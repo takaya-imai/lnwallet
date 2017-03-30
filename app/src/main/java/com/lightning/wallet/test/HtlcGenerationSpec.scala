@@ -23,6 +23,8 @@ class HtlcGenerationSpec {
   val channelUpdate_cd = defaultChannelUpdate.copy(shortChannelId = 3, cltvExpiryDelta = 10, feeBaseMsat = 60000, feeProportionalMillionths = 1)
   val channelUpdate_de = defaultChannelUpdate.copy(shortChannelId = 4, cltvExpiryDelta = 7, feeBaseMsat = 766000, feeProportionalMillionths = 10)
 
+  val currentBlockCount = 420000
+  val expiryDeltaBlocks = 144
   // simple route a -> b -> c -> d -> e
 
   val hops =
@@ -35,7 +37,7 @@ class HtlcGenerationSpec {
   val paymentPreimage = BinaryData("42" * 32)
   val paymentHash = Crypto.sha256(paymentPreimage)
 
-  val expiry_de = LNParams.currentBlockCount + LNParams.expiryDeltaBlocks
+  val expiry_de = currentBlockCount + expiryDeltaBlocks
   val amount_de = finalAmountMsat
   val fee_d = nodeFee(channelUpdate_de.feeBaseMsat, channelUpdate_de.feeProportionalMillionths, amount_de)
 
@@ -67,7 +69,7 @@ class HtlcGenerationSpec {
     {
       println("compute route with fees and expiry delta")
       
-      val (payloads, firstAmountMsat, firstExpiry) = buildRoute(finalAmountMsat, LNParams.currentBlockCount + LNParams.expiryDeltaBlocks, hops.drop(1))
+      val (payloads, firstAmountMsat, firstExpiry) = buildRoute(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, hops.drop(1))
 
       println(firstAmountMsat == amount_ab)
       println(firstExpiry == expiry_ab)
@@ -80,7 +82,7 @@ class HtlcGenerationSpec {
     {
       println("build onion")
       
-      val (payloads, _, _) = buildRoute(finalAmountMsat, LNParams.currentBlockCount + LNParams.expiryDeltaBlocks, hops.drop(1))
+      val (payloads, _, _) = buildRoute(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, hops.drop(1))
       val nodes = hops.map(_.nextNodeId)
       val OnionPacket(_, packet_b) = buildOnion(nodes, payloads, paymentHash)
       println(packet_b.size == 1254)
@@ -116,10 +118,10 @@ class HtlcGenerationSpec {
     {
       println("build a command including the onion")
       
-      val (amountMsat, onion, expiry) = buildCommand(finalAmountMsat, LNParams.currentBlockCount + LNParams.expiryDeltaBlocks, paymentHash, hops)
+      val (amountMsat, onion, expiry) = buildCommand(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, paymentHash, hops)
 
       println(amountMsat > finalAmountMsat)
-      println(expiry == LNParams.currentBlockCount + LNParams.expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
+      println(expiry == currentBlockCount + expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
       println(paymentHash == paymentHash)
       println(onion.onionPacket.length == 1254)
 
@@ -154,10 +156,10 @@ class HtlcGenerationSpec {
     {
       println("build a command with no hops")
       
-      val (amountMsat, onion, expiry) = buildCommand(finalAmountMsat, LNParams.currentBlockCount + LNParams.expiryDeltaBlocks, paymentHash, hops.take(1))
+      val (amountMsat, onion, expiry) = buildCommand(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, paymentHash, hops.take(1))
 
       println(amountMsat == finalAmountMsat)
-      println(expiry == LNParams.currentBlockCount + LNParams.expiryDeltaBlocks)
+      println(expiry == currentBlockCount + expiryDeltaBlocks)
       println(paymentHash == paymentHash)
       println(onion.onionPacket.size == 1254)
 

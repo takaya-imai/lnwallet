@@ -15,8 +15,8 @@ object LNParams {
   def hasSeed: Boolean = seed != null
 
   // Should be constantly updated
-  var currentBlockCount: Int = 120000
-  var feeRatePerKw: Long = 1000
+  var broadcaster: Broadcaster = _
+  var feeRatePerKw = 1000L
 
   val updateFeeMinDiffRatio = 0.1 // Should update fee
   val updateFeeMaxDiffRatio = 0.3 // Should disconnect
@@ -42,4 +42,13 @@ object LNParams {
 
   val expiryDeltaBlocks = 144
   val delayBlocks = 144
+}
+
+case class ScheduledTx(tx: BinaryData, atBlock: Int)
+
+trait Broadcaster {
+  def schedule(what: ScheduledTx): Unit
+  def unschedule(what: ScheduledTx): Unit
+  def broadcast(what: ScheduledTx): Unit
+  def currentBlockCount: Int
 }

@@ -48,7 +48,7 @@ object PaymentOps {
         PaymentRouteOps.withoutFailedChannel(ops)
 
       case ErrorPacket(nodeId, _: Node) =>
-        // Midway node has failed so try to use routes without is
+        // Midway node has failed so try to use routes without it
         PaymentRouteOps.withoutFailedNode(ops, nodeId.toBin)
 
       case ErrorPacket(nodeId, _) =>

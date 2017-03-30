@@ -218,8 +218,9 @@ object Commitments {
     } yield htlcIn.add
   }
 
-  def sendAdd(c: Commitments, htlc: Htlc, fallbacks: SeqPaymentRoute) =
-    if (htlc.add.expiry <= LNParams.currentBlockCount) Left(FinalExpiryTooSoon, HTLC_EXPIRY_TOO_SOON)
+  def sendAdd(c: Commitments, htlc: Htlc, blockCount: Int) =
+
+    if (htlc.add.expiry <= blockCount) Left(FinalExpiryTooSoon, HTLC_EXPIRY_TOO_SOON)
     else if (htlc.add.amountMsat < c.remoteParams.htlcMinimumMsat) Left(PermanentChannelFailure, HTLC_VALUE_TOO_SMALL)
     else {
 
@@ -239,12 +240,11 @@ object Commitments {
       else Right(c1, htlc)
     }
 
-  def receiveAdd(c: Commitments, add: UpdateAddHtlc) = {
-    val isOldAddHtlc: Boolean = add.id < c.remoteNextHtlcId
+  def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockCount: Int) =
 
-    if (isOldAddHtlc) c
-    else if (add.expiry < LNParams.currentBlockCount + 6) throw new RuntimeException(HTLC_EXPIRY_TOO_SOON)
+    if (add.id < c.remoteNextHtlcId) c
     else if (add.amountMsat < c.localParams.htlcMinimumMsat) throw new RuntimeException(HTLC_VALUE_TOO_SMALL)
+    else if (add.expiry < blockCount + 6) throw new RuntimeException(HTLC_EXPIRY_TOO_SOON)
     else if (add.id != c.remoteNextHtlcId) throw new RuntimeException(HTLC_UNEXPECTED_ID)
     else {
 
@@ -263,7 +263,6 @@ object Commitments {
       else if (feesOverflow) throw new RuntimeException(HTLC_MISSING_FEES)
       else c1
     }
-  }
 
   def sendFulfill(c: Commitments, cmd: CMDFulfillHtlc) = {
     val fulfill = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
