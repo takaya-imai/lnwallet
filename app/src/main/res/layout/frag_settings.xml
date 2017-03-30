@@ -1,0 +1,23 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="wrap_content" android:layout_width="wrap_content">
+
+    <Button
+        style="@style/TransButton"
+        android:id="@+id/changePass"
+        android:text="@string/sets_pass_change"/>
+
+    <Button
+        style="@style/TransButton"
+        android:id="@+id/viewMnemonic"
+        android:text="@string/sets_mnemonic"/>
+
+    <Button
+        style="@style/TransButton"
+        android:id="@+id/rescanWallet"
+        android:text="@string/sets_rescan"/>
+
+    <View style="@style/GrayDivider"/>
+
+</LinearLayout>

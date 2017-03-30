@@ -1,0 +1,172 @@
+<resources>
+    <string name="lang">eng</string>
+
+    <!-- app wide -->
+    <string name="or">or</string>
+    <string name="app_name">Bitcoin</string>
+    <string name="sets_noscreen">Do not make a screenshot</string>
+    <string name="sets_password_ok">New password has been set successfully</string>
+    <string name="sets_rescan_ok">Application is about to be closed now and blockchain rescan will be triggered on next launch</string>
+    <string name="greetings">Bitcoin + Lightning Network\nPlease read a short yet important\n<a href='https://lightning-wallet.com/'>wallet manual</a> before proceeding</string>
+    <string name="password_info">Without password you are in constant danger of losing your money. Please pick one which is at least 6 characters long</string>
+    <string name="fee_live"><![CDATA[<small>%2$s <font color=#999999>%1$s</font><br><small>Priority transaction fee</small></small>]]></string>
+    <string name="fee_risky"><![CDATA[<small>%2$s <font color=#999999>%1$s</font><br><small>Minimal transaction fee</small></small>]]></string>
+    <string name="wallet_restore">Restore Wallet From Code</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+    <string name="wallet_empty">Bitcoin wallet is empty</string>
+    <string name="wallet_create">Create New Wallet</string>
+
+    <string name="sets_pass_change">Change wallet password</string>
+    <string name="sets_mnemonic">View mnemonic code</string>
+    <string name="sets_rescan">Rescan blockchain</string>
+
+    <string name="password_new">New password</string>
+    <string name="password_old">Wallet password</string>
+    <string name="password_wrong">Wrong wallet password</string>
+    <string name="password_too_short">Password is too short</string>
+
+    <!-- headers with links -->
+    <string name="mnemonic_info">Mnemonic code is super important!\n<a href='https://lightning-wallet.com/#mnemonic-code'>Read about it</a> and be sure to save it\n\nWith mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins</string>
+    <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
+    <string name="read_settings"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read a short app manual</a><br><br></small>Wallet settings]]></string>
+
+    <!-- menu -->
+    <string name="action_settings">Wallet settings</string>
+    <string name="action_request_payment">Request payment</string>
+    <string name="action_receive_payment">Receive</string>
+    <string name="action_buy">Buy bitcoins</string>
+    <string name="action_scan">Scan</string>
+    <string name="action_send">Send</string>
+
+    <!-- dialogs -->
+    <string name="dialog_ok">OK</string>
+    <string name="dialog_pay">Pay</string>
+    <string name="dialog_next">Next</string>
+    <string name="dialog_back">Back</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <string name="dialog_sum_empty">Please provide an amount</string>
+    <string name="dialog_sum_dusty">Bitcoin amount is dusty</string>
+    <string name="spend_address_hint">Bitcoin address</string>
+    <string name="input_hint">amount in Satoshi</string>
+
+    <!-- paste button -->
+    <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
+    <string name="dialog_addr_absent">No valid address found in clipboard</string>
+    <string name="dialog_addr_wrong">Bitcoin address is required</string>
+
+    <!-- notifications -->
+    <string name="info_progress_done">Blockchain is up to date</string>
+    <string name="btc_tx_confirmed">Bitcoin transaction confirmed</string>
+    <string name="tx_announce">Announcing transaction&#8230;</string>
+    <string name="pass_checking">Checking password&#8230;</string>
+    <string name="pass_changing">DO NOT CLOSE WALLET</string>
+    <string name="tx_received">Just received %1$s</string>
+    <string name="tx_sent">Just sent %1$s</string>
+
+    <array name="info_progress">
+        <item>Sync complete</item>
+        <item>Sync: %1$d day behind</item>
+        <item>Sync: %1$d days behind</item>
+    </array>
+
+    <array name="info_peers">
+        <item>Searching for peers&#8230;</item>
+        <item>Connected to %1$s peer</item>
+        <item>Connected to %1$s peers</item>
+    </array>
+
+    <!-- activity_create, activity_restore, activity_request -->
+    <string name="restore_when">When was your wallet created?\nLeave date as is if not sure</string>
+    <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
+    <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
+    <string name="restore_mnemonic_wrong">Mnemonic must be 12 words long</string>
+    <string name="restore_wallet_ready">Your wallet is ready</string>
+    <string name="restore_hint">Your mnemonic code</string>
+    <string name="restore_wallet">Restore Wallet</string>
+
+    <!-- activity_btc -->
+    <string name="txs_fee_incoming"><![CDATA[<strong>Incoming transaction</strong><br>%1$s]]></string>
+    <string name="txs_fee_details"><![CDATA[<strong>Outgoing transaction</strong><br>%2$s<br><strong>%1$s</strong> fee]]></string>
+    <string name="txs_fee_absent"><![CDATA[<strong>Outgoing transaction</strong><br>%1$s<br><strong>No fee</strong>]]></string>
+
+    <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
+    <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
+    <string name="txs_view_outside">View on BlockExplorer.com</string>
+    <string name="txs_nothing_to_copy">Nothing to copy here</string>
+    <string name="txs_p2wsh">Channel funding</string>
+
+    <array name="txs_confs">
+        <item><![CDATA[<font color=#E31300>Not confirmed yet</font>]]></item>
+        <item><![CDATA[<strong>%1$s</strong> confirmation]]></item>
+        <item><![CDATA[<strong>%1$s</strong> confirmations]]></item>
+    </array>
+
+    <!-- errors -->
+    <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
+    <string name="err_not_enough_funds">Failed because you don\'t currently have enough coins in a wallet. Please add some funds and then try again</string>
+    <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees without violating a protocol rules. Please add some funds and then try again</string>
+    <string name="err_transaction_too_large">Failed because it is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
+    <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
+    <string name="err_optional_field">Failed because request contains a malformed amount which could not be parsed</string>
+    <string name="err_required_field">Failed because request contains a required parameter of unknown meaning</string>
+    <string name="err_uri">Failed because request contains a malformed URI which could not be parsed</string>
+    <string name="err_address">Failed because Bitcoin address in a given request is not valid</string>
+    <string name="err_neg">Failed because request contains a negative sum amount</string>
+    <string name="err_general">Failed because an unexpected error has occurred</string>
+
+    <!-- SPECIFIC TO LIGHTNING NETWORK -->
+
+    <!-- titles -->
+    <string name="btc_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s]]></string>
+    <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
+    <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
+
+    <!-- activity_ln, activity_ln_pass -->
+    <string name="ln_unlock">Unlock LN Wallet</string>
+    <string name="ln_btc_wallet">Open Bitcoin wallet</string>
+    <string name="ln_refill">Add funds to channel</string>
+    <string name="ln_backup">Set Backup Server</string>
+    <string name="ln_search">Find payments</string>
+    <string name="ln_close">Close channel</string>
+
+    <!-- setting a private backup server -->
+    <string name="ln_backup_ip">Backup server address</string>
+    <string name="ln_backup_key"><![CDATA[<small>Not sure what all this is about?<br><a href=https://lightning-wallet.com/>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
+    <string name="ln_backup_key_error">Could not set a private Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server has your backup public key and try again</string>
+    <string name="ln_backup_sig_error">Could not set a private Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
+    <string name="ln_backup_url_error">Could not set a private Backup Server because it\'s address seems to be invalid</string>
+    <string name="ln_backup_net_error">Could not set a private Backup Server because it is not reachable</string>
+    <string name="ln_backup_success">Private Backup Server has been set successfully</string>
+
+    <!-- activity_channel_ops -->
+    <string name="ln_trans_act_open">Open new channel</string>
+    <string name="ln_trans_act_close_now">Close channel now</string>
+
+    <!-- various messages -->
+    <string name="ln_state_none">A payment channel should be opened in order to send and receive LN payments\n\nPlease <a href='https://lightning-wallet.com/'>read more</a> on payment channels and Lightning network in general before proceeding</string>
+    <string name="ln_state_wait_anchor"><![CDATA[Payment channel has been established but before it becomes operational an <a href=https://lightning-wallet.com/>funding transaction</a> needs to get %1$s on a Blockchain.<br><br>Please wait a bit&#8230;<br>%2$s left]]></string>
+    <string name="ln_state_recharge"><![CDATA[Payment channel is being recharged and the new balance will be %1$s. Recharge Bitcoin transaction needs to get %1$s on a Blockchain for your channel to become operational again<br><br>Please wait a bit&#8230;<br>%3$s left]]></string>
+    <string name="ln_state_biclose_prepare">A <a href='https://lightning-wallet.com/'>mutual channel closing</a> has been initiated. Available channel balance will be transferred to your Bitcoin wallet in a <a href='https://lightning-wallet.com/'>refund Bitcoin transaction</a></string>
+    <string name="ln_state_close_tx_wait"><![CDATA[Refund Bitcoin transaction has been broadcasted. It needs to get %1$s for your current channel to become fully closed, %2$s has been sent to your Bitcoin wallet<br><br>Please wait a bit&#8230;<br>%3$s left]]></string>
+    <string name="ln_state_uniclose_sure">It would take a few days for your channel balance to be refunded to your Bitcoin wallet in a case of a <a href='https://lightning-wallet.com/'>forced close</a>.\n\nWould you like to proceed anyway?</string>
+    <string name="ln_state_uniclose"><![CDATA[Forced payment channel closing has been initiaited. <a href=https://lightning-wallet.com/>Refund Bitcoin transactions</a> listed below will be sent to your Bitcoin wallet<br><br>%1$s]]></string>
+    <string name="ln_state_uniclose_payout">%1$s in %2$s</string>
+
+    <!-- detailed info about channel opening + errors -->
+    <string name="ln_open_wait">Opening a new channel\nPlease wait a bit&#8230;</string>
+    <string name="ln_err_net">Could not proceed with your channel because of a network error</string>
+
+    <!-- ln notifications -->
+    <string name="ln_notify_connecting">Connecting&#8230;</string>
+    <string name="ln_notify_operational">Channel is ready</string>
+
+    <!-- LN QR and NFC related messages -->
+    <string name="nfc_enabled">NFC is on</string>
+    <string name="nfc_settings">Enable NFC</string>
+    <string name="nfc_got">Got an NFC payment request, would you like to proceed?</string>
+    <string name="nfc_error">Could not process an NFC message\nbecause it is malformed or empty</string>
+    <string name="ln_qr_warning"><![CDATA[<small>Disposable LN payment request</small><br>Do not reuse this QR code]]></string>
+    <string name="nfc_payee_tip">This payment request can be sent by touching two devices back-to-back provided payer\'s device also supports NFC technology</string>
+
+</resources>

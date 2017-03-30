@@ -1,0 +1,20 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="wrap_content" android:layout_width="wrap_content">
+
+    <EditText
+        style="@style/Info"
+        android:minWidth="100dp"
+        android:paddingTop="25dp"
+        android:id="@+id/secretInput"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        style="@style/StdText"
+        android:id="@+id/secretTip"
+        android:paddingBottom="25dp"
+        android:layout_width="wrap_content"/>
+
+    <View style="@style/GrayDivider"/>
+</LinearLayout>

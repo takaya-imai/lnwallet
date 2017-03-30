@@ -1,0 +1,23 @@
+<LinearLayout
+    style="@style/TransactionLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Custom toolbar -->
+    <include layout="@layout/toolbar"/>
+
+    <org.apmem.tools.layouts.FlowLayout
+        android:layout_height="wrap_content"
+        android:layout_width="fill_parent"
+        android:layout_weight="0"
+        android:padding="7dp"/>
+
+    <View
+        android:layout_weight="0"
+        style="@style/GrayDivider"/>
+
+    <ListView
+        android:layout_weight="1"
+        android:id="@+id/lnItemsList"
+        style="@style/GrayDividerListView"/>
+
+</LinearLayout>

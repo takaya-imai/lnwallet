@@ -1,0 +1,32 @@
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        app:showAsAction="never"
+        android:title="@string/ln_close"
+        android:id="@+id/actionCloseChannel"/>
+
+    <item
+        app:showAsAction="never"
+        android:title="@string/ln_backup"
+        android:id="@+id/actionSetBackupServer"/>
+
+    <item
+        app:showAsAction="never"
+        android:title="@string/ln_refill"
+        android:id="@+id/actionRefillChannel"/>
+
+    <item
+        android:id="@+id/action_search"
+        android:title="@string/ln_search"
+        app:showAsAction="never|collapseActionView"
+        app:actionViewClass="android.support.v7.widget.SearchView"/>
+
+    <item
+        app:showAsAction="ifRoom"
+        android:id="@+id/actionGoBtcWallet"
+        android:title="@string/ln_btc_wallet"
+        android:icon="@drawable/ic_btc_24dp"/>
+
+</menu>

@@ -1,0 +1,59 @@
+<LinearLayout
+    style="@style/TransactionLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Custom toolbar -->
+    <include layout="@layout/toolbar"/>
+
+    <org.apmem.tools.layouts.FlowLayout
+        android:layout_height="wrap_content"
+        android:layout_width="fill_parent"
+        android:layout_weight="0"
+        android:padding="7dp">
+
+        <Button android:drawableLeft="@drawable/ic_arrow_downward_black_18dp"
+            android:layout_width="wrap_content" android:text="@string/action_receive_payment"
+            android:onClick="doReceive" style="@style/BaseText"/>
+
+        <Button android:drawableLeft="@drawable/ic_arrow_upward_black_18dp"
+            android:layout_width="wrap_content" android:text="@string/action_send"
+            android:onClick="doPay" style="@style/BaseText"/>
+
+        <Button android:drawableLeft="@drawable/ic_fullscreen_black_18dp"
+            android:layout_width="wrap_content" android:text="@string/action_scan"
+            android:onClick="goQRScan" style="@style/BaseText"/>
+
+    </org.apmem.tools.layouts.FlowLayout>
+
+    <View
+        android:layout_weight="0"
+        style="@style/GrayDivider"/>
+
+    <ListView
+        android:layout_weight="1"
+        android:id="@+id/itemsList"
+        style="@style/GrayDividerListView"/>
+
+    <LinearLayout
+        android:visibility="gone"
+        android:layout_weight="1"
+        android:id="@+id/mnemonicWarn"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        style="@style/StandardLinearLayout">
+
+        <TextView
+            style="@style/Info"
+            android:id="@+id/mnemonicInfo"
+            android:layout_width="wrap_content"
+            android:text="@string/mnemonic_info"/>
+
+        <Button
+            style="@style/Info"
+            android:onClick="viewMnemonic"
+            android:layout_marginTop="25dp"
+            android:layout_width="wrap_content"
+            android:text="@string/sets_mnemonic"/>
+
+    </LinearLayout>
+</LinearLayout>

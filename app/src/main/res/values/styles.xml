@@ -1,0 +1,88 @@
+<resources>
+
+    <!-- page layouts -->
+
+    <style name="StandardLinearLayout">
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <style name="TransactionLinearLayout">
+        <item name="android:layout_height">fill_parent</item>
+        <item name="android:layout_width">fill_parent</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">#FFEEEEEE</item>
+    </style>
+
+    <!-- gray dividers -->
+
+    <style name="GrayDividerListView">
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_width">fill_parent</item>
+        <item name="android:dividerHeight">1dp</item>
+        <item name="android:divider">#33999999</item>
+    </style>
+
+    <style name="GrayDivider">
+        <item name="android:layout_height">1dp</item>
+        <item name="android:layout_width">fill_parent</item>
+        <item name="android:background">#33999999</item>
+    </style>
+
+    <!-- texts -->
+
+    <style name="BigInputText">
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">26sp</item>
+    </style>
+
+    <style name="BaseText">
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="StdText" parent="BaseText">
+        <item name="android:gravity">center</item>
+    </style>
+
+    <style name="Info" parent="StdText">
+        <item name="android:layout_marginRight">@dimen/app_padding</item>
+        <item name="android:layout_marginLeft">@dimen/app_padding</item>
+        <item name="android:maxWidth">400dp</item>
+    </style>
+
+    <style name="MarginInfo" parent="Info">
+        <item name="android:layout_marginBottom">25dp</item>
+        <item name="android:layout_marginTop">25dp</item>
+    </style>
+
+    <!-- transparent buttons -->
+
+    <style name="TransButton" parent="Info">
+        <item name="android:layout_margin">0dp</item>
+        <item name="android:layout_width">fill_parent</item>
+        <item name="android:background">?android:selectableItemBackground</item>
+    </style>
+
+    <!-- sliding dialog -->
+
+    <style name="SlidingDialog">
+        <item name="android:windowEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:windowExitAnimation">@anim/slide_hide</item>
+    </style>
+
+    <!-- overall theme style -->
+
+    <style name="NoBar" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorAccent">#FF34B4E3</item>
+    </style>
+
+    <style name="CustomBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimaryDark">#FF000000</item>
+        <item name="colorAccent">#FF34B4E3</item>
+    </style>
+
+</resources>

@@ -1,0 +1,13 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="match_parent" android:layout_width="match_parent">
+
+    <TextView
+        style="@style/MarginInfo"
+        android:layout_width="wrap_content"
+        android:maxWidth="230sp" android:id="@+id/actionTip"/>
+
+    <View style="@style/GrayDivider"/>
+
+</LinearLayout>

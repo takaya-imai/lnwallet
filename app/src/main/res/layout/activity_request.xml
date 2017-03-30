@@ -1,0 +1,48 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent" android:layout_height="fill_parent">
+
+    <LinearLayout
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"
+        android:orientation="horizontal"
+        android:id="@+id/restoreInfo"
+        android:gravity="center">
+
+        <ImageButton
+            android:src="@drawable/ic_share_white_18dp"
+            android:layout_height="60dp" android:layout_width="60dp"
+            android:id="@+id/reqShare" android:enabled="false"/>
+
+        <ImageButton
+            android:src="@drawable/ic_content_copy_white_18dp"
+            android:layout_width="60dp" android:layout_height="60dp"
+            android:id="@+id/copyData"/>
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/reqCode"
+        android:layout_marginTop="15dp"
+        android:layout_marginBottom="15dp"
+        android:layout_width="@dimen/bitmap_qr_wrap_width"
+        android:layout_height="@dimen/bitmap_qr_wrap_height"/>
+
+    <Button
+        style="@style/Info"
+        android:visibility="gone"
+        android:onClick="showTip"
+        android:id="@+id/reqNfcEnabled"
+        android:text="@string/nfc_enabled"
+        android:layout_width="wrap_content"/>
+
+    <Button
+        style="@style/Info"
+        android:visibility="gone"
+        android:onClick="goSettings"
+        android:id="@+id/reqNfcSettings"
+        android:text="@string/nfc_settings"
+        android:layout_width="wrap_content"/>
+
+</LinearLayout>

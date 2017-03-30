@@ -1,0 +1,69 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="fill_parent" android:layout_width="fill_parent">
+
+    <LinearLayout
+        style="@style/StandardLinearLayout"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"
+        android:id="@+id/mainChoice"
+        android:visibility="gone">
+
+        <TextView
+            style="@style/Info"
+            android:id="@+id/mainGreetings"
+            android:text="@string/greetings"
+            android:layout_marginBottom="45dp"
+            android:layout_width="wrap_content"/>
+
+        <Button
+            style="@style/Info"
+            android:onClick="goCreateWallet"
+            android:layout_width="wrap_content"
+            android:text="@string/wallet_create"/>
+
+        <TextView
+            style="@style/Info"
+            android:text="@string/or"
+            android:layout_margin="10dp"
+            android:layout_width="wrap_content"/>
+
+        <Button
+            style="@style/Info"
+            android:onClick="goRestoreWallet"
+            android:layout_width="wrap_content"
+            android:text="@string/wallet_restore"/>
+
+    </LinearLayout>
+
+    <LinearLayout
+        style="@style/StandardLinearLayout"
+        android:layout_height="wrap_content"
+        android:layout_width="fill_parent"
+        android:id="@+id/mainPassForm"
+        android:visibility="gone">
+
+        <EditText
+            style="@style/Info"
+            android:id="@+id/mainPassData"
+            android:inputType="textPassword"
+            android:layout_width="wrap_content"
+            android:hint="@string/password_old"/>
+
+        <Button
+            style="@style/Info"
+            android:id="@+id/mainPassCheck"
+            android:text="@string/ln_unlock"
+            android:layout_width="wrap_content"/>
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/mainProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/ic_launcher"
+        android:visibility="gone"/>
+
+</LinearLayout>
