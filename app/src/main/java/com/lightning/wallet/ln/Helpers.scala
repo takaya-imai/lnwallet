@@ -1,34 +1,29 @@
 package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
+import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
-import com.lightning.wallet.ln.Exceptions._
 
 import scala.util.{Success, Try}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
-
 import com.lightning.wallet.ln.crypto.Sphinx.BinaryDataSeq
-import com.lightning.wallet.ln.wire.ClosingSigned
 import com.lightning.wallet.ln.crypto.Generators
 
 
 object Helpers { me =>
-  def validateParams(channelReserveSatoshis: Long, fundingSatoshis: Long): Unit = {
-    val nope = channelReserveSatoshis.toDouble / fundingSatoshis > LNParams.maxReserveToFundingRatio
-    if (nope) throw new RuntimeException(CHANNEL_RESERVE_TOO_HIGH)
+  def validateHtlc(add: UpdateAddHtlc, bag: InvoiceBag) = bag getExtendedInvoice add.paymentHash match {
+    case Some(extendedInvoice) if extendedInvoice.invoice.sum.amount * 2 < add.amountMsat => Left(IncorrectPaymentAmount)
+    case Some(extendedInvoice) if extendedInvoice.invoice.sum.amount > add.amountMsat => Left(IncorrectPaymentAmount)
+    case Some(extendedInvoice) if extendedInvoice.preimage.isDefined => Right(extendedInvoice.preimage.get)
+    case _ => Left(UnknownPaymentHash)
   }
 
   def extractPreimages(tx: Transaction): BinaryDataSeq = tx.txIn.map(_.witness.stack) flatMap {
-    case timeout @ Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
-    case claimTimeout @ Seq(_, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
-    case success @ Seq(BinaryData.empty, _, _, preimage, _) if preimage.length == 32 => Some(preimage)
-    case claimSuccess @ Seq(_, preimage, _) if preimage.length == 32 => Some(preimage)
+    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
+    case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
+    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg)
+    case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg)
     case _ => None
-  }
-
-  def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
-    val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
-    networkFeeratePerKw > 0 && Math.abs(feeRatio) > LNParams.updateFeeMinDiffRatio
   }
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,

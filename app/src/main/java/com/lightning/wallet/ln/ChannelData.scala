@@ -110,9 +110,8 @@ object Changes {
 }
 
 object PaymentRouteOps {
-  def withoutFailedChannel(ops: PaymentRouteOps) = {
-    val failedChannelId = ops.remaining.head.last.lastUpdate.shortChannelId
-    def isBadHop(hop: Hop) = hop.lastUpdate.shortChannelId == failedChannelId
+  def withoutFailedChannel(ops: PaymentRouteOps, chanId: Long) = {
+    def isBadHop(hop: Hop) = hop.lastUpdate.shortChannelId == chanId
     ops.remaining.tail.filterNot(_ exists isBadHop)
   }
 

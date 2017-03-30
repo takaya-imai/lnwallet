@@ -43,12 +43,13 @@ object PaymentOps {
         // Permanent error from target node, nothing we can do here
         Nil
 
-      case ErrorPacket(nodeId, _) if ops.targetNodeId == nodeId =>
-        // Target node may have other channels so try to maybe use them
-        PaymentRouteOps.withoutFailedChannel(ops)
+      case ErrorPacket(nodeId, message: Update) =>
+        // This node may have other channels so try them
+        val failedChannelId = message.update.shortChannelId
+        PaymentRouteOps.withoutFailedChannel(ops, failedChannelId)
 
       case ErrorPacket(nodeId, _: Node) =>
-        // Midway node has failed so try to use routes without it
+        // This node has failed so try to use routes without it
         PaymentRouteOps.withoutFailedNode(ops, nodeId.toBin)
 
       case ErrorPacket(nodeId, _) =>

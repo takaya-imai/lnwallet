@@ -1,5 +1,6 @@
 package com.lightning.wallet.ln
 
+import com.lightning.wallet.ln.Exceptions._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import org.bitcoinj.wallet.DeterministicSeed
 import org.bitcoinj.crypto.DeterministicKey
@@ -42,6 +43,16 @@ object LNParams {
 
   val expiryDeltaBlocks = 144
   val delayBlocks = 144
+
+  def validateReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Unit = {
+    val nope = channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
+    if (nope) throw new RuntimeException(CHANNEL_RESERVE_TOO_HIGH)
+  }
+
+  def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
+    val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
+    networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
+  }
 }
 
 case class ScheduledTx(tx: BinaryData, atBlock: Int)

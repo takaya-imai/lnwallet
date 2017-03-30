@@ -435,6 +435,7 @@ class BtcManager(val man: RateManager) { me =>
   }
 }
 
+
 trait PayData {
   def colored(direction: String): String
   def sendRequest: SendRequest
@@ -467,6 +468,7 @@ case class P2WSHData(cn: Coin, wsh: Script) extends PayData {
   def onTapped = app toast txs_nothing_to_copy
   def sendRequest: SendRequest = null
 }
+
 
 abstract class TextChangedWatcher extends TextWatcher {
   override def beforeTextChanged(s: CharSequence, x: Int, y: Int, z: Int) = none

@@ -13,14 +13,6 @@ extends StateMachine[ChannelData](state, data) { me =>
   val bag: InvoiceBag
   val transport: TransportHandler
 
-  // Earlier we have sent an incoming payment request off-band and now we have a related HTLC
-  private def canFulfillHtlc(add: UpdateAddHtlc) = bag getExtendedInvoice add.paymentHash match {
-    case Some(ext) if ext.invoice.sum > add.amountMsatMilliSatoshi * 2 => Left(IncorrectPaymentAmount)
-    case Some(ext) if ext.invoice.sum < add.amountMsatMilliSatoshi => Left(IncorrectPaymentAmount)
-    case Some(ext) if ext.preimage.isDefined => Right(ext.preimage.get)
-    case _ => Left(UnknownPaymentHash)
-  }
-
   def doProcess(change: Any) = (change, data, state) match {
 
     case otherwise =>
