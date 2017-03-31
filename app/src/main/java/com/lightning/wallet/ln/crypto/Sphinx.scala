@@ -238,7 +238,8 @@ object Sphinx {
           Some(packet)
         }
 
-      case Nil => None
+      case Nil =>
+        None
     }
   }
 

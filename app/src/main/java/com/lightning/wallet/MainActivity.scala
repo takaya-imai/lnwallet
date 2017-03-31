@@ -70,19 +70,10 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
   // NFC and link
 
   override def onNoNfcIntentFound = {
+    // Filter out failures and nulls, try to set value, proceed if successful and inform if not
     val attempts = Try(getIntent.getDataString) :: Try(getIntent getStringExtra Intent.EXTRA_TEXT) :: Nil
-    val valid = attempts filter { case Success(_: String) => true case _ => false } // Not null
-
-    valid match {
-      case tryContainer :: _ =>
-        tryContainer map app.TransData.parseValue match {
-          case Failure(err) => app.TransData.onFail(inform)(err)
-          case _ => next // Valid value recorded, moving on
-        }
-
-      // Ordinary launch
-      case _ => next
-    }
+    val valid = attempts collectFirst { case res @ Success(nonNull: String) => res map app.TransData.parseValue }
+    if (valid.isEmpty) next else valid foreach { case Failure(err) => app.TransData.onFail(inform)(err) case _ => next }
   }
 
   def readNdefMessage(msg: Message) = try {

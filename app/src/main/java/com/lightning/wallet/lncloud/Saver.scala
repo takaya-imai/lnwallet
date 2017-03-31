@@ -1,8 +1,9 @@
 package com.lightning.wallet.lncloud
 
 import com.lightning.wallet.ln.JavaSerializer._
-import com.lightning.wallet.ln.{Channel, ChannelData}
+import com.lightning.wallet.ln.{Channel, ChannelData, ScheduledTx}
 import com.lightning.wallet.Utils.app
+import scala.collection.mutable
 import scala.util.Try
 
 
@@ -31,4 +32,9 @@ object StandaloneCloudSaver extends Saver {
   def remove = app.db.change(Storage.killSql, KEY)
   val KEY = "standaloneCloud"
   type Snapshot = String
+}
+
+object BroadcasterSaver extends Saver {
+  type Snapshot = mutable.Set[ScheduledTx]
+  val KEY = "broadcaster"
 }

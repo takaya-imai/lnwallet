@@ -8,16 +8,13 @@ import org.bitcoinj.core.Sha256Hash
 
 
 object LNParams {
+  var broadcaster: Broadcaster = _
   private var seed: DeterministicSeed = _
   lazy val extendedPrivateKey: DeterministicKey = Tools.derive(Nil, 46)(seed)
   lazy val extendedCloudPrivateKey: DeterministicKey = Tools.derive(Nil, 92)(seed)
   def getSeedHash: String = Sha256Hash.twiceOf(seed.getSeedBytes).toString
   def setSeed(newSeed: DeterministicSeed): Unit = seed = newSeed
   def hasSeed: Boolean = seed != null
-
-  // Should be constantly updated
-  var broadcaster: Broadcaster = _
-  var feeRatePerKw = 1000L
 
   val updateFeeMinDiffRatio = 0.1 // Should update fee
   val updateFeeMaxDiffRatio = 0.3 // Should disconnect
@@ -29,10 +26,9 @@ object LNParams {
   val localFeatures = BinaryData("01")
   val globalFeatures = BinaryData("")
 
-  val maxHtlcValueInFlightMsat = Long.MaxValue
   val maxReserveToFundingRatio = 0.05 // %
   val reserveToFundingRatio = 0.01 // %
-  val htlcMinimumMsat = 100000
+  val htlcMinimumMsat = 1000
   val maxAcceptedHtlcs = 10
   val smartfeeNBlocks = 3
   val minDepth = 2

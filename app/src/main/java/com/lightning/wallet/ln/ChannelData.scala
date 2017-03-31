@@ -68,7 +68,6 @@ case class Commitments(localParams: LocalParams, remoteParams: RemoteParams,
                        remotePerCommitmentSecrets: ShaHashesWithIndex,
                        channelId: BinaryData)
 
-
 case class Invoice(message: Option[String], nodeId: BinaryData,
                    sum: MilliSatoshi, paymentHash: BinaryData)
 
@@ -92,17 +91,10 @@ object Invoice {
   }
 }
 
-trait InvoiceBag {
-  def putPreimage(preimage: BinaryData): Unit
-  def getExtendedInvoice(hash: BinaryData): Option[ExtendedInvoice]
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
-}
-
 object Htlc {
   val PLAIN = "plain"
   val SILENT = "silent"
 }
-
 
 object Changes {
   def all(c: Changes): LightningMessages =
@@ -426,4 +418,10 @@ object Commitments {
     case Right(point) if point == rev.nextPerCommitmentPoint => Left(c)
     case _ => throw new RuntimeException(REVOCATION_UNEXPECTED)
   }
+}
+
+trait InvoiceBag {
+  def putPreimage(preimage: BinaryData): Unit
+  def getExtendedInvoice(hash: BinaryData): Option[ExtendedInvoice]
+  def newPreimage: BinaryData = BinaryData(random getBytes 32)
 }
