@@ -5,7 +5,7 @@ import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.lncloud.BlindTokens._
 import com.lightning.wallet.lncloud.BlindTokensSaver._
-import com.lightning.wallet.helper.JsonHttpUtils._
+import com.lightning.wallet.lncloud.JsonHttpUtils._
 
 import com.lightning.wallet.Utils.{app, string2Ops}
 import rx.lang.scala.{Observable => Obs}

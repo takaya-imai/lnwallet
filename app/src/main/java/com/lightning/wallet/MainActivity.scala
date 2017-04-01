@@ -5,7 +5,7 @@ import android.widget._
 
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-import com.lightning.wallet.helper.{Fee, FiatRates}
+import com.lightning.wallet.lncloud.RatesSaver
 import org.ndeftools.util.activity.NfcReaderActivity
 import org.bitcoinj.wallet.WalletProtobufSerializer
 
@@ -51,6 +51,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       peerGroup = new PeerGroup(app.params, blockChain)
 
       def startUp = {
+        RatesSaver.process
         setupAndStartDownload
         app.TransData valueExit me
       }
@@ -64,7 +65,6 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
     greet setMovementMethod LinkMovementMethod.getInstance
-    (new CommitmentSpecSpec).allTests
   }
 
   // NFC and link
@@ -98,7 +98,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
   def inform(code: Int): Unit = mkForm(mkChoiceDialog(next, finish,
     dialog_ok, dialog_cancel) setMessage code, null, null)
 
-  def next = {
+  def next =
     (app.walletFile.exists, app.isAlive, LNParams.hasSeed) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
       case (true, true, true) => app.TransData valueExit me
@@ -108,7 +108,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         // Also happens if app has become inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
         mainPassCheck setOnClickListener onButtonTap {
-          val proceed = makeKit.map(initialized => decrypt)
+          val proceed = makeKit.map(initialized => setSeed)
           <<(proceed, wrong)(passOk => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
@@ -117,21 +117,17 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         // Should not happen but whatever
         setVis(View.GONE, View.VISIBLE, View.GONE)
         mainPassCheck setOnClickListener onButtonTap {
-          <(decrypt, wrong)(passOk => app.kit.startAsync)
+          <(setSeed, wrong)(passOk => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
     }
-
-    FiatRates.go
-    Fee.go
-  }
 
   def wrong(error: Throwable) = {
     setVis(View.GONE, View.VISIBLE, View.GONE)
     app toast password_wrong
   }
 
-  def decrypt = {
+  def setSeed = {
     val pass = mainPassData.getText.toString
     val seed = Mnemonic decrypt pass
     LNParams setSeed seed

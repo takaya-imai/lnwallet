@@ -12,7 +12,7 @@ import org.bitcoinj.wallet.listeners._
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
-import com.lightning.wallet.helper.{Fee, FiatRates}
+import com.lightning.wallet.lncloud.{Rates, RatesSaver}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import scala.util.{Failure, Success, Try}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -76,9 +76,9 @@ object Utils { me =>
 
   // Fiat rates related functions, all transform a Try monad
   // Rate is fiat per BTC so we need to divide by btc factor in the end
-  def inFiat(ms: MilliSatoshi): Try[Double] = for (rate <- currentRate) yield ms.amount * rate / btcFactor
-  def currentRate: Try[Double] = for (rateMap <- FiatRates.rates) yield rateMap(currentFiatName)
   def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
+  def inFiat(ms: MilliSatoshi) = currentRate.map(ms.amount * _ / btcFactor)
+  def currentRate = Try(RatesSaver.rates exchange currentFiatName)
 
   def humanFiat(amount: Try[Double], prefix: String): String = amount match {
     case Success(amt) if currentFiatName == strYuan => s"$prefix<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
@@ -243,21 +243,21 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   // Temporairly update subtitle info
   def notifySubTitle(subtitle: String, infoType: Int)
-  def chooseFeeAndPay(back: => Unit, onError: Throwable => Unit,
-                      password: String, pay: PayData): Unit =
+  def chooseFeeAndPay(back: => Unit, onError: Throwable => Unit, password: String,
+                      pay: PayData, rates: Rates = RatesSaver.rates): Unit =
 
-    <(makeTx(password, pay, Fee.risky), onError) { feeEstimateTx =>
+    <(makeTx(password, pay, rates.riskyFee), onError) { feeEstimateTx =>
       // Fee is taken per 1000 bytes of data so we normalize it with respect to tx size
-      val riskyFinalFee = Fee.risky multiply feeEstimateTx.unsafeBitcoinSerialize.length div 1000
-      val liveFinalFee = Fee.live multiply feeEstimateTx.unsafeBitcoinSerialize.length div 1000
+      val riskyFinalFee = rates.riskyFee multiply feeEstimateTx.unsafeBitcoinSerialize.length div 1000
+      val liveFinalFee = rates.fee multiply feeEstimateTx.unsafeBitcoinSerialize.length div 1000
 
       // Mark fees as red because we are the ones who always pay them
       val riskyFeePretty = sumOut format withSign(riskyFinalFee)
       val liveFeePretty = sumOut format withSign(liveFinalFee)
 
       // Show fees in satoshis as well as in current fiat value
-      val feeRisky = getString(fee_risky).format(humanFiat(inFiat(Fee.risky), ""), riskyFeePretty)
-      val feeLive = getString(fee_live).format(humanFiat(inFiat(Fee.live), ""), liveFeePretty)
+      val feeRisky = getString(fee_risky).format(humanFiat(inFiat(rates.riskyFee), ""), riskyFeePretty)
+      val feeLive = getString(fee_live).format(humanFiat(inFiat(rates.fee), ""), liveFeePretty)
 
       // Create a fee selector
       val feesOptions = Array(feeRisky.html, feeLive.html)
@@ -268,8 +268,8 @@ trait ToolbarActivity extends TimerActivity { me =>
       lst.setItemChecked(0, true)
 
       def sendTx: Unit = rm(alert) {
-        def tx = makeTx(password, pay, if (lst.getCheckedItemPosition == 0) Fee.risky else Fee.live)
-        <(app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get, onError)(none)
+        val feerate: Coin = if (lst.getCheckedItemPosition == 0) rates.riskyFee else rates.fee
+        <(app.kit.peerGroup.broadcastTransaction(makeTx(password, pay, feerate), 1).broadcast.get, onError)(none)
         add(me getString tx_announce, Informer.BTCEVENT).ui.run
       }
 

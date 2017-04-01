@@ -17,6 +17,7 @@ import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
+import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import android.view.View.OnClickListener
@@ -322,8 +323,8 @@ with ListUpdater { me =>
         case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
         case Failure(_) => app toast dialog_sum_empty
 
-        case fine @ Success(ms) => rm(alert) {
-          def back = doPay(null).set(fine, spendManager.getAddress)
+        case tm @ Success(ms) => rm(alert) {
+          def back = doPay(null).set(tm, spendManager.getAddress)
           val payData = AddrData(cn = ms, adr = spendManager.getAddress)
           val go = chooseFeeAndPay(back, me errorReact back, _: String, payData)
           passPlus(payData cute sumOut)(back)(go)

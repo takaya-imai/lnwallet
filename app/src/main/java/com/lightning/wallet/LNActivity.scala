@@ -27,7 +27,7 @@ import android.support.v4.view.MenuItemCompat
 import android.support.v7.widget.SearchView.OnCloseListener
 import android.view.View.OnClickListener
 import android.webkit.URLUtil
-import com.lightning.wallet.helper.JsonHttpUtils._
+import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.helper._
 import com.lightning.wallet.ln.wire.UpdateAddHtlc
 import com.lightning.wallet.ln._
