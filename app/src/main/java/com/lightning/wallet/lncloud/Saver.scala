@@ -74,6 +74,7 @@ case class LastRate(last: Double) extends Rate { def now = last }
 case class AskRate(ask: Double) extends Rate { def now = ask }
 trait Rate { def now: Double }
 
+case class Rates(exchange: PriceMap, fee: Coin, stamp: Long)
 case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends RateProvider
 case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProvider
 trait RateProvider { val usd, eur, cny: Rate }
@@ -83,7 +84,7 @@ object RatesSaver extends Saver { me =>
   type BitpayList = List[BitpayRate]
   type RatesMap = Map[String, Rate]
   override type Snapshot = Rates
-  val KEY = "rates1"
+  val KEY = "rates"
 
   implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
@@ -111,7 +112,7 @@ object RatesSaver extends Saver { me =>
 
   def rates = tryGet match {
     case Success(savedRates) => savedRates
-    case _ => Rates(Map.empty, Coin valueOf 40000, 0L)
+    case _ => Rates(Map.empty, Coin valueOf 60000, 0L)
   }
 
   def process = {
@@ -121,12 +122,8 @@ object RatesSaver extends Saver { me =>
     val combined = pickExchangeRate zip pickFeeRate delay delayed.millis
 
     combined foreach { case (exchange, fee) =>
-      me save Rates(exchange, fee, System.currentTimeMillis)
+      val newFee = List(fee, Coin valueOf 60000).sorted.last
+      me save Rates(exchange, newFee, System.currentTimeMillis)
     }
   }
-}
-
-case class Rates(exchange: PriceMap, fee: Coin, stamp: Long) {
-  // Server may return too low a fee so we need to double check here
-  def riskyFee: Coin = List(fee div 3, Coin valueOf 5000).sorted.last
 }

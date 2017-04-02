@@ -2,6 +2,7 @@ package com.lightning.wallet
 
 import android.widget._
 import org.bitcoinj.core._
+
 import collection.JavaConverters._
 import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
@@ -23,18 +24,20 @@ import android.view.View.OnClickListener
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
+
 import org.bitcoinj.wallet.Wallet
 import android.graphics.Typeface
+
 import scala.collection.mutable
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.net.Uri
-
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import android.content.DialogInterface.BUTTON_POSITIVE
 import Transaction.MIN_NONDUST_OUTPUT
+import com.lightning.wallet.lncloud.RatesSaver
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -319,9 +322,10 @@ with ListUpdater { me =>
         case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
         case Failure(_) => app toast dialog_sum_empty
 
-        case tm @ Success(ms) => rm(alert) {
+        case Success(ms) => rm(alert) {
+          val live = RatesSaver.rates.fee
           val payData = AddrData(ms, spendManager.getAddress)
-          val proceed = chooseFeeAndPay(errorReact, _: String, payData)
+          val proceed = chooseFeeAndPay(_: String, payData, live, live div 2)
           passPlus(payData cute sumOut)(proceed)
         }
       }
