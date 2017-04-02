@@ -76,7 +76,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
     app.TransData parseValue asText
-    me inform nfc_got
+    app toast nfc_got
 
   } catch { case _: Throwable =>
     // Could not process a message

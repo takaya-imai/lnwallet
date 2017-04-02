@@ -14,6 +14,7 @@ import java.util.List;
 
 public abstract class AbstractKit extends AbstractIdleService {
     public static final String CURRENCY = "fiatCurrencyOfChoice";
+    public static final String ERROR_REPORT = "errorReport";
 
     // Bitcoin wallet core pieces
     public volatile BlockChain blockChain;

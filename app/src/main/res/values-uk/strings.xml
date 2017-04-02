@@ -1,6 +1,11 @@
 <resources>
     <string name="lang">ukr</string>
 
+    <!-- emergency mode -->
+    <string name="emerge_report">Переглянути звіт про помилку</string>
+    <string name="emerge_title">Щось пішло не так</string>
+    <string name="emerge_subtitle">Аварійний режим</string>
+
     <!-- app wide -->
     <string name="or">або</string>
     <string name="app_name">Блискавка</string>
@@ -54,7 +59,6 @@
     <!-- dialogs -->
     <string name="dialog_ok">OK</string>
     <string name="dialog_next">Далі</string>
-    <string name="dialog_back">Назад</string>
     <string name="dialog_pay">Заплатити</string>
 
     <string name="dialog_sum_empty">Будь ласка, вкажіть суму</string>

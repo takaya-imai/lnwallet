@@ -133,28 +133,25 @@ trait InfoActivity extends ToolbarActivity { me =>
   def tellGenError = wrap(app toast err_general)(mkSetsForm)
   def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
 
-  // A wrapper which provide a concrete method to check a passord and act on the outcome
-  def checkPass(title: CharSequence)(next: String => Unit) = passPlus(title)(mkSetsForm) { password =>
+  def checkPass(title: CharSequence)(next: String => Unit) = passPlus(title) { password =>
     <(app.kit.wallet checkPassword password, _ => tellGenError)(if (_) next(password) else tellWrongPass)
   }
 
   def doViewMnemonic(password: String) =
-    <(Mnemonic decrypt password, _ => tellWrongPass) { walletSeed =>
+    <(Mnemonic decrypt password, _ => tellGenError) { seed =>
       getWindow.setFlags(LayoutParams.FLAG_SECURE, LayoutParams.FLAG_SECURE)
-      val bld = new Builder(me) setCustomTitle getString(sets_noscreen)
-      bld.setMessage(Mnemonic text walletSeed).show
+      mkForm(me negBld dialog_ok, me getString sets_noscreen, Mnemonic text seed)
     }
 
   def mkSetsForm: Unit = {
     val form = getLayoutInflater.inflate(R.layout.frag_settings, null)
-    val dialog = mkForm(me negBld dialog_cancel, getString(read_settings).html, form)
+    val menu = mkForm(me negBld dialog_cancel, getString(read_settings).html, form)
     val rescanWallet = form.findViewById(R.id.rescanWallet).asInstanceOf[Button]
     val viewMnemonic = form.findViewById(R.id.viewMnemonic).asInstanceOf[Button]
     val changePass = form.findViewById(R.id.changePass).asInstanceOf[Button]
 
-    rescanWallet setOnClickListener new OnClickListener {
-      def onClick(proceedRescan: View) = rm(dialog)(openForm)
-      def openForm = checkPass(me getString sets_rescan) { password =>
+    rescanWallet setOnClickListener onButtonTap {
+      def openForm = checkPass(me getString sets_rescan) { _ =>
         mkForm(mkChoiceDialog(go, none, dialog_ok, dialog_cancel)
           setMessage sets_rescan_ok, null, null)
       }
@@ -166,10 +163,11 @@ trait InfoActivity extends ToolbarActivity { me =>
         app.kit useCheckPoints app.kit.wallet.getEarliestKeyCreationTime
         app.kit.wallet saveToFile app.walletFile
       } catch none finally System exit 0
+
+      rm(menu)(openForm)
     }
 
-    changePass setOnClickListener new OnClickListener {
-      def onClick(changePassView: View) = rm(dialog)(openForm)
+    changePass setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_pass_change) { oldPass =>
         val (textAsk, secret) = generatePasswordPromptView(textType, password_new)
         mkForm(mkChoiceDialog(changePass, none, dialog_ok, dialog_cancel),
@@ -187,11 +185,13 @@ trait InfoActivity extends ToolbarActivity { me =>
           app.kit encryptWallet newPass
         }
       }
+
+      rm(menu)(openForm)
     }
 
-    viewMnemonic setOnClickListener new OnClickListener {
-      def onClick(viewMnemonicButton: View) = rm(dialog)(proceed)
-      def proceed = checkPass(me getString sets_mnemonic)(doViewMnemonic)
+    viewMnemonic setOnClickListener onButtonTap {
+      def openForm = checkPass(me getString sets_mnemonic)(doViewMnemonic)
+      rm(menu)(openForm)
     }
   }
 }
@@ -222,9 +222,9 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   // Password checking popup
-  def passPlus(title: CharSequence)(back: => Unit)(next: String => Unit) = {
+  def passPlus(title: CharSequence)(next: String => Unit) = {
     val (passAsk, secret) = generatePasswordPromptView(passType, password_old)
-    mkForm(mkChoiceDialog(infoAndNext, back, dialog_next, dialog_back), title, passAsk)
+    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
 
     def infoAndNext = {
       add(app getString pass_checking, Informer.CODECHECK).ui.run
@@ -235,7 +235,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   // Temporairly update subtitle info
   def notifySubTitle(subtitle: String, infoType: Int)
-  def chooseFeeAndPay(back: => Unit, onError: Throwable => Unit, password: String,
+  def chooseFeeAndPay(onError: Throwable => Unit, password: String,
                       pay: PayData, rates: Rates = RatesSaver.rates): Unit =
 
     <(makeTx(password, pay, rates.riskyFee), onError) { feeEstimateTx =>
@@ -265,7 +265,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         add(me getString tx_announce, Informer.BTCEVENT).ui.run
       }
 
-      lazy val dialog = mkChoiceDialog(sendTx, back, dialog_pay, dialog_back)
+      lazy val dialog = mkChoiceDialog(sendTx, none, dialog_pay, dialog_cancel)
       lazy val alert = mkForm(dialog, pay cute sumOut, form)
       alert
     }
@@ -280,18 +280,14 @@ trait ToolbarActivity extends TimerActivity { me =>
     request.tx
   }
 
-  def errorReact(react: => Unit)(exc: Throwable): Unit = {
-    def onError(msg: String) = try mkForm(mkChoiceDialog(react, none,
-      dialog_ok, dialog_cancel) setMessage msg, null, null) catch none
-
-    exc match {
-      case _: ExceededMaxTransactionSize => onError(app getString err_transaction_too_large)
-      case _: InsufficientMoneyException => onError(app getString err_not_enough_funds)
-      case _: CouldNotAdjustDownwards => onError(app getString err_empty_shrunk)
-      case _: KeyCrypterException => onError(app getString err_pass)
-      case e: Throwable => onError(app getString err_general)
-    }
-  }
+  def errorReact(exc: Throwable): Unit =
+    try mkForm(me negBld dialog_ok, content = exc match {
+      case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
+      case _: InsufficientMoneyException => app getString err_not_enough_funds
+      case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
+      case _: KeyCrypterException => app getString err_pass
+      case _: Throwable => app getString err_general
+    }, title = null) catch none
 }
 
 trait TimerActivity extends AppCompatActivity { me =>
@@ -333,7 +329,6 @@ trait TimerActivity extends AppCompatActivity { me =>
   def mkForm(builder: Builder, title: View, content: View) = {
     val alertDialog = builder.setCustomTitle(title).setView(content).create
     if (scrWidth > 2.3) alertDialog.getWindow.setLayout(maxDialog.toInt, WRAP_CONTENT)
-    alertDialog.getWindow.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
     alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
     alertDialog.setCanceledOnTouchOutside(false)
     alertDialog.show
@@ -348,7 +343,12 @@ trait TimerActivity extends AppCompatActivity { me =>
     new Builder(me).setPositiveButton(okResource, again).setNegativeButton(noResource, cancel)
   }
 
-  // Timer utilities and toast
+  // Show an emergency page in case of a fatal error
+  override def onCreate(savedInstanceState: Bundle): Unit = {
+    Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
+    super.onCreate(savedInstanceState)
+  }
+
   override def onDestroy = wrap(super.onDestroy)(timer.cancel)
   implicit def anyToRunnable(process: => Unit): Runnable = new Runnable { def run = process }
   implicit def uiTask(process: => Runnable): TimerTask = new TimerTask { def run = me runOnUiThread process }

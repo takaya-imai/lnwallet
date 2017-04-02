@@ -121,13 +121,12 @@ object RatesSaver extends Saver { me =>
     val combined = pickExchangeRate zip pickFeeRate delay delayed.millis
 
     combined foreach { case (exchange, fee) =>
-      // In case of too low fee we use a default value
-      val newFee = List(fee, Coin valueOf 50000).sorted.last
-      me save Rates(exchange, newFee, System.currentTimeMillis)
+      me save Rates(exchange, fee, System.currentTimeMillis)
     }
   }
 }
 
 case class Rates(exchange: PriceMap, fee: Coin, stamp: Long) {
+  // Server may return too low a fee so we need to double check here
   def riskyFee: Coin = List(fee div 3, Coin valueOf 5000).sorted.last
 }

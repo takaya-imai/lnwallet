@@ -1,6 +1,11 @@
 <resources>
     <string name="lang">rus</string>
 
+    <!-- emergency mode -->
+    <string name="emerge_report">Показать отчет об ошибке</string>
+    <string name="emerge_title">Что-то пошло не так</string>
+    <string name="emerge_subtitle">Аварийный режим</string>
+
     <!-- app wide -->
     <string name="or">или</string>
     <string name="app_name">Молния</string>
@@ -54,7 +59,6 @@
     <!-- dialogs -->
     <string name="dialog_ok">OK</string>
     <string name="dialog_next">Далее</string>
-    <string name="dialog_back">Назад</string>
     <string name="dialog_pay">Заплатить</string>
 
     <string name="dialog_sum_empty">Пожалуйста, укажите сумму</string>

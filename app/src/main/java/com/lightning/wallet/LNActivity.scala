@@ -266,7 +266,7 @@ with ListUpdater { me =>
 //    }
   }
 
-  def closeChannel = passPlus(me getString ln_close)(none) { pass =>
+  def closeChannel = passPlus(me getString ln_close) { pass =>
     println(pass)
   }
 }

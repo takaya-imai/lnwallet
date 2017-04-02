@@ -61,6 +61,9 @@
         <activity android:launchMode="singleTask" android:name="BtcActivity"
             android:screenOrientation="portrait" android:theme="@style/CustomBar"/>
 
+        <activity android:launchMode="singleTask" android:name="EmergencyActivity"
+            android:screenOrientation="portrait" android:theme="@style/CustomBar"/>
+
         <activity android:launchMode="singleTask" android:name="ScanActivity"
             android:screenOrientation="portrait" android:theme="@style/NoBar"/>
 

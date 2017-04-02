@@ -8,7 +8,8 @@ public class Informer {
     public static final int CODECHECK = 4;
     public static final int TXCONFIRMED = 5;
 
-    public static final int LNSTATE = 6;
+    public static final int EMERGENCY = 6;
+    public static final int LNSTATE = 7;
 
     public int tag;
     public String value;

@@ -180,9 +180,9 @@ with ListUpdater { me =>
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
 
-        outside setOnClickListener new OnClickListener {
-          val outsideUri = Uri.parse("https://blockexplorer.com/tx/" + tx.getHashAsString)
-          def onClick(v: View) = me startActivity new Intent(Intent.ACTION_VIEW, outsideUri)
+        outside setOnClickListener onButtonTap {
+          val uri = "https://blockexplorer.com/tx/" + tx.getHashAsString
+          me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
         val sumPretty: String = coloring format withSign(me value tx)
@@ -299,7 +299,7 @@ with ListUpdater { me =>
 
   // Reactions to menu buttons
   def onFail(e: Throwable): Unit = negBld(dialog_ok).setMessage(e.getMessage).show
-  def viewMnemonic(v: View) = passPlus(me getString sets_mnemonic)(none)(doViewMnemonic)
+  def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
   def doReceive(top: View) = wrap(goToRequest)(app.TransData.value = app.kit.currentAddress)
   def goQRScan(top: View) = me goTo classOf[ScanActivity]
   def goToRequest = me goTo classOf[RequestActivity]
@@ -320,10 +320,9 @@ with ListUpdater { me =>
         case Failure(_) => app toast dialog_sum_empty
 
         case tm @ Success(ms) => rm(alert) {
-          def back = doPay(null).set(tm, spendManager.getAddress)
-          val payData = AddrData(cn = ms, adr = spendManager.getAddress)
-          val go = chooseFeeAndPay(back, me errorReact back, _: String, payData)
-          passPlus(payData cute sumOut)(back)(go)
+          val payData = AddrData(ms, spendManager.getAddress)
+          val proceed = chooseFeeAndPay(errorReact, _: String, payData)
+          passPlus(payData cute sumOut)(proceed)
         }
       }
     }
