@@ -43,7 +43,7 @@ class LNActivity extends NfcReaderActivity
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater { me =>
 
-  def onFail(e: Throwable): Unit = negBld(dialog_ok).setMessage(e.getMessage).show
+  def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   lazy val lnItemsList = findViewById(R.id.lnItemsList).asInstanceOf[ListView]
   lazy val lnTitle = me getString ln_title
   //lazy val adapter = new LNAdapter

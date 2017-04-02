@@ -298,7 +298,7 @@ with ListUpdater { me =>
   }
 
   // Reactions to menu buttons
-  def onFail(e: Throwable): Unit = negBld(dialog_ok).setMessage(e.getMessage).show
+  def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
   def doReceive(top: View) = wrap(goToRequest)(app.TransData.value = app.kit.currentAddress)
   def goQRScan(top: View) = me goTo classOf[ScanActivity]

@@ -186,7 +186,7 @@ with TimerActivity with ViewSwitch { me =>
   def onNdefPushCompleted = none
   def onNfcStateEnabled = none
 
-  def fail(error: Throwable): Unit = negBld(dialog_ok).setMessage(err_general).show
-  def showTip(v: View) = negBld(dialog_ok).setMessage(nfc_payee_tip).show
+  def fail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, me getString err_general)
+  def showTip(v: View) = mkForm(me negBld dialog_ok, null, me getString nfc_payee_tip)
   def goSettings(v: View) = startNfcSharingSettingsActivity
 }
