@@ -202,17 +202,9 @@ trait ToolbarActivity extends TimerActivity { me =>
   private[this] var infos = List.empty[Informer]
 
   val tracker = new NativeTxTracker with TransactionConfidenceEventListener {
-    override def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction): Unit =
-      if (tx.getConfidence.getDepthInBlocks == minDepth) notifySubTitle(me getString btc_tx_confirmed,
-        infoType = Informer.TXCONFIRMED)
-
-    override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) =
-      notifySubTitle(me getString tx_received format withSign(nb subtract pb),
-        infoType = Informer.BTCEVENT)
-
-    override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) =
-      notifySubTitle(me getString tx_sent format withSign(pb subtract nb),
-        infoType = Informer.BTCEVENT)
+    def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) = if (tx.getConfidence.getDepthInBlocks == minDepth) notifySubTitle(getString(btc_tx_confirmed), Informer.TXCONFIRMED)
+    override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) = notifySubTitle(getString(tx_received) format withSign(nb subtract pb), Informer.BTCEVENT)
+    override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) = notifySubTitle(getString(tx_sent) format withSign(pb subtract nb), Informer.BTCEVENT)
   }
 
   // Informer CRUD

@@ -1,22 +1,23 @@
 package com.lightning.wallet.lncloud
 
 import spray.json._
-import com.github.kevinsawicki.http.HttpRequest
-import com.lightning.wallet.ln.JavaSerializer._
-import com.lightning.wallet.ln.{Channel, ChannelData, ScheduledTx}
+import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.Tools._
-import org.bitcoinj.core.Coin
-import rx.lang.scala.schedulers.IOScheduler
 import spray.json.DefaultJsonProtocol._
-import spray.json.JsonFormat
-import rx.lang.scala.{Scheduler, Observable => Obs}
+import com.lightning.wallet.ln.JavaSerializer._
 import com.lightning.wallet.lncloud.RatesSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
-import com.softwaremill.quicklens._
+
+import com.lightning.wallet.ln.{Channel, ChannelData, ScheduledTx}
+import rx.lang.scala.{Scheduler, Observable => Obs}
+import scala.util.{Success, Try}
+
+import com.github.kevinsawicki.http.HttpRequest
+import rx.lang.scala.schedulers.IOScheduler
 import scala.collection.mutable
-import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import org.bitcoinj.core.Coin
+import spray.json.JsonFormat
 
 
 object JsonHttpUtils {
@@ -68,7 +69,6 @@ object BroadcasterSaver extends Saver {
 }
 
 // Fiat rates containers
-case class Rates(exchange: PriceMap, fee: Coin, stamp: Long) { def riskyFee = fee div 3 }
 case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
 case class LastRate(last: Double) extends Rate { def now = last }
 case class AskRate(ask: Double) extends Rate { def now = ask }
@@ -83,7 +83,7 @@ object RatesSaver extends Saver { me =>
   type BitpayList = List[BitpayRate]
   type RatesMap = Map[String, Rate]
   override type Snapshot = Rates
-  val KEY = "rates"
+  val KEY = "rates1"
 
   implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
@@ -115,13 +115,19 @@ object RatesSaver extends Saver { me =>
   }
 
   def process = {
-    val span = 1200000 // 20 minutes
+    val span = 20.minutes.toMillis
     val timeLag = System.currentTimeMillis - rates.stamp
     val delayed = if (span - timeLag < 0) 0L else span - timeLag
     val combined = pickExchangeRate zip pickFeeRate delay delayed.millis
 
     combined foreach { case (exchange, fee) =>
-      me save Rates(exchange, fee, System.currentTimeMillis)
+      // In case of too low fee we use a default value
+      val newFee = List(fee, Coin valueOf 50000).sorted.last
+      me save Rates(exchange, newFee, System.currentTimeMillis)
     }
   }
+}
+
+case class Rates(exchange: PriceMap, fee: Coin, stamp: Long) {
+  def riskyFee: Coin = List(fee div 3, Coin valueOf 5000).sorted.last
 }

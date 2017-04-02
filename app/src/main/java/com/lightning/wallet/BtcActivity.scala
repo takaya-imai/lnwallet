@@ -17,7 +17,6 @@ import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
-import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import android.view.View.OnClickListener
@@ -112,13 +111,12 @@ with ListUpdater { me =>
   lazy val adapter = new BtcAdapter
 
   private[this] val txsTracker =
-    new NativeTxTracker with TransactionConfidenceEventListener with WalletReorganizeEventListener {
+    new NativeTxTracker with TransactionConfidenceEventListener {
       override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
       override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
-      def onReorganize(wallet: Wallet) = me runOnUiThread adapter.notifyDataSetChanged
-
-      override def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction): Unit =
-        if (tx.getConfidence.getDepthInBlocks <= minDepth) onReorganize(wallet)
+      def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) =
+        if (tx.getConfidence.getDepthInBlocks <= minDepth)
+          me runOnUiThread adapter.notifyDataSetChanged
 
       def tell(tx: Transaction) = {
         adapter.transactions prepend tx
@@ -197,7 +195,6 @@ with ListUpdater { me =>
       <(nativeTransactions, onFail) { result =>
         app.kit.wallet addTransactionConfidenceEventListener txsTracker
         app.kit.wallet addCoinsReceivedEventListener txsTracker
-        app.kit.wallet addReorganizeEventListener txsTracker
         app.kit.wallet addCoinsSentEventListener txsTracker
 
         // Show limited txs list
@@ -222,7 +219,6 @@ with ListUpdater { me =>
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeTransactionConfidenceEventListener txsTracker
     app.kit.wallet removeCoinsReceivedEventListener txsTracker
-    app.kit.wallet removeReorganizeEventListener txsTracker
     app.kit.wallet removeCoinsSentEventListener txsTracker
 
     app.kit.wallet removeCoinsSentEventListener tracker

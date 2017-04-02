@@ -140,7 +140,8 @@ object Vibr {
   val generalTracker = new NativeTxTracker with TransactionConfidenceEventListener {
     override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
     override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
-    override def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction): Unit =
-      if (tx.getConfidence.getDepthInBlocks == minDepth) vibrate(confirmed)
+    def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) =
+      if (tx.getConfidence.getDepthInBlocks == minDepth)
+        vibrate(confirmed)
   }
 }

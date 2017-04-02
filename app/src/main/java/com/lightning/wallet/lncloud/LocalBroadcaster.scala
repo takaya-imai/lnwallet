@@ -16,4 +16,6 @@ class LocalBroadcaster(pending: BroadcasterSaver.Snapshot) extends Broadcaster {
     obsOn(new org.bitcoinj.core.Transaction(app.params, what.tx), IOScheduler.apply)
       .map(tx => app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get)
       .subscribe(_ => me unschedule what, _ => me unschedule what)
+
+  //TODO tx confidence changed
 }

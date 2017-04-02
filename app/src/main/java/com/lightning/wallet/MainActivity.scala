@@ -5,23 +5,20 @@ import android.widget._
 
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-import com.lightning.wallet.lncloud.RatesSaver
 import org.ndeftools.util.activity.NfcReaderActivity
 import org.bitcoinj.wallet.WalletProtobufSerializer
-
 import concurrent.ExecutionContext.Implicits.global
+import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
 import java.io.FileInputStream
-
 import scala.concurrent.Future
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.view.View
-import com.lightning.wallet.test.CommitmentSpecSpec
 
 
 trait ViewSwitch {

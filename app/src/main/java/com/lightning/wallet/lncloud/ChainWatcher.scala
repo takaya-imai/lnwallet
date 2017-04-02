@@ -17,7 +17,7 @@ import org.bitcoinj.wallet.Wallet
 object ChainWatcher {
   def watchTxDepthLocal(watchTxId: String) = Obs[Int] { obs =>
     val listener = new org.bitcoinj.core.listeners.TransactionConfidenceEventListener {
-      def onTransactionConfidenceChanged(w: org.bitcoinj.wallet.Wallet, tx: Transaction) =
+      def onTransactionConfidenceChanged(wallet: org.bitcoinj.wallet.Wallet, tx: Transaction) =
         if (tx.getHashAsString == watchTxId) obs onNext tx.getConfidence.getDepthInBlocks
     }
 
