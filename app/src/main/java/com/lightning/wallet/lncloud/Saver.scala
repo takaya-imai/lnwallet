@@ -74,12 +74,12 @@ case class LastRate(last: Double) extends Rate { def now = last }
 case class AskRate(ask: Double) extends Rate { def now = ask }
 trait Rate { def now: Double }
 
-case class Rates(exchange: PriceMap, fee: Coin, stamp: Long)
 case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends RateProvider
 case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProvider
 trait RateProvider { val usd, eur, cny: Rate }
 
 object RatesSaver extends Saver { me =>
+  private val defFee = Coin valueOf 60000
   type PriceMap = Map[String, Double]
   type BitpayList = List[BitpayRate]
   type RatesMap = Map[String, Rate]
@@ -102,28 +102,33 @@ object RatesSaver extends Saver { me =>
     case 1 => fromCoreFee(get("https://live.coin.space/api/utils/estimatefee?nbBlocks=9").body, "9")
     case 2 => fromCoreFee(get("https://blockexplorer.com/api/utils/estimatefee?nbBlocks=9").body, "9")
     case _ => fromCoreFee(get("https://localbitcoinschain.com/api/utils/estimatefee?nbBlocks=9").body, "9")
-  }, IOScheduler.apply), pickInc, 1 to 4 by 2).repeatWhen(_ delay 20.minute)
+  }, IOScheduler.apply), pickInc, 1 to 4 by 2)
 
   private def pickExchangeRate = retry(obsOn(random nextInt 3 match {
     case 0 => me toRates bitpayNorm(get("https://bitpay.com/rates").body)
     case 1 => me toRates to[Blockchain](get("https://blockchain.info/ticker").body)
     case _ => me toRates to[Bitaverage](get("https://api.bitcoinaverage.com/ticker/global/all").body)
-  }, IOScheduler.apply), pickInc, 1 to 4 by 2).repeatWhen(_ delay 20.minute)
+  }, IOScheduler.apply), pickInc, 1 to 4 by 2)
 
-  def rates = tryGet match {
-    case Success(savedRates) => savedRates
-    case _ => Rates(Map.empty, Coin valueOf 60000, 0L)
+  var rates = tryGet match {
+    case Success(savedRates: Rates) => savedRates
+    case _ => Rates(Map.empty, defFee div 2, defFee, 0L)
   }
 
   def process = {
     val span = 20.minutes.toMillis
     val timeLag = System.currentTimeMillis - rates.stamp
     val delayed = if (span - timeLag < 0) 0L else span - timeLag
-    val combined = pickExchangeRate zip pickFeeRate delay delayed.millis
+    val combo = pickFeeRate.map(List(_, defFee).sorted.last)
+      .zip(pickExchangeRate).delay(delayed.millis)
 
-    combined foreach { case (exchange, fee) =>
-      val newFee = List(fee, Coin valueOf 60000).sorted.last
-      me save Rates(exchange, newFee, System.currentTimeMillis)
+    combo.repeatWhen(_ delay 20.minutes) foreach { case (fee, exchange) =>
+      rates = Rates(exchange, feeRisky = fee div 2, fee, System.currentTimeMillis)
+      me save rates
     }
   }
 }
+
+@SerialVersionUID(1L)
+case class Rates(exchange: PriceMap, feeRisky: Coin,
+                 feeLive: Coin, stamp: Long)

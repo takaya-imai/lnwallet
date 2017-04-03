@@ -235,21 +235,19 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   // Temporairly update subtitle info
   def notifySubTitle(subtitle: String, infoType: Int)
-  def chooseFeeAndPay(password: String, pay: PayData,
-                      liveFee: Coin, riskyFee: Coin) =
-
-    <(makeTx(password, pay, riskyFee), errorReact) { feeEstimateTx =>
+  def chooseFeeAndPay(password: String, pay: PayData): Unit =
+    <(makeTx(password, pay, RatesSaver.rates.feeRisky), errorReact) { feeEstimate =>
       // Fee is taken per 1000 bytes of data so we normalize it with respect to tx size
-      val riskyFinalFee = riskyFee multiply feeEstimateTx.unsafeBitcoinSerialize.length div 1000
-      val liveFinalFee = liveFee multiply feeEstimateTx.unsafeBitcoinSerialize.length div 1000
+      val riskyFinalFee = RatesSaver.rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+      val liveFinalFee = RatesSaver.rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
 
       // Mark fees as red because we are the ones who always pay them
       val riskyFeePretty = sumOut format withSign(riskyFinalFee)
       val liveFeePretty = sumOut format withSign(liveFinalFee)
 
       // Show fees in satoshis as well as in current fiat value
-      val feeRisky = getString(fee_risky).format(humanFiat(inFiat(riskyFee), ""), riskyFeePretty)
-      val feeLive = getString(fee_live).format(humanFiat(inFiat(liveFee), ""), liveFeePretty)
+      val feeRisky = getString(fee_risky).format(humanFiat(inFiat(RatesSaver.rates.feeRisky), ""), riskyFeePretty)
+      val feeLive = getString(fee_live).format(humanFiat(inFiat(RatesSaver.rates.feeLive), ""), liveFeePretty)
 
       // Create a fee selector
       val feesOptions = Array(feeRisky.html, feeLive.html)
@@ -260,8 +258,8 @@ trait ToolbarActivity extends TimerActivity { me =>
       lst.setItemChecked(0, true)
 
       def sendTx: Unit = rm(alert) {
-        def tx = makeTx(password, pay, if (lst.getCheckedItemPosition == 0) riskyFee else liveFee)
-        <(app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get, errorReact)(none)
+        val fee: Coin = if (lst.getCheckedItemPosition == 0) RatesSaver.rates.feeRisky else RatesSaver.rates.feeLive
+        <(app.kit.peerGroup.broadcastTransaction(makeTx(password, pay, fee), 1).broadcast.get, errorReact)(none)
         add(me getString tx_announce, Informer.BTCEVENT).ui.run
       }
 

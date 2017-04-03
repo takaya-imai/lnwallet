@@ -73,19 +73,15 @@ object MSat {
 }
 
 object JavaSerializer {
-  private val version = 1
   def serialize[T](cs: T): String = {
-    val out = new ByteArrayOutputStream
-    val objectOut = new ObjectOutputStream(out)
-    objectOut.writeObject(version -> cs)
-    HEX encode out.toByteArray
+    val output = new ByteArrayOutputStream
+    new ObjectOutputStream(output) writeObject cs
+    HEX encode output.toByteArray
   }
 
   def deserialize[T](hex: String): T = {
-    type InternalVersionAndObject = (Int, T)
     val input = new ByteArrayInputStream(HEX decode hex)
-    val raw = new ObjectInputStream(input).readObject
-    raw.asInstanceOf[InternalVersionAndObject]._2
+    new ObjectInputStream(input).readObject.asInstanceOf[T]
   }
 }
 

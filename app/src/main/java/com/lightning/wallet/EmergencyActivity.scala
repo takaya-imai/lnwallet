@@ -20,7 +20,7 @@ class EmergencyActivity extends InfoActivity { me =>
     wrap(initToolbar)(me setContentView R.layout.activity_emergency)
     add(me getString emerge_subtitle, Informer.EMERGENCY).ui.run
     getSupportActionBar.setTitle(me getString emerge_title)
-    Future(prepareWallet)
+    <(prepareWallet, _ => app toast err_general)(none)
   }
 
   def prepareWallet =

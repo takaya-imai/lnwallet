@@ -323,9 +323,8 @@ with ListUpdater { me =>
         case Failure(_) => app toast dialog_sum_empty
 
         case Success(ms) => rm(alert) {
-          val live = RatesSaver.rates.fee
           val payData = AddrData(ms, spendManager.getAddress)
-          val proceed = chooseFeeAndPay(_: String, payData, live, live div 2)
+          val proceed = chooseFeeAndPay(_: String, payData)
           passPlus(payData cute sumOut)(proceed)
         }
       }
