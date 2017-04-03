@@ -3,11 +3,9 @@ package com.lightning.wallet
 import R.string._
 import scala.util.{Success, Try}
 import com.lightning.wallet.Utils.{wrap, app}
-import scala.concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.AbstractKit.ERROR_REPORT
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
-import scala.concurrent.Future
 import java.io.FileInputStream
 import android.os.Bundle
 import android.view.View

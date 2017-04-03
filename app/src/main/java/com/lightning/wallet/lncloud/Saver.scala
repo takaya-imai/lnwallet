@@ -15,7 +15,6 @@ import scala.util.{Success, Try}
 
 import com.github.kevinsawicki.http.HttpRequest
 import rx.lang.scala.schedulers.IOScheduler
-import scala.collection.mutable
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 
@@ -64,7 +63,8 @@ object StandaloneCloudSaver extends Saver {
 }
 
 object BroadcasterSaver extends Saver {
-  override type Snapshot = mutable.Set[ScheduledTx]
+  type ScheduledTxs = scala.collection.mutable.Set[ScheduledTx]
+  override type Snapshot = (ScheduledTxs, ScheduledTxs)
   val KEY = "broadcaster"
 }
 

@@ -51,11 +51,11 @@ object LNParams {
   }
 }
 
-case class ScheduledTx(tx: BinaryData, atBlock: Int)
+@SerialVersionUID(1L)
+case class ScheduledTx(hex: BinaryData, atBlock: Int)
 
 trait Broadcaster {
   def schedule(what: ScheduledTx): Unit
   def unschedule(what: ScheduledTx): Unit
-  def broadcast(what: ScheduledTx): Unit
-  def currentBlockCount: Int
+  def currentHeight: Int
 }

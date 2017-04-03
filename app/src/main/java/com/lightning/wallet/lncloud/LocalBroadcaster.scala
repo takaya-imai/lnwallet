@@ -1,21 +1,31 @@
 package com.lightning.wallet.lncloud
 
-import com.lightning.wallet.lncloud.JsonHttpUtils._
+import rx.lang.scala.{Observable => Obs}
+import com.lightning.wallet.Utils.{wrap, app}
+import org.bitcoinj.core.{Peer, Block, FilteredBlock}
 import com.lightning.wallet.ln.{Broadcaster, ScheduledTx}
+import com.lightning.wallet.lncloud.BroadcasterSaver.ScheduledTxs
+import com.lightning.wallet.lncloud.JsonHttpUtils.obsOn
+import com.lightning.wallet.MyPeerDataListener
 import rx.lang.scala.schedulers.IOScheduler
-import com.lightning.wallet.Utils.app
 
 
-class LocalBroadcaster(pending: BroadcasterSaver.Snapshot) extends Broadcaster { me =>
-  def broadcastReady: Unit = pending.filter(_.atBlock < currentBlockCount) foreach broadcast
-  def currentBlockCount: Int = app.kit.peerGroup.getMostCommonChainHeight
-  def unschedule(what: ScheduledTx): Unit = pending -= what
-  def schedule(what: ScheduledTx): Unit = pending += what
+class LocalBroadcaster(pending: ScheduledTxs, broadcasted: ScheduledTxs) extends Broadcaster { me =>
+  def send(stx: ScheduledTx): Unit = broadcast(stx).subscribe(_ => me unschedule stx, _ => me unschedule stx)
+  def resend(stx: ScheduledTx): Unit = broadcast(stx).subscribe(_ => broadcasted -= stx, _ => broadcasted -= stx)
 
-  def broadcast(what: ScheduledTx): Unit =
-    obsOn(new org.bitcoinj.core.Transaction(app.params, what.tx), IOScheduler.apply)
+  def unschedule(what: ScheduledTx): Unit = wrap(pending -= what)(broadcasted += what)
+  def schedule(what: ScheduledTx): Unit = wrap(broadcasted -= what)(pending += what)
+  def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
+
+  def broadcast(stx: ScheduledTx): Obs[org.bitcoinj.core.Transaction] =
+    obsOn(new org.bitcoinj.core.Transaction(app.params, stx.hex), IOScheduler.apply)
       .map(tx => app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get)
-      .subscribe(_ => me unschedule what, _ => me unschedule what)
 
-  //TODO tx confidence changed
+  app.kit.peerGroup addBlocksDownloadedEventListener new MyPeerDataListener {
+    def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 5) {
+      for (stx <- broadcasted if stx.atBlock < currentHeight - blocksPerDay * 7) me resend stx
+      for (stx <- pending if stx.atBlock < currentHeight) me send stx
+    }
+  }
 }
