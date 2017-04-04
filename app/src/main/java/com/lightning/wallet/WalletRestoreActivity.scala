@@ -2,17 +2,18 @@ package com.lightning.wallet
 
 import android.widget._
 import com.lightning.wallet.R.string._
-
 import android.view.{View, ViewGroup}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import com.lightning.wallet.Utils.{app, runAnd, wrap}
 import org.bitcoinj.wallet.{DeterministicSeed, KeyChainGroup, Wallet}
-
 import android.widget.DatePicker.OnDateChangedListener
 import com.lightning.wallet.ln.Tools.none
 import org.bitcoinj.store.SPVBlockStore
 import java.util.Calendar
+
 import android.os.Bundle
+import com.lightning.wallet.ln.LNParams
+import com.lightning.wallet.lncloud.RatesSaver
 
 
 class WhenPicker(host: TimerActivity, start: Long)
@@ -89,6 +90,8 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
           setupAndStartDownload
           wallet saveToFile app.walletFile
           exitTo apply classOf[BtcActivity]
+          LNParams setSeed seed
+          RatesSaver.process
         }
       }
     }

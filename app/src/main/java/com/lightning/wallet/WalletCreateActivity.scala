@@ -5,13 +5,14 @@ import com.lightning.wallet.Utils.{app, wrap}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
 import android.widget.{Button, EditText, LinearLayout, TextView}
-
 import android.view.WindowManager.LayoutParams
 import android.text.method.LinkMovementMethod
 import org.bitcoinj.store.SPVBlockStore
 import android.text.TextUtils
 import android.os.Bundle
 import android.view.View
+import com.lightning.wallet.ln.LNParams
+import com.lightning.wallet.lncloud.RatesSaver
 
 
 object Mnemonic {
@@ -77,6 +78,8 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
           wallet saveToFile app.walletFile
           me runOnUiThread mnemonicText.setText(Mnemonic text seed)
           me runOnUiThread setVis(View.GONE, View.GONE, View.VISIBLE)
+          LNParams setSeed seed
+          RatesSaver.process
         }
       }
     }

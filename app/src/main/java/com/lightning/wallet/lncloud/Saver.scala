@@ -7,8 +7,8 @@ import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.RatesSaver._
+import com.lightning.wallet.lncloud.ImplicitVals._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
-import com.lightning.wallet.lncloud.ImplicitPicklers._
 
 import com.lightning.wallet.ln.{Channel, ChannelData, ScheduledTx}
 import rx.lang.scala.{Scheduler, Observable => Obs}
@@ -21,6 +21,28 @@ import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import java.nio.ByteBuffer
 
+
+// Fiat rates containers
+case class Rates(exchange: PriceMap, feeRisky: Coin, feeLive: Coin, stamp: Long)
+case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
+case class LastRate(last: Double) extends Rate { def now = last }
+case class AskRate(ask: Double) extends Rate { def now = ask }
+trait Rate { def now: Double }
+
+case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends RateProvider
+case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProvider
+trait RateProvider { val usd, eur, cny: Rate }
+
+object ImplicitVals {
+  implicit val bigIntegerPickler = transformPickler { s: String => s.bigInteger } (_.toString)
+  implicit val coinPickler = transformPickler { v: Long => Coin valueOf v } (_.getValue)
+
+  implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
+  implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
+  implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
+  implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
+  implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
+}
 
 object JsonHttpUtils {
   def obsOn[T](provider: => T, scheduler: Scheduler): Obs[T] =
@@ -35,11 +57,6 @@ object JsonHttpUtils {
   def to[T : JsonFormat](raw: String): T = raw.parseJson.convertTo[T]
   def jsonFieldAs[T : JsonFormat](field: String)(raw: String) =
     raw.parseJson.asJsObject.fields(field).convertTo[T]
-}
-
-object ImplicitPicklers {
-  implicit val bigIntegerPickler = transformPickler { s: String => s.bigInteger } (_.toString)
-  implicit val coinPickler = transformPickler { v: Long => Coin valueOf v } (_.getValue)
 }
 
 trait Saver {
@@ -80,17 +97,6 @@ object LocalBroadcasterSaver extends Saver {
   val KEY = "broadcaster10"
 }
 
-// Fiat rates containers
-case class Rates(exchange: PriceMap, feeRisky: Coin, feeLive: Coin, stamp: Long)
-case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
-case class LastRate(last: Double) extends Rate { def now = last }
-case class AskRate(ask: Double) extends Rate { def now = ask }
-trait Rate { def now: Double }
-
-case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends RateProvider
-case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProvider
-trait RateProvider { val usd, eur, cny: Rate }
-
 object RatesSaver extends Saver { me =>
   private val defFee = Coin valueOf 60000
   type PriceMap = Map[String, Double]
@@ -98,16 +104,10 @@ object RatesSaver extends Saver { me =>
   type RatesMap = Map[String, Rate]
   val KEY = "rates10"
 
-  implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
-  implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
-  implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
-  implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
-  implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
-
   def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def toRates(src: RatesMap) = Map(strDollar -> src("USD").now, strEuro -> src("EUR").now, strYuan -> src("CNY").now)
-  def bitpayNorm(src: String) = src.parseJson.asJsObject.fields("data").convertTo[BitpayList].map(rt => rt.code -> rt).toMap
-  def fromCoreFee(raw: String, block: String) = Coin parseCoin jsonFieldAs[BigDecimal](block)(raw).abs.toString
+  def bitpayNorm(src: String) = jsonFieldAs[BitpayList]("data")(src).map(bitpay => bitpay.code -> bitpay).toMap
+  def fromCoreFee(src: String, ord: String) = Coin parseCoin jsonFieldAs[BigDecimal](ord)(src).abs.toString
 
   private def pickFeeRate = retry(obsOn(random nextInt 4 match {
     case 0 => fromCoreFee(get("https://bitlox.io/api/utils/estimatefee?nbBlocks=9").body, "9")
