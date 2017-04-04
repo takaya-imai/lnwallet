@@ -14,6 +14,9 @@ trait ChannelMessage extends LightningMessage
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends SetupMessage
 case class Error(channelId: BinaryData, data: BinaryData) extends SetupMessage
 
+case class Pong(data: BinaryData) extends LightningMessage
+case class Ping(pongLength: Int, data: BinaryData) extends LightningMessage
+
 case class OpenChannel(temporaryChannelId: BinaryData,
                        fundingSatoshis: Long, pushMsat: Long, dustLimitSatoshis: Long,
                        maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long, htlcMinimumMsat: Long,

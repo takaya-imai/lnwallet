@@ -167,6 +167,13 @@ object LightningMessageCodecs { me =>
     (binarydata(32) withContext "channelId") ::
       (varsizebinarydata withContext "data")
 
+  private val ping =
+    (uint16 withContext "pongLength") ::
+      (varsizebinarydata withContext "data")
+
+  private val pong =
+    varsizebinarydata withContext "data"
+
   private val openChannel =
     (binarydata(32) withContext "temporaryChannelId") ::
       (uint64 withContext "fundingSatoshis") ::
@@ -326,6 +333,8 @@ object LightningMessageCodecs { me =>
     discriminated[LightningMessage].by(uint16)
       .typecase(cr = init.as[Init], tag = 16)
       .typecase(cr = error.as[Error], tag = 17)
+      .typecase(cr = ping.as[Ping], tag = 18)
+      .typecase(cr = pong.as[Pong], tag = 19)
       .typecase(cr = openChannel.as[OpenChannel], tag = 32)
       .typecase(cr = acceptChannel.as[AcceptChannel], tag = 33)
       .typecase(cr = fundingCreated.as[FundingCreated], tag = 34)
