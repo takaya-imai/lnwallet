@@ -87,8 +87,8 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         peerGroup = new PeerGroup(app.params, blockChain)
 
         if (app.isAlive) {
-          setupAndStartDownload
           LNParams setSeed seed
+          setupAndStartDownload
           wallet saveToFile app.walletFile
           exitTo apply classOf[BtcActivity]
         }

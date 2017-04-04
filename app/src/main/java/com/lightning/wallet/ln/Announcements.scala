@@ -32,6 +32,35 @@ object Announcements { me =>
     (nodeSig :+ 1.toByte, bitcoinSig :+ 1.toByte)
   }
 
+  def makeChannelAnnouncement(shortChannelId: Long, localNodeId: PublicKey, remoteNodeId: PublicKey, localFundingKey: PublicKey,
+                              remoteFundingKey: PublicKey, localNodeSignature: BinaryData, remoteNodeSignature: BinaryData,
+                              localBitcoinSignature: BinaryData, remoteBitcoinSignature: BinaryData): ChannelAnnouncement =
+
+    LexicographicalOrdering.isLessThan(localNodeId.toBin, remoteNodeId.toBin) match {
+      case true => ChannelAnnouncement(nodeSignature1 = localNodeSignature, nodeSignature2 = remoteNodeSignature,
+        bitcoinSignature1 = localBitcoinSignature, bitcoinSignature2 = remoteBitcoinSignature, shortChannelId = shortChannelId,
+        nodeId1 = localNodeId, nodeId2 = remoteNodeId, bitcoinKey1 = localFundingKey, bitcoinKey2 = remoteFundingKey, features = "")
+
+      case false => ChannelAnnouncement(nodeSignature1 = remoteNodeSignature, nodeSignature2 = localNodeSignature,
+        bitcoinSignature1 = remoteBitcoinSignature, bitcoinSignature2 = localBitcoinSignature, shortChannelId = shortChannelId,
+        nodeId1 = remoteNodeId, nodeId2 = localNodeId, bitcoinKey1 = remoteFundingKey, bitcoinKey2 = localFundingKey, features = "")
+    }
+
+  def makeNodeAnnouncement(nodeSecret: PrivateKey, alias: String, color: RGB, addresses: InetSocketAddressList, timestamp: Long): NodeAnnouncement = {
+    val sig = Crypto encodeSignature Crypto.sign(nodeAnnouncementWitnessEncode(timestamp, nodeSecret.publicKey, color, alias, "", addresses), nodeSecret)
+    NodeAnnouncement(signature = sig :+ 1.toByte, timestamp = timestamp, nodeId = nodeSecret.publicKey, rgbColor = color, alias = alias take 32,
+      features = "", addresses = addresses)
+  }
+
+  def makeChannelUpdate(nodeSecret: PrivateKey, remoteNodeId: PublicKey, shortChannelId: Long, cltvExpiryDelta: Int, htlcMinimumMsat: Long,
+                        feeBaseMsat: Long, feeProportionalMillionths: Long, timestamp: Long): ChannelUpdate = {
+
+    val flags = LexicographicalOrdering.isLessThan(nodeSecret.publicKey.toBin, remoteNodeId.toBin) match { case true => "0000" case false => "0001" }
+    val sig = Crypto encodeSignature Crypto.sign(channelUpdateWitnessEncode(shortChannelId, timestamp, flags, cltvExpiryDelta, htlcMinimumMsat, feeBaseMsat, feeProportionalMillionths), nodeSecret)
+    ChannelUpdate(signature = sig :+ 1.toByte, shortChannelId = shortChannelId, timestamp = timestamp, flags = flags, cltvExpiryDelta = cltvExpiryDelta, htlcMinimumMsat = htlcMinimumMsat,
+      feeBaseMsat = feeBaseMsat, feeProportionalMillionths = feeProportionalMillionths)
+  }
+
   def checkSigs(ann: ChannelAnnouncement): Boolean = {
     val witness = channelAnnouncementWitnessEncode(ann.shortChannelId,
       ann.nodeId1, ann.nodeId2, ann.bitcoinKey1, ann.bitcoinKey2, ann.features)
