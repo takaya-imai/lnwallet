@@ -51,7 +51,7 @@ object LNParams {
   }
 }
 
-@SerialVersionUID(1L)
+@SerialVersionUID(2L)
 case class ScheduledTx(hex: BinaryData, atBlock: Int)
 
 trait Broadcaster {

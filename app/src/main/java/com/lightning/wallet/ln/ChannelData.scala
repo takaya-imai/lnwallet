@@ -21,8 +21,9 @@ case class CMDFailHtlc(id: Long, reason: BinaryData, commit: Boolean = false) ex
 case class CMDUpdateFee(feeratePerKw: Long, commit: Boolean = false) extends Command
 
 
-trait ChannelData extends Serializable
-trait WithCommitments extends Serializable { val commitments: Commitments }
+sealed trait ChannelData
+case class Test(x: String) extends ChannelData
+sealed trait WithCommitments { val commitments: Commitments }
 
 
 case class LocalParams(nodeId: PublicKey, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,

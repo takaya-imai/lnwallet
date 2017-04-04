@@ -12,9 +12,9 @@ import org.bitcoinj.wallet.listeners._
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
-import com.lightning.wallet.lncloud.{Rates, RatesSaver}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import scala.util.{Failure, Success, Try}
+import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
 import java.util.{Timer, TimerTask}
 
@@ -28,6 +28,7 @@ import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
 import android.view.WindowManager.LayoutParams
+import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import android.support.v7.widget.Toolbar
@@ -41,7 +42,7 @@ import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.script.Script
 import scala.concurrent.Future
-import android.app.Dialog
+import java.math.BigInteger
 import android.os.Bundle
 
 import ViewGroup.LayoutParams.WRAP_CONTENT
@@ -95,6 +96,7 @@ object Utils { me =>
 }
 
 class StringOps(source: String) {
+  def bigInteger = new BigInteger(source)
   def hex = HEX.encode(source getBytes "UTF-8")
   def noCommas = source.replace(",", "")
   def html = Html fromHtml source
@@ -324,8 +326,10 @@ trait TimerActivity extends AppCompatActivity { me =>
     prev.dismiss
   }
 
-  def mkForm(builder: Builder, title: View, content: View) = {
-    val alertDialog = builder.setCustomTitle(title).setView(content).create
+  def mkForm(builder: Builder, title: View, content: View) =
+    showForm(builder.setCustomTitle(title).setView(content).create)
+
+  def showForm(alertDialog: AlertDialog) = {
     if (scrWidth > 2.3) alertDialog.getWindow.setLayout(maxDialog.toInt, WRAP_CONTENT)
     alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
     alertDialog.setCanceledOnTouchOutside(false)

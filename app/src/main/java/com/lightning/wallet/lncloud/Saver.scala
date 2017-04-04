@@ -1,13 +1,14 @@
 package com.lightning.wallet.lncloud
 
 import spray.json._
+import boopickle.Default._
 import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
-import com.lightning.wallet.ln.JavaSerializer._
 import com.lightning.wallet.lncloud.RatesSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.lncloud.ImplicitPicklers._
 
 import com.lightning.wallet.ln.{Channel, ChannelData, ScheduledTx}
 import rx.lang.scala.{Scheduler, Observable => Obs}
@@ -15,8 +16,10 @@ import scala.util.{Success, Try}
 
 import com.github.kevinsawicki.http.HttpRequest
 import rx.lang.scala.schedulers.IOScheduler
+import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
+import java.nio.ByteBuffer
 
 
 object JsonHttpUtils {
@@ -34,41 +37,51 @@ object JsonHttpUtils {
     raw.parseJson.asJsObject.fields(field).convertTo[T]
 }
 
-trait Saver {
-  type Snapshot
-  val KEY: String
+object ImplicitPicklers {
+  implicit val bigIntegerPickler = transformPickler { s: String => s.bigInteger } (_.toString)
+  implicit val coinPickler = transformPickler { v: Long => Coin valueOf v } (_.getValue)
+}
 
-  def save(snap: Snapshot): Unit = StorageWrap.put(serialize(snap), KEY)
-  def tryGet: Try[Snapshot] = StorageWrap get KEY map deserialize[Snapshot]
+trait Saver {
+  val KEY: String
+  protected def tryGet: Try[ByteBuffer] = StorageWrap.get(KEY) map HEX.decode map ByteBuffer.wrap
+  protected def save(snapshot: Bytes): Unit = StorageWrap.put(HEX encode snapshot, KEY)
 }
 
 object BlindTokensSaver extends Saver {
-  val initState: Snapshot = (Set.empty, BlindTokens.OPERATIONAL :: Nil, null)
-  override type Snapshot = (Set[ClearToken], List[String], BlindProgress)
-  type ClearToken = (String, String, String)
   // Blinding point, clear token and sig
-  val KEY = "blindTokens"
+  type ClearToken = (String, String, String)
+  type Snapshot = (Set[ClearToken], List[String], BlindProgress)
+  val initState: Snapshot = (Set.empty, BlindTokens.OPERATIONAL :: Nil, null)
+  def saveObject(snap: Snapshot) = save(Pickle.intoBytes(snap).array)
+  def tryGetObject = tryGet map Unpickle[Snapshot].fromBytes
+  val KEY = "blindTokens10"
 }
 
 object ChannelSaver extends Saver {
+  type Snapshot = (List[String], ChannelData)
   val initState: Snapshot = (Channel.INITIALIZED :: Nil, null)
-  override type Snapshot = (List[String], ChannelData)
-  val KEY = "channel"
+  def saveObject(snap: Snapshot) = save(Pickle.intoBytes(snap).array)
+  def tryGetObject = tryGet map Unpickle[Snapshot].fromBytes
+  val KEY = "channel10"
 }
 
 object StandaloneCloudSaver extends Saver {
   def remove = app.db.change(Storage.killSql, KEY)
-  override type Snapshot = String
-  val KEY = "standaloneCloud"
+  def saveUrl(url: String) = StorageWrap.put(url, KEY)
+  def tryGetUrl: Try[String] = StorageWrap.get(KEY)
+  val KEY = "standaloneCloud10"
 }
 
-object BroadcasterSaver extends Saver {
+object LocalBroadcasterSaver extends Saver {
   type ScheduledTxs = scala.collection.mutable.Set[ScheduledTx]
-  override type Snapshot = (ScheduledTxs, ScheduledTxs)
-  val KEY = "broadcaster"
+  def saveObject(snap: LocalBroadcaster) = save(Pickle.intoBytes(snap).array)
+  def tryGetObject = tryGet map Unpickle[LocalBroadcaster].fromBytes
+  val KEY = "broadcaster10"
 }
 
 // Fiat rates containers
+case class Rates(exchange: PriceMap, feeRisky: Coin, feeLive: Coin, stamp: Long)
 case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
 case class LastRate(last: Double) extends Rate { def now = last }
 case class AskRate(ask: Double) extends Rate { def now = ask }
@@ -83,8 +96,7 @@ object RatesSaver extends Saver { me =>
   type PriceMap = Map[String, Double]
   type BitpayList = List[BitpayRate]
   type RatesMap = Map[String, Rate]
-  override type Snapshot = Rates
-  val KEY = "rates"
+  val KEY = "rates10"
 
   implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
@@ -110,10 +122,11 @@ object RatesSaver extends Saver { me =>
     case _ => me toRates to[Bitaverage](get("https://api.bitcoinaverage.com/ticker/global/all").body)
   }, IOScheduler.apply), pickInc, 1 to 4 by 2)
 
-  var rates = tryGet match {
-    case Success(savedRates: Rates) => savedRates
-    case _ => Rates(Map.empty, defFee div 2, defFee, 0L)
-  }
+  var rates: Rates =
+    tryGet map Unpickle[Rates].fromBytes match {
+      case Success(savedRates: Rates) => savedRates
+      case _ => Rates(Map.empty, defFee div 2, defFee, 0L)
+    }
 
   def process = {
     val span = 20.minutes.toMillis
@@ -124,11 +137,7 @@ object RatesSaver extends Saver { me =>
 
     combo.repeatWhen(_ delay 20.minutes) foreach { case (fee, exchange) =>
       rates = Rates(exchange, feeRisky = fee div 2, fee, System.currentTimeMillis)
-      me save rates
+      save(Pickle.intoBytes(rates).array)
     }
   }
 }
-
-@SerialVersionUID(1L)
-case class Rates(exchange: PriceMap, feeRisky: Coin,
-                 feeLive: Coin, stamp: Long)

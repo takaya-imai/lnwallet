@@ -38,7 +38,7 @@ class EmergencyActivity extends InfoActivity { me =>
   def emergeMnemonic(view: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
 
   def emergeReport(view: View) = Try(getIntent getStringExtra ERROR_REPORT) match {
-    case Success(errorReport: String) => mkForm(me negBld dialog_ok, null, errorReport)
-    case _ => mkForm(me negBld dialog_ok, null, me getString err_general)
+    case Success(errorReport: String) => showForm(negBld(dialog_ok).setMessage(errorReport).create)
+    case _ => showForm(negBld(dialog_ok).setMessage(me getString err_general).create)
   }
 }

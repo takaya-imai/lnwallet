@@ -1,6 +1,5 @@
 package com.lightning.wallet.ln
 
-import java.io._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Exceptions._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
@@ -9,7 +8,6 @@ import org.bitcoinj.crypto.{ChildNumber, HDKeyDerivation}
 import com.lightning.wallet.ln.crypto.RandomGenerator
 import org.bitcoinj.wallet.DeterministicSeed
 import language.implicitConversions
-import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import wire.LightningMessage
 import java.util.Locale
@@ -70,19 +68,6 @@ object MSat {
   implicit def coin2MilliSatoshi(coin: Coin): MilliSatoshi = MilliSatoshi(coin.value * satFactor)
   implicit def coin2String(coin: Coin): String = baseSat format coin.value
   def withSign(sum: String) = s"ⓢ $sum"
-}
-
-object JavaSerializer {
-  def serialize[T](cs: T): String = {
-    val output = new ByteArrayOutputStream
-    new ObjectOutputStream(output) writeObject cs
-    HEX encode output.toByteArray
-  }
-
-  def deserialize[T](hex: String): T = {
-    val input = new ByteArrayInputStream(HEX decode hex)
-    new ObjectInputStream(input).readObject.asInstanceOf[T]
-  }
 }
 
 object Features {

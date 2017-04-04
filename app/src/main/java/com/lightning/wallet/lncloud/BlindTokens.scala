@@ -6,7 +6,6 @@ import com.lightning.wallet.ln._
 import com.lightning.wallet.lncloud.BlindTokens._
 import com.lightning.wallet.lncloud.BlindTokensSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
-
 import com.lightning.wallet.Utils.{app, string2Ops}
 import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.{NodeAnnouncements, SeqPaymentRoute}
@@ -24,7 +23,7 @@ import org.bitcoinj.core.ECKey
 import scodec.bits.BitVector
 
 
-trait BlindProgress
+sealed trait BlindProgress
 case class UnpaidTokens(memo: BlindMemo, invoice: Invoice) extends BlindProgress
 case class PaidTokens(memo: BlindMemo, paymentPreimage: BinaryData) extends BlindProgress
 
@@ -102,11 +101,11 @@ extends StateMachine[BlindProgress](baseState, baseData) with ChannelListener wi
 
     call("blindtokens/buy", result => Invoice parse result.head.convertTo[String],
       "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.convertTo[String].hex)
-      .filter(_.sum.amount <= 50000000).map(invoice => augmentInvoice(invoice, qty.toInt) -> memo)
+      .filter(_.sum.amount < 50000000).map(invoice => augmentInvoice(invoice, qty.toInt) -> memo)
   }
 
   def getClearTokens(paid: PaidTokens) = call("blindtokens/redeem",
-    signatures => for (blind <- signatures) yield blind.convertTo[BigInt].bigInteger,
+    blindSigs => for (blind <- blindSigs) yield blind.convertTo[String].bigInteger,
     "preimage" -> paid.paymentPreimage.toString, "seskey" -> paid.memo.sesPubKeyHex)
       .map(paid.memo.makeClearSigs).map(paid.memo.pack)
 }
