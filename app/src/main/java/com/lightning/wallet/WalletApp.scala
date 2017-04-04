@@ -7,12 +7,12 @@ import org.bitcoinj.core._
 import org.bitcoinj.uri.{BitcoinURIParseException, OptionalFieldValidationException}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, RequiredFieldValidationException}
+import com.lightning.wallet.lncloud.{CipherOpenHelper, RatesSaver}
 import android.content.{ClipData, ClipboardManager, Context}
 import com.lightning.wallet.ln.{Invoice, LNParams}
 import org.bitcoinj.wallet.{Protos, Wallet}
 
 import listeners.TransactionConfidenceEventListener
-import com.lightning.wallet.lncloud.CipherOpenHelper
 import com.lightning.wallet.ln.LNParams.minDepth
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
@@ -87,12 +87,6 @@ class WalletApp extends Application { me =>
       case s if s matches lnPaymentRequestRegex => Invoice parse s
       case s => getTo(s)
     }
-
-    def valueExit(host: TimerActivity) = value match {
-      case _: BitcoinURI => host exitTo classOf[BtcActivity]
-      case _: Address => host exitTo classOf[BtcActivity]
-      case _ => host exitTo classOf[LNActivity]
-    }
   }
 
   abstract class WalletKit extends AbstractKit {
@@ -125,6 +119,7 @@ class WalletApp extends Application { me =>
       peerGroup setPingIntervalMsec 10000
       peerGroup setMaxConnections 8
       peerGroup addWallet wallet
+      RatesSaver.process
       startDownload
     }
   }

@@ -4,6 +4,8 @@ import R.string._
 import com.lightning.wallet.Utils._
 import com.journeyapps.barcodescanner._
 import com.lightning.wallet.ln.Tools.none
+import org.bitcoinj.uri.BitcoinURI
+import org.bitcoinj.core.Address
 import android.widget.Toast
 import android.os.Bundle
 
@@ -26,13 +28,19 @@ class ScanActivity extends TimerActivity with BarcodeCallback { me =>
     lastAttempt = System.currentTimeMillis
     beeper.playRawResource(R.raw.beep, false)
     app.TransData parseValue text
-    app.TransData valueExit me
+
+    // Find out where to go
+    app.TransData.value match {
+      case _: BitcoinURI => me exitTo classOf[BtcActivity]
+      case _: Address => me exitTo classOf[BtcActivity]
+      case _ => me exitTo classOf[LNActivity]
+    }
 
     // Parsing error may occur
   } catch app.TransData.onFail { code =>
-    val dlg = mkChoiceDialog(reader.resume, finish, dialog_ok, dialog_cancel)
-    mkForm(builder = dlg setMessage code, title = null, content = null)
     Toast.makeText(app, text, Toast.LENGTH_LONG).show
+    showForm(mkChoiceDialog(reader.resume, finish, dialog_ok,
+      dialog_cancel).setMessage(code).create)
 
     // Pause anyway
   } finally reader.pause

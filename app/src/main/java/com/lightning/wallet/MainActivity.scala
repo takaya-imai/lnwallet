@@ -8,7 +8,6 @@ import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.ndeftools.util.activity.NfcReaderActivity
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import concurrent.ExecutionContext.Implicits.global
-import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
@@ -48,9 +47,8 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       peerGroup = new PeerGroup(app.params, blockChain)
 
       def startUp = {
-        RatesSaver.process
         setupAndStartDownload
-        app.TransData valueExit me
+        exitTo apply classOf[LNActivity]
       }
     }
   }
@@ -92,13 +90,13 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   // STARTUP LOGIC
 
-  def inform(code: Int): Unit = mkForm(mkChoiceDialog(next, finish,
-    dialog_ok, dialog_cancel) setMessage code, null, null)
+  def inform(code: Int): Unit = showForm(mkChoiceDialog(next,
+    finish, dialog_ok, dialog_cancel).setMessage(code).create)
 
   def next =
     (app.walletFile.exists, app.isAlive, LNParams.hasSeed) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
-      case (true, true, true) => app.TransData valueExit me
+      case (true, true, true) => exitTo apply classOf[LNActivity]
 
       case (true, false, _) =>
         // Launch of a previously closed app

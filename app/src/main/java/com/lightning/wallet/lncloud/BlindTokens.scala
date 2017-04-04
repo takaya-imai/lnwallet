@@ -133,7 +133,7 @@ trait LNCloud { me =>
   type FeeRates = Map[Int, BigDecimal]
   def getFees = to[FeeRates](http("fees").body) mapValues MSat.btcBigDecimal2MilliSatoshi
   def findRoutes(from: BinaryData, to: BinaryData): Obs[SeqPaymentRoute] = call("router/routes",
-    _.flatMap(json2BitVec).map(routes => LightningMessageCodecs.hops.decode(routes).require.value),
+    _.flatMap(json2BitVec).map(LightningMessageCodecs.hops.decode(_).require.value),
     "from" -> from.toString, "to" -> to.toString)
 
   def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes/find",
