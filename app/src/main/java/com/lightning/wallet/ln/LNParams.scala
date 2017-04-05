@@ -1,20 +1,22 @@
 package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.Exceptions._
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import org.bitcoinj.wallet.DeterministicSeed
-import org.bitcoinj.crypto.DeterministicKey
-import org.bitcoinj.core.Sha256Hash
+import fr.acinq.bitcoin.DeterministicWallet._
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 
 
 object LNParams {
+  var seedHash: String = _
+  var extendedPrivateKey: ExtendedPrivateKey = _
+  var extendedCloudPrivateKey: ExtendedPrivateKey = _
   var broadcaster: Broadcaster = _
-  private var seed: DeterministicSeed = _
-  lazy val extendedPrivateKey: DeterministicKey = Tools.derive(Nil, 46)(seed)
-  lazy val extendedCloudPrivateKey: DeterministicKey = Tools.derive(Nil, 92)(seed)
-  def getSeedHash: String = Sha256Hash.twiceOf(seed.getSeedBytes).toString
-  def setSeed(newSeed: DeterministicSeed): Unit = seed = newSeed
-  def hasSeed: Boolean = seed != null
+
+  def hasSeed: Boolean = seedHash != null
+  def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
+    extendedPrivateKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
+    extendedCloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
+    seedHash = Crypto.hash256(seed).toString
+  }
 
   val updateFeeMinDiffRatio = 0.1 // Should update fee
   val updateFeeMaxDiffRatio = 0.3 // Should disconnect

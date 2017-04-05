@@ -80,6 +80,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         store = new SPVBlockStore(app.params, app.chainFile)
         wallet = new Wallet(app.params, keyChainGroup)
         app.kit encryptWallet password.getText
+        LNParams setup seed.getSeedBytes
         useCheckPoints(whenTime)
 
         // Must be initialized after checkpoints
@@ -87,7 +88,6 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         peerGroup = new PeerGroup(app.params, blockChain)
 
         if (app.isAlive) {
-          LNParams setSeed seed
           setupAndStartDownload
           wallet saveToFile app.walletFile
           exitTo apply classOf[BtcActivity]

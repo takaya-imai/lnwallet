@@ -4,9 +4,7 @@ import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Exceptions._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
-import org.bitcoinj.crypto.{ChildNumber, HDKeyDerivation}
 import com.lightning.wallet.ln.crypto.RandomGenerator
-import org.bitcoinj.wallet.DeterministicSeed
 import language.implicitConversions
 import org.bitcoinj.core.Coin
 import wire.LightningMessage
@@ -18,16 +16,7 @@ object Tools {
   type BinaryDataList = List[BinaryData]
   type LightningMessages = Vector[LightningMessage]
   def none: PartialFunction[Any, Unit] = { case _ => }
-
   val random = new RandomGenerator
-
-  // Second 0H means "Bitcoin" according to BIP44
-  // Deriving /M/nH/0H/<arbitrary depth> deterministic keys
-  def derive(way: List[ChildNumber], n: Int)(seed: DeterministicSeed) = {
-    val masterKey = HDKeyDerivation createMasterPrivateKey seed.getSeedBytes
-    val purposeBitcoin = List(new ChildNumber(n, true), ChildNumber.ZERO_HARDENED)
-    (purposeBitcoin ::: way).foldLeft(masterKey)(HDKeyDerivation.deriveChildKey)
-  }
 
   def fromShortId(id: Long): (Int, Int, Int) = {
     val blockNumber = id.>>(40).&(0xFFFFFF).toInt

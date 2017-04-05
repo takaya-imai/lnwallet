@@ -123,8 +123,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   def setSeed = {
     val pass = mainPassData.getText.toString
-    val seed = Mnemonic decrypt pass
-    LNParams setSeed seed
+    LNParams setup Mnemonic.decrypt(pass).getSeedBytes
   }
 
   def goRestoreWallet(view: View) = me exitTo classOf[WalletRestoreActivity]

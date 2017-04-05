@@ -69,13 +69,13 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
         store = new SPVBlockStore(app.params, app.chainFile)
         useCheckPoints(wallet.getEarliestKeyCreationTime)
         app.kit encryptWallet createPass.getText
+        LNParams setup seed.getSeedBytes
 
         // These should be initialized after checkpoints
         blockChain = new BlockChain(app.params, wallet, store)
         peerGroup = new PeerGroup(app.params, blockChain)
 
         if (app.isAlive) {
-          LNParams setSeed seed
           setupAndStartDownload
           wallet saveToFile app.walletFile
           me runOnUiThread mnemonicText.setText(Mnemonic text seed)

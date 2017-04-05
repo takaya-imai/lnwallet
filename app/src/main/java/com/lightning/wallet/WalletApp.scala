@@ -30,7 +30,7 @@ import Context.CLIPBOARD_SERVICE
 
 class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val db = new CipherOpenHelper(app, 1, LNParams.getSeedHash)
+  lazy val db = new CipherOpenHelper(app, 1, LNParams.seedHash)
   lazy val params = org.bitcoinj.params.TestNet3Params.get
   var walletFile, chainFile: java.io.File = _
   var kit: WalletKit = _
