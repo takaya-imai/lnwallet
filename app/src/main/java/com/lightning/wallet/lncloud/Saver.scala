@@ -48,6 +48,12 @@ object JsonHttpUtils {
   def obsOn[T](provider: => T, scheduler: Scheduler): Obs[T] =
     Obs.just(null).subscribeOn(scheduler).map(_ => provider)
 
+  def withDelay[T](obs: Obs[T], start: Long, timeout: Long) = {
+    val adjustedTimeout = start + timeout - System.currentTimeMillis
+    val delayLeft = if (adjustedTimeout < 0) 0L else adjustedTimeout
+    obs.delay(delayLeft.millis)
+  }
+
   type IntervalPicker = (Throwable, Int) => Duration
   def retry[T](obs: Obs[T], pick: IntervalPicker, times: Range): Obs[T] =
     obs.retryWhen(_.zipWith(Obs from times)(pick) flatMap Obs.timer)
@@ -128,16 +134,11 @@ object RatesSaver extends Saver { me =>
       case _ => Rates(Map.empty, defFee div 2, defFee, 0L)
     }
 
-  def process = {
-    val span = 20.minutes.toMillis
-    val timeLag = System.currentTimeMillis - rates.stamp
-    val delayed = if (span - timeLag < 0) 0L else span - timeLag
-    val combo = pickFeeRate.map(List(_, defFee).sorted.last)
-      .zip(pickExchangeRate).delay(delayed.millis)
-
-    combo.repeatWhen(_ delay 20.minutes) foreach { case (fee, exchange) =>
-      rates = Rates(exchange, feeRisky = fee div 2, fee, System.currentTimeMillis)
-      save(Pickle.intoBytes(rates).array)
-    }
+  private val updateRates = (fee: Coin, exchange: PriceMap) => {
+    rates = Rates(exchange, fee div 2, fee, System.currentTimeMillis)
+    save(Pickle.intoBytes(rates).array)
   }
+
+  def process = withDelay(pickFeeRate.map(List(_, defFee).sorted.last).zip(pickExchangeRate)
+    .repeatWhen(_ delay 20.minutes), rates.stamp, 20.minutes.toMillis) foreach updateRates.tupled
 }
