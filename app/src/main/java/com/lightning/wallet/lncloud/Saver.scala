@@ -48,8 +48,8 @@ object JsonHttpUtils {
   def obsOn[T](provider: => T, scheduler: Scheduler): Obs[T] =
     Obs.just(null).subscribeOn(scheduler).map(_ => provider)
 
-  def withDelay[T](obs: Obs[T], start: Long, timeout: Long) = {
-    val adjustedTimeout = start + timeout - System.currentTimeMillis
+  def withDelay[T](obs: Obs[T], startMillis: Long, timeoutMillis: Long) = {
+    val adjustedTimeout = startMillis + timeoutMillis - System.currentTimeMillis
     val delayLeft = if (adjustedTimeout < 0) 0L else adjustedTimeout
     obs.delay(delayLeft.millis)
   }

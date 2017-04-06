@@ -57,7 +57,7 @@ object StorageWrap {
   }
 }
 
-object PaymentsWrap extends ChannelListener with InvoiceBag {
+object PaymentsWrap extends /*ChannelListener with*/ InvoiceBag {
   import Payments.{table, preimage, hash, status, stamp, sum, message, incoming, nodeId, fee}
   def notifyView = app.getContentResolver.notifyChange(app.db sqlPath table, null)
 

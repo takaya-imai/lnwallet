@@ -15,15 +15,15 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 trait Command
-case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int, commit: Boolean = false) extends Command
-case class CMDFulfillHtlc(id: Long, preimage: BinaryData, commit: Boolean = false) extends Command
-case class CMDFailHtlc(id: Long, reason: BinaryData, commit: Boolean = false) extends Command
-case class CMDUpdateFee(feeratePerKw: Long, commit: Boolean = false) extends Command
+case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int) extends Command
+case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
+case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
+case class CMDUpdateFee(feeratePerKw: Long) extends Command
 
 
 sealed trait ChannelData
 case class Test(x: String) extends ChannelData
-sealed trait WithCommitments { val commitments: Commitments }
+sealed trait HasCommitments { val commitments: Commitments }
 
 
 case class LocalParams(nodeId: PublicKey, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,

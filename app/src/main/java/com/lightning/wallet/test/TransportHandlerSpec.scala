@@ -1,6 +1,6 @@
 package com.lightning.wallet.test
 
-import com.lightning.wallet.ln.{DataTransport, StateMachine, TransportHandler, TransportSerializer}
+import com.lightning.wallet.ln.{DataTransport, StateMachine, TransportHandler}
 import com.lightning.wallet.ln.crypto.Noise
 import fr.acinq.bitcoin.BinaryData
 
@@ -20,10 +20,7 @@ class TransportHandlerSpec {
     }
 
     lazy val bob: TransportHandler = new TransportHandler(Initiator.s, Some(Responder.s.pub),
-      new TransportSerializer {
-        def consume(data: BinaryData): Unit = println("Bob channel got: " + new String(data.toArray, "UTF-8"))
-        def prepare(data: Any): BinaryData = data.asInstanceOf[BinaryData]
-      },
+      data => println("Bob channel got: " + new String(data.toArray, "UTF-8")),
       new DataTransport {
         def send(data: BinaryData) = Future {
           Thread.sleep(1000)
@@ -32,10 +29,7 @@ class TransportHandlerSpec {
       })
 
     lazy val alice: TransportHandler = new TransportHandler(Responder.s, None,
-      new TransportSerializer {
-        def consume(data: BinaryData): Unit = println("Alice channel got: " + new String(data.toArray, "UTF-8"))
-        def prepare(data: Any): BinaryData = data.asInstanceOf[BinaryData]
-      },
+      data => println("Alice channel got: " + new String(data.toArray, "UTF-8")),
       new DataTransport {
         def send(data: BinaryData) = Future {
           Thread.sleep(1000)

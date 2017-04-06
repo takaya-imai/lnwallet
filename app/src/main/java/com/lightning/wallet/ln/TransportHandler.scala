@@ -7,22 +7,19 @@ import com.lightning.wallet.ln.Tools.random
 import java.nio.ByteOrder
 
 
-trait TransportSerializer {
-  def prepare(data: Any): BinaryData
-  def consume(data: BinaryData): Unit
-}
-
 trait DataTransport { def send(data: BinaryData): Unit }
-class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], serializer: TransportSerializer,
+class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: BinaryData => Unit,
                        transport: DataTransport) extends StateMachine[Data](Nil, null) { me =>
 
   val reader = rs match {
-    case None => makeReader(keyPair)
     case Some(remoteNodeStaticPubKey) =>
       val state = makeWriter(keyPair, remoteNodeStaticPubKey)
       val (state1, _, msg) = state write BinaryData.empty
       transport.send(prefix +: msg)
       state1
+
+    case None =>
+      makeReader(keyPair)
   }
 
   become(HandshakeData(reader, BinaryData.empty), HANDSHAKE)
@@ -65,8 +62,8 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], serializer: Tra
 
     // WAITING_CYPHERTEXT length phase
 
-    case (cd: CyphertextData, (Send, data: Any), WAITING_CYPHERTEXT) =>
-      val (encoder1, ciphertext) = encryptMsg(cd.enc, serializer prepare data)
+    case (cd: CyphertextData, (Send, data: BinaryData), WAITING_CYPHERTEXT) =>
+      val (encoder1: CipherState, ciphertext: BinaryData) = encryptMsg(cd.enc, data)
       stayWith(data1 = cd.copy(enc = encoder1), before = transport send ciphertext)
 
     case (cd: CyphertextData, bd: BinaryData, WAITING_CYPHERTEXT) =>
@@ -88,7 +85,7 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], serializer: Tra
       val (ciphertext, remainder) = buffer.splitAt(length + 16)
       val (decoder1, plaintext) = decoder.decryptWithAd(BinaryData.empty, ciphertext)
       becomeReact(CyphertextData(encoder, decoder1, None, remainder), WAITING_CYPHERTEXT,
-        change = Ping, before = serializer consume plaintext)
+        change = Ping, before = me consume plaintext)
 
     case otherwise =>
       // Let know if received an unhandled message

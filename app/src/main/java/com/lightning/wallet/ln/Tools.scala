@@ -63,8 +63,15 @@ object Features {
   val CHANNELS_PUBLIC_BIT = 0
   val INITIAL_ROUTING_SYNC_BIT = 2
 
-  def isSet(features: BinaryData, bitIndex: Int): Boolean =
-    java.util.BitSet.valueOf(features.reverse.toArray).get(bitIndex)
+  private def fromArray(features: BinaryData) =
+    java.util.BitSet.valueOf(features.data.reverse.toArray)
+
+  def isSet(features: BinaryData, bitIndex: Int): Boolean = fromArray(features) get bitIndex
+  def areSupported(features: BinaryData): Boolean = fromArray(features) match { case bitset =>
+    val (accumulator: List[Int], range: Range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
+    val bits = (accumulator /: range) { case (accum, idx) => bitset.nextSetBit(accum.last + idx) :: accum }
+    !bits.reverse.exists(value => value % 2 == 0 && value > INITIAL_ROUTING_SYNC_BIT)
+  }
 }
 
 abstract class StateMachine[T](var state: List[String], var data: T) { me =>

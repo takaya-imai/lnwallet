@@ -60,7 +60,8 @@ object PaymentOps {
 
   def failHtlc(nodeSecret: PrivateKey, htlc: Htlc, failure: FailureMessage) = {
     val packet = parsePacket(nodeSecret, htlc.add.paymentHash, htlc.add.onionRoutingPacket)
-    CMDFailHtlc(htlc.add.id, createErrorPacket(packet.sharedSecret, failure), commit = true)
+    val errorPacket = createErrorPacket(packet.sharedSecret, failure)
+    CMDFailHtlc(htlc.add.id, errorPacket)
   }
 
   def parseIncomingHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc) = Try {
@@ -75,19 +76,19 @@ object PaymentOps {
     case (Attempt.Successful(_), _, _, sharedSecret) =>
       // We don't route so could not resolve downstream node address
       val reason = createErrorPacket(sharedSecret, UnknownNextPeer)
-      val fail = CMDFailHtlc(add.id, reason, commit = true)
+      val fail = CMDFailHtlc(add.id, reason)
       Left(fail)
 
     case (Attempt.Failure(_), _, _, sharedSecret) =>
+      // Payload could not be parsed at all so we can only fail an HTLC
       val reason = createErrorPacket(sharedSecret, PermanentNodeFailure)
-      val fail = CMDFailHtlc(add.id, reason, commit = true)
-      // Could not parse payload
+      val fail = CMDFailHtlc(add.id, reason)
       Left(fail)
 
   } getOrElse {
     val code = FailureMessageCodecs.BADONION
     val hash = Crypto sha256 add.onionRoutingPacket
-    val fail = CMDFailMalformedHtlc(add.id, hash, code, commit = true)
+    val fail = CMDFailMalformedHtlc(add.id, hash, code)
     Left(fail)
   }
 }

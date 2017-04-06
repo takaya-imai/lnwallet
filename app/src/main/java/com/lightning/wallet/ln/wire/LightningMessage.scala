@@ -11,6 +11,9 @@ trait SetupMessage extends LightningMessage
 trait RoutingMessage extends LightningMessage
 trait ChannelMessage extends LightningMessage
 
+trait HasHtlcId extends ChannelMessage { def id: Long }
+trait FailHtlc extends HasHtlcId
+
 case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends SetupMessage
 case class Ping(pongLength: Int, data: BinaryData) extends SetupMessage
@@ -39,7 +42,6 @@ case class ClosingSigned(channelId: BinaryData, feeSatoshis: Long, signature: Bi
 case class Shutdown(channelId: BinaryData, scriptPubKey: BinaryData) extends ChannelMessage
 
 
-trait HasHtlcId extends ChannelMessage { val id: Long }
 case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId
 case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expiry: Long, paymentHash: BinaryData,
                          onionRoutingPacket: BinaryData) extends HasHtlcId {
@@ -47,7 +49,6 @@ case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expi
   val amountMsatMilliSatoshi = MilliSatoshi(amountMsat)
 }
 
-trait FailHtlc extends HasHtlcId
 case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
 
