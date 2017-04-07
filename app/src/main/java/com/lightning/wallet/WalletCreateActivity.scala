@@ -5,9 +5,6 @@ import com.lightning.wallet.Utils.{app, wrap}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import android.widget.{Button, EditText, TextView}
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
-
-import android.view.WindowManager.LayoutParams
-import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
@@ -44,8 +41,6 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
     super.onCreate(savedState)
     setContentView(R.layout.activity_create)
     info setMovementMethod LinkMovementMethod.getInstance
-    getWindow.setFlags(LayoutParams.FLAG_SECURE, LayoutParams.FLAG_SECURE)
-
     createPass addTextChangedListener new TextChangedWatcher {
       override def onTextChanged(s: CharSequence, st: Int, n: Int, af: Int) = {
         val buttonMessage = if (s.length >= 6) wallet_create else password_too_short
@@ -53,6 +48,7 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
         createWallet setText buttonMessage
       }
     }
+
   }
 
   def makeNewWallet =

@@ -69,7 +69,7 @@ object Features {
   def isSet(features: BinaryData, bitIndex: Int): Boolean = fromArray(features) get bitIndex
   def areSupported(features: BinaryData): Boolean = fromArray(features) match { case bitset =>
     val (accumulator: List[Int], range: Range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
-    val bits = (accumulator /: range) { case (accum, idx) => bitset.nextSetBit(accum.last + idx) :: accum }
+    val bits = (accumulator /: range) { case (accum, _) => bitset.nextSetBit(accum.head + 1) :: accum }
     !bits.reverse.exists(value => value % 2 == 0 && value > INITIAL_ROUTING_SYNC_BIT)
   }
 }

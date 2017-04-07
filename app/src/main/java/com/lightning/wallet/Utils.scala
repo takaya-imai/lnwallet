@@ -27,7 +27,6 @@ import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
-import android.view.WindowManager.LayoutParams
 import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
@@ -141,7 +140,6 @@ trait InfoActivity extends ToolbarActivity { me =>
 
   def doViewMnemonic(password: String) =
     <(Mnemonic decrypt password, _ => tellGenError) { seed =>
-      getWindow.setFlags(LayoutParams.FLAG_SECURE, LayoutParams.FLAG_SECURE)
       mkForm(me negBld dialog_ok, me getString sets_noscreen, Mnemonic text seed)
     }
 
