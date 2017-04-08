@@ -1,9 +1,8 @@
 package com.lightning.wallet.lncloud
 
+import com.lightning.wallet.ln.Tools.{none, runAnd}
 import net.sqlcipher.database.SQLiteOpenHelper
 import net.sqlcipher.database.SQLiteDatabase
-import com.lightning.wallet.ln.Tools.none
-import com.lightning.wallet.Utils.runAnd
 import android.content.Context
 import android.net.Uri
 

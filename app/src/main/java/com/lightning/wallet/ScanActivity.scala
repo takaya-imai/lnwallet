@@ -3,7 +3,8 @@ package com.lightning.wallet
 import R.string._
 import com.lightning.wallet.Utils._
 import com.journeyapps.barcodescanner._
-import com.lightning.wallet.ln.Tools.none
+import com.lightning.wallet.ln.Tools.{none,wrap}
+
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
 import android.widget.Toast

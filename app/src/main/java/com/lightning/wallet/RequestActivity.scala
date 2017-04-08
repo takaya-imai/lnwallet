@@ -10,16 +10,15 @@ import android.os.{Bundle, Environment}
 import android.view.View.{GONE, VISIBLE}
 import android.nfc.{NdefMessage, NfcEvent}
 import android.text.{StaticLayout, TextPaint}
+import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.google.zxing.{BarcodeFormat, EncodeHintType}
 import android.widget.{ImageButton, ImageView, LinearLayout}
-
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import org.ndeftools.util.activity.NfcBeamWriterActivity
 import android.text.Layout.Alignment.ALIGN_NORMAL
 import android.graphics.Bitmap.Config.ARGB_8888
 import com.google.zxing.qrcode.QRCodeWriter
 import android.graphics.Bitmap.createBitmap
-import com.lightning.wallet.ln.Tools.none
 import org.ndeftools.wellknown.TextRecord
 import com.lightning.wallet.ln.Invoice
 import org.bitcoinj.core.Address
@@ -186,7 +185,7 @@ with TimerActivity with ViewSwitch { me =>
   def onNdefPushCompleted = none
   def onNfcStateEnabled = none
 
-  def fail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, me getString err_general)
-  def showTip(v: View) = mkForm(me negBld dialog_ok, null, me getString nfc_payee_tip)
+  def fail(e: Throwable): Unit = showForm(negBld(dialog_ok).setMessage(me getString err_general).create)
+  def showTip(v: View) = showForm(negBld(dialog_ok).setMessage(me getString nfc_payee_tip).create)
   def goSettings(v: View) = startNfcSharingSettingsActivity
 }

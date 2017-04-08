@@ -10,15 +10,17 @@ import com.lightning.wallet.lncloud.RatesSaver._
 import com.lightning.wallet.lncloud.ImplicitVals._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 
-import com.lightning.wallet.ln.{Channel, ChannelData, ScheduledTx}
+import com.lightning.wallet.ln.{ChannelData, ScheduledTx}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import scala.util.{Success, Try}
 
 import com.github.kevinsawicki.http.HttpRequest
+import org.bitcoinj.core.ECKey.CURVE.getCurve
 import rx.lang.scala.schedulers.IOScheduler
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
+import scodec.bits.BitVector
 import java.nio.ByteBuffer
 
 
@@ -34,8 +36,14 @@ case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProv
 trait RateProvider { val usd, eur, cny: Rate }
 
 object ImplicitVals {
+  import com.lightning.wallet.ln.wire.LightningMessageCodecs.nodeAnnouncementCodec
   implicit val bigIntegerPickler = transformPickler { s: String => s.bigInteger } (_.toString)
-  implicit val coinPickler = transformPickler { v: Long => Coin valueOf v } (_.getValue)
+  implicit val ecPointPickler = transformPickler(getCurve.decodePoint)(_ getEncoded true)
+  implicit val coinPickler = transformPickler(Coin.valueOf)(_.getValue)
+
+  implicit val announcePickler = transformPickler { raw: Bytes =>
+    nodeAnnouncementCodec.decode(BitVector apply raw).require.value
+  } (nodeAnnouncementCodec.encode(_).require.toByteArray)
 
   implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
@@ -75,7 +83,6 @@ object BlindTokensSaver extends Saver {
   // Blinding point, clear token and sig
   type ClearToken = (String, String, String)
   type Snapshot = (Set[ClearToken], List[String], BlindProgress)
-  val initState: Snapshot = (Set.empty, BlindTokens.OPERATIONAL :: Nil, null)
   def saveObject(snap: Snapshot) = save(Pickle.intoBytes(snap).array)
   def tryGetObject = tryGet map Unpickle[Snapshot].fromBytes
   val KEY = "blindTokens10"
@@ -83,7 +90,6 @@ object BlindTokensSaver extends Saver {
 
 object ChannelSaver extends Saver {
   type Snapshot = (List[String], ChannelData)
-  val initState: Snapshot = (Channel.INITIALIZED :: Nil, null)
   def saveObject(snap: Snapshot) = save(Pickle.intoBytes(snap).array)
   def tryGetObject = tryGet map Unpickle[Snapshot].fromBytes
   val KEY = "channel10"
@@ -105,6 +111,8 @@ object LocalBroadcasterSaver extends Saver {
 
 object RatesSaver extends Saver { me =>
   private val defFee = Coin valueOf 60000
+  private val period = 20.minutes
+
   type PriceMap = Map[String, Double]
   type BitpayList = List[BitpayRate]
   type RatesMap = Map[String, Rate]
@@ -140,5 +148,5 @@ object RatesSaver extends Saver { me =>
   }
 
   def process = withDelay(pickFeeRate.map(List(_, defFee).sorted.last).zip(pickExchangeRate)
-    .repeatWhen(_ delay 20.minutes), rates.stamp, 20.minutes.toMillis) foreach updateRates.tupled
+    .repeatWhen(_ delay period), rates.stamp, period.toMillis) foreach updateRates.tupled
 }

@@ -31,9 +31,9 @@ class ECBlind(signerQ: ECPoint, signerR: ECPoint) {
     val b = new ECKey(random).getPrivKey
     val c = new ECKey(random).getPrivKey
 
-    val bInv = b modInverse getN
-    val abInvQ = signerQ.multiply(a.multiply(bInv) mod getN)
-    val blindF = signerR.multiply(bInv).add(abInvQ).add(getG multiply c).normalize
+    val bInv: BigInteger = b modInverse getN
+    val abInvQ: ECPoint = signerQ.multiply(a.multiply(bInv) mod getN)
+    val blindF: ECPoint = signerR.multiply(bInv).add(abInvQ).add(getG multiply c).normalize
     if (blindF.getAffineXCoord.isZero | blindF.getAffineYCoord.isZero) makeParams
     else BlindParam(blindF getEncoded true, a, b, c, bInv)
   }

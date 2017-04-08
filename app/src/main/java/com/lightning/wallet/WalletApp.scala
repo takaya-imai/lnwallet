@@ -18,7 +18,7 @@ import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
-import com.lightning.wallet.Utils.wrap
+import com.lightning.wallet.ln.Tools.wrap
 import com.google.protobuf.ByteString
 import android.app.Application
 import android.widget.Toast

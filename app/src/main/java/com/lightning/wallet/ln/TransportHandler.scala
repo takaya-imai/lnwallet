@@ -28,7 +28,8 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
     // HANDSHAKE phase
 
     case (HandshakeData(reader1, buffer), bd: BinaryData, HANDSHAKE) =>
-      becomeReact(HandshakeData(reader1, buffer ++ bd), HANDSHAKE, Ping)
+      me stayWith HandshakeData(reader1, buffer ++ bd)
+      process(Ping)
 
     case (HandshakeData(reader1, buffer), Ping, HANDSHAKE)
       if buffer.length >= expectedLength(reader1) =>
@@ -41,22 +42,25 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
           val encoder1 = ExtendedCipherState(encoder, ck)
           val decoder1 = ExtendedCipherState(decoder, ck)
           val d1 = CyphertextData(encoder1, decoder1, None, remainder)
-          becomeReact(data1 = d1, state1 = WAITING_CYPHERTEXT, change = Ping)
+          become(d1, WAITING_CYPHERTEXT)
+          process(Ping)
 
         case (writer, _, _) =>
           writer write BinaryData.empty match {
-            case (_, (encoder, decoder, ck), msg) =>
+            case (_, (encoder, decoder, ck), message) =>
               val encoder1 = ExtendedCipherState(encoder, ck)
               val decoder1 = ExtendedCipherState(decoder, ck)
               val d1 = CyphertextData(encoder1, decoder1, None, remainder)
-              becomeReact(before = transport.send(prefix +: msg), data1 = d1,
-                state1 = WAITING_CYPHERTEXT, change = Ping)
+              transport.send(prefix +: message)
+              become(d1, WAITING_CYPHERTEXT)
+              process(Ping)
 
-            case (reader2, _, msg) =>
+            case (reader2, _, message) =>
               require(remainder.isEmpty, s"Unexpected data")
-              becomeReact(before = transport.send(prefix +: msg),
-                data1 = HandshakeData(reader2, remainder),
-                state1 = HANDSHAKE, change = Ping)
+              val d1 = HandshakeData(reader2, remainder)
+              transport.send(prefix +: message)
+              become(d1, HANDSHAKE)
+              process(Ping)
           }
       }
 
@@ -64,11 +68,13 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
 
     case (cd: CyphertextData, (Send, data: BinaryData), WAITING_CYPHERTEXT) =>
       val (encoder1: CipherState, ciphertext: BinaryData) = encryptMsg(cd.enc, data)
-      stayWith(data1 = cd.copy(enc = encoder1), before = transport send ciphertext)
+
+      transport send ciphertext
+      me stayWith cd.copy(enc = encoder1)
 
     case (cd: CyphertextData, bd: BinaryData, WAITING_CYPHERTEXT) =>
-      becomeReact(data1 = cd.copy(buffer = cd.buffer ++ bd),
-        WAITING_CYPHERTEXT, change = Ping)
+      me stayWith cd.copy(buffer = cd.buffer ++ bd)
+      process(Ping)
 
     case (CyphertextData(encoder, decoder, None, buffer),
       Ping, WAITING_CYPHERTEXT) if buffer.length >= 18 =>
@@ -76,16 +82,17 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
       val (ciphertext, remainder) = buffer splitAt 18
       val (decoder1, plaintext) = decoder.decryptWithAd(BinaryData.empty, ciphertext)
       val length = Some apply Protocol.uint16(plaintext, ByteOrder.BIG_ENDIAN)
-      val d1 = CyphertextData(encoder, decoder1, length, remainder)
-      becomeReact(d1, WAITING_CYPHERTEXT, change = Ping)
+      me stayWith CyphertextData(encoder, decoder1, length, remainder)
+      process(Ping)
 
     case (CyphertextData(encoder, decoder, Some(length), buffer),
       Ping, WAITING_CYPHERTEXT) if buffer.length >= length =>
 
       val (ciphertext, remainder) = buffer.splitAt(length + 16)
       val (decoder1, plaintext) = decoder.decryptWithAd(BinaryData.empty, ciphertext)
-      becomeReact(CyphertextData(encoder, decoder1, None, remainder), WAITING_CYPHERTEXT,
-        change = Ping, before = me consume plaintext)
+      me stayWith CyphertextData(encoder, decoder1, length = None, remainder)
+      me consume plaintext
+      process(Ping)
 
     case otherwise =>
       // Let know if received an unhandled message
@@ -101,7 +108,7 @@ object TransportHandler {
   val Ping = "Ping"
   val Send = "Send"
 
-  def expectedLength(reader: HandshakeStateReader) =
+  def expectedLength(reader: HandshakeStateReader): Int =
     reader.messages.length match { case 3 | 2 => 50 case _ => 66 }
 
   def encryptMsg(enc: CipherState, plaintext: BinaryData): (CipherState, BinaryData) = {

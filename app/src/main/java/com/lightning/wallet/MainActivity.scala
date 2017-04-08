@@ -63,7 +63,6 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
     greet setMovementMethod LinkMovementMethod.getInstance
-    (new FeaturesSpec).allTests
   }
 
   // NFC and link

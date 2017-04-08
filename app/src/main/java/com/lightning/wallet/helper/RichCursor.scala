@@ -1,10 +1,9 @@
 package com.lightning.wallet.helper
 
 import android.database.{ContentObserver, Cursor}
+import com.lightning.wallet.ln.Tools.{none, runAnd}
 import android.support.v4.content.{AsyncTaskLoader, Loader}
 import android.support.v4.app.LoaderManager.LoaderCallbacks
-import com.lightning.wallet.ln.Tools.none
-import com.lightning.wallet.Utils.runAnd
 import android.content.Context
 import java.math.BigInteger
 import android.os.Handler

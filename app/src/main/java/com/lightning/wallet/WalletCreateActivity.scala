@@ -1,13 +1,14 @@
 package com.lightning.wallet
 
 import R.string._
-import com.lightning.wallet.Utils.{app, wrap}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import android.widget.{Button, EditText, TextView}
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
 import android.text.method.LinkMovementMethod
+import com.lightning.wallet.ln.Tools.wrap
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
+import com.lightning.wallet.Utils.app
 import android.text.TextUtils
 import android.os.Bundle
 import android.view.View

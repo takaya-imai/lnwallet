@@ -14,7 +14,7 @@ import com.lightning.wallet.ln.crypto.Sphinx.OnionPacket
 import com.lightning.wallet.ln.MSat.satFactor
 
 
-trait Command
+sealed trait Command
 case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int) extends Command
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
@@ -22,20 +22,27 @@ case class CMDUpdateFee(feeratePerKw: Long) extends Command
 
 
 sealed trait ChannelData
-case class Test(x: String) extends ChannelData
 sealed trait HasCommitments { val commitments: Commitments }
+case class InitData(announce: NodeAnnouncement) extends ChannelData
+case class ErrorData(announce: NodeAnnouncement, error: BinaryData) extends ChannelData
+
+case class ChannelOpenData(temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
+                           initialFeeratePerKw: Long, localParams: LocalParams, remoteInit: Init,
+                           announce: NodeAnnouncement) extends ChannelData
+
+case class WaitAcceptData(openData: ChannelOpenData, lastSent: OpenChannel) extends ChannelData
+case class WaitFundingData(acceptData: WaitAcceptData, remoteFirstPerCommitmentPoint: Point,
+                           remoteParams: RemoteParams) extends ChannelData
 
 
-case class LocalParams(nodeId: PublicKey, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
-                       channelReserveSatoshis: Long, htlcMinimumMsat: Long, feeratePerKw: Long, toSelfDelay: Int,
-                       maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey,
-                       delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean,
-                       globalFeatures: BinaryData, localFeatures: BinaryData)
+case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
+                       htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
+                       paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData,
+                       isFunder: Boolean, globalFeatures: BinaryData, localFeatures: BinaryData)
 
-case class RemoteParams(nodeId: PublicKey, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
-                        channelReserveSatoshis: Long, htlcMinimumMsat: Long, feeratePerKw: Long, toSelfDelay: Int,
-                        maxAcceptedHtlcs: Int, fundingPubKey: PublicKey, revocationBasepoint: Point, paymentBasepoint: Point,
-                        delayedPaymentBasepoint: Point, globalFeatures: BinaryData, localFeatures: BinaryData)
+case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
+                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey, revocationBasepoint: Point,
+                        paymentBasepoint: Point, delayedPaymentBasepoint: Point, globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class LocalCommitPublished(claimMainDelayedOutputTx: Option[Transaction], htlcSuccessTxs: Seq[Transaction],
                                 htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],

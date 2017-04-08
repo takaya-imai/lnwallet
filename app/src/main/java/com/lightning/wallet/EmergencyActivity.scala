@@ -2,10 +2,10 @@ package com.lightning.wallet
 
 import R.string._
 import scala.util.{Success, Try}
-import com.lightning.wallet.Utils.{wrap, app}
+import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.lightning.wallet.AbstractKit.ERROR_REPORT
 import org.bitcoinj.wallet.WalletProtobufSerializer
-import com.lightning.wallet.ln.Tools.none
+import com.lightning.wallet.Utils.app
 import java.io.FileInputStream
 import android.os.Bundle
 import android.view.View

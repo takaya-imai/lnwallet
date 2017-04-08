@@ -12,6 +12,7 @@ import org.bitcoinj.wallet.listeners._
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
+import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
@@ -29,7 +30,6 @@ import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
 import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
-import com.lightning.wallet.ln.Tools.none
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
@@ -70,9 +70,7 @@ object Utils { me =>
 
   // App wide utility functions
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
-  def wrap(run: => Unit)(go: => Unit) = try go catch none finally run
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
-  def runAnd[T](result: T)(action: Any) = result
 
   // Fiat rates related functions, all transform a Try monad
   // Rate is fiat per BTC so we need to divide by btc factor in the end
@@ -279,13 +277,13 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   def errorReact(exc: Throwable): Unit =
-    try mkForm(me negBld dialog_ok, content = exc match {
+    mkForm(me negBld dialog_ok, content = exc match {
       case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
       case _: InsufficientMoneyException => app getString err_not_enough_funds
       case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
       case _: KeyCrypterException => app getString err_pass
       case _: Throwable => app getString err_general
-    }, title = null) catch none
+    }, title = null)
 }
 
 trait TimerActivity extends AppCompatActivity { me =>
@@ -331,7 +329,7 @@ trait TimerActivity extends AppCompatActivity { me =>
     if (scrWidth > 2.3) alertDialog.getWindow.setLayout(maxDialog.toInt, WRAP_CONTENT)
     alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
     alertDialog.setCanceledOnTouchOutside(false)
-    alertDialog.show
+    try alertDialog.show catch none
     alertDialog
   }
 

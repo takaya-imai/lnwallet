@@ -122,7 +122,7 @@ class WireSpec {
     {
       println("encode/decode with zeropaddedstring codec")
 
-      val c = zeropaddedstring(32)
+      val c = zeropaddedstring
 
       {
         val alias = "IRATEMONK"

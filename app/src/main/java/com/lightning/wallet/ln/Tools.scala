@@ -15,8 +15,12 @@ object Tools {
   type Bytes = Array[Byte]
   type BinaryDataList = List[BinaryData]
   type LightningMessages = Vector[LightningMessage]
-  def none: PartialFunction[Any, Unit] = { case _ => }
   val random = new RandomGenerator
+
+  def none: PartialFunction[Any, Unit] = { case _ => }
+  def runAnd[T](result: T)(action: Any): T = result
+  def wrap(run: => Unit)(go: => Unit): Unit =
+    try go catch none finally run
 
   def fromShortId(id: Long): (Int, Int, Int) = {
     val blockNumber = id.>>(40).&(0xFFFFFF).toInt
@@ -74,28 +78,30 @@ object Features {
   }
 }
 
+// STATE MACHINE
+
+trait StateMachineListener {
+  def onError: PartialFunction[Throwable, Unit]
+  def onBecome: Unit
+}
+
+class StateMachineListenerProxy extends StateMachineListener {
+  private[this] var listeners = Set.empty[StateMachineListener]
+  def removeListeners = listeners = Set.empty[StateMachineListener]
+  def addListener(listener: StateMachineListener) = listeners += listener
+  def onError = { case err => for (lst <- listeners) lst onError err }
+  def onBecome: Unit = for (lst <- listeners) lst.onBecome
+}
+
 abstract class StateMachine[T](var state: List[String], var data: T) { me =>
-  def process(change: Any) = me synchronized doProcess(change)
-  def doProcess(change: Any)
+  def process(a: Any) = try me synchronized doProcess(a) catch events.onError
+  def doProcess(change: Any): Unit
 
-  def become(data1: T, state1: String) = {
-    println(s"Becoming $state1 with $data1")
-    state = state1 :: state take 2
-    data = data1
+  def become(data1: T, state1: String): Unit = {
+    wrap { data = data1 } { state = state1 :: state take 2 }
+    events.onBecome
   }
 
-  def stayWith(data1: T, before: => Unit = none) = {
-    // Run arbitrary function and then update data only
-
-    before
-    become(data1, state.head)
-  }
-
-  def becomeReact(data1: T, state1: String, change: Any, before: => Unit = none) = {
-    // Run arbitrary function and then update data, state and process the change right away
-
-    before
-    become(data1, state1)
-    process(change)
-  }
+  def stayWith(data1: T): Unit = become(data1, state.head)
+  val events = new StateMachineListenerProxy
 }

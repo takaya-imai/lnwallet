@@ -3,7 +3,6 @@ package com.lightning.wallet
 import android.widget._
 import org.bitcoinj.core._
 import collection.JavaConverters._
-import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
@@ -11,13 +10,14 @@ import com.lightning.wallet.R.string._
 import scala.util.{Failure, Success, Try}
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import android.provider.Settings.{System => FontSystem}
+import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import com.lightning.wallet.Utils.{app, string2Ops, sumIn, sumOut}
 import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.text.method.LinkMovementMethod
-import com.lightning.wallet.ln.Tools.none
 import android.view.View.OnClickListener
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI

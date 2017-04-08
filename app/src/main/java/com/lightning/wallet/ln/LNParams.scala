@@ -1,6 +1,7 @@
 package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.Exceptions._
+import fr.acinq.bitcoin.Crypto.PrivateKey
 import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 
@@ -42,10 +43,11 @@ object LNParams {
   val expiryDeltaBlocks = 144
   val delayBlocks = 144
 
-  def validateReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Unit = {
-    val nope = channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
-    if (nope) throw new RuntimeException(CHANNEL_RESERVE_TOO_HIGH)
-  }
+  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
+    derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
+
+  def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
+    channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
   def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble

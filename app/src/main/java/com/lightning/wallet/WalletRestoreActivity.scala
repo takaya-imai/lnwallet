@@ -5,13 +5,13 @@ import com.lightning.wallet.R.string._
 
 import android.view.{View, ViewGroup}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-import com.lightning.wallet.Utils.{app, runAnd, wrap}
+import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
 import org.bitcoinj.wallet.{DeterministicSeed, KeyChainGroup, Wallet}
+
 import android.widget.DatePicker.OnDateChangedListener
-import com.lightning.wallet.lncloud.RatesSaver
-import com.lightning.wallet.ln.Tools.none
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
+import com.lightning.wallet.Utils.app
 import java.util.Calendar
 import android.os.Bundle
 

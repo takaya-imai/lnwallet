@@ -72,6 +72,65 @@ object LightningMessageCodecs { me =>
 
   // Codecs
 
+  val signature = Codec[BinaryData](
+    encoder = (derEncoded: BinaryData) => {
+      val vec = bin2Vec(me der2wire derEncoded)
+      bytes(64) encode vec
+    },
+
+    decoder = (wireEncoded: BitVector) => for {
+      decodeResult <- bytes(64) decode wireEncoded
+    } yield decodeResult map vec2Bin map wire2der
+  )
+
+  val scalar = Codec[Scalar](
+    encoder = (scalar: Scalar) => {
+      val vec = bin2Vec(scalar.toBin)
+      bytes(32) encode vec
+    },
+
+    decoder = (wireEncoded: BitVector) => for {
+      decodeResult <- bytes(32) decode wireEncoded
+    } yield decodeResult map vec2Bin map Scalar.apply
+  )
+
+  val point = Codec[Point](
+    encoder = (point: Point) => {
+      val vec = bin2Vec(point toBin true)
+      bytes(33) encode vec
+    },
+
+    decoder = (wireEncoded: BitVector) => for {
+      decodeResult <- bytes(33) decode wireEncoded
+    } yield decodeResult map vec2Bin map Point.apply
+  )
+
+  val publicKey = Codec[PublicKey](
+    encoder = (publicKey: PublicKey) => {
+      val vec = bin2Vec(publicKey.value toBin true)
+      bytes(33) encode vec
+    },
+
+    decoder = (wireEncoded: BitVector) => for {
+      decodeResult <- bytes(33) decode wireEncoded
+    } yield decodeResult map vec2Bin map PublicKey.apply
+  )
+
+  type BinaryDataOption = Option[BinaryData]
+  val optionalSignature = Codec[BinaryDataOption](
+
+    encoder = (_: BinaryDataOption) match {
+      case Some(sig) => bytes(64) encode bin2Vec(me der2wire sig)
+      case None => bytes(64) encode ByteVector.fill[Byte](64)(0)
+    },
+
+    decoder = (wireEncoded: BitVector) => for {
+      decodeResult <- bytes(64) decode wireEncoded
+    } yield decodeResult map vec2Bin map { signature: BinaryData =>
+      if (signature forall 0.==) None else Some(me wire2der signature)
+    }
+  )
+
   private val uint64: Codec[Long] = int64.narrow(long =>
     if (long < 0) Attempt failure Err(s"Overflow for $long")
     else Attempt successful long, identity)
@@ -87,75 +146,12 @@ object LightningMessageCodecs { me =>
     inetSockAddress => (inetSockAddress.getAddress, inetSockAddress.getPort)
   )
 
-  def rgb: Codec[RGB] = bytes(3).xmap(bv2Rgb, rgb2Bv)
+  val rgb: Codec[RGB] = bytes(3).xmap(bv2Rgb, rgb2Bv)
   def binarydata(size: Int): Codec[BinaryData] = bytes(size).xmap(vec2Bin, bin2Vec)
-  def listofsocketaddresses: Codec[InetSocketAddressList] = listOfN(uint16, socketaddress)
-  def varsizebinarydata: Codec[BinaryData] = variableSizeBytesLong(value = bytes.xmap(vec2Bin, bin2Vec), size = uint32)
-  def zeropaddedstring(size: Int): Codec[String] = fixedSizeBytes(32, utf8).xmap(_.takeWhile(_ != '\u0000'), identity)
-  def listofsignatures: Codec[BinaryDataList] = listOfN(uint16, signature)
-
-  def signature = Codec[BinaryData](
-    encoder = (derEncoded: BinaryData) => {
-      val vec = bin2Vec(me der2wire derEncoded)
-      bytes(64) encode vec
-    },
-
-    decoder = (wireEncoded: BitVector) => for {
-      decodeResult <- bytes(64) decode wireEncoded
-    } yield decodeResult map vec2Bin map wire2der
-  )
-
-  def scalar = Codec[Scalar](
-    encoder = (scalar: Scalar) => {
-      val vec = bin2Vec(scalar.toBin)
-      bytes(32) encode vec
-    },
-
-    decoder = (wireEncoded: BitVector) => for {
-      decodeResult <- bytes(32) decode wireEncoded
-    } yield decodeResult map vec2Bin map Scalar.apply
-  )
-
-  def point = Codec[Point](
-    encoder = (point: Point) => {
-      val vec = bin2Vec(point toBin true)
-      bytes(33) encode vec
-    },
-
-    decoder = (wireEncoded: BitVector) => for {
-      decodeResult <- bytes(33) decode wireEncoded
-    } yield decodeResult map vec2Bin map Point.apply
-  )
-
-  def publicKey = Codec[PublicKey](
-    encoder = (publicKey: PublicKey) => {
-      val vec = bin2Vec(publicKey.value toBin true)
-      bytes(33) encode vec
-    },
-
-    decoder = (wireEncoded: BitVector) => for {
-      decodeResult <- bytes(33) decode wireEncoded
-    } yield decodeResult map vec2Bin map PublicKey.apply
-  )
-
-  type BinaryDataOption = Option[BinaryData]
-  def optionalSignature = Codec[BinaryDataOption](
-
-    encoder = (_: BinaryDataOption) match {
-      case Some(sig) => bytes(64) encode bin2Vec(me der2wire sig)
-      case None => bytes(64) encode ByteVector.fill[Byte](64)(0)
-    },
-
-    decoder = (wireEncoded: BitVector) => for {
-      decodeResult <- bytes(64) decode wireEncoded
-    } yield decodeResult map vec2Bin map { signature: BinaryData =>
-      if (signature forall 0.==) None else Some(me wire2der signature)
-    }
-  )
-
-  // Internal codecs (not part of LN protocol)
-  def hops: Codec[PaymentRoute] = listOfN(uint16, hopCodec)
-  def announcements: Codec[NodeAnnouncements] = listOfN(uint16, nodeAnnouncementCodec)
+  val listofsocketaddresses: Codec[InetSocketAddressList] = listOfN(uint16, socketaddress)
+  val varsizebinarydata: Codec[BinaryData] = variableSizeBytesLong(value = bytes.xmap(vec2Bin, bin2Vec), size = uint32)
+  val zeropaddedstring: Codec[String] = fixedSizeBytes(32, utf8).xmap(_.takeWhile(_ != '\u0000'), identity)
+  val listofsignatures: Codec[BinaryDataList] = listOfN(uint16, signature)
 
   // Data formats
 
@@ -292,7 +288,7 @@ object LightningMessageCodecs { me =>
     (uint32 withContext "timestamp") ::
       (binarydata(33) withContext "nodeId") ::
       (rgb withContext "rgbColor") ::
-      (zeropaddedstring(32) withContext "alias") ::
+      (zeropaddedstring withContext "alias") ::
       (varsizebinarydata withContext "features") ::
       (listofsocketaddresses withContext "addresses")
 
@@ -326,8 +322,12 @@ object LightningMessageCodecs { me =>
 
   val perHopPayloadCodec: Codec[PerHopPayload] = perHopPayload.as[PerHopPayload]
   val channelUpdateCodec: Codec[ChannelUpdate] = channelUpdate.as[ChannelUpdate]
-  private val nodeAnnouncementCodec = nodeAnnouncement.as[NodeAnnouncement]
-  private val hopCodec = hop.as[Hop]
+
+  private val hopCodec: Codec[Hop] = hop.as[Hop]
+  val hopsCodec: Codec[PaymentRoute] = listOfN(uint16, hopCodec)
+
+  val nodeAnnouncementCodec: Codec[NodeAnnouncement] = nodeAnnouncement.as[NodeAnnouncement]
+  val announcementsCodec: Codec[NodeAnnouncements] = listOfN(uint16, nodeAnnouncementCodec)
 
   val lightningMessageCodec =
     discriminated[LightningMessage].by(uint16)

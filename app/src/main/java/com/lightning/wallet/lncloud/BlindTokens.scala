@@ -127,13 +127,13 @@ trait LNCloud { me =>
     }
 
   def http(command: String) = HttpRequest.post(s"http://10.0.2.2:9002/v1/$command", true) connectTimeout 10000
-  def bitVec2Nodes(vec: BitVector): NodeAnnouncements = LightningMessageCodecs.announcements.decode(vec).require.value
+  def bitVec2Nodes(vec: BitVector): NodeAnnouncements = LightningMessageCodecs.announcementsCodec.decode(vec).require.value
   def json2BitVec(raw: JsValue): Option[BitVector] = BitVector fromHex raw.convertTo[String]
 
   type FeeRates = Map[Int, BigDecimal]
   def getFees = to[FeeRates](http("fees").body) mapValues MSat.btcBigDecimal2MilliSatoshi
   def findRoutes(from: BinaryData, to: BinaryData): Obs[SeqPaymentRoute] = call("router/routes",
-    _.flatMap(json2BitVec).map(LightningMessageCodecs.hops.decode(_).require.value),
+    _.flatMap(json2BitVec).map(LightningMessageCodecs.hopsCodec.decode(_).require.value),
     "from" -> from.toString, "to" -> to.toString)
 
   def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes/find",

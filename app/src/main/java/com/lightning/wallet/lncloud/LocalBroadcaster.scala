@@ -1,7 +1,6 @@
 package com.lightning.wallet.lncloud
 
 import rx.lang.scala.{Observable => Obs}
-import com.lightning.wallet.Utils.{wrap, app}
 import org.bitcoinj.core.{Peer, Block, FilteredBlock}
 import com.lightning.wallet.ln.{Broadcaster, ScheduledTx}
 
@@ -9,6 +8,8 @@ import com.lightning.wallet.lncloud.LocalBroadcasterSaver.ScheduledTxs
 import com.lightning.wallet.lncloud.JsonHttpUtils.obsOn
 import com.lightning.wallet.MyPeerDataListener
 import rx.lang.scala.schedulers.IOScheduler
+import com.lightning.wallet.ln.Tools.wrap
+import com.lightning.wallet.Utils.app
 
 
 case class LocalBroadcaster(pending: ScheduledTxs, broadcasted: ScheduledTxs) extends Broadcaster { me =>

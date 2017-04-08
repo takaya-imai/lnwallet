@@ -10,7 +10,7 @@ import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import org.bitcoinj.core.Utils.HEX
 import android.content.DialogInterface.BUTTON_POSITIVE
 import collection.JavaConverters.seqAsJavaListConverter
-import com.lightning.wallet.Utils.{runAnd, wrap}
+import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
 import android.widget._
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import org.ndeftools.Message
@@ -21,7 +21,6 @@ import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import concurrent.ExecutionContext.Implicits.global
 import android.os.Bundle
 import Utils.app
-import com.lightning.wallet.ln.Tools.none
 import android.database.Cursor
 import android.support.v4.view.MenuItemCompat
 import android.support.v7.widget.SearchView.OnCloseListener
