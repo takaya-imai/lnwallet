@@ -26,7 +26,7 @@ extends StateMachine[ChannelData](state, data) { me =>
       val data1 = WaitAcceptData(cod, open)
       become(data1, state1 = WAIT_FOR_ACCEPT)
 
-    // remote requires local to keep this much satoshis
+    // GUARD: remote requires local to keep too much in reserve
     case (accept: AcceptChannel, waitAccept: WaitAcceptData, WAIT_FOR_ACCEPT)
       if LNParams.exceedsReserve(accept.channelReserveSatoshis, waitAccept.openData.fundingSatoshis) =>
       become(ErrorData(waitAccept.openData.announce, CHANNEL_RESERVE_TOO_HIGH), state1 = CLOSED)

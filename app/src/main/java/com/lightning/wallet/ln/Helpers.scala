@@ -8,6 +8,7 @@ import scala.util.{Success, Try}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, sha256}
 import com.lightning.wallet.ln.crypto.Sphinx.BinaryDataSeq
 import com.lightning.wallet.ln.crypto.Generators
+import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
@@ -233,6 +234,23 @@ object Helpers { me =>
       val fundingTxOut = TxOut(fundingSatoshis, Script pay2wsh fundingScript)
       val outPoint = OutPoint(fundingTxId, index = fundingTxOutputIndex)
       InputInfo(outPoint, fundingTxOut, Script write fundingScript)
+    }
+
+    // Assuming we are always a funder
+    def makeFirstFunderCommitTxs(localParams: LocalParams, remoteParams: RemoteParams, fundingSatoshis: Long,
+                                 pushMsat: Long, initialFeeratePerKw: Long, fundingTxHash: BinaryData,
+                                 fundingTxOutputIndex: Int, remoteFirstPerCommitmentPoint: Point) = {
+
+      val toLocalMsat = fundingSatoshis * satFactor - pushMsat
+      val localSpec = CommitmentSpec(feeratePerKw = initialFeeratePerKw, toLocalMsat = toLocalMsat, toRemoteMsat = pushMsat)
+      val remoteSpec = CommitmentSpec(feeratePerKw = initialFeeratePerKw, toLocalMsat = pushMsat, toRemoteMsat = toLocalMsat)
+      val commitmentInput = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex, Satoshi(fundingSatoshis),
+        localParams.fundingPrivKey.publicKey, remoteParams.fundingPubKey)
+
+      val localPerCommitmentPoint = Generators.perCommitPoint(localParams.shaSeed, 0)
+      val (localCommitTx, _, _) = makeLocalTxs(0, localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
+      val (remoteCommitTx, _, _) = makeRemoteTxs(0, localParams, remoteParams, commitmentInput, remoteFirstPerCommitmentPoint, remoteSpec)
+      (localSpec, localCommitTx, remoteSpec, remoteCommitTx)
     }
   }
 }
