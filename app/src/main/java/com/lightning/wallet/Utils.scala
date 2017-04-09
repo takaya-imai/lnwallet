@@ -12,7 +12,7 @@ import org.bitcoinj.wallet.listeners._
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
-import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
+import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
@@ -24,6 +24,7 @@ import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
 import info.hoang8f.android.segmented.SegmentedGroup
 import concurrent.ExecutionContext.Implicits.global
+import com.lightning.wallet.ln.Scripts.ScriptEltSeq
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
@@ -69,8 +70,10 @@ object Utils { me =>
   lazy val sumOut = app getString txs_sum_out
 
   // App wide utility functions
-  implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
+  implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
+  implicit def bitcoinLibScript2bitcoinjScript(bitcoinLibScript: ScriptEltSeq): org.bitcoinj.script.Script =
+    new org.bitcoinj.script.Script(fr.acinq.bitcoin.Script write bitcoinLibScript, System.currentTimeMillis)
 
   // Fiat rates related functions, all transform a Try monad
   // Rate is fiat per BTC so we need to divide by btc factor in the end
@@ -453,10 +456,15 @@ case class EmptyAddrData(adr: Address) extends PayData {
   def cn = app.kit.currentBalance
 }
 
-case class P2WSHData(cn: Coin, wsh: Script) extends PayData {
+case class P2WSHData(cn: Coin, witScriptHash: Script) extends PayData {
   def colored(direction: String) = direction format app.getString(txs_p2wsh)
   def onTapped = app toast txs_nothing_to_copy
-  def sendRequest: SendRequest = null
+
+  def sendRequest: SendRequest = {
+    val funding = new Transaction(app.params)
+    funding.addOutput(cn, witScriptHash)
+    SendRequest forTx funding
+  }
 }
 
 

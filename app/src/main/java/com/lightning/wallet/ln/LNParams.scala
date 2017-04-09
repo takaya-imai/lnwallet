@@ -1,9 +1,8 @@
 package com.lightning.wallet.ln
 
-import com.lightning.wallet.ln.Exceptions._
-import fr.acinq.bitcoin.Crypto.PrivateKey
 import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
+import fr.acinq.bitcoin.Crypto.PrivateKey
 
 
 object LNParams {
