@@ -72,14 +72,18 @@ object Utils { me =>
   // App wide utility functions
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
+
   implicit def bitcoinLibScript2bitcoinjScript(bitcoinLibScript: ScriptEltSeq): org.bitcoinj.script.Script =
     new org.bitcoinj.script.Script(fr.acinq.bitcoin.Script write bitcoinLibScript, System.currentTimeMillis)
+
+  implicit def bitcoinjTx2bitcoinLibTx(bitcoinjTx: org.bitcoinj.core.Transaction): fr.acinq.bitcoin.Transaction =
+    fr.acinq.bitcoin.Transaction read bitcoinjTx.unsafeBitcoinSerialize
 
   // Fiat rates related functions, all transform a Try monad
   // Rate is fiat per BTC so we need to divide by btc factor in the end
   def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
-  def inFiat(ms: MilliSatoshi) = currentRate.map(ms.amount * _ / btcFactor)
-  def currentRate = Try(RatesSaver.rates exchange currentFiatName)
+  def inFiat(ms: MilliSatoshi): Try[Double] = currentRate.map(ms.amount * _ / btcFactor)
+  def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
 
   def humanFiat(amount: Try[Double], prefix: String): String = amount match {
     case Success(amt) if currentFiatName == strYuan => s"$prefix<font color=#999999>≈ ${baseFiat format amt} CNY</font>"

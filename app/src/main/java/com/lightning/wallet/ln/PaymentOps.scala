@@ -3,9 +3,12 @@ package com.lightning.wallet.ln
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
+import com.lightning.wallet.ln.crypto.{ErrorPacket, OnionPacket, ParsedPacket}
 import com.lightning.wallet.ln.Tools.{BinaryDataList, random}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
+
 import scodec.bits.BitVector
 import scodec.Attempt
 import scala.util.Try
@@ -36,7 +39,7 @@ object PaymentOps {
   }
 
   def reduceRoutes(fail: UpdateFailHtlc, packet: OnionPacket,
-                   ops: PaymentRouteOps): SeqPaymentRoute =
+                   ops: PaymentRouteOps): List[PaymentRoute] =
 
     parseErrorPacket(packet.sharedSecrets, fail.reason) map {
       case ErrorPacket(nodeId, _: Perm) if ops.targetNodeId == nodeId =>
@@ -58,9 +61,9 @@ object PaymentOps {
 
     } getOrElse Nil
 
-  def failHtlc(nodeSecret: PrivateKey, htlc: Htlc, failure: FailureMessage) = {
-    val packet = parsePacket(nodeSecret, htlc.add.paymentHash, htlc.add.onionRoutingPacket)
-    val errorPacket = createErrorPacket(packet.sharedSecret, failure)
+  def failHtlc(nodeSecret: PrivateKey, htlc: Htlc, failure: FailureMessage): CMDFailHtlc = {
+    val parsedPacked = parsePacket(nodeSecret, htlc.add.paymentHash, htlc.add.onionRoutingPacket)
+    val errorPacket = createErrorPacket(parsedPacked.sharedSecret, failure)
     CMDFailHtlc(htlc.add.id, errorPacket)
   }
 

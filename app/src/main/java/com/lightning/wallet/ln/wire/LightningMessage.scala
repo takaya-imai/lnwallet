@@ -2,7 +2,7 @@ package com.lightning.wallet.ln.wire
 
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.{InetSocketAddressList, RGB}
+import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import com.lightning.wallet.ln.Tools.BinaryDataList
 
 

@@ -1,9 +1,10 @@
 package com.lightning.wallet.test
 
-import fr.acinq.bitcoin.{BinaryData, Crypto}
+import fr.acinq.bitcoin.BinaryData
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.{InvalidRealm, PermanentChannelFailure, TemporaryChannelFailure}
+import com.lightning.wallet.ln.crypto._
 
 
 class SphinxSpec {

@@ -217,9 +217,6 @@ object Scripts { me =>
   def encodeTxNumber(txnumber: Long) = (0x80000000L | (txnumber >> 24), (txnumber & 0xffffffL) | 0x20000000)
   def decodeTxNumber(sequence: Long, locktime: Long) = (sequence & 0xffffffL).<<(24) + (locktime & 0xffffffL)
 
-  def findPubKeyScriptIndex(tx: Transaction, script: BinaryData): Int = tx.txOut.indexWhere(_.publicKeyScript == script)
-  def findPubKeyScriptIndex(tx: Transaction, script: ScriptEltSeq): Int = findPubKeyScriptIndex(tx, Script write script)
-
   // Tx siging and checking
   def addSigs(commit: CommitTx, localFunding: PublicKey, remoteFunding: PublicKey, localSig: BinaryData, remoteSig: BinaryData): CommitTx =
     commit.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localFunding, remoteFunding) :: Nil)
@@ -338,6 +335,9 @@ object Scripts { me =>
   }
 
   // General templates
+
+  def findPubKeyScriptIndex(tx: Transaction, script: BinaryData): Int =
+    tx.txOut.indexWhere(_.publicKeyScript == script)
 
   def makeHtlcTx(parent: Transaction, redeemScript: ScriptEltSeq,
                  pubKeyScript: ScriptEltSeq, amountWithFee: MilliSatoshi,

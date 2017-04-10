@@ -5,34 +5,45 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Exceptions._
-
-import com.lightning.wallet.ln.Tools.{random, LightningMessages}
-import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
+import com.lightning.wallet.ln.Tools.{LightningMessages, random}
+import com.lightning.wallet.ln.crypto.{Generators, OnionPacket, ShaChain, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi, Transaction}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.SeqPaymentRoute
-import com.lightning.wallet.ln.crypto.Sphinx.OnionPacket
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.MSat.satFactor
 
 
 sealed trait Command
 case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int) extends Command
+case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
+                          initialFeeratePerKw: Long, localParams: LocalParams,
+                          remoteInit: Init) extends Command
+
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 case class CMDUpdateFee(feeratePerKw: Long) extends Command
 
 
-sealed trait ChannelData
+sealed trait ChannelData { val announce: NodeAnnouncement }
+sealed trait HasLastSent { val lastSent: LightningMessage }
 sealed trait HasCommitments { val commitments: Commitments }
+
 case class InitData(announce: NodeAnnouncement) extends ChannelData
 case class ErrorData(announce: NodeAnnouncement, error: BinaryData) extends ChannelData
 
-case class ChannelOpenData(temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
-                           initialFeeratePerKw: Long, localParams: LocalParams, remoteInit: Init,
-                           announce: NodeAnnouncement) extends ChannelData
+case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel,
+                          lastSent: OpenChannel) extends ChannelData with HasLastSent
 
-case class WaitAcceptData(openData: ChannelOpenData, lastSent: OpenChannel) extends ChannelData
-case class WaitFundingData(acceptData: WaitAcceptData, remoteFirstPerCommitmentPoint: Point,
-                           remoteParams: RemoteParams) extends ChannelData
+case class WaitFundingDataInternal(announce: NodeAnnouncement, cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
+                                   remoteParams: RemoteParams, lastSent: OpenChannel) extends ChannelData with HasLastSent
+
+case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryData, localParams: LocalParams, remoteParams: RemoteParams,
+                                 fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
+                                 lastSent: FundingCreated) extends ChannelData with HasLastSent
+
+case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Commitments, their: Option[FundingLocked],
+                                    lastSent: LightningMessage) extends ChannelData with HasLastSent with HasCommitments
+
+case class NormalData(announce: NodeAnnouncement, commitments: Commitments) extends ChannelData with HasCommitments
 
 
 case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
@@ -63,9 +74,8 @@ case class PublishableTxs(htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
 case class LocalCommit(index: Long, spec: CommitmentSpec, publishableTxs: PublishableTxs, commit: CommitSig)
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
-case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig, reSignAsap: Boolean = false)
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
-case class PaymentRouteOps(remaining: SeqPaymentRoute, targetNodeId: PublicKey)
+case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
 
 case class Commitments(localParams: LocalParams, remoteParams: RemoteParams,
                        localCommit: LocalCommit, remoteCommit: RemoteCommit,
@@ -82,8 +92,9 @@ case class Invoice(message: Option[String], nodeId: BinaryData,
 case class ExtendedInvoice(preimage: Option[BinaryData], fee: Option[Long],
                            invoice: Invoice, status: Long, incoming: Boolean, stamp: Long)
 
-case class Htlc(incoming: Boolean, add: UpdateAddHtlc, routes: PaymentRouteOps = null,
-                onion: OnionPacket = null, sort: String = Htlc.PLAIN) extends ChannelMessage
+case class PaymentRouteOps(remaining: List[PaymentRoute], targetNodeId: PublicKey)
+case class Htlc(incoming: Boolean, add: UpdateAddHtlc, routes: PaymentRouteOps,
+                onion: OnionPacket, sort: String) extends ChannelMessage
 
 object Invoice {
   def serialize(inv: Invoice) = {

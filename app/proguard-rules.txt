@@ -20,3 +20,8 @@
 	public static **[] values();
 	public static ** valueOf(java.lang.String);
 }
+
+-keepclassmembers class com.lightning.wallet.** {
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    static final long serialVersionUID;
+}

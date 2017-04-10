@@ -4,9 +4,8 @@ import com.lightning.wallet.ln.{LNParams, PaymentOps}
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import com.lightning.wallet.ln.Tools.random
-import com.lightning.wallet.ln.crypto.Sphinx
-import com.lightning.wallet.ln.crypto.Sphinx.{OnionPacket, ParsedPacket}
-import com.lightning.wallet.ln.wire.{ChannelUpdate, LightningMessageCodecs, Hop, PerHopPayload}
+import com.lightning.wallet.ln.crypto.{OnionPacket, ParsedPacket, Sphinx}
+import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop, LightningMessageCodecs, PerHopPayload}
 import scodec.bits.BitVector
 
 

@@ -8,7 +8,7 @@ import com.lightning.wallet.lncloud.BlindTokensSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.Utils.{app, string2Ops}
 import rx.lang.scala.{Observable => Obs}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.{NodeAnnouncements, SeqPaymentRoute}
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.{NodeAnnouncements}
 
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest
@@ -132,7 +132,7 @@ trait LNCloud { me =>
 
   type FeeRates = Map[Int, BigDecimal]
   def getFees = to[FeeRates](http("fees").body) mapValues MSat.btcBigDecimal2MilliSatoshi
-  def findRoutes(from: BinaryData, to: BinaryData): Obs[SeqPaymentRoute] = call("router/routes",
+  def findRoutes(from: BinaryData, to: BinaryData) = call("router/routes",
     _.flatMap(json2BitVec).map(LightningMessageCodecs.hopsCodec.decode(_).require.value),
     "from" -> from.toString, "to" -> to.toString)
 

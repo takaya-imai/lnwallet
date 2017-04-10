@@ -38,6 +38,8 @@ object Exceptions {
   val SPHINX_ERR_PACKET_WRONG_LENGTH = "Error packet is of incorrect length"
 
   val CHANNEL_RESERVE_TOO_HIGH = "ChannelReserveSatoshis is too high"
+  val CHANNEL_REMOTE_SIG_INVALID = "Remote signature for commit tx is invalid"
+  val CHANNEL_FUNDING_TIMEOUT = "Funding transaction has timed out"
 }
 
 case class ExRuntimeException[T](why: String, plus: T) extends RuntimeException(why)

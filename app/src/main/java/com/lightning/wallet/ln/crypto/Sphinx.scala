@@ -1,16 +1,24 @@
 package com.lightning.wallet.ln.crypto
 
 import com.lightning.wallet.ln.Exceptions._
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import com.lightning.wallet.ln.crypto.Sphinx._
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, Crypto, Protocol}
+
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.failureMessageCodec
 import com.lightning.wallet.ln.wire.FailureMessage
 import com.lightning.wallet.ln.Tools.Bytes
 import scodec.bits.BitVector
 import java.nio.ByteOrder
 
+
+case class ParsedPacket(payload: BinaryData, nextAddress: BinaryData,
+                        nextPacket: BinaryData, sharedSecret: BinaryData)
+
+case class ErrorPacket(originNode: PublicKey, failureMessage: FailureMessage)
+case class OnionPacket(sharedSecrets: Seq[BinaryAndKey], onionPacket: BinaryData)
 
 object Sphinx {
   type ByteSeq = Seq[Byte]
@@ -29,9 +37,6 @@ object Sphinx {
 
   val LAST_ADDRESS: BinaryData = zeroes(addressLength)
   val LAST_PACKET: BinaryData = 1.toByte +: zeroes(packetLength - 1)
-
-  case class ErrorPacket(originNode: PublicKey, failureMessage: FailureMessage)
-  case class OnionPacket(sharedSecrets: Seq[BinaryAndKey], onionPacket: BinaryData)
 
   def zeroes(length: Int): BinaryData = Seq.fill[Byte](length)(0)
   def xor(a: ByteSeq, b: ByteSeq): ByteSeq = a zip b map { case (x, y) => x.^(y).&(0xFF).toByte }
@@ -101,8 +106,8 @@ object Sphinx {
         header.hmac, header.routingInfo).toByteArray
   }
 
-  case class ParsedPacket(payload: BinaryData, nextAddress: BinaryData, nextPacket: BinaryData, sharedSecret: BinaryData)
-  def parsePacket(privateKey: PrivateKey, associatedData: BinaryData, packet: BinaryData): ParsedPacket = {
+  def parsePacket(privateKey: PrivateKey, associatedData: BinaryData,
+                  packet: BinaryData): ParsedPacket = {
 
     val header = Header read packet
     val perHopPayload = packet drop headerLength
@@ -242,5 +247,4 @@ object Sphinx {
         None
     }
   }
-
 }
