@@ -2,13 +2,13 @@ package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256, verifySignature}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, hash256, verifySignature}
 import fr.acinq.bitcoin.{BinaryData, Crypto, LexicographicalOrdering}
 import shapeless.HNil
 
 
 object Announcements { me =>
-  private def hashTwice[T](attempt: BitVectorAttempt) = sha256(sha256(serializationResult(attempt).data).data)
+  private def hashTwice[T](attempt: BitVectorAttempt) = hash256(serializationResult(attempt).data)
   private def channelAnnouncementWitnessEncode(shortChannelId: Long, nodeId1: BinaryData, nodeId2: BinaryData, bitcoinKey1: BinaryData, bitcoinKey2: BinaryData, features: BinaryData) =
     me hashTwice LightningMessageCodecs.channelAnnouncementWitness.encode(shortChannelId :: nodeId1 :: nodeId2 :: bitcoinKey1 :: bitcoinKey2 :: features :: HNil)
 

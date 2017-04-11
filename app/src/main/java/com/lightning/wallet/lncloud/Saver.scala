@@ -134,9 +134,9 @@ object RatesSaver extends Saver { me =>
   }, IOScheduler.apply), pickInc, 1 to 4 by 2)
 
   var rates: Rates = tryGet[Rates] match {
-      case Success(savedRates: Rates) => savedRates
-      case _ => Rates(Map.empty, defFee div 2, defFee, 0L)
-    }
+    case Success(savedRates: Rates) => savedRates
+    case _ => Rates(Map.empty, defFee div 2, defFee, 0L)
+  }
 
   private val updateRates = (fee: Coin, exchange: PriceMap) => {
     rates = Rates(exchange, fee div 2, fee, System.currentTimeMillis)

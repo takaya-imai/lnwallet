@@ -130,8 +130,6 @@ trait LNCloud { me =>
   def bitVec2Nodes(vec: BitVector): NodeAnnouncements = LightningMessageCodecs.announcementsCodec.decode(vec).require.value
   def json2BitVec(raw: JsValue): Option[BitVector] = BitVector fromHex raw.convertTo[String]
 
-  type FeeRates = Map[Int, BigDecimal]
-  def getFees = to[FeeRates](http("fees").body) mapValues MSat.btcBigDecimal2MilliSatoshi
   def findRoutes(from: BinaryData, to: BinaryData) = call("router/routes",
     _.flatMap(json2BitVec).map(LightningMessageCodecs.hopsCodec.decode(_).require.value),
     "from" -> from.toString, "to" -> to.toString)

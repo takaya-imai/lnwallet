@@ -79,10 +79,6 @@ extends StateMachine[ChannelData](state, data) { me =>
           None, wait.lastSent), state1 = WAIT_FUNDING_DONE)
       }
 
-    case (FundingTimeout, wait, WAIT_FUNDING_DONE) =>
-      val error = ErrorData(wait.announce, CHANNEL_FUNDING_TIMEOUT)
-      become(error, state1 = CLOSED)
-
     // We have not yet sent a FundingLocked to them but just got a FundingLocked from them so we keep it
     case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, _, _, _: FundingCreated), WAIT_FUNDING_DONE) =>
       val wait1 = wait.modify(_.their) setTo Some(their)
@@ -104,6 +100,12 @@ extends StateMachine[ChannelData](state, data) { me =>
       val commitments1 = commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
       become(NormalData(announce, commitments1), state1 = NORMAL)
 
+    // NORMAL MODE
+
+
+
+    // SHUTDOWN MODE
+
     case otherwise =>
       // Let know if received an unhandled message
       android.util.Log.d("Channel", s"Unhandled $otherwise")
@@ -121,7 +123,6 @@ object Channel {
   val NORMAL = "Normal"
   val CLOSED = "Closed"
 
-  val FundingTimeout = "FundingTimeout"
   val FundingDepthOk = "FundingDepthOk"
   val FundingDeeplyBuried = "FundingDeeplyBuried"
 }

@@ -18,9 +18,7 @@ object LNParams {
     seedHash = Crypto.hash256(seed).toString
   }
 
-  val updateFeeMinDiffRatio = 0.1 // Should update fee
-  val updateFeeMaxDiffRatio = 0.3 // Should disconnect
-
+  val updateFeeMinDiffRatio = 0.2 // Should update fee
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val maxHtlcValue = MilliSatoshi(4294967295L)
 
