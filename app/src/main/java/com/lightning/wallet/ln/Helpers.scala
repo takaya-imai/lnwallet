@@ -28,7 +28,7 @@ object Helpers { me =>
   }
 
   def makeLocalParams(fundingSatoshis: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
-    LocalParams(dustLimitSatoshis = LNParams.dustLimitSatoshis, defaultFinalScriptPubKey = finalScriptPubKey,
+    LocalParams(LNParams.chainHash, dustLimitSatoshis = LNParams.dustLimitSatoshis, defaultFinalScriptPubKey = finalScriptPubKey,
       maxHtlcValueInFlightMsat = Long.MaxValue, channelReserveSatoshis = (LNParams.reserveToFundingRatio * fundingSatoshis).toLong,
       htlcMinimumMsat = LNParams.htlcMinimumMsat, toSelfDelay = LNParams.delayBlocks, maxAcceptedHtlcs = LNParams.maxAcceptedHtlcs,
       fundingPrivKey = LNParams.deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = LNParams.deriveParamsPrivateKey(keyIndex, 1L),

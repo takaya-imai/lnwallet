@@ -19,7 +19,7 @@ case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends S
 case class Ping(pongLength: Int, data: BinaryData) extends SetupMessage
 case class Pong(data: BinaryData) extends SetupMessage
 
-case class OpenChannel(temporaryChannelId: BinaryData,
+case class OpenChannel(chainHash: BinaryData, temporaryChannelId: BinaryData,
                        fundingSatoshis: Long, pushMsat: Long, dustLimitSatoshis: Long,
                        maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
                        feeratePerKw: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubkey: PublicKey,

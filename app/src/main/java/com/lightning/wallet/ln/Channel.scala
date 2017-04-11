@@ -19,10 +19,10 @@ extends StateMachine[ChannelData](state, data) { me =>
     case (cmd: CMDOpenChannel, InitData(announce), WAIT_FOR_INIT) =>
 
       val lp = cmd.localParams
-      val open = OpenChannel(cmd.temporaryChannelId, cmd.fundingSatoshis, cmd.pushMsat, lp.dustLimitSatoshis,
-        lp.maxHtlcValueInFlightMsat, lp.channelReserveSatoshis, lp.htlcMinimumMsat, cmd.initialFeeratePerKw,
-        lp.toSelfDelay, lp.maxAcceptedHtlcs, lp.fundingPrivKey.publicKey, lp.revocationSecret.toPoint,
-        lp.paymentKey.toPoint, Generators.perCommitPoint(lp.shaSeed, 0), lp.delayedPaymentKey.toPoint)
+      val open = OpenChannel(lp.chainHash, cmd.temporaryChannelId, cmd.fundingSatoshis, cmd.pushMsat, lp.dustLimitSatoshis,
+        lp.maxHtlcValueInFlightMsat, lp.channelReserveSatoshis, lp.htlcMinimumMsat, cmd.initialFeeratePerKw, lp.toSelfDelay,
+        lp.maxAcceptedHtlcs, lp.fundingPrivKey.publicKey, lp.revocationSecret.toPoint, lp.paymentKey.toPoint,
+        Generators.perCommitPoint(lp.shaSeed, 0), lp.delayedPaymentKey.toPoint)
 
       val data1 = WaitAcceptData(announce, cmd, open)
       become(data1, state1 = WAIT_FOR_ACCEPT)

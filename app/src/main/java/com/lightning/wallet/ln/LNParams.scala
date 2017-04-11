@@ -1,7 +1,7 @@
 package com.lightning.wallet.ln
 
+import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PrivateKey
 
 
@@ -18,7 +18,8 @@ object LNParams {
     seedHash = Crypto.hash256(seed).toString
   }
 
-  val updateFeeMinDiffRatio = 0.25 // Should update fee
+  val updateFeeMinDiffRatio = 0.25 // Must update
+  val chainHash = Block.TestnetGenesisBlock.blockId
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val maxHtlcValue = MilliSatoshi(4294967295L)
 

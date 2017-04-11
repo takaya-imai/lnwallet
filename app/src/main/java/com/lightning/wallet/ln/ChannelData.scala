@@ -46,7 +46,7 @@ case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Com
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments) extends ChannelData with HasCommitments
 
 
-case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
+case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
                        paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData,
                        isFunder: Boolean, globalFeatures: BinaryData, localFeatures: BinaryData)

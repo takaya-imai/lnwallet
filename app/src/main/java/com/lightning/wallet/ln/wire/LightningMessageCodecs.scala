@@ -169,7 +169,8 @@ object LightningMessageCodecs { me =>
     varsizebinarydata withContext "data"
 
   private val openChannel =
-    (binarydata(32) withContext "temporaryChannelId") ::
+    (binarydata(32) withContext "chainHash") ::
+      (binarydata(32) withContext "temporaryChannelId") ::
       (uint64 withContext "fundingSatoshis") ::
       (uint64 withContext "pushMsat") ::
       (uint64 withContext "dustLimitSatoshis") ::
