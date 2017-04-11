@@ -1,7 +1,6 @@
 <LinearLayout
-    style="@style/StandardLinearLayout"
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_height="fill_parent" android:layout_width="fill_parent">
+    style="@style/StandardLinearLayoutFillParent"
+    xmlns:android="http://schemas.android.com/apk/res/android">
 
     <LinearLayout
         style="@style/StandardLinearLayout"

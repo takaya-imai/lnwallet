@@ -1,5 +1,5 @@
 <LinearLayout
-    style="@style/TransactionLinearLayout"
+    style="@style/StandardLinearLayoutFillParentPage"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Custom toolbar -->
@@ -38,9 +38,7 @@
         android:visibility="gone"
         android:layout_weight="1"
         android:id="@+id/mnemonicWarn"
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        style="@style/StandardLinearLayout">
+        style="@style/StandardLinearLayoutFillParent">
 
         <TextView
             style="@style/Info"
