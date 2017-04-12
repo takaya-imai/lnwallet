@@ -5,6 +5,7 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Exceptions._
+
 import com.lightning.wallet.ln.Tools.{LightningMessages, random}
 import com.lightning.wallet.ln.crypto.{Generators, OnionPacket, ShaChain, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi, Transaction}

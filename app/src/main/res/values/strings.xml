@@ -37,11 +37,11 @@
 
     <!-- menu -->
     <string name="action_settings">Wallet settings</string>
-    <string name="action_request_payment">Request payment</string>
-    <string name="action_receive_payment">Receive</string>
+    <string name="action_bitcoin_request">Request payment</string>
+    <string name="action_bitcoin_receive">Receive bitcoins</string>
+    <string name="action_bitcoin_send">Send bitcoins</string>
+    <string name="action_scan">Scan QR code</string>
     <string name="action_buy">Buy bitcoins</string>
-    <string name="action_scan">Scan</string>
-    <string name="action_send">Send</string>
 
     <!-- dialogs -->
     <string name="dialog_ok">OK</string>

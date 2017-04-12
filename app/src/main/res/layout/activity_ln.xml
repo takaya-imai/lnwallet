@@ -5,12 +5,6 @@
     <!-- Custom toolbar -->
     <include layout="@layout/toolbar"/>
 
-    <org.apmem.tools.layouts.FlowLayout
-        android:layout_height="wrap_content"
-        android:layout_width="fill_parent"
-        android:layout_weight="0"
-        android:padding="7dp"/>
-
     <View
         android:layout_weight="0"
         style="@style/GrayDivider"/>

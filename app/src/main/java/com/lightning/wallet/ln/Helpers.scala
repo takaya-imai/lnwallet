@@ -197,8 +197,8 @@ object Helpers { me =>
 
         sig = Scripts.sign(info, localPrivkey)
         infoWithSigs = Scripts.addSigs(claimHtlcSuccessTx = info, sig, preimage)
-        tx <- makeTx("claim-htlc-success") apply infoWithSigs
-      } yield tx
+        claimSuccess <- makeTx("claim-htlc-success") apply infoWithSigs
+      } yield claimSuccess
 
       val claimTimeoutTxs = for {
         Htlc(true, add, _, _, _) <- commitments.remoteCommit.spec.htlcs
@@ -207,8 +207,8 @@ object Helpers { me =>
 
         sig = Scripts.sign(info, localPrivkey)
         infoWithSigs = Scripts.addSigs(claimHtlcTimeoutTx = info, sig)
-        tx <- makeTx("claim-p2wpkh-output") apply infoWithSigs
-      } yield tx
+        claimTimeout <- makeTx("claim-p2wpkh-output") apply infoWithSigs
+      } yield claimTimeout
 
       val mainTx = makeTx("claim-p2wpkh-output") apply {
         val info = Scripts.makeClaimP2WPKHOutputTx(tx, localPrivkey.publicKey,

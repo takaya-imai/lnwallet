@@ -87,4 +87,15 @@
         <item name="colorAccent">#FF34B4E3</item>
     </style>
 
+    <!-- floating buttons style -->
+
+    <style name="MenuButtonsSmall">
+        <item name="fab_size">mini</item>
+        <item name="fab_colorNormal">#0099fe</item>
+        <item name="fab_colorRipple">#0099fe</item>
+        <item name="fab_colorPressed">#0099fe</item>
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+    </style>
+
 </resources>

@@ -37,10 +37,10 @@
 
     <!-- menu -->
     <string name="action_settings">Налаштувати гаманець</string>
-    <string name="action_request_payment">Запросити суму</string>
-    <string name="action_receive_payment">Отримати</string>
+    <string name="action_bitcoin_request">Запросити суму</string>
+    <string name="action_bitcoin_receive">Отримати</string>
     <string name="action_buy">Купити бiткоiни</string>
-    <string name="action_send">Послати</string>
+    <string name="action_bitcoin_send">Послати</string>
     <string name="action_scan">QR</string>
 
     <!-- errors -->

@@ -19,7 +19,6 @@ import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.text.method.LinkMovementMethod
-import android.view.View.OnClickListener
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
@@ -100,6 +99,7 @@ class BtcActivity extends NfcReaderActivity
 with InfoActivity with HumanTimeDisplay
 with ListUpdater { me =>
 
+  lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
   lazy val mnemonicWarn = findViewById(R.id.mnemonicWarn).asInstanceOf[LinearLayout]
   lazy val mnemonicInfo = findViewById(R.id.mnemonicInfo).asInstanceOf[TextView]
   lazy val txsConfs = getResources getStringArray R.array.txs_confs
@@ -263,9 +263,9 @@ with ListUpdater { me =>
 
   // Working with transitional data and NFC
   def checkTrans = app.TransData.value match {
-    case uri: BitcoinURI => doPay(null).set(Try apply uri.getAmount, uri.getAddress)
-    case bitcoinAddress: Address => doPay(null) setAddress bitcoinAddress
-    case unusable => println(s"Unhandled TransData: $unusable")
+    case uri: BitcoinURI => pay.set(Try(uri.getAmount), uri.getAddress)
+    case bitcoinAddress: Address => pay setAddress bitcoinAddress
+    case unusable => println(s"Unknown TransData: $unusable")
   }
 
   def onNfcStateEnabled = none
@@ -288,7 +288,7 @@ with ListUpdater { me =>
 
   type TransactionBuffer = mutable.Buffer[Transaction]
   private val showMore = (result: TransactionBuffer) => {
-    toggler.setImageResource(R.drawable.ic_arrow_upward_black_18dp)
+    toggler.setImageResource(R.drawable.ic_expand_less_black_24dp)
     adapter.transactions = result take maxLinesNum
   }
 
@@ -300,11 +300,19 @@ with ListUpdater { me =>
   // Reactions to menu buttons
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
-  def doReceive(top: View) = wrap(goToRequest)(app.TransData.value = app.kit.currentAddress)
-  def goQRScan(top: View) = me goTo classOf[ScanActivity]
-  def goToRequest = me goTo classOf[RequestActivity]
 
-  def doPay(top: View): BtcManager = {
+  def receive = me goTo classOf[RequestActivity]
+  def doReceive(top: View) = wrap(fab close true) {
+    timer.schedule(me anyToRunnable receive, 300)
+    app.TransData.value = app.kit.currentAddress
+  }
+
+  def QRScan = me goTo classOf[ScanActivity]
+  def doQRScan(top: View) = wrap(fab close true) {
+    timer.schedule(me anyToRunnable QRScan, 300)
+  }
+
+  def pay: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_spend, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), null, content)
 
@@ -312,24 +320,28 @@ with ListUpdater { me =>
     val rateManager = new RateManager(content)
     val spendManager = new BtcManager(rateManager)
 
-    val ok = alert getButton BUTTON_POSITIVE
-    ok setOnClickListener new OnClickListener {
-      def onClick(view: View) = rateManager.result match {
-        case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
-        case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
-        case Failure(_) => app toast dialog_sum_empty
+    def attempt = rateManager.result match {
+      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
+      case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
+      case Failure(_) => app toast dialog_sum_empty
 
-        case Success(ms) => rm(alert) {
-          val payData = AddrData(ms, spendManager.getAddress)
-          val proceed = chooseFeeAndPay(_: String, payData)
-          passPlus(payData cute sumOut)(proceed)
-        }
+      case Success(ms) => rm(alert) {
+        val payData = AddrData(ms, spendManager.getAddress)
+        val proceed = chooseFeeAndPay(_: String, payData)
+        passPlus(payData cute sumOut)(proceed)
       }
     }
 
+    val ok = alert getButton BUTTON_POSITIVE
+    ok setOnClickListener onButtonTap(attempt)
     spendManager
   }
 
+  def doPay(top: View) = wrap(fab close true) {
+    timer.schedule(me anyToRunnable pay, 300)
+  }
+
+  // Working with transactions
   private def paymentMarking(tx: Transaction) = if (value(tx).amount > 0) sumIn else sumOut
   private def value(tx: Transaction) = coin2MilliSatoshi(tx getValue app.kit.wallet)
 
@@ -369,7 +381,7 @@ with ListUpdater { me =>
   class MkRequestForm {
     val content = getLayoutInflater.inflate(R.layout.frag_input_receive, null)
     val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-    mkForm(dialog, me getString action_request_payment, content)
+    mkForm(dialog, me getString action_bitcoin_request, content)
 
     val rman = new RateManager(content)
     def defineExactData = (rman.result, app.kit.currentAddress) match {
