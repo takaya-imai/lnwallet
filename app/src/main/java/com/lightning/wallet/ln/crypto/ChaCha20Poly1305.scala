@@ -20,8 +20,9 @@ object ChaCha20Poly1305 {
     val polykey = ChaCha20.process(new Bytes(32), key, nonce, encrypt = true, skipBlock = false)
     val same = Poly1305.mac(data = pack(aad, ciphertext), key = polykey) sameElements mac
 
-    if (!same) throw new RuntimeException(CHACHA_INVALID_MAC)
-    ChaCha20.process(ciphertext, key, nonce, encrypt = false, skipBlock = true)
+    if (!same) throw ChannelException(CHACHA_INVALID_MAC)
+    else ChaCha20.process(ciphertext, key, nonce,
+      encrypt = false, skipBlock = true)
   }
 
   def pack(aad: Bytes, text: Bytes) =
@@ -36,7 +37,6 @@ object ChaCha20Poly1305 {
 
 trait SkippingStreamCipherEngine {
   def getEngine: SkippingStreamCipher
-
   def process(data: Bytes, key: Bytes, nonce: Bytes,
               encrypt: Boolean, skipBlock: Boolean) = {
 
@@ -49,7 +49,7 @@ trait SkippingStreamCipherEngine {
     // Skip 1 block == set skip to true instead of false
     if (skipBlock) engine.processBytes(new Bytes(64), 0, 64, new Bytes(64), 0)
     val same = engine.processBytes(data, 0, data.length, resultData, 0) == data.length
-    if (!same) throw new RuntimeException(CHACHA_INVALID_DATA_LENGTH)
+    if (!same) throw ChannelException(CHACHA_INVALID_DATA_LENGTH)
     resultData
   }
 }

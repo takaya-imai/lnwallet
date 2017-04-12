@@ -32,13 +32,13 @@ object Tools {
   def toShortId(blockHeight: Int, txIndex: Int, outputIndex: Int): Long =
     blockHeight.&(0xFFFFFFL).<<(40) | txIndex.&(0xFFFFFFL).<<(16) | outputIndex.&(0xFFFFL)
 
-  def toLongId(fundingTxHash: BinaryData, fundingOutputIndex: Int): BinaryData = {
-    if (fundingOutputIndex >= 65536) throw new RuntimeException(LONG_ID_INDEX_TOO_BIG)
-    if (fundingTxHash.size != 32) throw new RuntimeException(LONG_ID_HASH_WRONG_SIZE)
+  def toLongId(txHash: BinaryData, fundingOutputIndex: Int): BinaryData = {
+    if (fundingOutputIndex >= 65536) throw ChannelException(LONG_ID_INDEX_TOO_BIG)
+    if (txHash.size != 32) throw ChannelException(LONG_ID_HASH_WRONG_SIZE)
 
-    val longChannelId = fundingTxHash.take(30) :+
-      fundingTxHash.data(30).^(fundingOutputIndex >> 8).toByte :+
-      fundingTxHash.data(31).^(fundingOutputIndex).toByte
+    val longChannelId = txHash.take(30) :+
+      txHash.data(30).^(fundingOutputIndex >> 8).toByte :+
+      txHash.data(31).^(fundingOutputIndex).toByte
 
     longChannelId
   }

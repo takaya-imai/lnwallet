@@ -195,7 +195,7 @@ object Sphinx {
 
   def createErrorPacket(sharedSecret: BinaryData, failure: FailureMessage) = {
     val message = BinaryData(failureMessageCodec.encode(failure).require.toByteArray)
-    if (message.length > 128) throw new RuntimeException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    if (message.length > 128) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
     val payload = Protocol.writeUInt16(message.length, ByteOrder.BIG_ENDIAN) ++
       message ++ Protocol.writeUInt16(128 - message.length, ByteOrder.BIG_ENDIAN) ++
@@ -207,18 +207,18 @@ object Sphinx {
   }
 
   def extractFailureMessage(packet: BinaryData): FailureMessage = {
-    if (packet.length != errLength) throw new RuntimeException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    if (packet.length != errLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
     val payload = packet.data drop macLength
     val len = Protocol.uint16(payload, ByteOrder.BIG_ENDIAN)
-    if (len > 128) throw new RuntimeException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    if (len > 128) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
     val vec = BitVector apply payload.slice(2, len + 2)
     failureMessageCodec.decode(vec).require.value
   }
 
   def forwardErrorPacket(packet: BinaryData, sharedSecret: BinaryData): BinaryData = {
-    if (packet.length != errLength) throw new RuntimeException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    if (packet.length != errLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
     val filler = generateFiller("ammag", sharedSecret :: Nil, errLength, maxNumberOfHops = 1)
     xor(packet, filler)
   }
@@ -230,7 +230,7 @@ object Sphinx {
     }
 
   def parseErrorPacket(sharedSecrets: Seq[BinaryAndKey], packet: BinaryData): Option[ErrorPacket] = {
-    if (packet.length != errLength) throw new RuntimeException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    if (packet.length != errLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
     sharedSecrets match {
       case (secret, pubkey) :: tail =>

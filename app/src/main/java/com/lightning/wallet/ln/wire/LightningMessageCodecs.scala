@@ -20,14 +20,14 @@ object LightningMessageCodecs { me =>
   type RGB = (Byte, Byte, Byte)
   type PaymentRoute = List[Hop]
 
-  def serializationResult(bva: BitVectorAttempt): BinaryData = bva match {
-    case Attempt.Failure(_) => throw new RuntimeException(SERIALIZATION_ERROR)
+  def serializationResult(attempt: BitVectorAttempt): BinaryData = attempt match {
+    case Attempt.Failure(some) => throw DetailedException(SERIALIZATION_ERROR, some.message)
     case Attempt.Successful(bin) => BinaryData(bin.toByteArray)
   }
 
-  def deserializationResult(binary: BinaryData): LightningMessage =
-    lightningMessageCodec.decode(BitVector apply binary.data) match {
-      case Attempt.Failure(_) => throw new RuntimeException(DESERIALIZATION_ERROR)
+  def deserializationResult(binary: BinaryData) =
+    lightningMessageCodec decode BitVector(binary.data) match {
+      case Attempt.Failure(_) => throw ChannelException(DESERIALIZATION_ERROR)
       case Attempt.Successful(result) => result.value
     }
 
