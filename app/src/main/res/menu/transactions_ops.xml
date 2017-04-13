@@ -3,12 +3,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        app:showAsAction="ifRoom"
-        android:title="@string/app_name"
-        android:icon="@drawable/ic_flash_24dp"
-        android:id="@+id/actionGoLnWallet"/>
-
-    <item
         app:showAsAction="never"
         android:title="@string/action_buy"
         android:id="@+id/actionBuyCoins"/>

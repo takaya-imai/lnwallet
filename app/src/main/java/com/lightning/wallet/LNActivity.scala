@@ -184,7 +184,7 @@ with ListUpdater { me =>
   // Menu area
   import android.support.v7.widget.SearchView
   override def onCreateOptionsMenu(menu: Menu) = {
-    getMenuInflater.inflate(R.menu.ln_transactions_ops, menu)
+    getMenuInflater.inflate(R.menu.ln_ops, menu)
     val view = MenuItemCompat.getActionView(menu findItem R.id.action_search)
     val search = view.asInstanceOf[SearchView]
 
@@ -201,39 +201,13 @@ with ListUpdater { me =>
   }
 
   override def onOptionsItemSelected(m: MenuItem) = runAnd(true) {
-    if (m.getItemId == R.id.actionGoBtcWallet) me goTo classOf[BtcActivity]
-    else if (m.getItemId == R.id.actionSetBackupServer) new SetBackupServer
-    else if (m.getItemId == R.id.actionRefillChannel) startChannelRefill
+    if (m.getItemId == R.id.actionSetBackupServer) new SetBackupServer
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  override def onResume = wrap(super.onResume)(app.TransData.value = null)
+  def goBitcoin(top: View) = me goTo classOf[BtcActivity]
 
-  def startChannelRefill: RateManager = {
-//    val builder = negPosBld(dialog_back, dialog_next)
-//    val content = getLayoutInflater.inflate(R.layout.frag_input_receive, null)
-//    val dialog = mkForm(builder, me getString ln_refill, content)
-//    val ok = dialog getButton BUTTON_POSITIVE
-//    val man = new RateManager(content)
-//
-//    ok setOnClickListener new OnClickListener {
-//      def onClick(view: View) = man.result match {
-//        case Failure(amountIsEmpty) => toast(dialog_sum_empty)
-//        case Success(ms) if ms.coin isLessThan MIN_NONDUST_OUTPUT => toast(dialog_sum_dusty)
-//        case Success(ms) => rm(prev = dialog)(fun = completePay(ms).showForm)
-//      }
-//    }
-//
-//    def completePay(msat: MSat) =
-//      new CompletePay(me, msat, app.kit.currentAddress) {
-//        val title = Html fromHtml PayData(amount, adr).humanSum
-//        def restart = startChannelRefill setSum Try(msat)
-//        def confirm = println("ok")
-//      }
-//
-//    man
-    null
-  }
+  override def onResume = wrap(super.onResume)(app.TransData.value = null)
 
   class SetBackupServer {
 //    val (view, field) = str2Tuple(LNParams.standaloneCloudKey.getPublicKeyAsHex)

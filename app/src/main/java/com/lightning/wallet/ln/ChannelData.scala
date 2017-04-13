@@ -47,14 +47,16 @@ case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Com
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments) extends ChannelData with HasCommitments
 
 
-case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
-                       htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
-                       paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData,
-                       isFunder: Boolean, globalFeatures: BinaryData, localFeatures: BinaryData)
+case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
+                       channelReserveSatoshis: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
+                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey, delayedPaymentKey: Scalar,
+                       defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean,
+                       globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
-                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey, revocationBasepoint: Point,
-                        paymentBasepoint: Point, delayedPaymentBasepoint: Point, globalFeatures: BinaryData, localFeatures: BinaryData)
+                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey,
+                        revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
+                        globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class LocalCommitPublished(claimMainDelayedOutputTx: Option[Transaction], htlcSuccessTxs: Seq[Transaction],
                                 htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],

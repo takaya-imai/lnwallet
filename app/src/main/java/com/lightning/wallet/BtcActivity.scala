@@ -235,8 +235,7 @@ with ListUpdater { me =>
   }
 
   override def onOptionsItemSelected(m: MenuItem) = runAnd(true) {
-    if (m.getItemId == R.id.actionGoLnWallet) me goTo classOf[LNActivity]
-    else if (m.getItemId == R.id.actionRequestPayment) new MkRequestForm
+    if (m.getItemId == R.id.actionRequestPayment) new MkRequestForm
     else if (m.getItemId == R.id.actionSettings) mkSetsForm
     else if (m.getItemId == R.id.actionBuyCoins) {
 
@@ -300,6 +299,7 @@ with ListUpdater { me =>
   // Reactions to menu buttons
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
+  def goLightning(top: View) = me goTo classOf[LNActivity]
 
   def receive = me goTo classOf[RequestActivity]
   def doReceive(top: View) = wrap(fab close true) {
@@ -314,7 +314,7 @@ with ListUpdater { me =>
 
   def pay: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_spend, null, false)
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), null, content)
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
 
     // Can input satoshis and address
     val rateManager = new RateManager(content)
