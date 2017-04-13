@@ -9,6 +9,7 @@ import scodec.bits.{BitVector, ByteVector}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import com.lightning.wallet.ln.Tools.BinaryDataList
+import com.lightning.wallet.ln.crypto.Sphinx
 import java.math.BigInteger
 
 
@@ -230,7 +231,7 @@ object LightningMessageCodecs { me =>
       (uint32 withContext "amountMsat") ::
       (uint32 withContext "expiry") ::
       (binarydata(32) withContext "paymentHash") ::
-      (binarydata(1254) withContext "onionRoutingPacket")
+      (binarydata(Sphinx.PacketLength) withContext "onionRoutingPacket")
 
   private val updateFulfillHtlc =
     (binarydata(32) withContext "channelId") ::
@@ -313,15 +314,16 @@ object LightningMessageCodecs { me =>
   val announcementsCodec: Codec[NodeAnnouncements] = listOfN(uint16, nodeAnnouncementCodec)
 
   private val hop =
-    (channelUpdateCodec withContext "lastUpdate") ::
-      (binarydata(33) withContext "nodeId") ::
-      (binarydata(33) withContext "nextNodeId")
+    (binarydata(33) withContext "nodeId") ::
+      (binarydata(33) withContext "nextNodeId") ::
+      (channelUpdateCodec withContext "lastUpdate")
 
   val perHopPayload =
     (ignore(8 * 1) withContext "realm") ::
-      (uint64 withContext "amt_to_forward") ::
+      (uint64 withContext "channel_id") ::
+      (uint32 withContext "amt_to_forward") ::
       (int32 withContext "outgoing_cltv_value") ::
-      (ignore(8 * 7) withContext "unused_with_v0_version_on_header")
+      (ignore(8 * 16) withContext "unused_with_v0_version_on_header")
 
   val hopsCodec: Codec[PaymentRoute] = listOfN(valueCodec = hop.as[Hop], countCodec = uint16)
   val perHopPayloadCodec: Codec[PerHopPayload] = perHopPayload.as[PerHopPayload]

@@ -2,6 +2,7 @@ package com.lightning.wallet.test
 
 import java.net.{InetAddress, InetSocketAddress}
 
+import com.lightning.wallet.ln.crypto.Sphinx
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import scodec.bits.{BitVector, ByteVector, HexStringSyntax}
@@ -157,7 +158,7 @@ class WireSpec {
       val update_fee = UpdateFee(randomBytes(32), 2)
       val shutdown = Shutdown(randomBytes(32), bin(47, 0))
       val closing_signed = ClosingSigned(randomBytes(32), 2, randomSignature)
-      val update_add_htlc = UpdateAddHtlc(randomBytes(32), 2, 3, 4, bin(32, 0), bin(1254, 0))
+      val update_add_htlc = UpdateAddHtlc(randomBytes(32), 2, 3, 4, bin(32, 0), bin(Sphinx.PacketLength, 0))
       val update_fulfill_htlc = UpdateFulfillHtlc(randomBytes(32), 2, bin(32, 0))
       val update_fail_htlc = UpdateFailHtlc(randomBytes(32), 2, bin(154, 0))
       val update_fail_malformed_htlc = UpdateFailMalformedHtlc(randomBytes(32), 2, randomBytes(32), 1111)
@@ -186,9 +187,9 @@ class WireSpec {
 
     {
       println("encode/decode per-hop payload")
-      val payload = PerHopPayload(amt_to_forward = 142000, outgoing_cltv_value = 500000)
+      val payload = PerHopPayload(channel_id = 42, amt_to_forward = 142000, outgoing_cltv_value = 500000)
       val bin = LightningMessageCodecs.perHopPayload.as[PerHopPayload].encode(payload).toOption.get
-      println(bin.toByteVector.size == 20)
+      println(bin.toByteVector.size == 33)
       val payload1 = LightningMessageCodecs.perHopPayload.as[PerHopPayload].decode(bin).toOption.get.value
       println(payload == payload1)
     }

@@ -73,5 +73,5 @@ case class ChannelUpdate(signature: BinaryData, shortChannelId: Long, timestamp:
                          feeProportionalMillionths: Long) extends RoutingMessage
 
 // Internal: receiving lists of lists of Hop's from a server
-case class Hop(lastUpdate: ChannelUpdate, nodeId: BinaryData, nextNodeId: BinaryData)
-case class PerHopPayload(amt_to_forward: Long, outgoing_cltv_value: Int)
+case class Hop(nodeId: BinaryData, nextNodeId: BinaryData, lastUpdate: ChannelUpdate)
+case class PerHopPayload(channel_id: Long, amt_to_forward: Long, outgoing_cltv_value: Int)

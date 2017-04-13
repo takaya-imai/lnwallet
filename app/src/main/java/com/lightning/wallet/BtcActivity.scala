@@ -234,15 +234,14 @@ with ListUpdater { me =>
     super.onCreateOptionsMenu(menu)
   }
 
-  override def onOptionsItemSelected(m: MenuItem) = runAnd(true) {
-    if (m.getItemId == R.id.actionRequestPayment) new MkRequestForm
-    else if (m.getItemId == R.id.actionSettings) mkSetsForm
-    else if (m.getItemId == R.id.actionBuyCoins) {
+  override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
+    if (menu.getItemId == R.id.actionBuyCoins) localBitcoinsAndGlidera
+    else if (menu.getItemId == R.id.actionSettings) mkSetsForm
+  }
 
-      // Provide a pay-to Bitcoin address for Glidera
-      val msg = getString(buy_info).format(app.kit.currentAddress.toString)
-      mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
-    }
+  private def localBitcoinsAndGlidera = {
+    val msg = getString(buy_info).format(app.kit.currentAddress.toString)
+    mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
   }
 
   override def onResume = {
@@ -250,6 +249,7 @@ with ListUpdater { me =>
     app.TransData.value = null
   }
 
+  // NFC
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
     app.TransData parseValue asText
@@ -375,23 +375,6 @@ with ListUpdater { me =>
       transactWhen setText time.html
       transactSum setText shortValue.html
       transactCircle setImageResource image
-    }
-  }
-
-  class MkRequestForm {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_receive, null)
-    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-    mkForm(dialog, me getString action_bitcoin_request, content)
-
-    val rman = new RateManager(content)
-    def defineExactData = (rman.result, app.kit.currentAddress) match {
-      case (Success(msat), currentAddress) => AddrData(msat, currentAddress)
-      case (Failure(_), currentAddress) => currentAddress
-    }
-
-    def proceed = {
-      app.TransData.value = defineExactData
-      me goTo classOf[RequestActivity]
     }
   }
 }

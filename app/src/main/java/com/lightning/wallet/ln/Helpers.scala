@@ -6,7 +6,6 @@ import com.lightning.wallet.ln.Scripts._
 
 import scala.util.{Success, Try}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, sha256}
-import com.lightning.wallet.ln.crypto.Sphinx.BinaryDataSeq
 import com.lightning.wallet.ln.crypto.Generators
 import com.lightning.wallet.ln.MSat.satFactor
 
@@ -19,7 +18,7 @@ object Helpers { me =>
     case _ => Left(UnknownPaymentHash)
   }
 
-  def extractPreimages(tx: Transaction): BinaryDataSeq = tx.txIn.map(_.witness.stack) flatMap {
+  def extractPreimages(tx: Transaction): Seq[BinaryData] = tx.txIn.map(_.witness.stack) flatMap {
     case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
     case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
     case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg)

@@ -37,7 +37,6 @@
 
     <!-- menu -->
     <string name="action_settings">Wallet settings</string>
-    <string name="action_bitcoin_request">Request payment</string>
     <string name="action_bitcoin_receive">Receive bitcoins</string>
     <string name="action_bitcoin_send">Send bitcoins</string>
     <string name="action_scan">Scan QR code</string>

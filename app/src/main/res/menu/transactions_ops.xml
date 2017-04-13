@@ -9,11 +9,6 @@
 
     <item
         app:showAsAction="never"
-        android:title="@string/action_bitcoin_request"
-        android:id="@+id/actionRequestPayment"/>
-
-    <item
-        app:showAsAction="never"
         android:title="@string/action_settings"
         android:id="@+id/actionSettings"/>
 
