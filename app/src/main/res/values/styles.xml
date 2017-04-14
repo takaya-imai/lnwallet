@@ -92,6 +92,7 @@
     <style name="FloatingMenu">
         <item name="android:layout_margin">@dimen/app_padding</item>
         <item name="android:layout_alignParentBottom">true</item>
+        <item name="android:layout_alignParentRight">true</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_width">wrap_content</item>
         <item name="menu_animationDelayPerItem">40</item>
@@ -102,11 +103,6 @@
         <item name="fab_size">mini</item>
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-    </style>
-
-    <style name="FloatingButtonSmall" parent="MenuButtonsSmall">
-        <item name="android:layout_margin">@dimen/app_padding</item>
-        <item name="android:layout_alignParentBottom">true</item>
     </style>
 
 </resources>

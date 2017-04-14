@@ -14,24 +14,22 @@
 
     </LinearLayout>
 
-    <com.github.clans.fab.FloatingActionButton
-        android:layout_alignParentRight="true"
-        android:src="@drawable/ic_btc_24dp"
-        style="@style/FloatingButtonSmall"
-        fab:fab_colorPressed="@color/btc"
-        fab:fab_colorNormal="@color/btc"
-        fab:fab_colorRipple="@color/btc"
-        android:onClick="goBitcoin"/>
-
     <com.github.clans.fab.FloatingActionMenu
         fab:menu_icon="@drawable/ic_flash_24dp"
-        android:layout_alignParentLeft="true"
         fab:menu_colorPressed="@color/ln"
         fab:menu_colorNormal="@color/ln"
         fab:menu_colorRipple="@color/ln"
-        fab:menu_labels_position="right"
         style="@style/FloatingMenu"
         android:id="@+id/fab">
+
+        <com.github.clans.fab.FloatingActionButton
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:src="@drawable/ic_btc_24dp"
+            fab:fab_colorPressed="@color/btc"
+            fab:fab_colorNormal="@color/btc"
+            fab:fab_colorRipple="@color/btc"
+            android:onClick="goBitcoin"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_upward_white_18dp"
