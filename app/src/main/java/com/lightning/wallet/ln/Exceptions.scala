@@ -3,7 +3,7 @@ package com.lightning.wallet.ln
 
 object Exceptions {
   case class ChannelException(why: String) extends RuntimeException(why)
-  case class DetailedException(why: String, details: String) extends RuntimeException(why)
+  case class DetailedException[T](why: String, details: T) extends RuntimeException(why)
 
   val CHACHA_INVALID_MAC = "ChaCha20Poly1305: Invalid mac"
   val CHACHA_INVALID_DATA_LENGTH = "Invalid data length"
@@ -41,5 +41,7 @@ object Exceptions {
 
   val CHANNEL_RESERVE_TOO_HIGH = "ChannelReserveSatoshis is too high"
   val CHANNEL_REMOTE_SIG_INVALID = "Remote signature for commit tx is invalid"
+  val CHANNEL_CLOSE_PENDING_CHANGES = "Cannot close when there are pending changes"
+  val CHANNEL_TIMEDOUT_HTLC = "One or more htlcs has timed out"
 }
 

@@ -22,7 +22,7 @@ object LightningMessageCodecs { me =>
   type PaymentRoute = List[Hop]
 
   def serializationResult(attempt: BitVectorAttempt): BinaryData = attempt match {
-    case Attempt.Failure(some) => throw DetailedException(SERIALIZATION_ERROR, some.message)
+    case Attempt.Failure(some) => throw DetailedException(SERIALIZATION_ERROR, some)
     case Attempt.Successful(bin) => BinaryData(bin.toByteArray)
   }
 
