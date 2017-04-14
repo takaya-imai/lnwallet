@@ -154,11 +154,11 @@ extends StateMachine[ChannelData](state, data) { me =>
       // GUARD: we only send it if we have changes
       if Commitments localHasChanges data.commitments =>
 
-      for {
-        // Commit sig will be sent after this transition
-        point <- data.commitments.remoteNextCommitInfo.right
-        c1 = Commitments.sendCommit(data.commitments, point)
-      } me stayWith data.copy(commitments = c1)
+      // Commit sig will be sent after this transition
+      data.commitments.remoteNextCommitInfo.right map { point =>
+        val c1 = Commitments.sendCommit(data.commitments, point)
+        me stayWith data.copy(commitments = c1)
+      }
 
     // We have received a commit sig from them
     case (sig: CommitSig, data: NormalData, NORMAL) =>
@@ -205,7 +205,7 @@ object Channel {
   val WAIT_FUNDING_CREATED = "WaitFundingCreated"
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
   val WAIT_FUNDING_DONE = "WaitFundingDone"
-
+  val NEGOTIATIONS = "Negotiations"
   val SHUTDOWN = "Shutdown"
   val NORMAL = "Normal"
   val CLOSED = "Closed"

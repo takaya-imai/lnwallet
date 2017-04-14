@@ -123,7 +123,7 @@ object Sphinx {
     val routingInfo1 = packet.routingInfo ++ zeroes(PayloadLength + MacLength)
     val length1 = PayloadLength + MacLength + (PayloadLength + MacLength) * MaxHops
     val stream1 = generateStream(generateKey("rho", sharedSecret), length1)
-    val bin = xor(routingInfo1.toVector, stream1.toVector)
+    val bin = xor(routingInfo1.toVector, stream1.data.toVector)
 
     val hmac = bin.slice(PayloadLength, PayloadLength + MacLength)
     val nextRoutinfo = bin.drop(PayloadLength + MacLength)
@@ -150,7 +150,7 @@ object Sphinx {
       val onion = Packet read packet
       val routingInfo1 = payload ++ onion.hmac ++ onion.routingInfo.dropRight(PayloadLength + MacLength)
       val stream1 = generateStream(generateKey("rho", sharedSecret), (PayloadLength + MacLength) * MaxHops)
-      xor(routingInfo1.toVector, stream1.toVector).dropRight(routingInfoFiller.length) ++ routingInfoFiller
+      xor(routingInfo1.toVector, stream1.data.toVector).dropRight(routingInfoFiller.length) ++ routingInfoFiller
     }
 
     require(payload.length == PayloadLength)
@@ -200,31 +200,27 @@ object Sphinx {
 
   def forwardErrorPacket(packet: BinaryData, sharedSecret: BinaryData): BinaryData = {
     if (packet.length != ErrorPacketLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
-    val filler = generateFiller("ammag", Vector(sharedSecret), ErrorPacketLength, maxHops = 1)
-    xor(packet.data.toVector, filler.toVector)
+    val stream = generateStream(generateKey("ammag", sharedSecret), ErrorPacketLength)
+    xor(packet.data.toVector, stream.data.toVector)
   }
 
-  def checkMac(sharedSecret: BinaryData, packet: BinaryData): Boolean =
-    packet.data splitAt MacLength match { case (mac1, payload) =>
-      val um = Sphinx.generateKey("um", sharedSecret)
-      BinaryData(mac1) == mac(um, payload)
-    }
-
-  def parseErrorPacket(sharedSecrets: Seq[BinaryAndKey], packet: BinaryData): Option[ErrorPacket] = {
+  def parseErrorPacket(sharedSecrets: Vector[BinaryAndKey], packet: BinaryData): Option[ErrorPacket] = {
     if (packet.length != ErrorPacketLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
     sharedSecrets match {
-      case (secret, pubkey) :: tail =>
+      case (secret, pubkey) +: tail =>
         val packet1 = forwardErrorPacket(packet, secret)
-        val ok = checkMac(sharedSecret = secret, packet1)
+        val (macPart, payload) = packet1.data splitAt MacLength
+        val macCheck = mac(Sphinx.generateKey("um", secret), payload)
+        val macOk = macPart == macCheck.data
 
-        if (!ok) parseErrorPacket(tail, packet1) else {
+        if (!macOk) parseErrorPacket(tail, packet1) else {
           val failureMessage = extractFailureMessage(packet1)
           val errPack = ErrorPacket(pubkey, failureMessage)
           Some(errPack)
         }
 
-      case Nil =>
+      case _ =>
         None
     }
   }
