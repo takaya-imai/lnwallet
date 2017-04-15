@@ -208,12 +208,12 @@ extends StateMachine[ChannelData](state, data) { me =>
         down -> data.commitments.modify(_.unackedMessages).using(_ :+ down)
       }
 
-      if (Commitments hasNoPendingHtlcs data.commitments) {
+      if (Commitments hasNoPendingHtlcs commitments1) {
         val closeSigned = Closing.makeFirstClosingTx(commitments1, local.scriptPubKey,
           remoteScriptPubkey = remote.scriptPubKey, LNParams.broadcaster.currentFeeRate)
 
         // We may go directly to negotiations about final tx fee
-        val commitments2 = data.commitments.modify(_.unackedMessages).using(_ :+ closeSigned)
+        val commitments2 = commitments1.modify(_.unackedMessages).using(_ :+ closeSigned)
         become(NegotiationsData(data.announce, commitments2, closeSigned, local, remote), state1 = NEGOTIATIONS)
       } else become(data1 = ShutdownData(data.announce, commitments1, local, remote), state1 = SHUTDOWN)
 
