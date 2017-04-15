@@ -38,8 +38,8 @@ case class ErrorData(announce: NodeAnnouncement, error: BinaryData) extends Chan
 case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel,
                           lastSent: OpenChannel) extends ChannelData with HasLastSent
 
-case class WaitFundingDataInternal(announce: NodeAnnouncement, cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
-                                   remoteParams: RemoteParams, lastSent: OpenChannel) extends ChannelData with HasLastSent
+case class WaitFundingTxData(announce: NodeAnnouncement, cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
+                             remoteParams: RemoteParams, lastSent: OpenChannel) extends ChannelData with HasLastSent
 
 case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryData, localParams: LocalParams, remoteParams: RemoteParams,
                                  fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
@@ -48,7 +48,14 @@ case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryDa
 case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Commitments, their: Option[FundingLocked],
                                     lastSent: LightningMessage) extends ChannelData with HasLastSent with HasCommitments
 
-case class NormalData(announce: NodeAnnouncement, commitments: Commitments) extends ChannelData with HasCommitments
+case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
+                      afterCommit: Option[Any] = None) extends ChannelData with HasCommitments
+
+case class ShutdownData(announce: NodeAnnouncement, commitments: Commitments, localShutdown: Shutdown,
+                        remoteShutdown: Shutdown) extends ChannelData with HasCommitments
+
+case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
+                            localShutdown: Shutdown, remoteShutdown: Shutdown) extends ChannelData with HasCommitments
 
 // COMMITMENTS
 
@@ -192,15 +199,17 @@ object CommitmentSpec {
 }
 
 object UnackedOps {
-  def ackShutdown(ms: LightningMessages) = ms diff getUnackedShutdown(ms).toList
   def getUnackedShutdown(ms: LightningMessages) = ms.collectFirst { case down: Shutdown => down }
   def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
   def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filterNot { case _: RevokeAndAck => true case _ => false } :+ r
 }
 
 object Commitments {
-  def hasNoPendingHtlcs(c: Commitments): Boolean =
-    c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
+  def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
+    case Right(_) => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
+    case Left(wait) => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty &&
+      wait.nextRemoteCommit.spec.htlcs.isEmpty
+  }
 
   def hasTimedoutOutgoingHtlcs(c: Commitments, blockHeight: Long): Boolean =
     c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && blockHeight >= htlc.add.expiry) ||
@@ -211,9 +220,6 @@ object Commitments {
 
   def addRemoteProposal(c: Commitments, proposal: LightningMessage): Commitments =
     c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
-
-  def addToUnackedMessages(c: Commitments, message: LightningMessage): Commitments =
-    c.modify(_.unackedMessages).using(_ :+ message)
 
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
@@ -383,7 +389,7 @@ object Commitments {
     val sortedHtlcTxs = (htlcTimeoutTxs ++ htlcSuccessTxs).sortBy(_.input.outPoint.index)
     val signedCommitTx = Scripts.addSigs(localCommitTx, c.localParams.fundingPrivKey.publicKey,
       c.remoteParams.fundingPubKey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey),
-      commit.signature)
+      remoteSig = commit.signature)
 
     if (Scripts.checkSpendable(signedCommitTx).isFailure) throw ChannelException(COMMIT_RECEIVE_INVALID_SIGNATURE)
     if (commit.htlcSignatures.size != sortedHtlcTxs.size) throw ChannelException(COMMIT_SIG_COUNT_MISMATCH)
@@ -421,7 +427,7 @@ object Commitments {
 
       c.copy(localChanges = lc1, remoteChanges = c.remoteChanges.copy(signed = Vector.empty),
         remoteCommit = wait.nextRemoteCommit, remoteNextCommitInfo = Right(rev.nextPerCommitmentPoint),
-        unackedMessages = UnackedOps.cutAcked(c.unackedMessages), remotePerCommitmentSecrets = secrets1)
+        unackedMessages = UnackedOps cutAcked c.unackedMessages, remotePerCommitmentSecrets = secrets1)
 
     case Right(point) if point == rev.nextPerCommitmentPoint => c
     case _ => throw ChannelException(REVOCATION_UNEXPECTED)

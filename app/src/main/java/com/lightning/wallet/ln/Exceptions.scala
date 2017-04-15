@@ -42,6 +42,7 @@ object Exceptions {
   val CHANNEL_RESERVE_TOO_HIGH = "ChannelReserveSatoshis is too high"
   val CHANNEL_REMOTE_SIG_INVALID = "Remote signature for commit tx is invalid"
   val CHANNEL_CLOSE_PENDING_CHANGES = "Cannot close when there are pending changes"
+  val CHANNEL_SHUTDOWN_IN_PROGRESS = "Can't proceed because channel shutdown is in progress"
   val CHANNEL_TIMEDOUT_HTLC = "One or more htlcs has timed out"
 }
 

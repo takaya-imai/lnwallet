@@ -6,11 +6,8 @@ import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Exceptions._
-import com.lightning.wallet.ln.Helpers.Funding
+import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.{BinaryData, Transaction}
-import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
-
-import scala.util.Left
 
 
 class Channel(state: List[String], data: ChannelData, bag: InvoiceBag)
@@ -40,13 +37,13 @@ extends StateMachine[ChannelData](state, data) { me =>
         accept.fundingPubkey, accept.revocationBasepoint, accept.paymentBasepoint, accept.delayedPaymentBasepoint,
         waitAccept.cmd.remoteInit.globalFeatures, waitAccept.cmd.remoteInit.localFeatures)
 
-      become(WaitFundingDataInternal(waitAccept.announce, waitAccept.cmd,
+      become(WaitFundingTxData(waitAccept.announce, waitAccept.cmd,
         accept.firstPerCommitmentPoint, remoteParams, waitAccept.lastSent),
         state1 = WAIT_FUNDING_CREATED)
 
     // We now have a funding tx with funding out
     case (Tuple2(funding: Transaction, outIndex: Int),
-      wait: WaitFundingDataInternal, WAIT_FUNDING_CREATED) =>
+      wait: WaitFundingTxData, WAIT_FUNDING_CREATED) =>
 
       val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
         Funding.makeFirstFunderCommitTxs(wait.cmd.localParams, wait.remoteParams,
@@ -77,6 +74,7 @@ extends StateMachine[ChannelData](state, data) { me =>
           ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
         // At this point funding tx should be broadcasted
+        // lastSent may contain FundingCreated or FundingLocked
         become(WaitFundingConfirmedData(wait.announce, commitments,
           None, wait.lastSent), state1 = WAIT_FUNDING_DONE)
       }
@@ -107,9 +105,13 @@ extends StateMachine[ChannelData](state, data) { me =>
     case (htlc: Htlc, data: NormalData, NORMAL)
       // GUARD: can't add new outgoing HTLCs when channel closing is in process
       if UnackedOps.getUnackedShutdown(data.commitments.unackedMessages).isEmpty =>
-      val c1 = Commitments.sendAdd(data.commitments, htlc, LNParams.broadcaster.currentHeight)
+      throw DetailedException(CHANNEL_SHUTDOWN_IN_PROGRESS, htlc)
+
+    case (htlc: Htlc, data: NormalData, NORMAL) =>
+      val chainHeight: Int = LNParams.broadcaster.currentHeight
+      val c1 = Commitments.sendAdd(data.commitments, htlc, chainHeight)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
     // Got an incoming HTLC
     case (add: UpdateAddHtlc, data: NormalData, NORMAL) =>
@@ -121,7 +123,7 @@ extends StateMachine[ChannelData](state, data) { me =>
     case (cmd: CMDFulfillHtlc, data: NormalData, NORMAL) =>
       val c1 = Commitments.sendFulfill(data.commitments, cmd)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
     // Got a fulfill for an HTLC we sent earlier
     case (fulfill: UpdateFulfillHtlc, data: NormalData, NORMAL) =>
@@ -132,12 +134,12 @@ extends StateMachine[ChannelData](state, data) { me =>
     case (cmd: CMDFailHtlc, data: NormalData, NORMAL) =>
       val c1 = Commitments.sendFail(data.commitments, cmd)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
     case (cmd: CMDFailMalformedHtlc, data: NormalData, NORMAL) =>
       val c1 = Commitments.sendFailMalformed(data.commitments, cmd)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
     // Got a failure for an HTLC we sent earlier
     case (fail: FailHtlc, data: NormalData, NORMAL) =>
@@ -147,44 +149,73 @@ extends StateMachine[ChannelData](state, data) { me =>
     case (cmd: CMDUpdateFee, data: NormalData, NORMAL) =>
       val c1 = Commitments.sendFee(data.commitments, cmd)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
     // Send new commit tx signature
-    case (CMDCommit, data: NormalData, NORMAL)
+    case (CMDCommitSig, data: NormalData, NORMAL)
       // GUARD: we only send it if we have changes
       if Commitments localHasChanges data.commitments =>
 
-      // Commit sig will be sent after this transition
-      data.commitments.remoteNextCommitInfo.right map { point =>
-        val c1 = Commitments.sendCommit(data.commitments, point)
-        me stayWith data.copy(commitments = c1)
+      // If afterCommit is not empty we process it once
+      data.commitments.remoteNextCommitInfo.right foreach { point =>
+        val commitments1 = Commitments.sendCommit(data.commitments, point)
+        me stayWith data.copy(afterCommit = None, commitments = commitments1)
+        data.afterCommit foreach process
       }
 
     // We have received a commit sig from them
     case (sig: CommitSig, data: NormalData, NORMAL) =>
       val c1 = Commitments.receiveCommit(data.commitments, sig)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
     // We received a revocation because we sent a sig
     case (rev: RevokeAndAck, data: NormalData, NORMAL) =>
       val c1 = Commitments.receiveRevocation(data.commitments, rev)
       me stayWith data.copy(commitments = c1)
-      process(CMDCommit)
+      process(CMDCommitSig)
 
-    case (CMDShutDown, data: NormalData, NORMAL)
-      // GUARD: don't proceed if we have already sent a shutdown proposal
-      if UnackedOps.getUnackedShutdown(data.commitments.unackedMessages).isEmpty =>
-      if (Commitments localHasChanges data.commitments) throw ChannelException(CHANNEL_CLOSE_PENDING_CHANGES)
-      val shutdown = Shutdown(data.commitments.channelId, data.commitments.localParams.defaultFinalScriptPubKey)
+    // When initiating or receiving a shutdown message
+    // we can't proceed until all local changes are cleared
+
+    case (CMDShutdown, data: NormalData, NORMAL)
+      // GUARD: postpone shutdown if we have changes
+      if Commitments localHasChanges data.commitments =>
+      me stayWith data.copy(afterCommit = Some apply CMDShutdown)
+      process(CMDCommitSig)
+
+    case (CMDShutdown, data: NormalData, NORMAL) =>
+      val key = data.commitments.localParams.defaultFinalScriptPubKey
+      val shutdown = Shutdown(data.commitments.channelId, scriptPubKey = key)
       me stayWith data.modify(_.commitments.unackedMessages).using(_ :+ shutdown)
 
-    case (down: Shutdown, data: NormalData, NORMAL)
+    case (_: Shutdown, data: NormalData, NORMAL)
       // GUARD: can't accept shutdown with unacked changes
       if data.commitments.remoteChanges.proposed.nonEmpty =>
       throw ChannelException(CHANNEL_CLOSE_PENDING_CHANGES)
 
-    // TODO: receiving normal shutdown
+    case (remote: Shutdown, data: NormalData, NORMAL)
+      // GUARD: postpone our reply if we have changes
+      if Commitments localHasChanges data.commitments =>
+      me stayWith data.copy(afterCommit = Some apply remote)
+      process(CMDCommitSig)
+
+    case (remote: Shutdown, data: NormalData, NORMAL) =>
+      // At this point we definitely don't have local changes
+      val localOpt = UnackedOps.getUnackedShutdown(data.commitments.unackedMessages)
+      val (local, commitments1) = localOpt.map(shutdown => shutdown -> data.commitments) getOrElse {
+        val down = Shutdown(data.commitments.channelId, data.commitments.localParams.defaultFinalScriptPubKey)
+        down -> data.commitments.modify(_.unackedMessages).using(_ :+ down)
+      }
+
+      if (Commitments hasNoPendingHtlcs data.commitments) {
+        val closeSigned = Closing.makeFirstClosingTx(commitments1, local.scriptPubKey,
+          remoteScriptPubkey = remote.scriptPubKey, LNParams.broadcaster.currentFeeRate)
+
+        // We may go directly to negotiations about final tx fee
+        val commitments2 = data.commitments.modify(_.unackedMessages).using(_ :+ closeSigned)
+        become(NegotiationsData(data.announce, commitments2, closeSigned, local, remote), state1 = NEGOTIATIONS)
+      } else become(data1 = ShutdownData(data.announce, commitments1, local, remote), state1 = SHUTDOWN)
 
     // Periodic watch for timed-out outgoing HTLCs
     case (Tuple2(CMDDepth, count: Int), data: NormalData, NORMAL)
@@ -211,6 +242,6 @@ object Channel {
   val CLOSED = "Closed"
 
   val CMDDepth = "CMDDepth"
-  val CMDCommit = "CMDCommit"
-  val CMDShutDown = "CMDShutdown"
+  val CMDCommitSig = "CMDCommitSig"
+  val CMDShutdown = "CMDShutdown"
 }

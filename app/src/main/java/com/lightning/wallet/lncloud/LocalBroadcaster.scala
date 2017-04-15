@@ -24,6 +24,7 @@ case class LocalBroadcaster(pending: ScheduledTxs, broadcasted: ScheduledTxs) ex
   def schedule(what: ScheduledTx): Unit = wrap(pending += what)(broadcasted -= what)
   def unschedule(what: ScheduledTx): Unit = wrap(pending -= what)(broadcasted += what)
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
+  def currentFeeRate: Long = RatesSaver.rates.feeLive.value
 
   app.kit.peerGroup addBlocksDownloadedEventListener new MyPeerDataListener {
     def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 2) {

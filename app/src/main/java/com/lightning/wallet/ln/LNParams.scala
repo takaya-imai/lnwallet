@@ -58,5 +58,6 @@ case class ScheduledTx(hex: BinaryData, atBlock: Int)
 trait Broadcaster {
   def schedule(what: ScheduledTx): Unit
   def unschedule(what: ScheduledTx): Unit
+  def currentFeeRate: Long
   def currentHeight: Int
 }
