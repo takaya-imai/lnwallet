@@ -9,7 +9,7 @@ import java.nio.ByteOrder
 
 trait DataTransport { def send(data: BinaryData): Unit }
 class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: BinaryData => Unit,
-                       transport: DataTransport) extends StateMachine[Data](Nil, null) { me =>
+                       transport: DataTransport) extends StateMachine[Data] { me =>
 
   val reader = rs match {
     case Some(remoteNodeStaticPubKey) =>
@@ -24,9 +24,6 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
 
   become(HandshakeData(reader, BinaryData.empty), HANDSHAKE)
   def doProcess(change: Any) = (data, change, state.head) match {
-
-    // HANDSHAKE phase
-
     case (HandshakeData(reader1, buffer), bd: BinaryData, HANDSHAKE) =>
       me stayWith HandshakeData(reader1, buffer ++ bd)
       process(Ping)

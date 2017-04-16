@@ -93,14 +93,20 @@ class StateMachineListenerProxy extends StateMachineListener {
   def onBecome: Unit = for (lst <- listeners) lst.onBecome
 }
 
-abstract class StateMachine[T](var state: List[String], var data: T) { me =>
-  def process(a: Any) = try me synchronized doProcess(a) catch events.onError
-  def stayWith(data1: T): Unit = become(data1, state.head)
-  def doProcess(change: Any): Unit
-
+abstract class StateMachine[T] { me =>
   val events = new StateMachineListenerProxy
   def become(data1: T, state1: String): Unit = {
-    wrap { data = data1 } { state = state1 :: state take 2 }
+    // Update both state and data in a single pass
+    state = state1 :: state take 2
+    data = data1
+
+    // Notify listeners
     events.onBecome
   }
+
+  def stayWith(data1: T): Unit = become(data1, state.head)
+  def process(x: Any) = try me synchronized doProcess(x) catch events.onError
+  def doProcess(change: Any): Unit
+  var state: List[String] = Nil
+  var data: T = _
 }

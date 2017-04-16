@@ -24,7 +24,6 @@ case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData,
 
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
-case class CMDUpdateFee(feeratePerKw: Long) extends Command
 
 // STORABLE CHANNEL DATA
 
@@ -180,28 +179,26 @@ object CommitmentSpec {
     val spec3 = localChanges.foldLeft(spec2) {
       case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, isIncoming = true, msg)
       case (spec, msg: UpdateFailHtlc) => fail(spec, isIncoming = true, msg)
+      case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
       case (spec, _) => spec
     }
 
     val spec4 = remoteChanges.foldLeft(spec3) {
       case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, isIncoming = false, msg)
       case (spec, msg: UpdateFailHtlc) => fail(spec, isIncoming = false, msg)
-      case (spec, _) => spec
-    }
-
-    val spec5 = (localChanges ++ remoteChanges).foldLeft(spec4) {
       case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
       case (spec, _) => spec
     }
 
-    spec5
+    spec4
   }
 }
 
 object UnackedOps {
   def getUnackedShutdown(ms: LightningMessages) = ms.collectFirst { case down: Shutdown => down }
-  def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
+  def getUnackedAnnouncements(ms: LightningMessages) = ms.collect { case announce: AnnouncementSignatures => announce }
   def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filterNot { case _: RevokeAndAck => true case _ => false } :+ r
+  def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
 }
 
 object Commitments {
@@ -324,9 +321,9 @@ object Commitments {
       else addRemoteProposal(c, fail)
     }
 
-  def sendFee(c: Commitments, cmd: CMDUpdateFee) = {
-    val fee = UpdateFee(c.channelId, cmd.feeratePerKw)
-    val c1 = addLocalProposal(c, fee)
+  def sendFee(c: Commitments, rate: Long) = {
+    val updateFee = UpdateFee(c.channelId, rate)
+    val c1 = addLocalProposal(c, updateFee)
 
     val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
     val fees = Scripts.commitTxFee(dustLimit = Satoshi(c1.remoteParams.dustLimitSatoshis), spec = reduced).amount

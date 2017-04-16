@@ -2,7 +2,7 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.bitcoin.Crypto.{sha256, PrivateKey}
 
 
 object LNParams {
@@ -39,7 +39,7 @@ object LNParams {
   val feeBaseMsat = 546000
 
   val expiryDeltaBlocks = 144
-  val delayBlocks = 144
+  val toSelfDelay = 144
 
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
     derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
@@ -51,6 +51,14 @@ object LNParams {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
   }
+
+  def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
+    LocalParams(chainHash = chainHash, dustLimitSatoshis = dustLimitSatoshis, maxHtlcValueInFlightMsat = Long.MaxValue,
+      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat, toSelfDelay, maxAcceptedHtlcs,
+      fundingPrivKey = deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = deriveParamsPrivateKey(keyIndex, 1L),
+      paymentKey = deriveParamsPrivateKey(keyIndex, 2L), delayedPaymentKey = deriveParamsPrivateKey(keyIndex, 3L),
+      defaultFinalScriptPubKey = finalScriptPubKey, shaSeed = sha256(deriveParamsPrivateKey(keyIndex, 4L).toBin),
+      isFunder = true, globalFeatures, localFeatures)
 }
 
 case class ScheduledTx(hex: BinaryData, atBlock: Int)

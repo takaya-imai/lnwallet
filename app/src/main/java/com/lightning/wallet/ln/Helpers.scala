@@ -5,7 +5,7 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 
 import scala.util.{Success, Try}
-import fr.acinq.bitcoin.Crypto.{Point, PublicKey, sha256}
+import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import com.lightning.wallet.ln.crypto.Generators
 import com.lightning.wallet.ln.MSat.satFactor
 
@@ -25,15 +25,6 @@ object Helpers { me =>
     case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg)
     case _ => None
   }
-
-  def makeLocalParams(fundingSatoshis: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
-    LocalParams(LNParams.chainHash, dustLimitSatoshis = LNParams.dustLimitSatoshis, defaultFinalScriptPubKey = finalScriptPubKey,
-      maxHtlcValueInFlightMsat = Long.MaxValue, channelReserveSatoshis = (LNParams.reserveToFundingRatio * fundingSatoshis).toLong,
-      htlcMinimumMsat = LNParams.htlcMinimumMsat, toSelfDelay = LNParams.delayBlocks, maxAcceptedHtlcs = LNParams.maxAcceptedHtlcs,
-      fundingPrivKey = LNParams.deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = LNParams.deriveParamsPrivateKey(keyIndex, 1L),
-      paymentKey = LNParams.deriveParamsPrivateKey(keyIndex, 2L), delayedPaymentKey = LNParams.deriveParamsPrivateKey(keyIndex, 3L),
-      shaSeed = sha256(LNParams.deriveParamsPrivateKey(keyIndex, 4L).toBin), isFunder = true,
-      globalFeatures = LNParams.globalFeatures, localFeatures = LNParams.localFeatures)
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,
                    remoteParams: RemoteParams, commitmentInput: InputInfo,
