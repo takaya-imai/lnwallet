@@ -104,7 +104,7 @@ abstract class StateMachine[T] { me =>
     events.onBecome
   }
 
-  def stayWith(data1: T): Unit = become(data1, state.head)
+  def stayWith(data1: T): Unit = become(data1, state1 = state.head)
   def process(x: Any) = try me synchronized doProcess(x) catch events.onError
   def doProcess(change: Any): Unit
   var state: List[String] = Nil

@@ -48,10 +48,8 @@ case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Com
                                     lastSent: LightningMessage) extends ChannelData with HasLastSent with HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
+                      localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],
                       afterCommit: Option[Any] = None) extends ChannelData with HasCommitments
-
-case class ShutdownData(announce: NodeAnnouncement, commitments: Commitments, localShutdown: Shutdown,
-                        remoteShutdown: Shutdown) extends ChannelData with HasCommitments
 
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends ChannelData with HasCommitments
@@ -195,7 +193,6 @@ object CommitmentSpec {
 }
 
 object UnackedOps {
-  def getUnackedShutdown(ms: LightningMessages) = ms.collectFirst { case down: Shutdown => down }
   def getUnackedAnnouncements(ms: LightningMessages) = ms.collect { case announce: AnnouncementSignatures => announce }
   def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filterNot { case _: RevokeAndAck => true case _ => false } :+ r
   def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
@@ -204,8 +201,7 @@ object UnackedOps {
 object Commitments {
   def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
     case Right(_) => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
-    case Left(wait) => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty &&
-      wait.nextRemoteCommit.spec.htlcs.isEmpty
+    case Left(wait) => c.localCommit.spec.htlcs.isEmpty && wait.nextRemoteCommit.spec.htlcs.isEmpty
   }
 
   def hasTimedoutOutgoingHtlcs(c: Commitments, blockHeight: Long): Boolean =

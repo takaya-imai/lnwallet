@@ -1,14 +1,15 @@
 package com.lightning.wallet.ln
 
 import com.softwaremill.quicklens._
-import com.lightning.wallet.ln.Channel._
-import com.lightning.wallet.ln.Tools._
-import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.wire._
+import com.lightning.wallet.ln.Tools._
+import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Exceptions._
+
+import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.bitcoin.{BinaryData, Transaction}
+import fr.acinq.bitcoin.Transaction
 
 
 class Channel extends StateMachine[ChannelData] { me =>
@@ -90,18 +91,26 @@ class Channel extends StateMachine[ChannelData] { me =>
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
     case (their: FundingLocked, wait @ WaitFundingConfirmedData(announce, commitments, _, _: FundingLocked), WAIT_FUNDING_DONE) =>
       val commitments1 = commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
-      become(NormalData(announce, commitments1), state1 = NORMAL)
+      val normal = NormalData(announce, commitments1, localShutdown = None, remoteShutdown = None)
+      become(normal, state1 = NORMAL)
 
     // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
     case (Tuple2(CMDDepth, LNParams.minDepth), wait @ WaitFundingConfirmedData(announce, commitments, Some(their), _), WAIT_FUNDING_DONE) =>
       val commitments1 = commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
-      become(NormalData(announce, commitments1), state1 = NORMAL)
+      val normal = NormalData(announce, commitments1, localShutdown = None, remoteShutdown = None)
+      become(normal, state1 = NORMAL)
 
     // NORMAL MODE
 
+    // GUARD: only accept incoming HTLCs when no closing is in progress
+    case (add: UpdateAddHtlc, norm @ NormalData(_, commitments, None, None, _), NORMAL) =>
+      val c1 = Commitments.receiveAdd(commitments, add, LNParams.broadcaster.currentHeight)
+      me stayWith norm.copy(commitments = c1)
+
     case (htlc: Htlc, norm: NormalData, NORMAL)
-      // GUARD: can't add new outgoing HTLCs when channel closing is in process
-      if UnackedOps.getUnackedShutdown(norm.commitments.unackedMessages).isEmpty =>
+      // Throw an exception so we can do something about it
+      // GUARD: can't add new outgoing HTLCs when closing is in progress
+      if norm.localShutdown.isDefined | norm.remoteShutdown.isDefined =>
       throw DetailedException(CHANNEL_SHUTDOWN_IN_PROGRESS, htlc)
 
     case (htlc: Htlc, norm: NormalData, NORMAL) =>
@@ -109,12 +118,6 @@ class Channel extends StateMachine[ChannelData] { me =>
       val c1 = Commitments.sendAdd(norm.commitments, htlc, chainHeight)
       me stayWith norm.copy(commitments = c1)
       process(CMDCommitSig)
-
-    // Got an incoming HTLC
-    case (add: UpdateAddHtlc, norm: NormalData, NORMAL) =>
-      val chainHeight: Int = LNParams.broadcaster.currentHeight
-      val c1 = Commitments.receiveAdd(norm.commitments, add, chainHeight)
-      me stayWith norm.copy(commitments = c1)
 
     // We're fulfilling an HTLC we got earlier
     case (cmd: CMDFulfillHtlc, norm: NormalData, NORMAL) =>
@@ -155,59 +158,35 @@ class Channel extends StateMachine[ChannelData] { me =>
         norm.afterCommit foreach process
       }
 
-    // We have received a commit sig from them
+    // GUARD: we have received a commit sig from them when shutdown is fully confirmed by both parties
+    case (sig: CommitSig, norm @ NormalData(announce, commitments, Some(local), Some(remote), _), NORMAL) =>
+
+      val c1 = Commitments.receiveCommit(commitments, sig)
+      val canStartNegotiations = Commitments hasNoPendingHtlcs c1
+      if (canStartNegotiations) startNegotiations(announce, c1, local, remote)
+      if (!canStartNegotiations) me stayWith norm.copy(commitments = c1)
+      if (!canStartNegotiations) process(CMDCommitSig)
+
+    // We received a commit sig from them
     case (sig: CommitSig, norm: NormalData, NORMAL) =>
       val c1 = Commitments.receiveCommit(norm.commitments, sig)
       me stayWith norm.copy(commitments = c1)
       process(CMDCommitSig)
+
+    // GUARD: we have received a revocation from them when shutdown is fully confirmed by both parties
+    case (rev: RevokeAndAck, norm @ NormalData(announce, commitments, Some(local), Some(remote), _), NORMAL) =>
+
+      val c1 = Commitments.receiveRevocation(commitments, rev)
+      val canStartNegotiations = Commitments hasNoPendingHtlcs c1
+      if (canStartNegotiations) startNegotiations(announce, c1, local, remote)
+      if (!canStartNegotiations) me stayWith norm.copy(commitments = c1)
+      if (!canStartNegotiations) process(CMDCommitSig)
 
     // We received a revocation because we sent a sig
     case (rev: RevokeAndAck, norm: NormalData, NORMAL) =>
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
       me stayWith norm.copy(commitments = c1)
       process(CMDCommitSig)
-
-    // When initiating or receiving a shutdown message
-    // we can't proceed until all local changes are cleared
-
-    case (CMDShutdown, norm: NormalData, NORMAL)
-      // GUARD: postpone shutdown if we have changes
-      if Commitments localHasChanges norm.commitments =>
-      me stayWith norm.copy(afterCommit = Some apply CMDShutdown)
-      process(CMDCommitSig)
-
-    case (CMDShutdown, norm: NormalData, NORMAL) =>
-      val key = norm.commitments.localParams.defaultFinalScriptPubKey
-      val shutdown = Shutdown(norm.commitments.channelId, scriptPubKey = key)
-      me stayWith norm.modify(_.commitments.unackedMessages).using(_ :+ shutdown)
-
-    case (_: Shutdown, norm: NormalData, NORMAL)
-      // GUARD: can't accept shutdown with unacked changes
-      if norm.commitments.remoteChanges.proposed.nonEmpty =>
-      throw ChannelException(CHANNEL_CLOSE_PENDING_CHANGES)
-
-    case (remote: Shutdown, norm: NormalData, NORMAL)
-      // GUARD: postpone our reply if we have changes
-      if Commitments localHasChanges norm.commitments =>
-      me stayWith norm.copy(afterCommit = Some apply remote)
-      process(CMDCommitSig)
-
-    case (remote: Shutdown, norm: NormalData, NORMAL) =>
-      // At this point we definitely don't have local changes
-      val localOpt = UnackedOps.getUnackedShutdown(norm.commitments.unackedMessages)
-      val (local, commitments1) = localOpt.map(shutdown => shutdown -> norm.commitments) getOrElse {
-        val down = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
-        down -> norm.commitments.modify(_.unackedMessages).using(_ :+ down)
-      }
-
-      if (Commitments hasNoPendingHtlcs commitments1) {
-        val closeSigned = Closing.makeFirstClosingTx(commitments1, local.scriptPubKey,
-          remoteScriptPubkey = remote.scriptPubKey, LNParams.broadcaster.currentFeeRate)
-
-        // We may go directly to negotiations about final tx fee
-        val commitments2 = commitments1.modify(_.unackedMessages).using(_ :+ closeSigned)
-        become(NegotiationsData(norm.announce, commitments2, closeSigned, local, remote), state1 = NEGOTIATIONS)
-      } else become(data1 = ShutdownData(norm.announce, commitments1, local, remote), state1 = SHUTDOWN)
 
     // Periodic fee updates
     case (Tuple2(CMDFeerate, rate: Long), norm: NormalData, NORMAL)
@@ -222,42 +201,81 @@ class Channel extends StateMachine[ChannelData] { me =>
       if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, count) =>
       throw ChannelException(CHANNEL_TIMEDOUT_HTLC)
 
-    case (Tuple2(CMDCanAnnounce, txIndex: Int), norm: NormalData, NORMAL) =>
-      val shortId = toShortId(LNParams.broadcaster.currentHeight, txIndex, norm.commitments.commitInput.outPoint.index.toInt)
+    // Can only send announcement signatures when no closing is in progress
+    case (Tuple2(CMDCanAnnounce, txIndex: Int), norm @ NormalData(_, commitments, None, None, _), NORMAL) =>
+      val shortId: Long = toShortId(LNParams.broadcaster.currentHeight, txIndex, commitments.commitInput.outPoint.index.toInt)
       val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(shortId, LNParams.extendedPrivateKey.privateKey,
-        PublicKey(norm.announce.nodeId), norm.commitments.localParams.fundingPrivKey, norm.commitments.remoteParams.fundingPubKey,
-        norm.commitments.localParams.globalFeatures)
+        PublicKey(norm.announce.nodeId), commitments.localParams.fundingPrivKey, commitments.remoteParams.fundingPubKey,
+        commitments.localParams.globalFeatures)
 
       // Let the other node announce our channel availability
-      val annSignatures = AnnouncementSignatures(norm.commitments.channelId, shortId, localNodeSig, localBitcoinSig)
+      val annSignatures = AnnouncementSignatures(commitments.channelId, shortId, localNodeSig, localBitcoinSig)
       me stayWith norm.modify(_.commitments.unackedMessages).using(_ :+ annSignatures)
 
-    // Ack our announcement sigs once we get their
-    case (_: AnnouncementSignatures, norm: NormalData, NORMAL) =>
-      val localAnnSigs = UnackedOps getUnackedAnnouncements norm.commitments.unackedMessages
-      data = norm.modify(_.commitments.unackedMessages).using(_ diff localAnnSigs)
+    // When initiating or receiving a shutdown message
+    // we can't proceed until all local changes are cleared
+    // and we can't enter negotiations phase util pending HTLCs are present
 
-    // SHUTDOWN MODE
+    case (CMDShutdown, norm: NormalData, NORMAL)
+      // GUARD: postpone shutdown if we have changes
+      if Commitments localHasChanges norm.commitments =>
+      me stayWith norm.copy(afterCommit = Some apply CMDShutdown)
+      process(CMDCommitSig)
+
+    case (CMDShutdown, norm: NormalData, NORMAL) =>
+      val key = norm.commitments.localParams.defaultFinalScriptPubKey
+      val shutdown = Shutdown(norm.commitments.channelId, scriptPubKey = key)
+      val norm1 = norm.modify(_.commitments.unackedMessages).using(_ :+ shutdown)
+      me stayWith norm1.copy(localShutdown = Some apply shutdown)
+
+    case (_: Shutdown, norm: NormalData, NORMAL)
+      // GUARD: can't accept shutdown with unacked changes
+      if norm.commitments.remoteChanges.proposed.nonEmpty =>
+      throw ChannelException(CHANNEL_CLOSE_PENDING_CHANGES)
+
+    case (remote: Shutdown, norm: NormalData, NORMAL)
+      // GUARD: postpone our reply if we have changes
+      if Commitments localHasChanges norm.commitments =>
+      me stayWith norm.copy(afterCommit = Some apply remote)
+      process(CMDCommitSig)
+
+    // We have not yet send or received a shutdown so send it and retry
+    case (remote: Shutdown, norm @ NormalData(_, commitments, None, None, _), NORMAL) =>
+      val local = Shutdown(commitments.channelId, commitments.localParams.defaultFinalScriptPubKey)
+      val norm1 = norm.modify(_.commitments.unackedMessages).using(_ :+ local)
+      me stayWith norm1.copy(localShutdown = Some apply local)
+      process(remote)
+
+    // We have already sent a shutdown (initially or in response to their shutdown)
+    case (remote: Shutdown, norm @ NormalData(announce, commitments, Some(local), None, _), NORMAL) =>
+      if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
+      else me stayWith norm.copy(remoteShutdown = Some apply remote)
+
+    // NEGOTIATIONS MODE
 
     case otherwise =>
       // Let know if received an unhandled message
       android.util.Log.d("Channel", s"Unhandled $otherwise")
   }
 
-  def extractState = (state, data)
+  private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
+    val signed = Closing.makeFirstClosingTx(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
+    become(NegotiationsData(announce, cs.modify(_.unackedMessages).using(_ :+ signed), signed, local, remote), NEGOTIATIONS)
+  }
 }
 
 object Channel {
+  // Channel states
   val WAIT_FOR_INIT = "WaitForInit"
   val WAIT_FOR_ACCEPT = "WaitForAccept"
   val WAIT_FUNDING_CREATED = "WaitFundingCreated"
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
-  val SHUTDOWN = "Shutdown"
   val NORMAL = "Normal"
   val CLOSED = "Closed"
 
+  // Text commands
   val CMDDepth = "CMDDepth"
   val CMDFeerate = "CMDFeerate"
   val CMDCanAnnounce = "CMDCanAnnounce"
