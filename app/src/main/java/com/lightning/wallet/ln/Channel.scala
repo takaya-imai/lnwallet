@@ -7,7 +7,7 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Exceptions._
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
-import fr.acinq.bitcoin.Crypto.PublicKey
+import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 
 
@@ -89,22 +89,13 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
     case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, commitments, _, _: FundingLocked), WAIT_FUNDING_DONE) =>
-      val commitments1 = commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
-      val normal = NormalData(wait.announce, commitments1, announced = false, None, None)
-      become(normal, state1 = NORMAL)
+      becomeNormal(wait, their.nextPerCommitmentPoint)
 
     // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
     case (Tuple2(CMDDepth, LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, Some(their), _), WAIT_FUNDING_DONE) =>
-      val commitments1 = commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
-      val normal = NormalData(wait.announce, commitments1, announced = false, None, None)
-      become(normal, state1 = NORMAL)
+      becomeNormal(wait, their.nextPerCommitmentPoint)
 
     // NORMAL MODE
-
-    // GUARD: only accept incoming HTLCs when no closing is in progress
-    case (add: UpdateAddHtlc, norm @ NormalData(_, commitments, _, None, None, _), NORMAL) =>
-      val c1 = Commitments.receiveAdd(commitments, add, LNParams.broadcaster.currentHeight)
-      me stayWith norm.copy(commitments = c1)
 
     case (htlc: Htlc, norm: NormalData, NORMAL)
       // Throw an exception so we can do something about it
@@ -117,6 +108,11 @@ class Channel extends StateMachine[ChannelData] { me =>
       val c1 = Commitments.sendAdd(norm.commitments, htlc, chainHeight)
       me stayWith norm.copy(commitments = c1)
       process(CMDCommitSig)
+
+    case (add: UpdateAddHtlc, norm: NormalData, NORMAL) =>
+      val chainHeight: Int = LNParams.broadcaster.currentHeight
+      val c1 = Commitments.receiveAdd(norm.commitments, add, chainHeight)
+      me stayWith norm.copy(commitments = c1)
 
     // We're fulfilling an HTLC we got earlier
     case (cmd: CMDFulfillHtlc, norm: NormalData, NORMAL) =>
@@ -272,6 +268,12 @@ class Channel extends StateMachine[ChannelData] { me =>
     case otherwise =>
       // Let know if received an unhandled message
       android.util.Log.d("Channel", s"Unhandled $otherwise")
+  }
+
+  private def becomeNormal(source: ChannelData with HasCommitments, theirNextPoint: Point) = {
+    val commitments1 = source.commitments.modify(_.remoteNextCommitInfo) setTo Right(theirNextPoint)
+    val normal = NormalData(source.announce, commitments1, announced = false, None, None)
+    become(normal, state1 = NORMAL)
   }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
