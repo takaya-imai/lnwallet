@@ -20,6 +20,7 @@ import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
 
+
 object JavaSerializer {
   def serialize(source: Serializable): String = {
     val output: ByteArrayOutputStream = new ByteArrayOutputStream

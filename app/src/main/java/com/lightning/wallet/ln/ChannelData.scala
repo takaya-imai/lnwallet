@@ -19,9 +19,7 @@ case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long,
                           pushMsat: Long, initialFeeratePerKw: Long, localParams: LocalParams,
                           remoteInit: Init) extends Command
 
-case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData,
-                                failureCode: Int) extends Command
-
+case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int) extends Command
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
@@ -48,11 +46,16 @@ case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Com
                                     lastSent: LightningMessage) extends ChannelData with HasLastSent with HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
-                      localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],
+                      announced: Boolean, localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],
                       afterCommit: Option[Any] = None) extends ChannelData with HasCommitments
 
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends ChannelData with HasCommitments
+
+case class ClosingData(announce: NodeAnnouncement, commitments: Commitments,
+                       mutualClose: Option[Transaction] = None, localCommit: Option[LocalCommitPublished] = None,
+                       remoteCommit: Option[RemoteCommitPublished] = None, nextRemoteCommit: Option[RemoteCommitPublished] = None,
+                       revokedCommit: Seq[RevokedCommitPublished] = Nil) extends ChannelData with HasCommitments
 
 // COMMITMENTS
 
@@ -193,8 +196,7 @@ object CommitmentSpec {
 }
 
 object UnackedOps {
-  def getUnackedAnnouncements(ms: LightningMessages) = ms.collect { case announce: AnnouncementSignatures => announce }
-  def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filterNot { case _: RevokeAndAck => true case _ => false } :+ r
+  def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filter { case _: RevokeAndAck => false case _ => true } :+ r
   def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
 }
 

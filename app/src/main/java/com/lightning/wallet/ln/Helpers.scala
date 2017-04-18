@@ -110,15 +110,14 @@ object Helpers { me =>
 
     def checkClosingSignature(commitments: Commitments, localScriptPubkey: BinaryData,
                               remoteScriptPubkey: BinaryData, remoteClosingFee: Satoshi,
-                              remoteClosingSig: BinaryData): Try[Transaction] = {
+                              remoteClosingSig: BinaryData): (Boolean, Transaction) = {
 
       val (closingTx, closingSigned) = makeClosingTx(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
       val signedClosingTx: ClosingTx = Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
         commitments.remoteParams.fundingPubKey, closingSigned.signature, remoteClosingSig)
 
-      // Map positive check result into transaction
       val check = Scripts checkSpendable signedClosingTx
-      check.map(_ => signedClosingTx.tx)
+      (check.isSuccess, signedClosingTx.tx)
     }
 
     def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi) = {
