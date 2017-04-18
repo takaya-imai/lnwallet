@@ -301,6 +301,7 @@ object Channel {
   val NORMAL = "Normal"
 
   // Text commands
+  val CMDClose = "CMDClose"
   val CMDDepth = "CMDDepth"
   val CMDFeerate = "CMDFeerate"
   val CMDCommitSig = "CMDCommitSig"

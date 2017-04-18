@@ -70,60 +70,60 @@ object Scripts { me =>
 
     OP_IF ::
       OP_PUSHDATA(revocationPubkey) ::
-    OP_ELSE ::
+      OP_ELSE ::
       encodeNumber(toSelfDelay) ::
       OP_CHECKSEQUENCEVERIFY :: OP_DROP ::
       OP_PUSHDATA(localDelayedPubkey) ::
-    OP_ENDIF ::
-    OP_CHECKSIG :: Nil
+      OP_ENDIF ::
+      OP_CHECKSIG :: Nil
 
   def htlcOffered(localPubkey: PublicKey, remotePubkey: PublicKey,
                   revocationPubKey: PublicKey, paymentHash: BinaryData) =
 
     OP_DUP :: OP_HASH160 ::
-    OP_PUSHDATA(revocationPubKey.hash160) ::
-    OP_EQUAL ::
-    OP_IF ::
+      OP_PUSHDATA(revocationPubKey.hash160) ::
+      OP_EQUAL ::
+      OP_IF ::
       // To you with revocation key
       OP_CHECKSIG ::
-    OP_ELSE ::
+      OP_ELSE ::
       OP_PUSHDATA(remotePubkey) :: OP_SWAP ::
       OP_SIZE :: encodeNumber(32) :: OP_EQUAL ::
       OP_NOTIF ::
-        // To me via timelocked HTLC-timeout transaction
-        OP_DROP :: OP_2 :: OP_SWAP ::
-        OP_PUSHDATA(localPubkey) :: OP_2 ::
-        OP_CHECKMULTISIG ::
+      // To me via timelocked HTLC-timeout transaction
+      OP_DROP :: OP_2 :: OP_SWAP ::
+      OP_PUSHDATA(localPubkey) :: OP_2 ::
+      OP_CHECKMULTISIG ::
       OP_ELSE ::
-        OP_HASH160 :: OP_PUSHDATA(paymentHash) ::
-        OP_EQUALVERIFY :: OP_CHECKSIG ::
+      OP_HASH160 :: OP_PUSHDATA(paymentHash) ::
+      OP_EQUALVERIFY :: OP_CHECKSIG ::
       OP_ENDIF ::
-    OP_ENDIF :: Nil
+      OP_ENDIF :: Nil
 
   def htlcReceived(localKey: PublicKey, remotePubkey: PublicKey, revocationPubKey: PublicKey,
                    paymentHash: BinaryData, lockTime: Long): ScriptEltSeq =
 
     OP_DUP :: OP_HASH160 ::
-    OP_PUSHDATA(revocationPubKey.hash160) ::
-    OP_EQUAL ::
-    OP_IF ::
+      OP_PUSHDATA(revocationPubKey.hash160) ::
+      OP_EQUAL ::
+      OP_IF ::
       // To you with revocation key
       OP_CHECKSIG ::
-    OP_ELSE ::
+      OP_ELSE ::
       OP_PUSHDATA(remotePubkey) :: OP_SWAP ::
       OP_SIZE :: encodeNumber(32) :: OP_EQUAL ::
       OP_IF ::
-        // To me via HTLC-success transaction
-        OP_HASH160 :: OP_PUSHDATA(paymentHash) :: OP_EQUALVERIFY ::
-        OP_2 :: OP_SWAP :: OP_PUSHDATA(localKey) :: OP_2 ::
-        OP_CHECKMULTISIG ::
+      // To me via HTLC-success transaction
+      OP_HASH160 :: OP_PUSHDATA(paymentHash) :: OP_EQUALVERIFY ::
+      OP_2 :: OP_SWAP :: OP_PUSHDATA(localKey) :: OP_2 ::
+      OP_CHECKMULTISIG ::
       OP_ELSE ::
-        // To you after timeout
-        OP_DROP :: encodeNumber(lockTime) ::
-        OP_CHECKLOCKTIMEVERIFY :: OP_DROP ::
-        OP_CHECKSIG ::
+      // To you after timeout
+      OP_DROP :: encodeNumber(lockTime) ::
+      OP_CHECKLOCKTIMEVERIFY :: OP_DROP ::
+      OP_CHECKSIG ::
       OP_ENDIF ::
-    OP_ENDIF :: Nil
+      OP_ENDIF :: Nil
 
   // @formatter:on
 
@@ -182,21 +182,21 @@ object Scripts { me =>
 
   // Fee calculation
   def weight2fee(feeratePerKw: Long, weight: Int): Satoshi =
-    Satoshi(feeratePerKw * weight / 1000)
+  Satoshi(feeratePerKw * weight / 1000)
 
-  def trimOfferedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec): Seq[Htlc] = {
-    val htlcTimeoutFee = weight2fee(spec.feeratePerKw, htlcTimeoutWeight) + dustLimit
-    spec.htlcs.filterNot(_.incoming).filter(_.add.amountMsatMilliSatoshi >= htlcTimeoutFee)
+  private def trimOfferedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
+    val htlcTimeoutFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcTimeoutWeight) + dustLimit
+    spec.htlcs collect { case x if !x.incoming & x.add.amountMsat >= htlcTimeoutFee.amount => x.add }
   }.toSeq
 
-  def trimReceivedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec): Seq[Htlc] = {
-    val htlcSuccessFee = weight2fee(spec.feeratePerKw, htlcSuccessWeight) + dustLimit
-    spec.htlcs.filter(_.incoming).filter(_.add.amountMsatMilliSatoshi >= htlcSuccessFee)
+  private def trimReceivedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
+    val htlcSuccessFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcSuccessWeight) + dustLimit
+    spec.htlcs collect { case x if x.incoming & x.add.amountMsat >= htlcSuccessFee.amount => x.add }
   }.toSeq
 
   def commitTxFee(dustLimit: Satoshi, spec: CommitmentSpec): Satoshi = {
-    val trimmedOfferedHtlcs = trimOfferedHtlcs(dustLimit, spec).map(_.add.amountMsatMilliSatoshi)
-    val trimmedReceivedHtlcs = trimReceivedHtlcs(dustLimit, spec).map(_.add.amountMsatMilliSatoshi)
+    val trimmedOfferedHtlcs = trimOfferedHtlcs(dustLimit, spec)
+    val trimmedReceivedHtlcs = trimReceivedHtlcs(dustLimit, spec)
     val weight = commitWeight + 172 * (trimmedOfferedHtlcs.size + trimmedReceivedHtlcs.size)
     weight2fee(spec.feeratePerKw, weight)
   }
@@ -219,7 +219,7 @@ object Scripts { me =>
 
   // Tx siging and checking
   def addSigs(commit: CommitTx, localFunding: PublicKey, remoteFunding: PublicKey, localSig: BinaryData, remoteSig: BinaryData): CommitTx =
-    commit.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localFunding, remoteFunding) :: Nil)
+  commit.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localFunding, remoteFunding) :: Nil)
 
   def addSigs(closing: ClosingTx, localFunding: PublicKey, remoteFunding: PublicKey, localSig: BinaryData, remoteSig: BinaryData): ClosingTx =
     closing.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localFunding, remoteFunding) :: Nil)
@@ -292,16 +292,14 @@ object Scripts { me =>
       TxOut(toRemoteAmount, publicKeyScript = Script pay2wpkh remotePubkey) :: Nil
     } else Nil
 
-    val htlcOfferedOutputs = trimOfferedHtlcs(localDustLimit, spec) map { htlc =>
-      TxOut(publicKeyScript = Script pay2wsh htlcOffered(localPubKey, remotePubkey,
-        localRevocationPubkey, Crypto ripemd160 htlc.add.paymentHash),
-        amount = htlc.add.amountMsatMilliSatoshi)
+    val htlcOfferedOutputs = trimOfferedHtlcs(localDustLimit, spec) map { add =>
+      val offered = htlcOffered(localPubKey, remotePubkey, localRevocationPubkey, Crypto ripemd160 add.paymentHash)
+      TxOut(amount = MilliSatoshi(add.amountMsat), publicKeyScript = Script pay2wsh offered)
     }
 
-    val htlcReceivedOutputs = trimReceivedHtlcs(localDustLimit, spec) map { htlc =>
-      TxOut(publicKeyScript = Script pay2wsh htlcReceived(localPubKey, remotePubkey,
-        localRevocationPubkey, Crypto ripemd160 htlc.add.paymentHash, htlc.add.expiry),
-        amount = htlc.add.amountMsatMilliSatoshi)
+    val htlcReceivedOutputs = trimReceivedHtlcs(localDustLimit, spec) map { add =>
+      val received = htlcReceived(localPubKey, remotePubkey, localRevocationPubkey, Crypto ripemd160 add.paymentHash, add.expiry)
+      TxOut(amount = MilliSatoshi(add.amountMsat), publicKeyScript = Script pay2wsh received)
     }
 
     // Make an obscured tx number as defined in BOLT #3 (a 48 bits integer) which we can use in case of contract breach
@@ -376,24 +374,24 @@ object Scripts { me =>
     val htlcTimeoutFee = weight2fee(spec.feeratePerKw, htlcTimeoutWeight)
     val htlcSuccessFee = weight2fee(spec.feeratePerKw, htlcSuccessWeight)
 
-    def makeHtlcTimeoutTx(htlc: Htlc) = {
-      val paymentHash160 = Crypto ripemd160 htlc.add.paymentHash
-      val amountWithFee = htlc.add.amountMsatMilliSatoshi - htlcTimeoutFee
+    def makeHtlcTimeoutTx(add: UpdateAddHtlc) = {
+      val paymentHash160 = Crypto ripemd160 add.paymentHash
+      val amountWithFee = MilliSatoshi(add.amountMsat) - htlcTimeoutFee
       val pubKeyScript = Script pay2wsh toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
       val (input, tx) = makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevocationPubkey,
-        paymentHash160), pubKeyScript, amountWithFee, htlc.add.expiry, 0x00000000L)
+        paymentHash160), pubKeyScript, amountWithFee, add.expiry, 0x00000000L)
 
       HtlcTimeoutTx(input, tx)
     }
 
-    def makeHtlcSuccessTx(htlc: Htlc) = {
-      val paymentHash160 = Crypto ripemd160 htlc.add.paymentHash
-      val amountWithFee = htlc.add.amountMsatMilliSatoshi - htlcSuccessFee
+    def makeHtlcSuccessTx(add: UpdateAddHtlc) = {
+      val paymentHash160 = Crypto ripemd160 add.paymentHash
+      val amountWithFee = MilliSatoshi(add.amountMsat) - htlcSuccessFee
       val pubKeyScript = Script pay2wsh toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
       val (input, tx) = makeHtlcTx(commitTx, htlcReceived(localPubkey, remotePubkey, localRevocationPubkey,
-        paymentHash160, htlc.add.expiry), pubKeyScript, amountWithFee, 0L, 0x00000000L)
+        paymentHash160, add.expiry), pubKeyScript, amountWithFee, 0L, 0x00000000L)
 
-      HtlcSuccessTx(input, tx, htlc.add.paymentHash)
+      HtlcSuccessTx(input, tx, add.paymentHash)
     }
 
     // Dusty HTLCs are filtered out and thus go to fees

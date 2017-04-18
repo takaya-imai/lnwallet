@@ -42,15 +42,12 @@ case class ClosingSigned(channelId: BinaryData, feeSatoshis: Long, signature: Bi
 case class Shutdown(channelId: BinaryData, scriptPubKey: BinaryData) extends ChannelMessage
 
 
-case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId
-case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expiry: Long, paymentHash: BinaryData,
-                         onionRoutingPacket: BinaryData) extends HasHtlcId {
-
-  val amountMsatMilliSatoshi = MilliSatoshi(amountMsat)
-}
+case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expiry: Long,
+                         paymentHash: BinaryData, onionRoutingPacket: BinaryData) extends HasHtlcId
 
 case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
+case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId
 
 
 case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: BinaryDataList) extends ChannelMessage

@@ -19,10 +19,10 @@ object Helpers { me =>
   }
 
   def extractPreimages(tx: Transaction): Seq[BinaryData] = tx.txIn.map(_.witness.stack) flatMap {
-    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
-    case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
-    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg)
-    case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg)
+    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData) // htlc-timeout
+    case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 69 + 20): BinaryData) // claim-htlc-timeout
+    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg) // htlc-success
+    case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg) // claim-htlc-success
     case _ => None
   }
 
