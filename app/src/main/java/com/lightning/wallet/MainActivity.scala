@@ -2,7 +2,6 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
-
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.ndeftools.util.activity.NfcReaderActivity

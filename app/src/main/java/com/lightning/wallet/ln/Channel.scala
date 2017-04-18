@@ -2,17 +2,17 @@ package com.lightning.wallet.ln
 
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
-import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Exceptions._
+
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
+import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
-import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 
 
 class Channel extends StateMachine[ChannelData] { me =>
-  def doProcess(change: Any) = (change, data, state.head) match {
+  def doProcess(change: Any) = (change, data, state) match {
     case (cmd: CMDOpenChannel, InitData(announce), WAIT_FOR_INIT) =>
 
       val lp = cmd.localParams

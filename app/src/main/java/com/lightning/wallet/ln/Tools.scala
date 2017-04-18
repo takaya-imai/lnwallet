@@ -81,32 +81,40 @@ object Features {
 // STATE MACHINE
 
 trait StateMachineListener {
+  type StartupState = (Any, String)
+  type Transition = (Any, Any, String, String)
   def onError: PartialFunction[Throwable, Unit]
-  def onBecome: Unit
+  def onBecome: PartialFunction[Transition, Unit]
+  def onStart: PartialFunction[StartupState, Unit]
 }
 
 class StateMachineListenerProxy extends StateMachineListener {
   private[this] var listeners = Set.empty[StateMachineListener]
   def removeListeners = listeners = Set.empty[StateMachineListener]
   def addListener(listener: StateMachineListener) = listeners += listener
-  def onError = { case err => for (lst <- listeners) lst onError err }
-  def onBecome: Unit = for (lst <- listeners) lst.onBecome
+
+  def onStart = { case start => for (lst <- listeners) lst onStart start }
+  def onError = { case error => for (lst <- listeners) lst onError error }
+  def onBecome = { case trans => for (lst <- listeners) lst onBecome trans }
 }
 
 abstract class StateMachine[T] { me =>
   val events = new StateMachineListenerProxy
-  def become(data1: T, state1: String): Unit = {
-    // Update both state and data in a single pass
-    state = state1 :: state take 2
-    data = data1
+  var state: String = _
+  var data: T = _
 
-    // Notify listeners
-    events.onBecome
+  def become(data1: T, state1: String) = {
+    val transition = (data, data1, state, state1)
+    wrap { data = data1 } { state = state1 }
+    events onBecome transition
   }
 
-  def stayWith(data1: T): Unit = become(data1, state1 = state.head)
+  def startWith(data0: T, state0: String) = {
+    wrap { data = data0 } { state = state0 }
+    events onStart Tuple2(data0, state0)
+  }
+
+  def stayWith(newData: T): Unit = become(data1 = newData, state1 = state)
   def process(x: Any) = try me synchronized doProcess(x) catch events.onError
   def doProcess(change: Any): Unit
-  var state: List[String] = Nil
-  var data: T = _
 }

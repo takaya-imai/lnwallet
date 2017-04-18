@@ -195,6 +195,7 @@ trait InfoActivity extends ToolbarActivity { me =>
     }
 
     viewMnemonic setOnClickListener onButtonTap {
+      // Provided as an external function because may be accessed from main page
       def openForm = checkPass(me getString sets_mnemonic)(doViewMnemonic)
       rm(menu)(openForm)
     }
@@ -335,7 +336,7 @@ trait TimerActivity extends AppCompatActivity { me =>
   def showForm(alertDialog: AlertDialog) = {
     if (scrWidth > 2.3) alertDialog.getWindow.setLayout(maxDialog.toInt, WRAP_CONTENT)
     alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
-    alertDialog.setCanceledOnTouchOutside(false)
+    alertDialog setCanceledOnTouchOutside false
     try alertDialog.show catch none
     alertDialog
   }
