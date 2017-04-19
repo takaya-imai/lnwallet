@@ -260,14 +260,10 @@ extends StateMachine[ChannelData] { me =>
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
-    case (_: Error, some, NORMAL) => // I need to spend my current commit
-    case (Tuple2(CMDFundingSpent, tx: Transaction), some: ChannelData with HasCommitments, NORMAL) =>
-      if (some.commitments.remoteNextCommitInfo.left.toOption.map(_.nextRemoteCommit.txid) contains tx.txid) { /*their next commit spent*/ }
-    //if (tx.txid == wait.commitments.remoteCommit.txid); /* they have spent a first commit */ else; /* info leak */
-
     // Unilateral channel closing in NORMAL
     case (_: Error, norm: NormalData, NORMAL) => startLocalCurrentClose(norm)
-    case (Tuple2(CMDFundingSpent, tx: Transaction), norm: NormalData, NORMAL) => defineClosingAction(norm, tx)
+    case (Tuple2(CMDFundingSpent, tx: Transaction), norm: NormalData, NORMAL) =>
+      defineClosingAction(norm, tx)
 
     // NEGOTIATIONS MODE
 
@@ -310,8 +306,9 @@ extends StateMachine[ChannelData] { me =>
         me stayWith closing
 
     // Some other type of tx has been spent while we await for confirmations
-    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING) => defineClosingAction(closing, tx)
-    case (CMDClosingFinished, closing: ClosingData, CLOSING) => become(closing, state1 = FINISHED)
+    case (CMDClosingFinished, closing: ClosingData, CLOSING) => become(closing, FINISHED)
+    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING) =>
+      defineClosingAction(closing, tx)
 
     case otherwise =>
       // Let know if received an unhandled message
