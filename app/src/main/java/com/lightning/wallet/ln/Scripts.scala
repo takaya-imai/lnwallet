@@ -70,60 +70,60 @@ object Scripts { me =>
 
     OP_IF ::
       OP_PUSHDATA(revocationPubkey) ::
-      OP_ELSE ::
+    OP_ELSE ::
       encodeNumber(toSelfDelay) ::
       OP_CHECKSEQUENCEVERIFY :: OP_DROP ::
       OP_PUSHDATA(localDelayedPubkey) ::
-      OP_ENDIF ::
-      OP_CHECKSIG :: Nil
+    OP_ENDIF ::
+    OP_CHECKSIG :: Nil
 
   def htlcOffered(localPubkey: PublicKey, remotePubkey: PublicKey,
                   revocationPubKey: PublicKey, paymentHash: BinaryData) =
 
     OP_DUP :: OP_HASH160 ::
-      OP_PUSHDATA(revocationPubKey.hash160) ::
-      OP_EQUAL ::
-      OP_IF ::
+    OP_PUSHDATA(revocationPubKey.hash160) ::
+    OP_EQUAL ::
+    OP_IF ::
       // To you with revocation key
       OP_CHECKSIG ::
-      OP_ELSE ::
+    OP_ELSE ::
       OP_PUSHDATA(remotePubkey) :: OP_SWAP ::
       OP_SIZE :: encodeNumber(32) :: OP_EQUAL ::
       OP_NOTIF ::
-      // To me via timelocked HTLC-timeout transaction
-      OP_DROP :: OP_2 :: OP_SWAP ::
-      OP_PUSHDATA(localPubkey) :: OP_2 ::
-      OP_CHECKMULTISIG ::
+        // To me via timelocked HTLC-timeout transaction
+        OP_DROP :: OP_2 :: OP_SWAP ::
+        OP_PUSHDATA(localPubkey) :: OP_2 ::
+        OP_CHECKMULTISIG ::
       OP_ELSE ::
-      OP_HASH160 :: OP_PUSHDATA(paymentHash) ::
-      OP_EQUALVERIFY :: OP_CHECKSIG ::
+        OP_HASH160 :: OP_PUSHDATA(paymentHash) ::
+        OP_EQUALVERIFY :: OP_CHECKSIG ::
       OP_ENDIF ::
-      OP_ENDIF :: Nil
+    OP_ENDIF :: Nil
 
   def htlcReceived(localKey: PublicKey, remotePubkey: PublicKey, revocationPubKey: PublicKey,
                    paymentHash: BinaryData, lockTime: Long): ScriptEltSeq =
 
     OP_DUP :: OP_HASH160 ::
-      OP_PUSHDATA(revocationPubKey.hash160) ::
-      OP_EQUAL ::
-      OP_IF ::
+    OP_PUSHDATA(revocationPubKey.hash160) ::
+    OP_EQUAL ::
+    OP_IF ::
       // To you with revocation key
       OP_CHECKSIG ::
-      OP_ELSE ::
+    OP_ELSE ::
       OP_PUSHDATA(remotePubkey) :: OP_SWAP ::
       OP_SIZE :: encodeNumber(32) :: OP_EQUAL ::
       OP_IF ::
-      // To me via HTLC-success transaction
-      OP_HASH160 :: OP_PUSHDATA(paymentHash) :: OP_EQUALVERIFY ::
-      OP_2 :: OP_SWAP :: OP_PUSHDATA(localKey) :: OP_2 ::
-      OP_CHECKMULTISIG ::
+        // To me via HTLC-success transaction
+        OP_HASH160 :: OP_PUSHDATA(paymentHash) :: OP_EQUALVERIFY ::
+        OP_2 :: OP_SWAP :: OP_PUSHDATA(localKey) :: OP_2 ::
+        OP_CHECKMULTISIG ::
       OP_ELSE ::
-      // To you after timeout
-      OP_DROP :: encodeNumber(lockTime) ::
-      OP_CHECKLOCKTIMEVERIFY :: OP_DROP ::
-      OP_CHECKSIG ::
+        // To you after timeout
+        OP_DROP :: encodeNumber(lockTime) ::
+        OP_CHECKLOCKTIMEVERIFY :: OP_DROP ::
+        OP_CHECKSIG ::
       OP_ENDIF ::
-      OP_ENDIF :: Nil
+    OP_ENDIF :: Nil
 
   // @formatter:on
 
@@ -195,9 +195,9 @@ object Scripts { me =>
   }.toSeq
 
   def commitTxFee(dustLimit: Satoshi, spec: CommitmentSpec): Satoshi = {
-    val trimmedOfferedHtlcs = trimOfferedHtlcs(dustLimit, spec)
-    val trimmedReceivedHtlcs = trimReceivedHtlcs(dustLimit, spec)
-    val weight = commitWeight + 172 * (trimmedOfferedHtlcs.size + trimmedReceivedHtlcs.size)
+    val trimmedOfferedHtlcs = 172 * trimOfferedHtlcs(dustLimit, spec).size
+    val trimmedReceivedHtlcs = 172 * trimReceivedHtlcs(dustLimit, spec).size
+    val weight = commitWeight + trimmedOfferedHtlcs + trimmedReceivedHtlcs
     weight2fee(spec.feeratePerKw, weight)
   }
 
@@ -402,19 +402,19 @@ object Scripts { me =>
 
   def makeClaimHtlcTimeoutTx(commitTx: Transaction, localPubkey: PublicKey, remotePubkey: PublicKey,
                              remoteRevocationPubkey: PublicKey, localFinalScriptPubKey: BinaryData,
-                             htlc: UpdateAddHtlc, feeratePerKw: Long): ClaimHtlcTimeoutTx = {
+                             add: UpdateAddHtlc, feeratePerKw: Long): ClaimHtlcTimeoutTx = {
 
-    val hash = Crypto ripemd160 htlc.paymentHash
-    val redeem = htlcReceived(remotePubkey, localPubkey, remoteRevocationPubkey, hash, htlc.expiry)
+    val hash = Crypto ripemd160 add.paymentHash
+    val redeem = htlcReceived(remotePubkey, localPubkey, remoteRevocationPubkey, hash, add.expiry)
     ClaimHtlcTimeoutTx tupled makeClaimHtlcTx(commitTx, redeem, pubKeyScript = Script pay2wsh redeem,
-      localFinalScriptPubKey, weight2fee(feeratePerKw, claimHtlcTimeoutWeight), htlc.expiry, 0x00000000L)
+      localFinalScriptPubKey, weight2fee(feeratePerKw, claimHtlcTimeoutWeight), add.expiry, 0x00000000L)
   }
 
   def makeClaimHtlcSuccessTx(commitTx: Transaction, localPubkey: PublicKey, remotePubkey: PublicKey,
                              remoteRevocationPubkey: PublicKey, localFinalScriptPubKey: BinaryData,
-                             htlc: UpdateAddHtlc, feeratePerKw: Long): ClaimHtlcSuccessTx = {
+                             add: UpdateAddHtlc, feeratePerKw: Long): ClaimHtlcSuccessTx = {
 
-    val hash = Crypto ripemd160 htlc.paymentHash
+    val hash = Crypto ripemd160 add.paymentHash
     val redeem = htlcOffered(remotePubkey, localPubkey, remoteRevocationPubkey, hash)
     ClaimHtlcSuccessTx tupled makeClaimHtlcTx(commitTx, redeem, pubKeyScript = Script pay2wsh redeem,
       localFinalScriptPubKey, weight2fee(feeratePerKw, claimHtlcSuccessWeight), 0L, 0xffffffffL)

@@ -11,7 +11,9 @@ import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 
 
-class Channel extends StateMachine[ChannelData] { me =>
+class Channel(bag: InvoiceBag)
+extends StateMachine[ChannelData] { me =>
+
   def doProcess(change: Any) = (change, data, state) match {
     case (cmd: CMDOpenChannel, InitData(announce), WAIT_FOR_INIT) =>
 
@@ -27,7 +29,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (accept: AcceptChannel, waitAccept: WaitAcceptData, WAIT_FOR_ACCEPT)
       // GUARD: remote requires local to keep too much in reserve which is unacceptable
       if LNParams.exceedsReserve(accept.channelReserveSatoshis, waitAccept.cmd.fundingSatoshis) =>
-      throw ChannelException(CHANNEL_RESERVE_TOO_HIGH)
+      become(waitAccept, FINISHED)
 
     case (accept: AcceptChannel, waitAccept: WaitAcceptData, WAIT_FOR_ACCEPT) =>
       val remoteParams = RemoteParams(accept.dustLimitSatoshis, accept.maxHtlcValueInFlightMsat,
@@ -61,8 +63,7 @@ class Channel extends StateMachine[ChannelData] { me =>
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
-      val failed = Scripts.checkSpendable(signedLocalCommitTx).isFailure
-      if (failed) throw ChannelException(CHANNEL_REMOTE_SIG_INVALID) else {
+      if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) become(wait, FINISHED) else {
         val localCommit = LocalCommit(0L, wait.localSpec, PublishableTxs(Nil, signedLocalCommitTx), null)
         val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit, wait.remoteCommit,
           localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty),
@@ -76,6 +77,12 @@ class Channel extends StateMachine[ChannelData] { me =>
         become(WaitFundingConfirmedData(wait.announce, commitments,
           None, wait.lastSent), state1 = WAIT_FUNDING_DONE)
       }
+
+    // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED
+    case (CMDShutdown, some, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+    case (_: Error, some, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+
+    // FUNDING TX IS BROADCASTED AT THIS POINT
 
     // We have not yet sent a FundingLocked to them but just got a FundingLocked from them so we keep it
     case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, _, _, _: FundingCreated), WAIT_FUNDING_DONE) =>
@@ -94,6 +101,14 @@ class Channel extends StateMachine[ChannelData] { me =>
     // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
     case (Tuple2(CMDDepth, LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, Some(their), _), WAIT_FUNDING_DONE) =>
       becomeNormal(wait, their.nextPerCommitmentPoint)
+
+    // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
+    case (_: Error, wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
+    case (CMDShutdown, wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
+    case (Tuple2(CMDFundingSpent, tx: Transaction), wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) =>
+      // We don't yet have any revoked commits so they either spent a first commit or it's an info leak
+      if (tx.txid == wait.commitments.remoteCommit.txid) startRemoteCurrentClose(wait, tx)
+      else startLocalCurrentClose(wait)
 
     // NORMAL MODE
 
@@ -194,7 +209,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     // Periodic watch for timed-out outgoing HTLCs
     case (Tuple2(CMDDepth, count: Int), norm: NormalData, NORMAL)
       if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, count) =>
-      throw ChannelException(CHANNEL_TIMEDOUT_HTLC)
+      startLocalCurrentClose(norm)
 
     // Can only send announcement signatures when no closing is in progress
     case (remote: AnnouncementSignatures, norm @ NormalData(_, commitments, false, None, None, _), NORMAL) =>
@@ -245,6 +260,15 @@ class Channel extends StateMachine[ChannelData] { me =>
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
+    case (_: Error, some, NORMAL) => // I need to spend my current commit
+    case (Tuple2(CMDFundingSpent, tx: Transaction), some: ChannelData with HasCommitments, NORMAL) =>
+      if (some.commitments.remoteNextCommitInfo.left.toOption.map(_.nextRemoteCommit.txid) contains tx.txid) { /*their next commit spent*/ }
+    //if (tx.txid == wait.commitments.remoteCommit.txid); /* they have spent a first commit */ else; /* info leak */
+
+    // Unilateral channel closing in NORMAL
+    case (_: Error, norm: NormalData, NORMAL) => startLocalCurrentClose(norm)
+    case (Tuple2(CMDFundingSpent, tx: Transaction), norm: NormalData, NORMAL) => defineClosingAction(norm, tx)
+
     // NEGOTIATIONS MODE
 
     // At this point commitments.unackedMessages may contain:
@@ -259,11 +283,35 @@ class Channel extends StateMachine[ChannelData] { me =>
       if (!checks) throw ChannelException(CHANNEL_CLOSE_SIG_FAIL)
 
       if (closeFeeSat != remoteFeeSat) {
-        val nextCloseFeeSat = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
-        val (_, nextLocalClosingSigned) = Closing.makeClosingTx(neg.commitments, localKey, remoteKey, nextCloseFeeSat)
-        if (nextCloseFeeSat != remoteFeeSat) me stayWith updateNegotiations(neg, signed = nextLocalClosingSigned)
+        val nextCloseFee: Satoshi = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
+        val (_, nextLocalClosingSigned) = Closing.makeClosingTx(neg.commitments, localKey, remoteKey, nextCloseFee)
+        if (nextCloseFee != remoteFeeSat) updateNegotiations(neg, signed = nextLocalClosingSigned)
         else startMutualClose(neg, closeTx, nextLocalClosingSigned)
       } else startMutualClose(neg, closeTx, neg.localClosingSigned)
+
+    // Channel closing in NEGOTIATIONS
+    case (_: Error, neg: NegotiationsData, NEGOTIATIONS) => startLocalCurrentClose(neg)
+    case (CMDShutdown, neg: NegotiationsData, NEGOTIATIONS) => startLocalCurrentClose(neg)
+    case (Tuple2(CMDFundingSpent, tx: Transaction), neg: NegotiationsData, NEGOTIATIONS) =>
+      val (closeTx, signed) = Closing.makeClosingTx(neg.commitments, neg.localShutdown.scriptPubKey,
+        neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
+
+      // Happens when we agreed on a closeSig, but we don't know it yet
+      // we receive the a tx notification before their ClosingSigned arrives
+      if (closeTx.tx.txid == tx.txid) startMutualClose(neg, closeTx.tx, signed)
+      else defineClosingAction(neg, tx)
+
+    // These spends have already been taken care of
+    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING)
+      if closing.nextRemoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
+        closing.remoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
+        closing.localCommit.map(_.commitTx.txid).contains(tx.txid) ||
+        closing.mutualClose.map(_.txid).contains(tx.txid) =>
+        me stayWith closing
+
+    // Some other type of tx has been spent while we await for confirmations
+    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING) => defineClosingAction(closing, tx)
+    case (CMDClosingFinished, closing: ClosingData, CLOSING) => become(closing, state1 = FINISHED)
 
     case otherwise =>
       // Let know if received an unhandled message
@@ -277,16 +325,60 @@ class Channel extends StateMachine[ChannelData] { me =>
   }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
-    val closingSigned = Closing.makeFirstClosingTx(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
-    become(NegotiationsData(announce, cs.modify(_.unackedMessages).using(_ :+ closingSigned), closingSigned, local, remote), NEGOTIATIONS)
+    val firstSigned = Closing.makeFirstClosingTx(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
+    val neg = NegotiationsData(announce, cs.modify(_.unackedMessages).using(_ :+ firstSigned), firstSigned, local, remote)
+    become(neg, state1 = NEGOTIATIONS)
   }
 
-  private def updateNegotiations(neg: NegotiationsData, signed: ClosingSigned): NegotiationsData =
-    neg.modify(_.commitments.unackedMessages).setTo(Vector apply signed).copy(localClosingSigned = signed)
+  private def updateNegotiations(neg: NegotiationsData, signed: ClosingSigned) = {
+    val c1: Commitments = neg.commitments.modify(_.unackedMessages).setTo(Vector apply signed)
+    become(neg.copy(commitments = c1, localClosingSigned = signed), state1 = NEGOTIATIONS)
+  }
 
-  private def startMutualClose(neg: NegotiationsData, closeTx: Transaction, signed: ClosingSigned) =
-    become(ClosingData(neg.announce, neg.commitments.modify(_.unackedMessages).setTo(Vector apply signed),
-      mutualClose = Some apply closeTx), CLOSING)
+  private def startMutualClose(neg: NegotiationsData, closeTx: Transaction, signed: ClosingSigned) = {
+    // Negotiations have been completed successfully and we can broadcast a mutual closing transaction
+    val c1: Commitments = neg.commitments.modify(_.unackedMessages).setTo(Vector apply signed)
+    val closing = ClosingData(neg.announce, c1, mutualClose = Some apply closeTx)
+    become(closing, state1 = CLOSING)
+  }
+
+  private def startLocalCurrentClose(some: ChannelData with HasCommitments) = {
+    // Something went wrong and we decided to spend our current commit transaction
+    val commitTx: Transaction = some.commitments.localCommit.publishableTxs.commitTx.tx
+    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, commitTx, bag) -> some match {
+      case (claim, closing: ClosingData) => become(data1 = closing.copy(localCommit = Some apply claim), state1 = CLOSING)
+      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, localCommit = Some apply claim), CLOSING)
+    }
+  }
+
+  private def startRemoteCurrentClose(some: ChannelData with HasCommitments, commitTx: Transaction) =
+    // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take ours
+    Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, commitTx, bag) -> some match {
+      case (claim, closing: ClosingData) => become(data1 = closing.copy(remoteCommit = Some apply claim), state1 = CLOSING)
+      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, remoteCommit = Some apply claim), CLOSING)
+    }
+
+  private def startRemoteNextClose(some: ChannelData with HasCommitments, commitTx: Transaction, nextRemoteCommit: RemoteCommit) =
+    // Something went wrong on their side and they decided to spend their NEXT commit transaction, we still need to take ours
+    Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, commitTx, bag) -> some match {
+      case (claim, closing: ClosingData) => become(data1 = closing.copy(nextRemoteCommit = Some apply claim), state1 = CLOSING)
+      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, nextRemoteCommit = Some apply claim), CLOSING)
+    }
+
+  private def startRemoteOther(some: ChannelData with HasCommitments, commitTx: Transaction) =
+    // This is a contract breach, they have spent a revoked transaction so we can take all the money
+    Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, commitTx) -> some match {
+      case (Some(claim), closing: ClosingData) => become(data1 = closing.modify(_.revokedCommits).using(_ :+ claim), state1 = CLOSING)
+      case (Some(claim), _) => become(data1 = ClosingData(some.announce, some.commitments, revokedCommits = Vector apply claim), CLOSING)
+      case (None, _) => startLocalCurrentClose(some)
+    }
+
+  private def defineClosingAction(some: ChannelData with HasCommitments, tx: Transaction) =
+    some.commitments.remoteNextCommitInfo.left.map(waiting => waiting.nextRemoteCommit) match {
+      case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, tx, remoteCommit)
+      case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some, tx)
+      case _ => startRemoteOther(some, tx)
+    }
 }
 
 object Channel {
@@ -297,13 +389,17 @@ object Channel {
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
+  val FINISHED = "Finished"
   val CLOSING = "Closing"
   val NORMAL = "Normal"
 
-  // Text commands
-  val CMDClose = "CMDClose"
-  val CMDDepth = "CMDDepth"
-  val CMDFeerate = "CMDFeerate"
+  // Normal text commands
   val CMDCommitSig = "CMDCommitSig"
+  val CMDFeerate = "CMDFeerate"
+  val CMDDepth = "CMDDepth"
+
+  // Closing text commands
   val CMDShutdown = "CMDShutdown"
+  val CMDFundingSpent = "CMDFundingSpent"
+  val CMDClosingFinished = "CMDClosingFinished"
 }

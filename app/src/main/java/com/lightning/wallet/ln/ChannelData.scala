@@ -55,7 +55,7 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments,
                        mutualClose: Option[Transaction] = None, localCommit: Option[LocalCommitPublished] = None,
                        remoteCommit: Option[RemoteCommitPublished] = None, nextRemoteCommit: Option[RemoteCommitPublished] = None,
-                       revokedCommit: Seq[RevokedCommitPublished] = Nil) extends ChannelData with HasCommitments
+                       revokedCommits: Vector[RevokedCommitPublished] = Vector.empty) extends ChannelData with HasCommitments
 
 // COMMITMENTS
 

@@ -39,11 +39,10 @@ object Exceptions {
 
   val SPHINX_ERR_PACKET_WRONG_LENGTH = "Error packet is of incorrect length"
 
-  val CHANNEL_RESERVE_TOO_HIGH = "ChannelReserveSatoshis is too high"
-  val CHANNEL_REMOTE_SIG_INVALID = "Remote signature for commit tx is invalid"
   val CHANNEL_CLOSE_PENDING_CHANGES = "Cannot close when there are pending changes"
   val CHANNEL_SHUTDOWN_IN_PROGRESS = "Cannot proceed because channel shutdown is in progress"
   val CHANNEL_CLOSE_SIG_FAIL = "Cannot verify their close signature"
   val CHANNEL_TIMEDOUT_HTLC = "One or more htlcs has timed out"
+  val CHANNEL_INFO_LEACK = "Channel info leak happened"
 }
 
