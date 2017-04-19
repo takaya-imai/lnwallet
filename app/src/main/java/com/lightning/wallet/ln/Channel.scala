@@ -42,17 +42,13 @@ extends StateMachine[ChannelData] { me =>
         state1 = WAIT_FUNDING_CREATED)
 
     // We now have a funding tx with funding out
-    case (Tuple2(funding: Transaction, outIndex: Int),
-      wait: WaitFundingTxData, WAIT_FUNDING_CREATED) =>
-
-      val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
-        Funding.makeFirstFunderCommitTxs(wait.cmd.localParams, wait.remoteParams,
-          wait.cmd.fundingSatoshis, wait.cmd.pushMsat, wait.cmd.initialFeeratePerKw,
-          funding.hash, outIndex, wait.remoteFirstPerCommitmentPoint)
+    case (Tuple2(funding: Transaction, outIndex: Int), wait: WaitFundingTxData, WAIT_FUNDING_CREATED) =>
+      val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) = Funding.makeFirstFunderCommitTxs(wait.cmd.localParams, wait.remoteParams,
+        wait.cmd.fundingSatoshis, wait.cmd.pushMsat, wait.cmd.initialFeeratePerKw, funding.hash, outIndex, wait.remoteFirstPerCommitmentPoint)
 
       val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, wait.cmd.localParams.fundingPrivKey)
       val fundingCreated = FundingCreated(wait.cmd.temporaryChannelId, funding.hash, outIndex, localSigOfRemoteTx)
-      val firstRemoteCommit = RemoteCommit(0, remoteSpec, remoteCommitTx.tx.txid, wait.remoteFirstPerCommitmentPoint)
+      val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, wait.remoteFirstPerCommitmentPoint)
 
       become(WaitFundingSignedData(wait.announce, Tools.toLongId(funding.hash, outIndex),
         wait.cmd.localParams, wait.remoteParams, funding, localSpec, localCommitTx,
@@ -78,9 +74,9 @@ extends StateMachine[ChannelData] { me =>
           None, wait.lastSent), state1 = WAIT_FUNDING_DONE)
       }
 
-    // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED
-    case (CMDShutdown, some, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
-    case (_: Error, some, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+    // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED
+    case (CMDShutdown, some, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+    case (_: Error, some, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
 
     // FUNDING TX IS BROADCASTED AT THIS POINT
 
@@ -223,7 +219,7 @@ extends StateMachine[ChannelData] { me =>
 
     // When initiating or receiving a shutdown message
     // we can't proceed until all local changes are cleared
-    // and we can't enter negotiations phase util pending HTLCs are present
+    // and we can't enter negotiations util pending HTLCs are present
 
     case (CMDShutdown, norm: NormalData, NORMAL)
       // GUARD: postpone shutdown if we have changes
@@ -260,7 +256,7 @@ extends StateMachine[ChannelData] { me =>
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
-    // Unilateral channel closing in NORMAL
+    // Unilateral channel closing in NORMAL (bilateral is handled above)
     case (_: Error, norm: NormalData, NORMAL) => startLocalCurrentClose(norm)
     case (Tuple2(CMDFundingSpent, tx: Transaction), norm: NormalData, NORMAL) =>
       defineClosingAction(norm, tx)
@@ -297,18 +293,18 @@ extends StateMachine[ChannelData] { me =>
       if (closeTx.tx.txid == tx.txid) startMutualClose(neg, closeTx.tx, signed)
       else defineClosingAction(neg, tx)
 
+    // Channel closing evenis in CLOSING phase
     // These spends have already been taken care of
     case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING)
       if closing.nextRemoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
         closing.remoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
         closing.localCommit.map(_.commitTx.txid).contains(tx.txid) ||
         closing.mutualClose.map(_.txid).contains(tx.txid) =>
-        me stayWith closing
+        // Do nothing
 
     // Some other type of tx has been spent while we await for confirmations
-    case (CMDClosingFinished, closing: ClosingData, CLOSING) => become(closing, FINISHED)
-    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING) =>
-      defineClosingAction(closing, tx)
+    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING) => defineClosingAction(closing, tx)
+    case (CMDClosingFinished, closing: ClosingData, CLOSING) => become(closing, state1 = FINISHED)
 
     case otherwise =>
       // Let know if received an unhandled message
