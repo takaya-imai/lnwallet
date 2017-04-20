@@ -153,7 +153,7 @@ object Sphinx { me =>
                      ephemerealPublicKey: Bytes, sharedSecret: Bytes,
                      packet: Bytes, routingInfoFiller: Bytes): Bytes = {
 
-    def nextRoutingInfo = {
+    val nextRoutingInfo = {
       val onion = Packet read packet
       val stream1 = generateStream(generateKey("rho", sharedSecret), (PayloadLength + MacLength) * MaxHops)
       val routingInfo1 = aconcat(payload, onion.hmac, onion.routingInfo dropRight PayloadLength + MacLength)

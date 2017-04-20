@@ -10,11 +10,11 @@ import com.lightning.wallet.lncloud.RatesSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.JavaSerializer._
 
-import com.lightning.wallet.ln.{ChannelData, ScheduledTx}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
 import rx.lang.scala.schedulers.IOScheduler
+import com.lightning.wallet.ln.ChannelData
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
@@ -62,16 +62,15 @@ trait Saver {
 }
 
 object BlindTokensSaver extends Saver {
-  // Blinding point, clear token and sig
-  type ClearToken = (String, String, String)
+  type ClearToken = (String, String, String) // point, clear token, sig
   type Snapshot = (Set[ClearToken], List[String], BlindProgress)
   def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
   val KEY = "blindTokens"
 }
 
 object ChannelSaver extends Saver {
-  type Snapshot = (List[String], ChannelData)
   def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
+  type Snapshot = (String, ChannelData)
   val KEY = "channel"
 }
 
@@ -80,13 +79,6 @@ object StandaloneCloudSaver extends Saver {
   def saveUrl(url: String) = StorageWrap.put(url, KEY)
   def tryGetUrl: Try[String] = StorageWrap.get(KEY)
   val KEY = "standaloneCloud"
-}
-
-object LocalBroadcasterSaver extends Saver {
-  type Snapshot = (ScheduledTxs, ScheduledTxs)
-  type ScheduledTxs = scala.collection.mutable.Set[ScheduledTx]
-  def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
-  val KEY = "broadcaster"
 }
 
 // Exchange rates and Bitcoin fees

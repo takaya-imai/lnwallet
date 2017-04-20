@@ -19,12 +19,12 @@ import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
 import java.util.{Timer, TimerTask}
 
+import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
 import info.hoang8f.android.segmented.SegmentedGroup
 import concurrent.ExecutionContext.Implicits.global
-import com.lightning.wallet.ln.Scripts.ScriptEltSeq
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
@@ -39,10 +39,8 @@ import fr.acinq.bitcoin.MilliSatoshi
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
-import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.script.Script
 import scala.concurrent.Future
-import java.math.BigInteger
 import android.os.Bundle
 
 import ViewGroup.LayoutParams.WRAP_CONTENT
@@ -69,22 +67,7 @@ object Utils { me =>
   lazy val sumIn = app getString txs_sum_in
   lazy val sumOut = app getString txs_sum_out
 
-  // App wide utility functions
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
-  implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
-
-  implicit def bitcoinLibScript2bitcoinjScript(bitcoinLibScript: ScriptEltSeq): org.bitcoinj.script.Script =
-    new org.bitcoinj.script.Script(fr.acinq.bitcoin.Script write bitcoinLibScript, System.currentTimeMillis)
-
-  implicit def bitcoinjTx2bitcoinLibTx(bitcoinjTx: org.bitcoinj.core.Transaction): fr.acinq.bitcoin.Transaction =
-    fr.acinq.bitcoin.Transaction read bitcoinjTx.unsafeBitcoinSerialize
-
-  // Fiat rates related functions, all transform a Try monad
-  // Rate is fiat per BTC so we need to divide by btc factor in the end
-  def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
-  def inFiat(ms: MilliSatoshi): Try[Double] = currentRate.map(ms.amount * _ / btcFactor)
-  def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
-
   def humanFiat(amount: Try[Double], prefix: String): String = amount match {
     case Success(amt) if currentFiatName == strYuan => s"$prefix<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
     case Success(amt) if currentFiatName == strEuro => s"$prefix<font color=#999999>≈ ${baseFiat format amt} EUR</font>"
@@ -92,18 +75,17 @@ object Utils { me =>
     case _ => ""
   }
 
+  // Fiat rates related functions, all transform a Try monad
+  // Rate is fiat per BTC so we need to divide by btc factor in the end
+  def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
+  def inFiat(ms: MilliSatoshi): Try[Double] = currentRate.map(ms.amount * _ / btcFactor)
+  def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
+
   // Convert pairs of strings into Java bundle
   def mkBundle(args:(String, String)*) = new Bundle match { case bundle =>
     for (Tuple2(key, value) <- args) bundle.putString(key, value)
     bundle
   }
-}
-
-class StringOps(source: String) {
-  def bigInteger = new BigInteger(source)
-  def hex = HEX.encode(source getBytes "UTF-8")
-  def noCommas = source.replace(",", "")
-  def html = Html fromHtml source
 }
 
 trait InfoActivity extends ToolbarActivity { me =>

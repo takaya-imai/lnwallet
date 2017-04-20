@@ -7,13 +7,14 @@ import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 
-import com.lightning.wallet.Utils.{app, string2Ops, sumIn, sumOut}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
 import android.provider.Settings.{System => FontSystem}
+import com.lightning.wallet.Utils.{app, sumIn, sumOut}
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import scala.util.{Failure, Success, Try}
 
+import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener

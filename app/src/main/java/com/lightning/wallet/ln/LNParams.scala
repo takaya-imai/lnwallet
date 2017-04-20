@@ -61,11 +61,8 @@ object LNParams {
       isFunder = true, globalFeatures, localFeatures)
 }
 
-case class ScheduledTx(hex: BinaryData, atBlock: Int)
-
 trait Broadcaster {
-  def schedule(what: ScheduledTx): Unit
-  def unschedule(what: ScheduledTx): Unit
+  def broadcast(tx: Transaction)
   def currentFeeRate: Long
   def currentHeight: Int
 }
