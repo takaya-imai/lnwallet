@@ -363,7 +363,7 @@ extends StateMachine[ChannelData] { me =>
     Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, commitTx) -> some match {
       case (Some(claim), closing: ClosingData) => become(data1 = closing.modify(_.revokedCommits).using(_ :+ claim), state1 = CLOSING)
       case (Some(claim), _) => become(data1 = ClosingData(some.announce, some.commitments, revokedCommits = Vector apply claim), CLOSING)
-      case (None, _) => startLocalCurrentClose(some)
+      case (None, _) => startLocalCurrentClose(some) // Info leak, try to spend current commit
     }
 
   private def defineClosingAction(some: ChannelData with HasCommitments, tx: Transaction) =

@@ -1,14 +1,13 @@
 package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
+import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
-import com.lightning.wallet.ln.crypto.{ErrorPacket, OnionPacket, ParsedPacket}
-import com.lightning.wallet.ln.Tools.{BinaryDataList, random}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
-
+import com.lightning.wallet.ln.Tools.random
 import scodec.bits.BitVector
 import scodec.Attempt
 import scala.util.Try
@@ -36,7 +35,7 @@ object PaymentOps {
   def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): OnionPacket = {
     require(nodes.size == payloads.size + 1, s"Сount mismatch: there should be one less payload than ${nodes.size}")
     val payloadsBin = payloads.map(perHopPayloadCodec.encode).map(serializationResult) :+ BinaryData("00" * PayloadLength)
-    makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin, assocData)
+    makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
   }
 
   def reduceRoutes(fail: UpdateFailHtlc, packet: OnionPacket,
@@ -70,7 +69,7 @@ object PaymentOps {
 
   def parseIncomingHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc) = Try {
     val packet: ParsedPacket = parsePacket(nodeSecret, add.paymentHash, add.onionRoutingPacket)
-    val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload.data)
+    val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload)
     Tuple3(payload, packet.nextPacket, packet.sharedSecret)
   } map {
     case (_, nextPacket, sharedSecret) if Packet isLastPacket nextPacket =>

@@ -84,30 +84,30 @@ class HtlcGenerationSpec {
       val (payloads, _, _) = buildRoute(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, hops.drop(1))
       val nodes = hops.map(_.nextNodeId)
       val OnionPacket(_, packet_b) = buildOnion(nodes.map(PublicKey.apply).toVector, payloads, paymentHash)
-      println(packet_b.size == Sphinx.PacketLength)
+      println(packet_b.length == Sphinx.PacketLength)
 
       // let's peel the onion
       val ParsedPacket(bin_b, packet_c, _) = Sphinx.parsePacket(priv_b, paymentHash, packet_b)
-      val payload_b = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_b.data)).toOption.get.value
-      println(packet_c.size == Sphinx.PacketLength)
+      val payload_b = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_b)).toOption.get.value
+      println(packet_c.length == Sphinx.PacketLength)
       println(payload_b.amt_to_forward == amount_bc)
       println(payload_b.outgoing_cltv_value == expiry_bc)
 
       val ParsedPacket(bin_c, packet_d, _) = Sphinx.parsePacket(priv_c, paymentHash, packet_c)
-      val payload_c = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_c.data)).toOption.get.value
-      println(packet_d.size == Sphinx.PacketLength)
+      val payload_c = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_c)).toOption.get.value
+      println(packet_d.length == Sphinx.PacketLength)
       println(payload_c.amt_to_forward == amount_cd)
       println(payload_c.outgoing_cltv_value == expiry_cd)
 
       val ParsedPacket(bin_d, packet_e, _) = Sphinx.parsePacket(priv_d, paymentHash, packet_d)
-      val payload_d = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_d.data)).toOption.get.value
-      println(packet_e.size == Sphinx.PacketLength)
+      val payload_d = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_d)).toOption.get.value
+      println(packet_e.length == Sphinx.PacketLength)
       println(payload_d.amt_to_forward == amount_de)
       println(payload_d.outgoing_cltv_value == expiry_de)
 
       val ParsedPacket(bin_e, packet_random, _) = Sphinx.parsePacket(priv_e, paymentHash, packet_e)
-      println(bin_e == BinaryData("00" * Sphinx.PayloadLength))
-      println(packet_random.size == Sphinx.PacketLength)
+      println(BinaryData(bin_e) == BinaryData("00" * Sphinx.PayloadLength))
+      println(packet_random.length == Sphinx.PacketLength)
     }
 
     {
@@ -121,26 +121,26 @@ class HtlcGenerationSpec {
 
       // let's peel the onion
       val ParsedPacket(bin_b, packet_c, _) = Sphinx.parsePacket(priv_b, paymentHash, onion.onionPacket)
-      val payload_b = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_b.data)).toOption.get.value
-      println(packet_c.size == Sphinx.PacketLength)
+      val payload_b = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_b)).toOption.get.value
+      println(packet_c.length == Sphinx.PacketLength)
       println(payload_b.amt_to_forward == amount_bc)
       println(payload_b.outgoing_cltv_value == expiry_bc)
 
       val ParsedPacket(bin_c, packet_d, _) = Sphinx.parsePacket(priv_c, paymentHash, packet_c)
-      val payload_c = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_c.data)).toOption.get.value
-      println(packet_d.size == Sphinx.PacketLength)
+      val payload_c = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_c)).toOption.get.value
+      println(packet_d.length == Sphinx.PacketLength)
       println(payload_c.amt_to_forward == amount_cd)
       println(payload_c.outgoing_cltv_value == expiry_cd)
 
       val ParsedPacket(bin_d, packet_e, _) = Sphinx.parsePacket(priv_d, paymentHash, packet_d)
-      val payload_d = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_d.data)).toOption.get.value
-      println(packet_e.size == Sphinx.PacketLength)
+      val payload_d = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_d)).toOption.get.value
+      println(packet_e.length == Sphinx.PacketLength)
       println(payload_d.amt_to_forward == amount_de)
       println(payload_d.outgoing_cltv_value == expiry_de)
 
       val ParsedPacket(bin_e, packet_random, _) = Sphinx.parsePacket(priv_e, paymentHash, packet_e)
-      println(bin_e == BinaryData("00" * Sphinx.PayloadLength))
-      println(packet_random.size == Sphinx.PacketLength)
+      println(BinaryData(bin_e) == BinaryData("00" * Sphinx.PayloadLength))
+      println(packet_random.length == Sphinx.PacketLength)
     }
 
     {
@@ -150,12 +150,12 @@ class HtlcGenerationSpec {
 
       println(amountMsat == finalAmountMsat)
       println(expiry == currentBlockCount + expiryDeltaBlocks)
-      println(onion.onionPacket.size == Sphinx.PacketLength)
+      println(onion.onionPacket.length == Sphinx.PacketLength)
 
       // let's peel the onion
       val ParsedPacket(bin_b, packet_random, _) = Sphinx.parsePacket(priv_b, paymentHash, onion.onionPacket)
-      println(bin_b == BinaryData("00" * Sphinx.PayloadLength))
-      println(packet_random.size == Sphinx.PacketLength)
+      println(BinaryData(bin_b) == BinaryData("00" * Sphinx.PayloadLength))
+      println(packet_random.length == Sphinx.PacketLength)
     }
 
   }
