@@ -28,38 +28,17 @@ object Scripts { me =>
       case (true, multisig) => ScriptWitness(BinaryData.empty :: sig1 :: sig2 :: Script.write(multisig) :: Nil)
     }
 
-  def sequenceToBlockHeight(sequence: Long): Long = {
-    val isCsvDisabled = (sequence & TxIn.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0
-    val isCsvBlockHeight = (sequence & TxIn.SEQUENCE_LOCKTIME_TYPE_FLAG) == 0
+  def csvTimeout(tx: Transaction): Long =
+    if (tx.version < 2) 0L else tx.txIn.map { in =>
+      val isCsvDisabled = (in.sequence & TxIn.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0
+      if (isCsvDisabled) 0L else in.sequence & TxIn.SEQUENCE_LOCKTIME_MASK
+    }.max
 
-    if (isCsvDisabled) 0 else {
-      require(isCsvBlockHeight, "Block heights only")
-      sequence & TxIn.SEQUENCE_LOCKTIME_MASK
-    }
-  }
-
-  def csvTimeout(tx: Transaction) = tx match {
-    case Transaction(version, _, _, _) if version < 2 => 0L
-    case _ => tx.txIn.map(_.sequence).map(sequenceToBlockHeight).max
-  }
-
-  def cltvTimeout(tx: Transaction) = {
-    val isBlockHeight = tx.lockTime <= LockTimeThreshold
-    require(isBlockHeight, "Block heights only")
-    tx.lockTime
-  }
-
-  def encodeNumber(n: Long): ScriptElt = n match {
-    case normalNum if normalNum >= 1 & normalNum <= 16 =>
-      val code = ScriptElt.elt2code(OP_1) + normalNum - 1
-      ScriptElt code2elt code.toInt
-
-    case 0 => OP_0
-    case -1 => OP_1NEGATE
-
-    case other =>
-      val encoded = Script encodeNumber other
-      OP_PUSHDATA(data = encoded)
+  def encodeNumber(number: Long): ScriptElt = number match {
+    case n if n < -1 | n > 16 => OP_PUSHDATA(Script encodeNumber n)
+    case n if n >= 1 & n <= 16 => ScriptElt code2elt number.toInt
+    case -1L => OP_1NEGATE
+    case 0L => OP_0
   }
 
   // LN SCRIPTS

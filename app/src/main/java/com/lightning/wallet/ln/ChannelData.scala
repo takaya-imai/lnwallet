@@ -14,7 +14,6 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 sealed trait Command
-
 case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long,
                           pushMsat: Long, initialFeeratePerKw: Long, localParams: LocalParams,
                           remoteInit: Init) extends Command
@@ -57,6 +56,40 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments,
                        remoteCommit: Option[RemoteCommitPublished] = None, nextRemoteCommit: Option[RemoteCommitPublished] = None,
                        revokedCommits: Vector[RevokedCommitPublished] = Vector.empty) extends ChannelData with HasCommitments
 
+case class LocalCommitPublished(claimMainDelayedOutputTx: Option[Transaction], htlcSuccessTxs: Seq[Transaction],
+                                htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
+                                claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
+
+case class RemoteCommitPublished(claimMainOutputTx: Option[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
+                                 claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
+
+case class RevokedCommitPublished(claimMainOutputTx: Option[Transaction], mainPenaltyTx: Option[Transaction],
+                                  claimHtlcTimeoutTxs: Seq[Transaction], htlcTimeoutTxs: Seq[Transaction],
+                                  htlcPenaltyTxs: Seq[Transaction], commitTx: Transaction)
+
+object ClosingData {
+  private def extractTxs(bag: LocalCommitPublished): List[Transaction] = {
+    val LocalCommitPublished(claimMainDelayedOutput, htlcSuccess, htlcTimeout, claimHtlcSuccess, claimHtlcTimeout, _) = bag
+    claimMainDelayedOutput.toList ++ htlcSuccess ++ htlcTimeout ++ claimHtlcSuccess ++ claimHtlcTimeout
+  }
+
+  private def extractTxs(bag: RemoteCommitPublished): List[Transaction] = {
+    val RemoteCommitPublished(claimMainOutput, claimHtlcSuccess, claimHtlcTimeout, _) = bag
+    claimMainOutput.toList ++ claimHtlcSuccess ++ claimHtlcTimeout
+  }
+
+  private def extractTxs(bag: RevokedCommitPublished): List[Transaction] = {
+    val RevokedCommitPublished(claimMainOutput, mainPenalty, claimHtlcTimeout, htlcTimeout, htlcPenalty, _) = bag
+    claimMainOutput.toList ++ mainPenalty.toList ++ claimHtlcTimeout ++ htlcTimeout ++ htlcPenalty
+  }
+
+  def extractTxs(closing: ClosingData): List[Transaction] = {
+    val ClosingData(_, _, mutualClose, localCommit, remoteCommit, nextRemoteCommit, revokedCommits) = closing
+    mutualClose.toList ++ localCommit.toList.flatMap(extractTxs) ++ remoteCommit.toList.flatMap(extractTxs) ++
+      nextRemoteCommit.toList.flatMap(extractTxs) ++ revokedCommits.flatMap(extractTxs)
+  }
+}
+
 // COMMITMENTS
 
 case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
@@ -70,80 +103,9 @@ case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
                         revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
                         globalFeatures: BinaryData, localFeatures: BinaryData)
 
-case class LocalCommitPublished(claimMainDelayedOutputTx: Option[Transaction], htlcSuccessTxs: Seq[Transaction],
-                                htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
-                                claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
-
-case class RemoteCommitPublished(claimMainOutputTx: Option[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
-                                 claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
-
-case class RevokedCommitPublished(claimMainOutputTx: Option[Transaction], mainPenaltyTx: Option[Transaction],
-                                  claimHtlcTimeoutTxs: Seq[Transaction], htlcTimeoutTxs: Seq[Transaction],
-                                  htlcPenaltyTxs: Seq[Transaction], commitTx: Transaction)
-
 case class CommitmentSpec(feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long,
                           htlcs: Set[Htlc] = Set.empty, fulfilled: Set[Htlc] = Set.empty,
                           failed: Set[Htlc] = Set.empty)
-
-case class PublishableTxs(htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
-case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
-case class LocalCommit(index: Long, spec: CommitmentSpec, publishableTxs: PublishableTxs, commit: CommitSig)
-case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
-case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
-case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
-
-case class Commitments(localParams: LocalParams, remoteParams: RemoteParams,
-                       localCommit: LocalCommit, remoteCommit: RemoteCommit,
-                       localChanges: Changes, remoteChanges: Changes,
-                       localNextHtlcId: Long, remoteNextHtlcId: Long,
-                       remoteNextCommitInfo: Either[WaitingForRevocation, Point],
-                       unackedMessages: LightningMessages, commitInput: InputInfo,
-                       remotePerCommitmentSecrets: ShaHashesWithIndex,
-                       channelId: BinaryData)
-
-// PAYMENT REQUEST
-
-case class Invoice(message: Option[String], nodeId: BinaryData,
-                   sum: MilliSatoshi, paymentHash: BinaryData)
-
-case class ExtendedInvoice(preimage: Option[BinaryData], fee: Option[Long],
-                           invoice: Invoice, status: Long, incoming: Boolean, stamp: Long)
-
-case class PaymentRouteOps(remaining: List[PaymentRoute], targetNodeId: PublicKey)
-case class Htlc(incoming: Boolean, add: UpdateAddHtlc, routes: PaymentRouteOps,
-                onion: OnionPacket, sort: String) extends ChannelMessage
-
-// CONTROL OBJECTS
-
-object Invoice {
-  def serialize(inv: Invoice) = {
-    val hash = inv.paymentHash.toString
-    val node = inv.nodeId.toString
-    val sum = inv.sum.amount
-    s"$node:$sum:$hash"
-  }
-
-  def parse(raw: String) = {
-    val Array(node, sum, hash) = raw.split(':')
-    Invoice(None, node, MilliSatoshi(sum.toLong), hash)
-  }
-}
-
-object Htlc {
-  val PLAIN = "plain"
-  val SILENT = "silent"
-}
-
-object Changes {
-  def all(c: Changes): LightningMessages =
-    c.proposed ++ c.signed ++ c.acked
-}
-
-object PaymentRouteOps {
-  private def without(ops: PaymentRouteOps, predicate: Hop => Boolean) = ops.remaining.tail.filterNot(_ exists predicate)
-  def withoutFailedChannel(ops: PaymentRouteOps, chanId: Long) = without(ops, _.lastUpdate.shortChannelId == chanId)
-  def withoutFailedNode(ops: PaymentRouteOps, nodeId: BinaryData) = without(ops, _.nodeId == nodeId)
-}
 
 object CommitmentSpec {
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
@@ -193,6 +155,61 @@ object CommitmentSpec {
 
     spec4
   }
+}
+
+case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
+case class PublishableTxs(htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
+case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
+case class LocalCommit(index: Long, spec: CommitmentSpec, publishableTxs: PublishableTxs, commit: CommitSig)
+case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
+
+case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
+object Changes { def all(c: Changes): LightningMessages = c.proposed ++ c.signed ++ c.acked }
+
+case class Commitments(localParams: LocalParams, remoteParams: RemoteParams,
+                       localCommit: LocalCommit, remoteCommit: RemoteCommit,
+                       localChanges: Changes, remoteChanges: Changes,
+                       localNextHtlcId: Long, remoteNextHtlcId: Long,
+                       remoteNextCommitInfo: Either[WaitingForRevocation, Point],
+                       unackedMessages: LightningMessages, commitInput: InputInfo,
+                       remotePerCommitmentSecrets: ShaHashesWithIndex,
+                       channelId: BinaryData)
+
+// PAYMENT REQUEST
+
+case class Invoice(message: Option[String], nodeId: BinaryData,
+                   sum: MilliSatoshi, paymentHash: BinaryData)
+
+object Invoice {
+  def serialize(inv: Invoice) = {
+    val hash = inv.paymentHash.toString
+    val node = inv.nodeId.toString
+    val sum = inv.sum.amount
+    s"$node:$sum:$hash"
+  }
+
+  def parse(raw: String) = {
+    val Array(node, sum, hash) = raw.split(':')
+    Invoice(None, node, MilliSatoshi(sum.toLong), hash)
+  }
+}
+
+case class ExtendedInvoice(preimage: Option[BinaryData], fee: Option[Long],
+                           invoice: Invoice, status: Long, incoming: Boolean, stamp: Long)
+
+case class PaymentRouteOps(remaining: List[PaymentRoute], targetNodeId: PublicKey)
+case class Htlc(incoming: Boolean, add: UpdateAddHtlc, routes: PaymentRouteOps,
+                onion: OnionPacket, sort: String) extends ChannelMessage
+
+object Htlc {
+  val PLAIN = "plain"
+  val SILENT = "silent"
+}
+
+object PaymentRouteOps {
+  private def without(ops: PaymentRouteOps, predicate: Hop => Boolean) = ops.remaining.tail.filterNot(_ exists predicate)
+  def withoutFailedChannel(ops: PaymentRouteOps, chanId: Long) = without(ops, _.lastUpdate.shortChannelId == chanId)
+  def withoutFailedNode(ops: PaymentRouteOps, nodeId: BinaryData) = without(ops, _.nodeId == nodeId)
 }
 
 object UnackedOps {
