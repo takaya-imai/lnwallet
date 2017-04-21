@@ -15,14 +15,10 @@ import scala.util.Try
 class LocalBroadcaster extends Broadcaster { me =>
   def broadcast(tx: fr.acinq.bitcoin.Transaction): Unit =
     obsOn(app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get, IOScheduler.apply)
-      .subscribe(tx => android.util.Log.d("LocalBroadcaster", tx.toString), none)
+      .subscribe(tx => android.util.Log.d("LocalBroadcaster", tx.getHashAsString), none)
 
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
-  def txStatus: Map[String, Int] = app.kit.wallet.getTransactions(false).asScala
+  def parentStatus: Map[String, Int] = app.kit.wallet.getTransactions(false).asScala
     .map(tx => tx.getHashAsString -> tx.getConfidence.getDepthInBlocks).toMap
-
-  private def getDelay(tx: Transaction) = Try {
-
-  }
 }

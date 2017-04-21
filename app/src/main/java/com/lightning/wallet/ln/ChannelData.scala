@@ -56,6 +56,7 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments,
                        remoteCommit: Option[RemoteCommitPublished] = None, nextRemoteCommit: Option[RemoteCommitPublished] = None,
                        revokedCommits: Vector[RevokedCommitPublished] = Vector.empty) extends ChannelData with HasCommitments
 
+case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
 case class LocalCommitPublished(claimMainDelayedOutputTx: Option[Transaction], htlcSuccessTxs: Seq[Transaction],
                                 htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
                                 claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
