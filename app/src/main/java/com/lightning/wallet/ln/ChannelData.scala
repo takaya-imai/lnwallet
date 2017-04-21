@@ -6,10 +6,10 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Exceptions._
 
-import com.lightning.wallet.ln.Tools.{LightningMessages, random}
-import com.lightning.wallet.ln.crypto.{Generators, OnionPacket, ShaChain, ShaHashesWithIndex}
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi, Transaction}
+import com.lightning.wallet.ln.crypto.{Generators, SecretsAndPacket, ShaChain, ShaHashesWithIndex}
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+import com.lightning.wallet.ln.Tools.{LightningMessages, random}
 import com.lightning.wallet.ln.MSat.satFactor
 
 
@@ -84,12 +84,12 @@ object ClosingData {
     closing.mutualClose ++ closing.localCommit.flatMap(extractTxs) ++ closing.remoteCommit.flatMap(extractTxs) ++
       closing.nextRemoteCommit.flatMap(extractTxs) ++ closing.revokedCommits.flatMap(extractTxs)
 
-  def extractWatchScripts(closing: ClosingData): Seq[BinaryData] = {
-    // Upon channel breaking we need to watch all htlc-sent outputs for preimages
-    val local = closing.localCommit.flatMap(_.commitTx.txOut).map(_.publicKeyScript)
-    val remote = closing.remoteCommit.flatMap(_.commitTx.txOut).map(_.publicKeyScript)
-    val remoteNext = closing.nextRemoteCommit.flatMap(_.commitTx.txOut).map(_.publicKeyScript)
-    local ++ remote ++ remoteNext
+  def extractWatchScripts(closing: ClosingData): Seq[TxOut] = {
+    // On channel breaking we need to watch all commit outputs for preimages
+    val remoteNext = closing.nextRemoteCommit.flatMap(_.commitTx.txOut)
+    val remote = closing.remoteCommit.flatMap(_.commitTx.txOut)
+    val local = closing.localCommit.flatMap(_.commitTx.txOut)
+    remoteNext ++ remote ++ local
   }
 }
 
@@ -202,7 +202,7 @@ case class ExtendedInvoice(preimage: Option[BinaryData], fee: Option[Long],
 
 case class PaymentRouteOps(remaining: List[PaymentRoute], targetNodeId: PublicKey)
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc, routes: PaymentRouteOps,
-                onion: OnionPacket, sort: String) extends ChannelMessage
+                onion: SecretsAndPacket, sort: String) extends ChannelMessage
 
 object Htlc {
   val PLAIN = "plain"

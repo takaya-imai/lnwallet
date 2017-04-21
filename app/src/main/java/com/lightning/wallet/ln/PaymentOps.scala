@@ -19,26 +19,26 @@ object PaymentOps {
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
   def buildCommand(finalAmountMsat: Long, finalExpiryBlockCount: Int, paymentHash: BinaryData, hops: PaymentRoute) = {
     val (perHopPayloads, firstAmountMsat, firstExpiry) = buildRoute(finalAmountMsat, finalExpiryBlockCount, hops drop 1)
-    (firstAmountMsat, buildOnion(hops.map(PublicKey apply _.nextNodeId).toVector, perHopPayloads, paymentHash), firstExpiry)
+    val onion = buildOnion(hops.map(PublicKey apply _.nextNodeId).toVector, perHopPayloads, paymentHash)
+    (firstAmountMsat, onion, firstExpiry)
   }
 
   def buildRoute(finalAmountMsat: Long, finalExpiryBlockCount: Int, hops: PaymentRoute) = {
     val startConditions = (Vector.empty[PerHopPayload], finalAmountMsat, finalExpiryBlockCount)
-
-    hops.reverse.foldLeft(startConditions) { case (Tuple3(payloads, msat, expiry), hop) =>
+    hops.reverse.foldLeft(startConditions) { case (Tuple3(payloads, msat: Long, expiry: Int), hop) =>
       val feeMsat = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
       val perHopPayload1 = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
       (perHopPayload1, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
     }
   }
 
-  def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): OnionPacket = {
-    require(nodes.size == payloads.size + 1, s"Сount mismatch: there should be one less payload than ${nodes.size}")
+  def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): SecretsAndPacket = {
+    require(nodes.size == payloads.size + 1, "Payload count mismatch: there should be one less payload than " + nodes.size)
     val payloadsBin = payloads.map(perHopPayloadCodec.encode).map(serializationResult) :+ BinaryData("00" * PayloadLength)
     makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
   }
 
-  def reduceRoutes(fail: UpdateFailHtlc, packet: OnionPacket,
+  def reduceRoutes(fail: UpdateFailHtlc, packet: SecretsAndPacket,
                    ops: PaymentRouteOps): List[PaymentRoute] =
 
     parseErrorPacket(packet.sharedSecrets, fail.reason) map {
@@ -72,8 +72,8 @@ object PaymentOps {
     val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload)
     Tuple3(payload, packet.nextPacket, packet.sharedSecret)
   } map {
-    case (_, nextPacket, sharedSecret) if Packet isLastPacket nextPacket =>
-      // Looks like we are the final recipient of HTLC, the only viable option
+    case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
+      // Looks like we are the final recipient of HTLC
       Right(add, sharedSecret)
 
     case (Attempt.Successful(_), _, sharedSecret) =>

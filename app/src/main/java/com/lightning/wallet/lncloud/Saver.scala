@@ -103,9 +103,8 @@ object RatesSaver extends Saver { me =>
   implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
   implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
   implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
-
-  def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def toRates(src: RatesMap) = Map(strDollar -> src("USD").now, strEuro -> src("EUR").now, strYuan -> src("CNY").now)
+  def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def bitpayNorm(src: String) = jsonFieldAs[BitpayList]("data")(src).map(bitpay => bitpay.code -> bitpay).toMap
 
   private def pickExchangeRate = retry(obsOn(random nextInt 3 match {
@@ -127,6 +126,7 @@ object RatesSaver extends Saver { me =>
   var rates = tryGet[Rates] getOrElse Rates(Map.empty, defaultFee, defaultFee div 2, 0L)
 
   def process = {
+    // Pull feerates from all *responsive* sources at once and filter out those beyond 1st sd
     def allFees = for (orderNum <- 0 until 4) yield pickFeeRate(orderNum).onErrorReturn(_ => None)
     def combined = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate).repeatWhen(_ delay period)
 

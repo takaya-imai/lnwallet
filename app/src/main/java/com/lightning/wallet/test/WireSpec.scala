@@ -176,10 +176,9 @@ class WireSpec {
           update_add_htlc :: update_fulfill_htlc :: update_fail_htlc :: update_fail_malformed_htlc :: commit_sig :: revoke_and_ack ::
           channel_announcement :: node_announcement :: channel_update :: announcement_signatures :: ping :: pong :: Nil
 
-      msgs.foreach {
-        case msg => {
+      msgs.foreach { msg => {
           val encoded = lightningMessageCodec.encode(msg)
-          val decoded = encoded.flatMap(lightningMessageCodec.decode(_))
+          val decoded = encoded.flatMap(lightningMessageCodec.decode)
           println(msg == decoded.toOption.get.value)
         }
       }
@@ -188,10 +187,19 @@ class WireSpec {
     {
       println("encode/decode per-hop payload")
       val payload = PerHopPayload(channel_id = 42, amt_to_forward = 142000, outgoing_cltv_value = 500000)
-      val bin = LightningMessageCodecs.perHopPayload.as[PerHopPayload].encode(payload).toOption.get
+      val bin = LightningMessageCodecs.perHopPayloadCodec.encode(payload).require
       println(bin.toByteVector.size == 33)
-      val payload1 = LightningMessageCodecs.perHopPayload.as[PerHopPayload].decode(bin).toOption.get.value
+      val payload1 = LightningMessageCodecs.perHopPayloadCodec.decode(bin).require.value
       println(payload == payload1)
+
+      // realm (the first byte) should be 0
+      val bin1 = bin.toByteVector.update(0, 1)
+      try {
+        val payload2 = LightningMessageCodecs.perHopPayloadCodec.decode(bin1.toBitVector).require.value
+        println(payload2 == payload1)
+      } catch {
+        case e: Throwable => println(true)
+      }
     }
   }
 }

@@ -319,7 +319,7 @@ object LightningMessageCodecs { me =>
       (channelUpdateCodec withContext "lastUpdate")
 
   val perHopPayload =
-    (ignore(8 * 1) withContext "realm") ::
+    (constant(ByteVector fromByte 0) withContext "realm") ::
       (uint64 withContext "channel_id") ::
       (uint32 withContext "amt_to_forward") ::
       (int32 withContext "outgoing_cltv_value") ::

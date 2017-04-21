@@ -157,8 +157,8 @@ object Helpers { me =>
       val (successTxs, claimSuccessTxs) = allSuccessTxs.unzip
       val (timeoutTxs, claimTimeoutTxs) = allTimeoutTxs.unzip
 
-      LocalCommitPublished(claimMainDelayedOutputTx = makeClaimDelayedOutput(tx, "main-claim-delayed"),
-        htlcSuccessTxs = successTxs, htlcTimeoutTxs = timeoutTxs, claimHtlcSuccessTxs = claimSuccessTxs,
+      LocalCommitPublished(makeClaimDelayedOutput(tx, "main-claim-delayed").toList,
+        successTxs, htlcTimeoutTxs = timeoutTxs, claimHtlcSuccessTxs = claimSuccessTxs,
         claimHtlcTimeoutTxs = claimTimeoutTxs, commitTx = tx)
     }
 
@@ -207,7 +207,7 @@ object Helpers { me =>
         Scripts.addSigs(info, localPrivkey.publicKey, sig)
       }
 
-      RemoteCommitPublished(claimMainOutputTx = mainTx,
+      RemoteCommitPublished(mainTx.toList,
         claimHtlcSuccessTxs = claimSuccessTxs.toSeq,
         claimHtlcTimeoutTxs = claimTimeoutTxs.toSeq,
         commitTx = tx)
