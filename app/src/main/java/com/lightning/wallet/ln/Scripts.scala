@@ -160,8 +160,8 @@ object Scripts { me =>
   val mainPenaltyWeight = 483
 
   // Fee calculation
-  def weight2fee(feeratePerKw: Long, weight: Int): Satoshi =
-  Satoshi(feeratePerKw * weight / 1000)
+  def weight2fee(feeratePerKw: Long, weight: Int) =
+    Satoshi(feeratePerKw * weight / 1000)
 
   private def trimOfferedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
     val htlcTimeoutFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcTimeoutWeight) + dustLimit

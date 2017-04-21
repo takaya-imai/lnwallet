@@ -19,6 +19,6 @@ class LocalBroadcaster extends Broadcaster { me =>
 
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
-  def parentStatus: Map[String, Int] = app.kit.wallet.getTransactions(false).asScala
+  def parents: Map[String, Int] = app.kit.wallet.getTransactions(false).asScala
     .map(tx => tx.getHashAsString -> tx.getConfidence.getDepthInBlocks).toMap
 }

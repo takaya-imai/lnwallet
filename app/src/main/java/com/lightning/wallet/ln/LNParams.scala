@@ -66,21 +66,19 @@ trait Broadcaster {
   def currentFeeRate: Long
   def currentHeight: Int
 
-  def broadcastStatus(txs: List[Transaction], parents: Map[String, Int], chainHeight: Int): List[BroadcastStatus] = {
+  def broadcastStatus(txs: Seq[Transaction], parents: Map[String, Int], chainHeight: Int): Seq[BroadcastStatus] = {
     val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
 
     augmented map {
-      // If we have CSV but don't have a parent published then we wait for parent
-      // If we don't have CSV so whether parent tx is present is irrelevant, we look as CLTV
+      // If CSV is zero then whether parent tx is present is irrelevant, we look as CLTV
       case (tx, _, 0L) if tx.lockTime - chainHeight < 1 => BroadcastStatus(None, publishable = true, tx)
       case (tx, _, 0L) => BroadcastStatus(Some(tx.lockTime - chainHeight), publishable = false, tx)
-      case (tx, None, csv) => BroadcastStatus(None, publishable = false, tx)
+      // If CSV is not zero but parent tx is not published then we wait for parent
+      case (tx, None, _) => BroadcastStatus(None, publishable = false, tx)
 
       case (tx, Some(parentConfs), csv) =>
-        val relativeCsv: Long = csv - parentConfs
-        val relativeCltv: Long = tx.lockTime - chainHeight
-        val blocksLeft = math.max(relativeCsv, relativeCltv)
-
+        // Tx may have both CLTV and CSV so we need to get the max of them
+        val blocksLeft = math.max(csv - parentConfs, tx.lockTime - chainHeight)
         if (blocksLeft < 1) BroadcastStatus(None, publishable = true, tx)
         else BroadcastStatus(Some(blocksLeft), publishable = false, tx)
     }

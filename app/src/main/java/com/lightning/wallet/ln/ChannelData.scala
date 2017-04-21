@@ -52,42 +52,44 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends ChannelData with HasCommitments
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments,
-                       mutualClose: Option[Transaction] = None, localCommit: Option[LocalCommitPublished] = None,
-                       remoteCommit: Option[RemoteCommitPublished] = None, nextRemoteCommit: Option[RemoteCommitPublished] = None,
-                       revokedCommits: Vector[RevokedCommitPublished] = Vector.empty) extends ChannelData with HasCommitments
+                       mutualClose: Seq[Transaction] = Nil, localCommit: Seq[LocalCommitPublished] = Nil,
+                       remoteCommit: Seq[RemoteCommitPublished] = Nil, nextRemoteCommit: Seq[RemoteCommitPublished] = Nil,
+                       revokedCommits: Seq[RevokedCommitPublished] = Nil) extends ChannelData with HasCommitments
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
-case class LocalCommitPublished(claimMainDelayedOutputTx: Option[Transaction], htlcSuccessTxs: Seq[Transaction],
+case class LocalCommitPublished(claimMainDelayedOutputTx: Seq[Transaction], htlcSuccessTxs: Seq[Transaction],
                                 htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
                                 claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
 
-case class RemoteCommitPublished(claimMainOutputTx: Option[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
+case class RemoteCommitPublished(claimMainOutputTx: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
                                  claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
 
-case class RevokedCommitPublished(claimMainOutputTx: Option[Transaction], mainPenaltyTx: Option[Transaction],
+case class RevokedCommitPublished(claimMainOutputTx: Seq[Transaction], mainPenaltyTx: Seq[Transaction],
                                   claimHtlcTimeoutTxs: Seq[Transaction], htlcTimeoutTxs: Seq[Transaction],
                                   htlcPenaltyTxs: Seq[Transaction], commitTx: Transaction)
 
 object ClosingData {
-  private def extractTxs(bag: LocalCommitPublished): List[Transaction] = {
-    val LocalCommitPublished(claimMainDelayedOutput, htlcSuccess, htlcTimeout, claimHtlcSuccess, claimHtlcTimeout, _) = bag
-    claimMainDelayedOutput.toList ++ htlcSuccess ++ htlcTimeout ++ claimHtlcSuccess ++ claimHtlcTimeout
-  }
+  private def extractTxs(bag: LocalCommitPublished): Seq[Transaction] =
+    bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
+      bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 
-  private def extractTxs(bag: RemoteCommitPublished): List[Transaction] = {
-    val RemoteCommitPublished(claimMainOutput, claimHtlcSuccess, claimHtlcTimeout, _) = bag
-    claimMainOutput.toList ++ claimHtlcSuccess ++ claimHtlcTimeout
-  }
+  private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
+    bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 
-  private def extractTxs(bag: RevokedCommitPublished): List[Transaction] = {
-    val RevokedCommitPublished(claimMainOutput, mainPenalty, claimHtlcTimeout, htlcTimeout, htlcPenalty, _) = bag
-    claimMainOutput.toList ++ mainPenalty.toList ++ claimHtlcTimeout ++ htlcTimeout ++ htlcPenalty
-  }
+  private def extractTxs(bag: RevokedCommitPublished): Seq[Transaction] =
+    bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
+      bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
 
-  def extractTxs(closing: ClosingData): List[Transaction] = {
-    val ClosingData(_, _, mutualClose, localCommit, remoteCommit, nextRemoteCommit, revokedCommits) = closing
-    mutualClose.toList ++ localCommit.toList.flatMap(extractTxs) ++ remoteCommit.toList.flatMap(extractTxs) ++
-      nextRemoteCommit.toList.flatMap(extractTxs) ++ revokedCommits.flatMap(extractTxs)
+  def extractTxs(closing: ClosingData): Seq[Transaction] =
+    closing.mutualClose ++ closing.localCommit.flatMap(extractTxs) ++ closing.remoteCommit.flatMap(extractTxs) ++
+      closing.nextRemoteCommit.flatMap(extractTxs) ++ closing.revokedCommits.flatMap(extractTxs)
+
+  def extractWatchScripts(closing: ClosingData): Seq[BinaryData] = {
+    // Upon channel breaking we need to watch all htlc-sent outputs for preimages
+    val local = closing.localCommit.flatMap(_.commitTx.txOut).map(_.publicKeyScript)
+    val remote = closing.remoteCommit.flatMap(_.commitTx.txOut).map(_.publicKeyScript)
+    val remoteNext = closing.nextRemoteCommit.flatMap(_.commitTx.txOut).map(_.publicKeyScript)
+    local ++ remote ++ remoteNext
   }
 }
 

@@ -331,7 +331,7 @@ extends StateMachine[ChannelData] { me =>
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction, signed: ClosingSigned) = {
     // Negotiations have been completed successfully and we can broadcast a mutual closing transaction
     val c1: Commitments = neg.commitments.modify(_.unackedMessages).setTo(Vector apply signed)
-    val closing = ClosingData(neg.announce, c1, mutualClose = Some apply closeTx)
+    val closing = ClosingData(neg.announce, c1, mutualClose = closeTx :: Nil)
     become(closing, state1 = CLOSING)
   }
 
@@ -339,30 +339,30 @@ extends StateMachine[ChannelData] { me =>
     // Something went wrong and we decided to spend our current commit transaction
     val commitTx: Transaction = some.commitments.localCommit.publishableTxs.commitTx.tx
     Closing.claimCurrentLocalCommitTxOutputs(some.commitments, commitTx, bag) -> some match {
-      case (claim, closing: ClosingData) => become(data1 = closing.copy(localCommit = Some apply claim), state1 = CLOSING)
-      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, localCommit = Some apply claim), CLOSING)
+      case (claim, closing: ClosingData) => become(data1 = closing.copy(localCommit = claim :: Nil), state1 = CLOSING)
+      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, localCommit = claim :: Nil), CLOSING)
     }
   }
 
   private def startRemoteCurrentClose(some: ChannelData with HasCommitments, commitTx: Transaction) =
     // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, commitTx, bag) -> some match {
-      case (claim, closing: ClosingData) => become(data1 = closing.copy(remoteCommit = Some apply claim), state1 = CLOSING)
-      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, remoteCommit = Some apply claim), CLOSING)
+      case (claim, closing: ClosingData) => become(data1 = closing.copy(remoteCommit = claim :: Nil), state1 = CLOSING)
+      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil), CLOSING)
     }
 
   private def startRemoteNextClose(some: ChannelData with HasCommitments, commitTx: Transaction, nextRemoteCommit: RemoteCommit) =
     // Something went wrong on their side and they decided to spend their NEXT commit transaction, we still need to take ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, commitTx, bag) -> some match {
-      case (claim, closing: ClosingData) => become(data1 = closing.copy(nextRemoteCommit = Some apply claim), state1 = CLOSING)
-      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, nextRemoteCommit = Some apply claim), CLOSING)
+      case (claim, closing: ClosingData) => become(data1 = closing.copy(nextRemoteCommit = claim :: Nil), state1 = CLOSING)
+      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil), CLOSING)
     }
 
   private def startRemoteOther(some: ChannelData with HasCommitments, commitTx: Transaction) =
     // This is a contract breach, they have spent a revoked transaction so we can take all the money
     Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, commitTx) -> some match {
-      case (Some(claim), closing: ClosingData) => become(data1 = closing.modify(_.revokedCommits).using(_ :+ claim), state1 = CLOSING)
-      case (Some(claim), _) => become(data1 = ClosingData(some.announce, some.commitments, revokedCommits = Vector apply claim), CLOSING)
+      case (Some(claim), closing: ClosingData) => become(data1 = closing.modify(_.revokedCommits).using(claim +: _), state1 = CLOSING)
+      case (Some(claim), _) => become(data1 = ClosingData(some.announce, some.commitments, revokedCommits = claim :: Nil), CLOSING)
       case (None, _) => startLocalCurrentClose(some) // Info leak, try to spend current commit
     }
 
