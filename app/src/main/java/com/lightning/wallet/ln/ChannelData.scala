@@ -8,8 +8,9 @@ import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, SecretsAndPacket, ShaChain, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi, Transaction, TxOut}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.Tools.{LightningMessages, random}
+
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.MSat.satFactor
 
 
@@ -106,52 +107,44 @@ case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
                         revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
                         globalFeatures: BinaryData, localFeatures: BinaryData)
 
-case class CommitmentSpec(feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long,
-                          htlcs: Set[Htlc] = Set.empty, fulfilled: Set[Htlc] = Set.empty,
-                          failed: Set[Htlc] = Set.empty)
+case class CommitmentSpec(feeratePerKw: Long, toLocalMsat: Long,
+                          toRemoteMsat: Long, htlcs: Set[Htlc] = Set.empty)
 
 object CommitmentSpec {
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
-  def totalFunds(cs: CommitmentSpec): Long =
-    cs.htlcs.toSeq.map(_.add.amountMsat).sum +
-      cs.toLocalMsat + cs.toRemoteMsat
+  private def fulfill(cs: CommitmentSpec, in: Boolean, update: UpdateFulfillHtlc) = findHtlcById(cs, update.id, in) match {
+    case Some(htlc) if htlc.incoming => cs.copy(toLocalMsat = cs.toLocalMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
+    case Some(htlc) => cs.copy(toRemoteMsat = cs.toRemoteMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
+    case None => cs
+  }
+
+  private def fail(cs: CommitmentSpec, in: Boolean, update: UpdateFailHtlc) = findHtlcById(cs, update.id, in) match {
+    case Some(htlc) if htlc.incoming => cs.copy(toRemoteMsat = cs.toRemoteMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
+    case Some(htlc) => cs.copy(toLocalMsat = cs.toLocalMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
+    case None => cs
+  }
 
   private def add(cs: CommitmentSpec, htlc: Htlc) = htlc.incoming match {
     case true => cs.copy(htlcs = cs.htlcs + htlc, toRemoteMsat = cs.toRemoteMsat - htlc.add.amountMsat)
     case false => cs.copy(htlcs = cs.htlcs + htlc, toLocalMsat = cs.toLocalMsat - htlc.add.amountMsat)
   }
 
-  private def fulfill(cs: CommitmentSpec, isIncoming: Boolean, update: UpdateFulfillHtlc) = findHtlcById(cs, update.id, isIncoming) match {
-    case Some(x) if x.incoming => cs.copy(toLocalMsat = cs.toLocalMsat + x.add.amountMsat, htlcs = cs.htlcs - x, fulfilled = cs.fulfilled + x)
-    case Some(x) => cs.copy(toRemoteMsat = cs.toRemoteMsat + x.add.amountMsat, htlcs = cs.htlcs - x, fulfilled = cs.fulfilled + x)
-    case None => cs
-  }
-
-  private def fail(cs: CommitmentSpec, isIncoming: Boolean, update: UpdateFailHtlc) = findHtlcById(cs, update.id, isIncoming) match {
-    case Some(x) if x.incoming => cs.copy(toRemoteMsat = cs.toRemoteMsat + x.add.amountMsat, htlcs = cs.htlcs - x, failed = cs.failed + x)
-    case Some(x) => cs.copy(toLocalMsat = cs.toLocalMsat + x.add.amountMsat, htlcs = cs.htlcs - x, failed = cs.failed + x)
-    case None => cs
-  }
-
   def reduce(cs: CommitmentSpec, localChanges: LightningMessages, remoteChanges: LightningMessages) = {
-    // On each reduce we collect failed and fulfilled HTLCs, we can use that info later to update our views
-
-    val spec0 = cs.copy(fulfilled = Set.empty, failed = Set.empty)
-    val spec1 = (spec0 /: localChanges) { case (spec, htlc: Htlc) => add(spec, htlc) case (spec, _) => spec }
+    val spec1 = (cs /: localChanges) { case (spec, htlc: Htlc) => add(spec, htlc) case (spec, _) => spec }
     val spec2 = (spec1 /: remoteChanges) { case (spec, htlc: Htlc) => add(spec, htlc) case (spec, _) => spec }
 
     val spec3 = localChanges.foldLeft(spec2) {
-      case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, isIncoming = true, msg)
-      case (spec, msg: UpdateFailHtlc) => fail(spec, isIncoming = true, msg)
+      case (spec, msg: UpdateFailHtlc) => fail(spec, in = true, msg)
+      case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, in = true, msg)
       case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
       case (spec, _) => spec
     }
 
     val spec4 = remoteChanges.foldLeft(spec3) {
-      case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, isIncoming = false, msg)
-      case (spec, msg: UpdateFailHtlc) => fail(spec, isIncoming = false, msg)
+      case (spec, msg: UpdateFailHtlc) => fail(spec, in = false, msg)
+      case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, in = false, msg)
       case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
       case (spec, _) => spec
     }
@@ -165,7 +158,6 @@ case class PublishableTxs(htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
 case class LocalCommit(index: Long, spec: CommitmentSpec, publishableTxs: PublishableTxs, commit: CommitSig)
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
-
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
 object Changes { def all(c: Changes): LightningMessages = c.proposed ++ c.signed ++ c.acked }
 
@@ -215,11 +207,6 @@ object PaymentRouteOps {
   def withoutFailedNode(ops: PaymentRouteOps, nodeId: BinaryData) = without(ops, _.nodeId == nodeId)
 }
 
-object UnackedOps {
-  def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filter { case _: RevokeAndAck => false case _ => true } :+ r
-  def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
-}
-
 object Commitments {
   def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
     case Right(_) => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
@@ -230,11 +217,12 @@ object Commitments {
     c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && blockHeight >= htlc.add.expiry) ||
       c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && blockHeight >= htlc.add.expiry)
 
-  def addLocalProposal(c: Commitments, proposal: LightningMessage): Commitments =
-    c.modifyAll(_.unackedMessages, _.localChanges.proposed).using(_ :+ proposal)
+  def addRemoteProposal(c: Commitments, proposal: LightningMessage): Commitments = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
+  def addLocalProposal(c: Commitments, proposal: LightningMessage): Commitments = c.modify(_.localChanges.proposed).using(_ :+ proposal)
+  def addUnackedMessage(c: Commitments, msg: LightningMessage) = c.modify(_.unackedMessages).using(_ :+ msg)
 
-  def addRemoteProposal(c: Commitments, proposal: LightningMessage): Commitments =
-    c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
+  def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filter { case _: RevokeAndAck => false case _ => true } :+ r
+  def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
 
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
@@ -256,13 +244,13 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, htlc: Htlc, blockCount: Int) =
-    if (htlc.add.expiry <= blockCount) throw DetailedException(HTLC_EXPIRY_TOO_SOON, FinalExpiryTooSoon)
-    else if (htlc.add.amountMsat < c.remoteParams.htlcMinimumMsat) throw DetailedException(HTLC_VALUE_TOO_SMALL, PermanentChannelFailure)
+    if (htlc.add.expiry <= blockCount) throw DetailedException(HTLC_EXPIRY_TOO_SOON, htlc)
+    else if (htlc.add.amountMsat < c.remoteParams.htlcMinimumMsat) throw DetailedException(HTLC_VALUE_TOO_SMALL, htlc)
     else {
 
-      val c1 = addLocalProposal(c, htlc).copy(localNextHtlcId = c.localNextHtlcId + 1)
       // Let's compute the current commitment *as seen by them* with this change taken into account
-      val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
+      val c1 = addUnackedMessage(addLocalProposal(c, htlc), htlc.add).copy(localNextHtlcId = c.localNextHtlcId + 1)
+      val reduced: CommitmentSpec = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.remoteParams.dustLimitSatoshis), reduced).amount else 0
 
       // The rest of the guards
@@ -270,9 +258,9 @@ object Commitments {
       val feesOverflow = reduced.toRemoteMsat / satFactor - c1.remoteParams.channelReserveSatoshis - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
-      if (htlcValueInFlightOverflow) throw DetailedException(HTLC_TOO_MUCH_VALUE_IN_FLIGHT, TemporaryChannelFailure)
-      else if (acceptedHtlcsOverflow) throw DetailedException(HTLC_TOO_MANY_ACCEPTED, TemporaryChannelFailure)
-      else if (feesOverflow) throw DetailedException(HTLC_MISSING_FEES, TemporaryChannelFailure)
+      if (htlcValueInFlightOverflow) throw DetailedException(HTLC_TOO_MUCH_VALUE_IN_FLIGHT, htlc)
+      else if (acceptedHtlcsOverflow) throw DetailedException(HTLC_TOO_MANY_ACCEPTED, htlc)
+      else if (feesOverflow) throw DetailedException(HTLC_MISSING_FEES, htlc)
       else c1
     }
 
@@ -302,8 +290,10 @@ object Commitments {
 
   def sendFulfill(c: Commitments, cmd: CMDFulfillHtlc) = {
     val fulfill = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
-    getHtlcCrossSigned(commitments = c, incomingRelativeToLocal = true, htlcId = cmd.id) match {
-      case Some(htlc) if sha256(cmd.preimage) == htlc.paymentHash => addLocalProposal(c, fulfill)
+    getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id) match {
+      case Some(rightHtlc) if sha256(cmd.preimage) == rightHtlc.paymentHash =>
+        addUnackedMessage(addLocalProposal(c, fulfill), fulfill)
+
       case Some(htlc) => throw ChannelException(HTLC_INVALID_PREIMAGE)
       case _ => throw ChannelException(HTLC_UNKNOWN_PREIMAGE)
     }
@@ -322,14 +312,14 @@ object Commitments {
     val fail = UpdateFailHtlc(c.channelId, cmd.id, cmd.reason)
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id)
     if (found.isEmpty) throw ChannelException(HTLC_UNKNOWN_PREIMAGE)
-    else addLocalProposal(c, fail)
+    else addUnackedMessage(addLocalProposal(c, fail), fail)
   }
 
   def sendFailMalformed(c: Commitments, cmd: CMDFailMalformedHtlc) = {
     val fail = UpdateFailMalformedHtlc(c.channelId, cmd.id, cmd.onionHash, cmd.failureCode)
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id)
     if (found.isEmpty) throw ChannelException(HTLC_UNEXPECTED_ID)
-    else addLocalProposal(c, fail)
+    else addUnackedMessage(addLocalProposal(c, fail), fail)
   }
 
   def receiveFail(c: Commitments, fail: FailHtlc) =
@@ -341,8 +331,7 @@ object Commitments {
 
   def sendFee(c: Commitments, rate: Long) = {
     val updateFee = UpdateFee(c.channelId, rate)
-    val c1 = addLocalProposal(c, updateFee)
-
+    val c1 = addUnackedMessage(addLocalProposal(c, updateFee), updateFee)
     val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
     val fees = Scripts.commitTxFee(dustLimit = Satoshi(c1.remoteParams.dustLimitSatoshis), spec = reduced).amount
     val feesOverflow = reduced.toRemoteMsat / satFactor - c1.remoteParams.channelReserveSatoshis - fees < 0
@@ -365,11 +354,12 @@ object Commitments {
     // Update commitment data
     val commitSig = CommitSig(c.channelId, Scripts.sign(remoteCommitTx, c.localParams.fundingPrivKey), htlcSigs.toList)
     val remote1 = RemoteCommit(c.remoteCommit.index + 1, spec, remoteCommitTx.tx.txid, remoteNextPerCommitmentPoint)
+    val localChanges1 = c.localChanges.copy(proposed = Vector.empty, signed = c.localChanges.proposed)
+    val remoteChanges1 = c.remoteChanges.copy(acked = Vector.empty, signed = c.remoteChanges.acked)
+    val wait = WaitingForRevocation(remote1, commitSig)
 
-    c.copy(remoteNextCommitInfo = Left apply WaitingForRevocation(remote1, commitSig),
-      localChanges = c.localChanges.copy(proposed = Vector.empty, signed = c.localChanges.proposed),
-      remoteChanges = c.remoteChanges.copy(acked = Vector.empty, signed = c.remoteChanges.acked),
-      unackedMessages = c.unackedMessages :+ commitSig)
+    addUnackedMessage(c.copy(remoteNextCommitInfo = Left apply wait,
+      localChanges = localChanges1, remoteChanges = remoteChanges1), commitSig)
   }
 
   def receiveCommit(c: Commitments, commit: CommitSig) =
@@ -424,10 +414,10 @@ object Commitments {
         HtlcTxAndSigs(htlcTx, localSig, remoteSig)
     }
 
-    val unackedMessages1 = UnackedOps.replaceRevoke(c.unackedMessages, revocation)
-    c.copy(localCommit = LocalCommit(c.localCommit.index + 1, spec, PublishableTxs(htlcTxsAndSigs, signedCommitTx), commit),
-      remoteChanges = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed),
-      localChanges = c.localChanges.copy(acked = Vector.empty), unackedMessages = unackedMessages1)
+    val localChanges1 = c.localChanges.copy(acked = Vector.empty)
+    c.copy(remoteChanges = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed),
+      localCommit = LocalCommit(c.localCommit.index + 1, spec, PublishableTxs(htlcTxsAndSigs, signedCommitTx), commit),
+      unackedMessages = replaceRevoke(c.unackedMessages, revocation), localChanges = localChanges1)
   }
 
   def receiveRevocation(c: Commitments, rev: RevokeAndAck) = c.remoteNextCommitInfo match {
@@ -438,11 +428,11 @@ object Commitments {
     case Left(wait: WaitingForRevocation) =>
       val nextIndex = ShaChain.largestTxIndex - c.remoteCommit.index
       val secrets1 = ShaChain.addHash(c.remotePerCommitmentSecrets, rev.perCommitmentSecret.toBin, nextIndex)
-      val lc1 = c.localChanges.copy(signed = Vector.empty, acked = c.localChanges.acked ++ c.localChanges.signed)
+      val localChanges1 = c.localChanges.copy(signed = Vector.empty, acked = c.localChanges.acked ++ c.localChanges.signed)
 
-      c.copy(localChanges = lc1, remoteChanges = c.remoteChanges.copy(signed = Vector.empty),
+      c.copy(localChanges = localChanges1, remoteChanges = c.remoteChanges.copy(signed = Vector.empty),
         remoteCommit = wait.nextRemoteCommit, remoteNextCommitInfo = Right(rev.nextPerCommitmentPoint),
-        unackedMessages = UnackedOps cutAcked c.unackedMessages, remotePerCommitmentSecrets = secrets1)
+        unackedMessages = cutAcked(c.unackedMessages), remotePerCommitmentSecrets = secrets1)
 
     case Right(point) if point == rev.nextPerCommitmentPoint => c
     case _ => throw ChannelException(REVOCATION_UNEXPECTED)

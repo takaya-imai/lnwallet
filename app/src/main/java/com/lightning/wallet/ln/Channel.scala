@@ -215,7 +215,7 @@ extends StateMachine[ChannelData] { me =>
 
       // Let the other node announce our channel availability
       val as = AnnouncementSignatures(commitments.channelId, remote.shortChannelId, localNodeSig, localBitcoinSig)
-      me stayWith norm.modify(_.commitments.unackedMessages).using(_ :+ as).copy(announced = true)
+      me stayWith norm.copy(commitments = Commitments.addUnackedMessage(commitments, as), announced = true)
 
     // When initiating or receiving a shutdown message
     // we can't proceed until all local changes are cleared
@@ -228,10 +228,7 @@ extends StateMachine[ChannelData] { me =>
       process(CMDCommitSig)
 
     case (CMDShutdown, norm: NormalData, NORMAL) =>
-      val key = norm.commitments.localParams.defaultFinalScriptPubKey
-      val shutdown = Shutdown(norm.commitments.channelId, scriptPubKey = key)
-      val norm1 = norm.modify(_.commitments.unackedMessages).using(_ :+ shutdown)
-      me stayWith norm1.copy(localShutdown = Some apply shutdown)
+      initiateShutdown(norm)
 
     case (_: Shutdown, norm: NormalData, NORMAL)
       // GUARD: can't accept shutdown with unacked changes
@@ -245,10 +242,8 @@ extends StateMachine[ChannelData] { me =>
       process(CMDCommitSig)
 
     // We have not yet send or received a shutdown so send it and retry
-    case (remote: Shutdown, norm @ NormalData(_, commitments, _, None, None, _), NORMAL) =>
-      val local = Shutdown(commitments.channelId, commitments.localParams.defaultFinalScriptPubKey)
-      val norm1 = norm.modify(_.commitments.unackedMessages).using(_ :+ local)
-      me stayWith norm1.copy(localShutdown = Some apply local)
+    case (remote: Shutdown, norm @ NormalData(_, _, _, None, None, _), NORMAL) =>
+      initiateShutdown(norm)
       process(remote)
 
     // We have already sent a shutdown (initially or in response to their shutdown)
@@ -313,25 +308,28 @@ extends StateMachine[ChannelData] { me =>
 
   private def becomeNormal(source: ChannelData with HasCommitments, theirNextPoint: Point) = {
     val commitments1 = source.commitments.modify(_.remoteNextCommitInfo) setTo Right(theirNextPoint)
-    val normal = NormalData(source.announce, commitments1, announced = false, None, None)
-    become(normal, state1 = NORMAL)
+    become(NormalData(source.announce, commitments1, announced = false, None, None), state1 = NORMAL)
+  }
+
+  private def initiateShutdown(norm: NormalData) = {
+    val local = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
+    me stayWith norm.copy(commitments = Commitments.addUnackedMessage(norm.commitments, local), localShutdown = Some apply local)
   }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
     val firstSigned = Closing.makeFirstClosingTx(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
-    val neg = NegotiationsData(announce, cs.modify(_.unackedMessages).using(_ :+ firstSigned), firstSigned, local, remote)
-    become(neg, state1 = NEGOTIATIONS)
+    become(NegotiationsData(announce, Commitments.addUnackedMessage(cs, firstSigned), firstSigned, local, remote), state1 = NEGOTIATIONS)
   }
 
   private def updateNegotiations(neg: NegotiationsData, signed: ClosingSigned) = {
-    val c1: Commitments = neg.commitments.modify(_.unackedMessages).setTo(Vector apply signed)
-    become(neg.copy(commitments = c1, localClosingSigned = signed), state1 = NEGOTIATIONS)
+    // Negotiations are in progress, we send our next estimated fee in an attempt of reaching a mutual agreement
+    val neg1 = neg.copy(commitments = neg.commitments.copy(unackedMessages = Vector apply signed), localClosingSigned = signed)
+    become(neg1, state1 = NEGOTIATIONS)
   }
 
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction, signed: ClosingSigned) = {
-    // Negotiations have been completed successfully and we can broadcast a mutual closing transaction
-    val c1: Commitments = neg.commitments.modify(_.unackedMessages).setTo(Vector apply signed)
-    val closing = ClosingData(neg.announce, c1, mutualClose = closeTx :: Nil)
+    // Negotiations completed successfully and we can broadcast a mutual closing transaction while entering a CLOSING state
+    val closing = ClosingData(neg.announce, neg.commitments.copy(unackedMessages = Vector apply signed), mutualClose = closeTx :: Nil)
     become(closing, state1 = CLOSING)
   }
 

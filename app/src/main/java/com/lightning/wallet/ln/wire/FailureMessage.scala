@@ -18,6 +18,7 @@ case object TemporaryNodeFailure extends Node
 case class InvalidOnionVersion(onionHash: BinaryData) extends BadOnion with Perm
 case class InvalidOnionHmac(onionHash: BinaryData) extends BadOnion with Perm
 case class InvalidOnionKey(onionHash: BinaryData) extends BadOnion with Perm
+
 case object PermanentChannelFailure extends Perm
 case object IncorrectPaymentAmount extends Perm
 case object PermanentNodeFailure extends Perm

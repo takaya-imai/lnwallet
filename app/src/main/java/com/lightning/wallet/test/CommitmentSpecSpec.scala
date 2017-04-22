@@ -25,11 +25,11 @@ class CommitmentSpecSpec {
 
       val ful1 = UpdateFulfillHtlc("00" * 32, add1.id, R)
       val spec3 = CommitmentSpec.reduce(spec2, Vector.empty, Vector(ful1))
-      println(spec3 == spec2.copy(htlcs = Set(Htlc(false, add2, null, null, "")), fulfilled = Set(Htlc(false, add1, null, null, "")), toRemoteMsat = 2000 * 1000))
+      println(spec3 == spec2.copy(htlcs = Set(Htlc(false, add2, null, null, "")), toRemoteMsat = 2000 * 1000))
 
       val fail1 = UpdateFailHtlc("00" * 32, add2.id, R)
       val spec4 = CommitmentSpec.reduce(spec3, Vector.empty, Vector(fail1))
-      println(spec4 == spec3.copy(htlcs = Set(), fulfilled = Set(), failed = Set(Htlc(false, add2, null, null, "")), toLocalMsat = 3000 * 1000))
+      println(spec4 == spec3.copy(htlcs = Set(), toLocalMsat = 3000 * 1000))
     }
 
     {
@@ -49,11 +49,11 @@ class CommitmentSpecSpec {
 
       val ful1 = UpdateFulfillHtlc("00" * 32, add1.id, R)
       val spec3 = CommitmentSpec.reduce(spec2, Vector(ful1), Vector.empty)
-      println(spec3 == spec2.copy(htlcs = Set(Htlc(true, add2, null, null, "")), fulfilled = Set(Htlc(true, add1, null, null, "")), toLocalMsat = 2000 * 1000))
+      println(spec3 == spec2.copy(htlcs = Set(Htlc(true, add2, null, null, "")), toLocalMsat = 2000 * 1000))
 
       val fail1 = UpdateFailHtlc("00" * 32, add2.id, R)
       val spec4 = CommitmentSpec.reduce(spec3, Vector(fail1), Vector.empty)
-      println(spec4 == spec3.copy(htlcs = Set(), fulfilled = Set(), failed = Set(Htlc(true, add2, null, null, "")), toRemoteMsat = 3000 * 1000))
+      println(spec4 == spec3.copy(htlcs = Set(), toRemoteMsat = 3000 * 1000))
     }
     
   }
