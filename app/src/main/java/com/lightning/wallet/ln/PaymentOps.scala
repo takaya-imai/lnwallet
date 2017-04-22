@@ -4,10 +4,10 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.{BinaryData, Crypto}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
 import com.lightning.wallet.ln.Tools.random
+import fr.acinq.bitcoin.BinaryData
 import scodec.bits.BitVector
 import scodec.Attempt
 import scala.util.Try
@@ -61,37 +61,44 @@ object PaymentOps {
 
     } getOrElse Nil
 
-  def failHtlc(nodeSecret: PrivateKey, htlc: Htlc, failure: FailureMessage): CMDFailHtlc = {
-    val parsedPacked = parsePacket(nodeSecret, htlc.add.paymentHash, htlc.add.onionRoutingPacket)
-    val errorPacket = createErrorPacket(parsedPacked.sharedSecret, failure)
-    CMDFailHtlc(htlc.add.id, errorPacket)
-  }
+  private def failHtlc(sharedSecret: BinaryData, add: UpdateAddHtlc, failure: FailureMessage) =
+    CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
 
-  def parseIncomingHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc) = Try {
-    val packet: ParsedPacket = parsePacket(nodeSecret, add.paymentHash, add.onionRoutingPacket)
+  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: InvoiceBag) = Try {
+    val packet = parsePacket(nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload)
     Tuple3(payload, packet.nextPacket, packet.sharedSecret)
   } map {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
-      // Looks like we are the final recipient of HTLC
-      Right(add, sharedSecret)
+      // We are the final recipient of HTLC, the only viable option
+
+      bag getExtendedInvoice add.paymentHash match {
+        case Some(inv) if add.amountMsat > inv.invoice.sum.amount * 2 =>
+          // They have sent too much funds, this is a protective measure
+          failHtlc(sharedSecret, add, IncorrectPaymentAmount)
+
+        case Some(inv) if add.amountMsat < inv.invoice.sum.amount =>
+          // An amount is less than what we requested, this won't do
+          failHtlc(sharedSecret, add, IncorrectPaymentAmount)
+
+        case Some(inv) if inv.preimage.isDefined =>
+          CMDFulfillHtlc(add.id, inv.preimage.get)
+
+        case None =>
+          // Could not find a payment preimage
+          failHtlc(sharedSecret, add, UnknownPaymentHash)
+      }
 
     case (Attempt.Successful(_), _, sharedSecret) =>
-      // We don't route so could not resolve downstream node address
-      val reason = createErrorPacket(sharedSecret, UnknownNextPeer)
-      val fail = CMDFailHtlc(add.id, reason)
-      Left(fail)
+      // We don't route so can't find the next node
+      failHtlc(sharedSecret, add, UnknownNextPeer)
 
     case (Attempt.Failure(_), _, sharedSecret) =>
-      // Payload could not be parsed at all so we can only fail an HTLC
-      val reason = createErrorPacket(sharedSecret, PermanentNodeFailure)
-      val fail = CMDFailHtlc(add.id, reason)
-      Left(fail)
+      // Payload could not be parsed at all so fail it
+      failHtlc(sharedSecret, add, PermanentNodeFailure)
 
   } getOrElse {
-    val code = FailureMessageCodecs.BADONION
-    val hash = Crypto sha256 add.onionRoutingPacket
-    val fail = CMDFailMalformedHtlc(add.id, hash, code)
-    Left(fail)
+    val hash = sha256(add.onionRoutingPacket)
+    CMDFailMalformedHtlc(add.id, hash, BADONION)
   }
 }
