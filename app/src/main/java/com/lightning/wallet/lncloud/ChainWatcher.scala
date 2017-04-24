@@ -60,26 +60,26 @@ object StorageWrap {
 
 object PaymentSpecWrap extends PaymentSpecBag { me =>
   def updateStatus(status: String, hash: BinaryData) = {
-    app.db.change(Payments.updStatusSql, status, hash.toString)
-    app.getContentResolver.notifyChange(app.db sqlPath Payments.table, null)
+    app.db.change(PaymentSpecs.updStatusSql, status, hash.toString)
+    app.getContentResolver.notifyChange(app.db sqlPath PaymentSpecs.table, null)
   }
 
   def getPaymentSpec(hash: BinaryData): Try[PaymentSpec] = {
-    val basicCursor = app.db.select(Payments.selectByHashSql, hash.toString)
-    RichCursor(basicCursor).headTry(_ string Payments.data) map deserialize[PaymentSpec]
+    val basicCursor = app.db.select(PaymentSpecs.selectByHashSql, hash.toString)
+    RichCursor(basicCursor).headTry(_ string PaymentSpecs.data) map deserialize[PaymentSpec]
   }
 
   def putPaymentSpec(spec: PaymentSpec) = app.db txWrap {
     val paymentHashString = spec.invoice.paymentHash.toString
-    app.db.change(Payments.newSql, serialize(spec), paymentHashString, spec.status, spec.stamp.toString)
-    app.db.change(Payments.newVirtualSql, s"${spec.invoice.message.orNull} $paymentHashString", paymentHashString)
-    app.getContentResolver.notifyChange(app.db sqlPath Payments.table, null)
+    app.db.change(PaymentSpecs.newSql, serialize(spec), paymentHashString, spec.status, spec.stamp.toString)
+    app.db.change(PaymentSpecs.newVirtualSql, s"${spec.invoice.message.orNull} $paymentHashString", paymentHashString)
+    app.getContentResolver.notifyChange(app.db sqlPath PaymentSpecs.table, null)
   }
 
   def replacePaymentSpec(spec: PaymentSpec) = {
-    val (stamp, hash) = (spec.stamp.toString, spec.invoice.paymentHash.toString)
-    app.db.change(Payments.updSql, serialize(spec), spec.status, stamp, hash)
-    app.getContentResolver.notifyChange(app.db sqlPath Payments.table, null)
+    val hash: String = spec.invoice.paymentHash.toString
+    app.db.change(PaymentSpecs.updSql, serialize(spec), spec.status, spec.stamp.toString, hash)
+    app.getContentResolver.notifyChange(app.db sqlPath PaymentSpecs.table, null)
   }
 
   def addPreimage(preimage: BinaryData) = sha256(preimage.data) match { case hash =>

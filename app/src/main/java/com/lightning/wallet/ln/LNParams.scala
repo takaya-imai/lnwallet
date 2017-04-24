@@ -71,7 +71,7 @@ trait Broadcaster {
     val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
 
     augmented map {
-      // If CSV is zero then whether parent tx is present is irrelevant, we look as CLTV
+      // If CSV is zero then whether parent tx is present or not is irrelevant, we look as CLTV
       case (tx, _, 0L) if tx.lockTime - chainHeight < 1 => BroadcastStatus(None, publishable = true, tx)
       case (tx, _, 0L) => BroadcastStatus(Some(tx.lockTime - chainHeight), publishable = false, tx)
       // If CSV is not zero but parent tx is not published then we wait for parent

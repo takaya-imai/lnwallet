@@ -22,7 +22,7 @@ object Storage extends Table {
     );"""
 }
 
-object Payments extends Table {
+object PaymentSpecs extends Table {
   import com.lightning.wallet.ln.PaymentSpec._
   val strings = ("payments", "data", "hash", "status", "stamp", "search")
   val (table, data, hash, status, stamp, searchData) = strings
@@ -49,7 +49,7 @@ object Payments extends Table {
       $data STRING NOT NULL,
       $hash STRING UNIQUE NOT NULL,
       $status STRING NOT NULL,
-      $stamp INTEGER NOT NULL,
+      $stamp INTEGER NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status, $stamp);
     CREATE INDEX idx2 ON $table ($hash);
@@ -73,8 +73,8 @@ extends SQLiteOpenHelper(context, "lndata5.db", null, version)
   } finally base.endTransaction
 
   def onCreate(dbs: SQLiteDatabase) = {
-    dbs execSQL Payments.createVirtualSql
-    dbs execSQL Payments.createSql
+    dbs execSQL PaymentSpecs.createVirtualSql
+    dbs execSQL PaymentSpecs.createSql
     dbs execSQL Storage.createSql
   }
 }
