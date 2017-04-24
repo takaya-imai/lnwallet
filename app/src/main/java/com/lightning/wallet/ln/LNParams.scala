@@ -38,6 +38,7 @@ object LNParams {
   val dustLimitSatoshis = 542
   val feeBaseMsat = 546000
 
+  val minExpiryBlocks = 6
   val expiryDeltaBlocks = 144
   val toSelfDelay = 144
 

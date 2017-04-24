@@ -3,15 +3,16 @@ package com.lightning.wallet.lncloud
 import com.lightning.wallet.ln._
 import collection.JavaConverters._
 import org.bitcoinj.wallet.listeners._
-
-import org.bitcoinj.core.{Coin, Transaction}
+import com.lightning.wallet.lncloud.JavaSerializer._
 import rx.lang.scala.{Subscription, Observable => Obs}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint}
+import fr.acinq.bitcoin.{BinaryData, OutPoint}
+import org.bitcoinj.core.{Coin, Transaction}
 
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.Crypto.sha256
 import org.bitcoinj.wallet.Wallet
+import scala.util.Try
 
 
 object ChainWatcher {
@@ -51,32 +52,37 @@ object StorageWrap {
     app.db.change(sql = Storage.updSql, params = value, key)
   }
 
-  def get(key: String) = {
+  def get(key: String): Try[String] = {
     val cursor = app.db.select(Storage.selectSql, key)
     RichCursor(cursor).headTry(_ string Storage.value)
   }
 }
 
-object PaymentsWrap extends /*ChannelListener with*/ InvoiceBag {
-  import Payments.{table, preimage, hash, status, stamp, sum, message, incoming, nodeId, fee}
-  def notifyView = app.getContentResolver.notifyChange(app.db sqlPath table, null)
-
-  def put(wrap: ExtendedInvoice) = app.db txWrap {
-    val search = s"${wrap.invoice.message.orNull} ${wrap.invoice.paymentHash.toString}"
-    app.db.change(Payments.newVirtualSql, search, wrap.invoice.paymentHash.toString)
-
-    app.db.change(Payments.newSql, wrap.preimage.map(_.toString).orNull, wrap.invoice.paymentHash.toString,
-      wrap.status.toString, wrap.stamp.toString, wrap.invoice.sum.amount.toString, wrap.invoice.message.orNull,
-      if (wrap.incoming) "1" else "0", wrap.invoice.nodeId.toString, wrap.fee.map(_.toString).orNull)
+object PaymentSpecWrap extends PaymentSpecBag { me =>
+  def updateStatus(status: String, hash: BinaryData) = {
+    app.db.change(Payments.updStatusSql, status, hash.toString)
+    app.getContentResolver.notifyChange(app.db sqlPath Payments.table, null)
   }
 
-  def getExtendedInvoice(hash: BinaryData): Option[ExtendedInvoice] = {
+  def getPaymentSpec(hash: BinaryData): Try[PaymentSpec] = {
     val basicCursor = app.db.select(Payments.selectByHashSql, hash.toString)
-    RichCursor(basicCursor).headTry(toExtendedInvoice).toOption
+    RichCursor(basicCursor).headTry(_ string Payments.data) map deserialize[PaymentSpec]
   }
 
-  def putPreimage(preimage: BinaryData) = app.db.change(Payments.updPreimageSql, preimage.toString, sha256(preimage).toString)
-  def toExtendedInvoice(rc: RichCursor) = ExtendedInvoice(preimage = Option(rc string preimage), Option(rc long fee),
-    Invoice(message = Option(rc string message), rc string nodeId, MilliSatoshi(rc long sum), rc string hash),
-    rc long status, rc long incoming equals 1, rc long stamp)
+  def putPaymentSpec(spec: PaymentSpec) = app.db txWrap {
+    val paymentHashString = spec.invoice.paymentHash.toString
+    app.db.change(Payments.newSql, serialize(spec), paymentHashString, spec.status, spec.stamp.toString)
+    app.db.change(Payments.newVirtualSql, s"${spec.invoice.message.orNull} $paymentHashString", paymentHashString)
+    app.getContentResolver.notifyChange(app.db sqlPath Payments.table, null)
+  }
+
+  def replacePaymentSpec(spec: PaymentSpec) = {
+    val (stamp, hash) = (spec.stamp.toString, spec.invoice.paymentHash.toString)
+    app.db.change(Payments.updSql, serialize(spec), spec.status, stamp, hash)
+    app.getContentResolver.notifyChange(app.db sqlPath Payments.table, null)
+  }
+
+  def addPreimage(preimage: BinaryData) = sha256(preimage.data) match { case hash =>
+    for (spec <- me getPaymentSpec hash) me replacePaymentSpec spec.copy(preimage = Some apply preimage)
+  }
 }

@@ -11,7 +11,7 @@ import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 
 
-class Channel(bag: InvoiceBag)
+class Channel(bag: PaymentSpecBag)
 extends StateMachine[ChannelData] { me =>
 
   def doProcess(change: Any) = (change, data, state) match {
@@ -85,7 +85,7 @@ extends StateMachine[ChannelData] { me =>
       me stayWith wait.copy(their = Some apply their)
 
     // We have got a FundingDepthOk blockchain event but have not yet got a confirmation from them
-    case (Tuple2(CMDDepth, LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, None, _), WAIT_FUNDING_DONE) =>
+    case (CMDDepth(LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, None, _), WAIT_FUNDING_DONE) =>
       val nextPerCommitmentPoint = Generators.perCommitPoint(commitments.localParams.shaSeed, index = 1)
       val our = FundingLocked(commitments.channelId, nextPerCommitmentPoint)
       me stayWith wait.copy(lastSent = our)
@@ -95,13 +95,14 @@ extends StateMachine[ChannelData] { me =>
       becomeNormal(wait, their.nextPerCommitmentPoint)
 
     // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
-    case (Tuple2(CMDDepth, LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, Some(their), _), WAIT_FUNDING_DONE) =>
+    case (CMDDepth(LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, Some(their), _), WAIT_FUNDING_DONE) =>
       becomeNormal(wait, their.nextPerCommitmentPoint)
 
     // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
     case (_: Error, wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
     case (CMDShutdown, wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
-    case (Tuple2(CMDFundingSpent, tx: Transaction), wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) =>
+
+    case (CMDFundingSpent(tx), wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) =>
       // We don't yet have any revoked commits so they either spent a first commit or it's an info leak
       if (tx.txid == wait.commitments.remoteCommit.txid) startRemoteCurrentClose(wait, tx)
       else startLocalCurrentClose(wait)
@@ -121,8 +122,12 @@ extends StateMachine[ChannelData] { me =>
       process(CMDCommitSig)
 
     case (add: UpdateAddHtlc, norm: NormalData, NORMAL) =>
+      // We have received a new incoming HTLC from them
+      // No extra data since it's an incoming HTLC
+
+      val htlc = Htlc(incoming = true, add, extra = null)
       val chainHeight: Int = LNParams.broadcaster.currentHeight
-      val c1 = Commitments.receiveAdd(norm.commitments, add, chainHeight)
+      val c1 = Commitments.receiveAdd(norm.commitments, htlc, chainHeight)
       me stayWith norm.copy(commitments = c1)
 
     // We're fulfilling an HTLC we got earlier
@@ -195,7 +200,7 @@ extends StateMachine[ChannelData] { me =>
       process(CMDCommitSig)
 
     // Periodic fee updates
-    case (Tuple2(CMDFeerate, rate: Long), norm: NormalData, NORMAL)
+    case (CMDFeerate(rate), norm: NormalData, NORMAL)
       // GUARD: we only send fee updates if the fee gap between nodes is large enough
       if LNParams.shouldUpdateFee(norm.commitments.localCommit.spec.feeratePerKw, rate) =>
       val c1 = Commitments.sendFee(norm.commitments, rate)
@@ -203,8 +208,8 @@ extends StateMachine[ChannelData] { me =>
       process(CMDCommitSig)
 
     // Periodic watch for timed-out outgoing HTLCs
-    case (Tuple2(CMDDepth, count: Int), norm: NormalData, NORMAL)
-      if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, count) =>
+    case (CMDDepth(confirmationCount), norm: NormalData, NORMAL)
+      if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, confirmationCount) =>
       startLocalCurrentClose(norm)
 
     // Can only send announcement signatures when no closing is in progress
@@ -253,8 +258,7 @@ extends StateMachine[ChannelData] { me =>
 
     // Unilateral channel closing in NORMAL (bilateral is handled above)
     case (_: Error, norm: NormalData, NORMAL) => startLocalCurrentClose(norm)
-    case (Tuple2(CMDFundingSpent, tx: Transaction), norm: NormalData, NORMAL) =>
-      defineClosingAction(norm, tx)
+    case (CMDFundingSpent(tx), norm: NormalData, NORMAL) => defineClosingAction(norm, tx)
 
     // NEGOTIATIONS MODE
 
@@ -279,7 +283,8 @@ extends StateMachine[ChannelData] { me =>
     // Channel closing in NEGOTIATIONS
     case (_: Error, neg: NegotiationsData, NEGOTIATIONS) => startLocalCurrentClose(neg)
     case (CMDShutdown, neg: NegotiationsData, NEGOTIATIONS) => startLocalCurrentClose(neg)
-    case (Tuple2(CMDFundingSpent, tx: Transaction), neg: NegotiationsData, NEGOTIATIONS) =>
+
+    case (CMDFundingSpent(tx), neg: NegotiationsData, NEGOTIATIONS) =>
       val (closeTx, signed) = Closing.makeClosingTx(neg.commitments, neg.localShutdown.scriptPubKey,
         neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
 
@@ -290,7 +295,7 @@ extends StateMachine[ChannelData] { me =>
 
     // Channel closing evenis in CLOSING phase
     // These spends have already been taken care of
-    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING)
+    case (CMDFundingSpent(tx), closing: ClosingData, CLOSING)
       if closing.nextRemoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
         closing.remoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
         closing.localCommit.map(_.commitTx.txid).contains(tx.txid) ||
@@ -298,7 +303,7 @@ extends StateMachine[ChannelData] { me =>
         // Do nothing
 
     // Some other type of tx has been spent while we await for confirmations
-    case (Tuple2(CMDFundingSpent, tx: Transaction), closing: ClosingData, CLOSING) => defineClosingAction(closing, tx)
+    case (CMDFundingSpent(tx), closing: ClosingData, CLOSING) => defineClosingAction(closing, tx)
     case (CMDClosingFinished, closing: ClosingData, CLOSING) => become(closing, state1 = FINISHED)
 
     case otherwise =>
@@ -383,14 +388,4 @@ object Channel {
   val FINISHED = "Finished"
   val CLOSING = "Closing"
   val NORMAL = "Normal"
-
-  // Normal text commands
-  val CMDCommitSig = "CMDCommitSig"
-  val CMDFeerate = "CMDFeerate"
-  val CMDDepth = "CMDDepth"
-
-  // Closing text commands
-  val CMDShutdown = "CMDShutdown"
-  val CMDFundingSpent = "CMDFundingSpent"
-  val CMDClosingFinished = "CMDClosingFinished"
 }

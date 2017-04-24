@@ -15,11 +15,12 @@ import java.math.BigInteger
 
 object LightningMessageCodecs { me =>
   type BitVectorAttempt = Attempt[BitVector]
-  type NodeAnnouncements = List[NodeAnnouncement]
   type InetSocketAddressList = List[InetSocketAddress]
+  type NodeAnnouncements = Vector[NodeAnnouncement]
+  type PaymentRoute = Vector[Hop]
+
   type AddressPort = (InetAddress, Int)
   type RGB = (Byte, Byte, Byte)
-  type PaymentRoute = List[Hop]
 
   def serializationResult(attempt: BitVectorAttempt): BinaryData = attempt match {
     case Attempt.Failure(some) => throw DetailedException(SERIALIZATION_ERROR, some)
@@ -311,11 +312,11 @@ object LightningMessageCodecs { me =>
 
   val channelUpdateCodec: Codec[ChannelUpdate] = channelUpdate.as[ChannelUpdate]
   val nodeAnnouncementCodec: Codec[NodeAnnouncement] = nodeAnnouncement.as[NodeAnnouncement]
-  val announcementsCodec: Codec[NodeAnnouncements] = listOfN(uint16, nodeAnnouncementCodec)
+  val announcementsCodec: Codec[NodeAnnouncements] = vectorOfN(uint16, nodeAnnouncementCodec)
 
   private val hop =
-    (binarydata(33) withContext "nodeId") ::
-      (binarydata(33) withContext "nextNodeId") ::
+    (publicKey withContext "nodeId") ::
+      (publicKey withContext "nextNodeId") ::
       (channelUpdateCodec withContext "lastUpdate")
 
   val perHopPayload =
@@ -325,7 +326,7 @@ object LightningMessageCodecs { me =>
       (int32 withContext "outgoing_cltv_value") ::
       (ignore(8 * 16) withContext "unused_with_v0_version_on_header")
 
-  val hopsCodec: Codec[PaymentRoute] = listOfN(valueCodec = hop.as[Hop], countCodec = uint16)
+  val hopsCodec: Codec[PaymentRoute] = vectorOfN(valueCodec = hop.as[Hop], countCodec = uint16)
   val perHopPayloadCodec: Codec[PerHopPayload] = perHopPayload.as[PerHopPayload]
 
   val lightningMessageCodec =

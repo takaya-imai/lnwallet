@@ -1,16 +1,16 @@
 package com.lightning.wallet.test
 
-import com.lightning.wallet.ln.{LNParams, PaymentOps}
+import com.lightning.wallet.ln.{Invoice, LNParams, PaymentSpec}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.{BinaryData, Crypto}
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import com.lightning.wallet.ln.Tools.random
-import com.lightning.wallet.ln.crypto.{SecretsAndPacket, ParsedPacket, Sphinx}
+import com.lightning.wallet.ln.crypto.{ParsedPacket, SecretsAndPacket, Sphinx}
 import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop, LightningMessageCodecs, PerHopPayload}
 import scodec.bits.BitVector
 
 
 class HtlcGenerationSpec {
-  import PaymentOps._
+  import PaymentSpec._
 
   def randomKey = PrivateKey(random getBytes 32)
   val (priv_a, priv_b, priv_c, priv_d, priv_e) = (randomKey, randomKey, randomKey, randomKey, randomKey)
@@ -26,11 +26,11 @@ class HtlcGenerationSpec {
   val expiryDeltaBlocks = 144
   // simple route a -> b -> c -> d -> e
 
-  val hops =
-    Hop(a, b, channelUpdate_ab) ::
-      Hop(b, c, channelUpdate_bc) ::
-      Hop(c, d, channelUpdate_cd) ::
-      Hop(d, e, channelUpdate_de) :: Nil
+  val hops = Vector(
+    Hop(a, b, channelUpdate_ab),
+      Hop(b, c, channelUpdate_bc),
+      Hop(c, d, channelUpdate_cd),
+      Hop(d, e, channelUpdate_de))
 
   val finalAmountMsat = 42000000L
   val paymentPreimage = BinaryData("42" * 32)
@@ -83,7 +83,7 @@ class HtlcGenerationSpec {
 
       val (payloads, _, _) = buildRoute(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, hops.drop(1))
       val nodes = hops.map(_.nextNodeId)
-      val SecretsAndPacket(_, packet_b) = buildOnion(nodes.map(PublicKey.apply).toVector, payloads, paymentHash)
+      val SecretsAndPacket(_, packet_b) = buildOnion(nodes, payloads, paymentHash)
       println(packet_b.serialize.length == Sphinx.PacketLength)
 
       // let's peel the onion
@@ -110,17 +110,18 @@ class HtlcGenerationSpec {
       println(packet_random.serialize.length == Sphinx.PacketLength)
     }
 
+    val invoice = Invoice(None, PublicKey(BinaryData("0x028f9438bfbf7feac2e108d677e3a82da596be706cc1cf342b75c7b7e22bf4e6e2")), MilliSatoshi(finalAmountMsat), paymentHash)
+
     {
       println("build a command including the onion")
+      val spec = doMakeOutgoingSpec(hops, Vector.empty, currentBlockCount + expiryDeltaBlocks, invoice)
 
-      val (amountMsat, onion, expiry) = buildCommand(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, paymentHash, hops)
-
-      println(amountMsat > finalAmountMsat)
-      println(expiry == currentBlockCount + expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
-      println(onion.packet.serialize.length == Sphinx.PacketLength)
+      println(spec.amountWithFee.get > finalAmountMsat)
+      println(spec.expiry == currentBlockCount + expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
+      println(spec.onion.packet.serialize.length == Sphinx.PacketLength)
 
       // let's peel the onion
-      val ParsedPacket(bin_b, packet_c, _) = Sphinx.parsePacket(priv_b, paymentHash, onion.packet.serialize)
+      val ParsedPacket(bin_b, packet_c, _) = Sphinx.parsePacket(priv_b, paymentHash, spec.onion.packet.serialize)
       val payload_b = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_b)).toOption.get.value
       println(packet_c.serialize.length == Sphinx.PacketLength)
       println(payload_b.amt_to_forward == amount_bc)
@@ -145,15 +146,14 @@ class HtlcGenerationSpec {
 
     {
       println("build a command with no hops")
+      val spec = doMakeOutgoingSpec(hops take 1, Vector.empty, currentBlockCount + expiryDeltaBlocks, invoice)
 
-      val (amountMsat, onion, expiry) = buildCommand(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, paymentHash, hops.take(1))
-
-      println(amountMsat == finalAmountMsat)
-      println(expiry == currentBlockCount + expiryDeltaBlocks)
-      println(onion.packet.serialize.length == Sphinx.PacketLength)
+      println(spec.amountWithFee.get == finalAmountMsat)
+      println(spec.expiry == currentBlockCount + expiryDeltaBlocks)
+      println(spec.onion.packet.serialize.length == Sphinx.PacketLength)
 
       // let's peel the onion
-      val ParsedPacket(bin_b, packet_random, _) = Sphinx.parsePacket(priv_b, paymentHash, onion.packet.serialize)
+      val ParsedPacket(bin_b, packet_random, _) = Sphinx.parsePacket(priv_b, paymentHash, spec.onion.packet.serialize)
       println(BinaryData(bin_b) == BinaryData("00" * Sphinx.PayloadLength))
       println(packet_random.serialize.length == Sphinx.PacketLength)
     }
