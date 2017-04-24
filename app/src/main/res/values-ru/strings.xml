@@ -37,7 +37,6 @@
 
     <!-- menu -->
     <string name="action_settings">Настройки кошелька</string>
-    <string name="action_bitcoin_request">Запросить сумму</string>
     <string name="action_bitcoin_receive">Получить</string>
     <string name="action_buy">Купить биткоины</string>
     <string name="action_bitcoin_send">Послать</string>

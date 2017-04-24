@@ -1,10 +1,30 @@
 package com.lightning.wallet.test
 
-import com.lightning.wallet.ln.crypto.{ChaCha20Poly1305, Poly1305}
+import com.lightning.wallet.ln.crypto.{ChaCha20Legacy, ChaCha20Poly1305, Poly1305}
 import fr.acinq.bitcoin.BinaryData
 
 
 class ChaCha20Poly1305Spec {
+
+  def legacy = {
+    val plaintext: BinaryData = "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.".getBytes
+    val key: BinaryData = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    val nonce: BinaryData = "0000004a00000000"
+
+    val ciphertext = ChaCha20Legacy.process(plaintext, key, nonce, encrypt = true, skipBlock = true)
+    assert(BinaryData(ciphertext) == BinaryData("6e2e359a2568f98041ba0728dd0d6981e97e7aec1d4360c20a27afccfd9fae0bf91b65c5524733ab8f593dabcd62b3571639d624e65152ab8f530c359f0861d807ca0dbf500d6a6156a38e088a22b65e52bc514d16ccf806818ce91ab77937365af90bbf74a35be6b40b8eedf2785e42874d"))
+
+    assert(BinaryData(ChaCha20Legacy.process(ciphertext, key, nonce, encrypt = false, skipBlock = true)) == BinaryData(plaintext))
+  }
+
+  def legacyKeyGeneration = {
+    // see https://tools.ietf.org/html/rfc7539#section-2.6.2
+    val key: BinaryData = "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f"
+    val nonce: BinaryData = "0001020304050607"
+    assert(BinaryData(ChaCha20Legacy.process(new Array[Byte](32), key, nonce, encrypt = true, skipBlock = false)) ==
+      BinaryData("8ad5a08b905f81cc815040274ab29471a833b637e3fd0da508dbb8e2fdd1a646"))
+  }
+
   def poly1305 = {
     // from https://tools.ietf.org/html/rfc7539 ch 2.5.2
     val key: BinaryData = "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b"
@@ -37,6 +57,8 @@ class ChaCha20Poly1305Spec {
   }
 
   def allTests = {
+    legacyKeyGeneration
+    legacy
     poly1305
     poly1305two
     ietf

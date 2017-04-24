@@ -7,13 +7,14 @@ import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 
-import com.lightning.wallet.Utils.{app, string2Ops, sumIn, sumOut}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
 import android.provider.Settings.{System => FontSystem}
+import com.lightning.wallet.Utils.{app, sumIn, sumOut}
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import scala.util.{Failure, Success, Try}
 
+import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
@@ -234,16 +235,14 @@ with ListUpdater { me =>
     super.onCreateOptionsMenu(menu)
   }
 
-  override def onOptionsItemSelected(m: MenuItem) = runAnd(true) {
-    if (m.getItemId == R.id.actionGoLnWallet) me goTo classOf[LNActivity]
-    else if (m.getItemId == R.id.actionRequestPayment) new MkRequestForm
-    else if (m.getItemId == R.id.actionSettings) mkSetsForm
-    else if (m.getItemId == R.id.actionBuyCoins) {
+  override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
+    if (menu.getItemId == R.id.actionBuyCoins) localBitcoinsAndGlidera
+    else if (menu.getItemId == R.id.actionSettings) mkSetsForm
+  }
 
-      // Provide a pay-to Bitcoin address for Glidera
-      val msg = getString(buy_info).format(app.kit.currentAddress.toString)
-      mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
-    }
+  private def localBitcoinsAndGlidera = {
+    val msg = getString(buy_info).format(app.kit.currentAddress.toString)
+    mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
   }
 
   override def onResume = {
@@ -251,6 +250,7 @@ with ListUpdater { me =>
     app.TransData.value = null
   }
 
+  // NFC
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
     app.TransData parseValue asText
@@ -300,6 +300,7 @@ with ListUpdater { me =>
   // Reactions to menu buttons
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
+  def goLightning(top: View) = me goTo classOf[LNActivity]
 
   def receive = me goTo classOf[RequestActivity]
   def doReceive(top: View) = wrap(fab close true) {
@@ -314,7 +315,7 @@ with ListUpdater { me =>
 
   def pay: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_spend, null, false)
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), null, content)
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
 
     // Can input satoshis and address
     val rateManager = new RateManager(content)
@@ -375,23 +376,6 @@ with ListUpdater { me =>
       transactWhen setText time.html
       transactSum setText shortValue.html
       transactCircle setImageResource image
-    }
-  }
-
-  class MkRequestForm {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_receive, null)
-    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-    mkForm(dialog, me getString action_bitcoin_request, content)
-
-    val rman = new RateManager(content)
-    def defineExactData = (rman.result, app.kit.currentAddress) match {
-      case (Success(msat), currentAddress) => AddrData(msat, currentAddress)
-      case (Failure(_), currentAddress) => currentAddress
-    }
-
-    def proceed = {
-      app.TransData.value = defineExactData
-      me goTo classOf[RequestActivity]
     }
   }
 }

@@ -26,7 +26,7 @@
     <string name="sets_rescan">Rescan blockchain</string>
 
     <string name="password_new">New password</string>
-    <string name="password_old">Wallet password</string>
+    <string name="password_old">Current password</string>
     <string name="password_wrong">Wrong wallet password</string>
     <string name="password_too_short">Password is too short</string>
 
@@ -37,7 +37,6 @@
 
     <!-- menu -->
     <string name="action_settings">Wallet settings</string>
-    <string name="action_bitcoin_request">Request payment</string>
     <string name="action_bitcoin_receive">Receive bitcoins</string>
     <string name="action_bitcoin_send">Send bitcoins</string>
     <string name="action_scan">Scan QR code</string>
@@ -127,9 +126,7 @@
     <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
 
     <!-- activity_ln, activity_ln_pass -->
-    <string name="ln_unlock">Unlock LN Wallet</string>
-    <string name="ln_btc_wallet">Open Bitcoin wallet</string>
-    <string name="ln_refill">Add funds to channel</string>
+    <string name="ln_unlock">Unlock Wallet</string>
     <string name="ln_backup">Set Backup Server</string>
     <string name="ln_search">Find payments</string>
     <string name="ln_close">Close channel</string>

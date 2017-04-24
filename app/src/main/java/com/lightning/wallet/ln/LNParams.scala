@@ -2,7 +2,7 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.bitcoin.Crypto.{sha256, PrivateKey}
 
 
 object LNParams {
@@ -38,8 +38,9 @@ object LNParams {
   val dustLimitSatoshis = 542
   val feeBaseMsat = 546000
 
+  val minExpiryBlocks = 6
   val expiryDeltaBlocks = 144
-  val delayBlocks = 144
+  val toSelfDelay = 144
 
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
     derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
@@ -51,12 +52,36 @@ object LNParams {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
   }
+
+  def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
+    LocalParams(chainHash = chainHash, dustLimitSatoshis = dustLimitSatoshis, maxHtlcValueInFlightMsat = Long.MaxValue,
+      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat, toSelfDelay, maxAcceptedHtlcs,
+      fundingPrivKey = deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = deriveParamsPrivateKey(keyIndex, 1L),
+      paymentKey = deriveParamsPrivateKey(keyIndex, 2L), delayedPaymentKey = deriveParamsPrivateKey(keyIndex, 3L),
+      defaultFinalScriptPubKey = finalScriptPubKey, shaSeed = sha256(deriveParamsPrivateKey(keyIndex, 4L).toBin),
+      isFunder = true, globalFeatures, localFeatures)
 }
 
-case class ScheduledTx(hex: BinaryData, atBlock: Int)
-
 trait Broadcaster {
-  def schedule(what: ScheduledTx): Unit
-  def unschedule(what: ScheduledTx): Unit
+  def broadcast(tx: Transaction)
+  def currentFeeRate: Long
   def currentHeight: Int
+
+  def broadcastStatus(txs: Seq[Transaction], parents: Map[String, Int], chainHeight: Int): Seq[BroadcastStatus] = {
+    val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
+
+    augmented map {
+      // If CSV is zero then whether parent tx is present or not is irrelevant, we look as CLTV
+      case (tx, _, 0L) if tx.lockTime - chainHeight < 1 => BroadcastStatus(None, publishable = true, tx)
+      case (tx, _, 0L) => BroadcastStatus(Some(tx.lockTime - chainHeight), publishable = false, tx)
+      // If CSV is not zero but parent tx is not published then we wait for parent
+      case (tx, None, _) => BroadcastStatus(None, publishable = false, tx)
+
+      case (tx, Some(parentConfs), csv) =>
+        // Tx may have both CLTV and CSV so we need to get the max of them
+        val blocksLeft = math.max(csv - parentConfs, tx.lockTime - chainHeight)
+        if (blocksLeft < 1) BroadcastStatus(None, publishable = true, tx)
+        else BroadcastStatus(Some(blocksLeft), publishable = false, tx)
+    }
+  }
 }

@@ -22,50 +22,19 @@ object Storage extends Table {
     );"""
 }
 
-object Commits extends Table {
-  val strings = ("commits", "parenttxid", "punish", "privcloud", "lncloud")
-  val (table, parentTxId, punishData, privateCloud, lnCloud) = strings
+object PaymentSpecs extends Table {
+  import com.lightning.wallet.ln.PaymentSpec._
+  val strings = ("payments", "data", "hash", "status", "stamp", "search")
+  val (table, data, hash, status, stamp, searchData) = strings
 
-  def updLnCloudOnSql = s"UPDATE $table SET $lnCloud = 1 WHERE $parentTxId = ?"
-  def updPrivateCloudOnSql = s"UPDATE $table SET $privateCloud = 1 WHERE $parentTxId = ?"
-  def selectPrivateCloudOffSql = s"SELECT * FROM $table WHERE $privateCloud = 0 LIMIT 50"
-  def selectLnCloudOffSql = s"SELECT * FROM $table WHERE $lnCloud = 0 LIMIT 50"
-  def selectByParentTxIdSql = s"SELECT * FROM $table WHERE $parentTxId = ?"
-
-  def newSql = s"""INSERT OR IGNORE INTO $table
-    ($parentTxId, $punishData, $privateCloud, $lnCloud)
-    VALUES (?, ?, 0, 0)"""
-
-  def createSql = s"""
-    CREATE TABLE $table (
-      $id INTEGER PRIMARY KEY AUTOINCREMENT,
-      $parentTxId TEXT NOT NULL UNIQUE,
-      $punishData TEXT NOT NULL UNIQUE,
-      $privateCloud INTEGER NOT NULL,
-      $lnCloud INTEGER NOT NULL
-    );
-    CREATE INDEX idx1 ON $table ($parentTxId);
-    CREATE INDEX idx2 ON $table ($privateCloud);
-    CREATE INDEX idx3 ON $table ($lnCloud);
-    COMMIT"""
-}
-
-object Payments extends Table {
-  val strings = ("payments", "preimage", "hash", "status", "stamp", "sum", "message", "incoming", "nodeid", "fee", "search")
-  val (table, preimage, hash, status, stamp, sum, message, incoming, nodeId, fee, searchData) = strings
-  val (waitHidden, waitVisible, fail, success) = (0, 1, 2, 3)
-
-  def selectByHashSql = s"SELECT * FROM $table WHERE $preimage = ? LIMIT 1"
-  def selectRecentSql = s"""SELECT * FROM $table WHERE $status = $success OR
-    ($status <> $waitHidden AND $stamp > ?) ORDER BY $id DESC LIMIT 100"""
+  def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
+  def selectRecentSql = s"""SELECT * FROM $table WHERE $status = $SUCCESS OR
+    ($status <> $WAIT_HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 100"""
 
   // Hidden -> Visible -> Failed or Success
-  def updFeeSql = s"UPDATE $table SET fee = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
-
-  def newSql = s"""INSERT OR IGNORE INTO $table ($preimage, $hash, $status, $stamp,
-    $sum, $message, $incoming, $nodeId, $fee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+  def updSql = s"UPDATE $table SET $data = ?, $status = ?, $stamp = ? WHERE $hash = ?"
+  def newSql = s"INSERT OR IGNORE INTO $table ($data, $hash, $status, $stamp) VALUES (?, ?, ?, ?)"
 
   // Searching by message and payment hash
   def newVirtualSql = s"INSERT INTO $fts$table ($searchData, $hash) VALUES (?, ?)"
@@ -77,24 +46,19 @@ object Payments extends Table {
   def createSql = s"""
     CREATE TABLE $table (
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
-      $preimage STRING,
+      $data STRING NOT NULL,
       $hash STRING UNIQUE NOT NULL,
-      $status INTEGER NOT NULL,
-      $stamp INTEGER NOT NULL,
-      $sum INTEGER NOT NULL,
-      $message STRING,
-      $incoming INTEGER NOT NULL,
-      $nodeId STRING NOT NULL,
-      $fee INTEGER
+      $status STRING NOT NULL,
+      $stamp INTEGER NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status, $stamp);
     CREATE INDEX idx2 ON $table ($hash);
-    COMMIT"""
+    COMMIT;"""
 }
 
 trait Table { val (id, fts) = "_id" -> "fts" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata4.db", null, version)
+extends SQLiteOpenHelper(context, "lndata5.db", null, version)
 {
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)
@@ -109,9 +73,8 @@ extends SQLiteOpenHelper(context, "lndata4.db", null, version)
   } finally base.endTransaction
 
   def onCreate(dbs: SQLiteDatabase) = {
-    dbs execSQL Payments.createVirtualSql
-    dbs execSQL Payments.createSql
+    dbs execSQL PaymentSpecs.createVirtualSql
+    dbs execSQL PaymentSpecs.createSql
     dbs execSQL Storage.createSql
-    dbs execSQL Commits.createSql
   }
 }

@@ -13,6 +13,8 @@ import android.text.{StaticLayout, TextPaint}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.google.zxing.{BarcodeFormat, EncodeHintType}
 import android.widget.{ImageButton, ImageView, LinearLayout}
+
+import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import org.ndeftools.util.activity.NfcBeamWriterActivity
 import android.text.Layout.Alignment.ALIGN_NORMAL
@@ -59,17 +61,12 @@ object FileOps {
   }
 }
 
-class RequestActivity extends NfcBeamWriterActivity
-with TimerActivity with ViewSwitch { me =>
-
-  lazy val reqCode = findViewById(R.id.reqCode).asInstanceOf[ImageView]
+class RequestActivity extends NfcBeamWriterActivity with TimerActivity with ViewSwitch { me =>
+  lazy val views = findViewById(R.id.reqNfcEnabled) :: findViewById(R.id.reqNfcSettings) :: Nil
+  lazy val restoreInfo = findViewById(R.id.restoreInfo).asInstanceOf[LinearLayout]
   lazy val reqShare = findViewById(R.id.reqShare).asInstanceOf[ImageButton]
   lazy val copyData = findViewById(R.id.copyData).asInstanceOf[ImageButton]
-  lazy val restoreInfo = findViewById(R.id.restoreInfo).asInstanceOf[LinearLayout]
-
-  lazy val views =
-    findViewById(R.id.reqNfcEnabled) ::
-      findViewById(R.id.reqNfcSettings) :: Nil
+  lazy val reqCode = findViewById(R.id.reqCode).asInstanceOf[ImageView]
 
   lazy val textBounds = getResources getDimensionPixelSize R.dimen.bitmap_text_bounds
   lazy val bottomSize = getResources getDimensionPixelSize R.dimen.bitmap_bottom_size

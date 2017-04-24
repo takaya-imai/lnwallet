@@ -1,7 +1,5 @@
 package com.lightning.wallet.helper
 
-import java.text.DecimalFormat
-
 
 abstract class Statistics[O] {
   type Collection = Traversable[O]
@@ -26,7 +24,7 @@ abstract class Statistics[O] {
 
   def meanWithin(items: Collection, stdDevs: Double) = {
     val filtered: Collection = filterWithin(items, stdDevs)
-    val formatter = new DecimalFormat("##.00000000")
+    val formatter = new java.text.DecimalFormat("##.00000000")
     formatter format mean(filtered)
   }
 }

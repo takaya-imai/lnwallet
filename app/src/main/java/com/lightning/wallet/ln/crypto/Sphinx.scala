@@ -2,248 +2,214 @@ package com.lightning.wallet.ln.crypto
 
 import com.lightning.wallet.ln.Exceptions._
 import com.lightning.wallet.ln.crypto.Sphinx._
-
+import com.lightning.wallet.ln.crypto.MultiStreamUtils._
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, Scalar}
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.{BinaryData, Crypto, Protocol}
+import fr.acinq.bitcoin.{Crypto, Protocol}
 
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.failureMessageCodec
 import com.lightning.wallet.ln.wire.FailureMessage
 import com.lightning.wallet.ln.Tools.Bytes
+import org.bitcoinj.core.Sha256Hash
 import scodec.bits.BitVector
+import java.math.BigInteger
 import java.nio.ByteOrder
 
 
-case class ParsedPacket(payload: BinaryData, nextAddress: BinaryData,
-                        nextPacket: BinaryData, sharedSecret: BinaryData)
-
+case class ParsedPacket(payload: Bytes, nextPacket: Packet, sharedSecret: Bytes)
+case class SecretsAndPacket(sharedSecrets: Vector[BytesAndKey], packet: Packet)
 case class ErrorPacket(originNode: PublicKey, failureMessage: FailureMessage)
-case class OnionPacket(sharedSecrets: Seq[BinaryAndKey], onionPacket: BinaryData)
 
-object Sphinx {
-  type ByteSeq = Seq[Byte]
-  type PublicKeySeq = Seq[PublicKey]
-  type BinaryDataSeq = Seq[BinaryData]
-  type BinaryAndKey = (BinaryData, PublicKey)
+object Sphinx { me =>
+  type BytesVec = Vector[Bytes]
+  type PublicKeyVec = Vector[PublicKey]
+  type BytesAndKey = (Bytes, PublicKey)
 
-  val maxHops = 20
-  val macLength = 20
-  val addressLength = 20
-  val perHopPayloadLength = 20
-  val errLength = macLength + 128 + 2 + 2
+  val Version = 1.toByte
+  val PayloadLength = 33
+  val MacLength = 32
+  val MaxHops = 20
 
-  val headerLength = 1 + 33 + macLength + maxHops * (addressLength + macLength)
-  val packetLength = headerLength + maxHops * perHopPayloadLength
+  /*
+    error packet format:
+    +----------------+----------------------------------+-----------------+----------------------+-----+
+    | HMAC(32 bytes) | failure message length (2 bytes) | failure message | pad length (2 bytes) | pad |
+    +----------------+----------------------------------+-----------------+----------------------+-----+
+    with failure message length + pad length = 128
+   */
 
-  val LAST_ADDRESS: BinaryData = zeroes(addressLength)
-  val LAST_PACKET: BinaryData = 1.toByte +: zeroes(packetLength - 1)
+  val ErrorPacketLength = MacLength + 128 + 2 + 2
+  val DataLength = (PayloadLength + MacLength) * MaxHops
+  val PacketLength = 1 + 33 + MacLength + DataLength
 
-  def zeroes(length: Int): BinaryData = Seq.fill[Byte](length)(0)
-  def xor(a: ByteSeq, b: ByteSeq): ByteSeq = a zip b map { case (x, y) => x.^(y).&(0xFF).toByte }
-  def generateKey(keyType: BinaryData, secret: BinaryData): BinaryData = Digests.hmacSha256(keyType, secret)
-  def generateKey(keyType: String, secret: BinaryData): BinaryData = generateKey(keyType getBytes "UTF-8", secret)
-  def mac(key: BinaryData, message: BinaryData): BinaryData = Digests.hmacSha256(key, message) take macLength
+  val LAST_ADDRESS = zeroes(PayloadLength)
+  val LAST_PACKET = Packet(Array(Version), zeroes(33),
+    me zeroes DataLength, me zeroes MacLength)
 
-  def computeblindingFactor(pub: PublicKey, secret: BinaryData): BinaryData = Crypto.sha256(pub.toBin ++ secret)
-  def blind(pub: PublicKey, blindingFactor: BinaryData): PublicKey = PublicKey(pub.multiply(blindingFactor).normalize)
-  def blind(pub: PublicKey, blindingFactors: BinaryDataSeq): PublicKey = blindingFactors.foldLeft(pub)(blind)
+  def zeroes(length: Int): Bytes = Array.fill[Byte](length)(0)
+  def xor(a: Bytes, b: Bytes): Bytes = a zip b map { case (x, y) => x.^(y).&(0xFF).toByte }
+  def mac(key: Bytes, message: Bytes): Bytes = Digests.hmacSha256(key, message) take MacLength
 
-  def computeSharedSecret(pub: PublicKey, secret: PrivateKey): BinaryData =
-    Crypto.sha256(pub.multiply(secret).normalize getEncoded true)
+  def generateKey(keyType: Bytes, secret: Bytes): Bytes = Digests.hmacSha256(keyType, secret)
+  def generateKey(keyType: String, secret: Bytes): Bytes = generateKey(keyType getBytes "UTF-8", secret)
+  def computeblindingFactor(pub: PublicKey, secret: Bytes): Bytes = Sha256Hash hash aconcat(pub.toBin, secret)
+  def blind(pub: PublicKey, blindingFactors: BytesVec): PublicKey = blindingFactors.foldLeft(pub)(blind)
 
-  def generateStream(key: BinaryData, length: Int): BinaryData =
-    ChaCha20Legacy.process(zeroes(length), key, zeroes(8),
-      encrypt = true, skipBlock = false)
-
-  def computeEphemerealPublicKeysAndSharedSecrets(sessionKey: PrivateKey, publicKeys: PublicKeySeq): (PublicKeySeq, BinaryDataSeq) = {
-    val firstEphemerealPublicKey = blind(PublicKey(Crypto.curve.getG, compressed = true), sessionKey.value)
-    val firstSecret = computeSharedSecret(publicKeys.head, sessionKey)
-
-    computeEphemerealPublicKeysAndSharedSecrets(sessionKey, publicKeys.tail, firstEphemerealPublicKey :: Nil,
-      computeblindingFactor(firstEphemerealPublicKey, firstSecret) :: Nil, firstSecret :: Nil)
+  def blind(pub: PublicKey, blindingFactor: Bytes): PublicKey = {
+    val scalar = Scalar apply new BigInteger(1, blindingFactor)
+    PublicKey(pub.multiply(scalar).normalize)
   }
 
-  def computeEphemerealPublicKeysAndSharedSecrets(sessionKey: PrivateKey, publicKeys: PublicKeySeq,
-                                                  ephemerealPublicKeys: PublicKeySeq, blindingFactors: BinaryDataSeq,
-                                                  sharedSecrets: BinaryDataSeq): (PublicKeySeq, BinaryDataSeq) =
+  def computeSharedSecret(pub: PublicKey, secret: PrivateKey): Bytes =
+    Sha256Hash.hash(pub.multiply(secret).normalize getEncoded true)
+
+  def generateStream(key: Bytes, length: Int): Bytes =
+    ChaCha20Legacy.process(me zeroes length, key, me zeroes 8,
+      encrypt = true, skipBlock = false)
+
+  def computeEphemerealPublicKeysAndSharedSecrets(publicKeys: PublicKeyVec, sessionKey: PrivateKey): (PublicKeyVec, BytesVec) = {
+    val firstEphemerealPublicKey = blind(pub = PublicKey(value = Crypto.curve.getG, compressed = true), sessionKey.value.toByteArray)
+    val firstSecret: Bytes = computeSharedSecret(pub = publicKeys.head, secret = sessionKey)
+    val firstBlindingFactor = computeblindingFactor(firstEphemerealPublicKey, firstSecret)
+
+    computeEphemerealPublicKeysAndSharedSecrets(publicKeys.tail,
+      Vector(firstEphemerealPublicKey), Vector(firstBlindingFactor),
+      Vector(firstSecret), sessionKey)
+  }
+
+  def computeEphemerealPublicKeysAndSharedSecrets(publicKeys: PublicKeyVec, ephemerealPublicKeys: PublicKeyVec,
+                                                  blindingFactors: BytesVec, sharedSecrets: BytesVec,
+                                                  sessionKey: PrivateKey): (PublicKeyVec, BytesVec) =
 
     if (publicKeys.isEmpty) (ephemerealPublicKeys, sharedSecrets) else {
       val nextEphemerealPublicKey = blind(ephemerealPublicKeys.last, blindingFactors.last)
       val nextSecret = computeSharedSecret(blind(publicKeys.head, blindingFactors), sessionKey)
-
-      computeEphemerealPublicKeysAndSharedSecrets(sessionKey, publicKeys.tail, ephemerealPublicKeys :+ nextEphemerealPublicKey,
-        blindingFactors :+ computeblindingFactor(nextEphemerealPublicKey, nextSecret), sharedSecrets :+ nextSecret)
+      computeEphemerealPublicKeysAndSharedSecrets(publicKeys.tail, ephemerealPublicKeys :+ nextEphemerealPublicKey,
+        blindingFactors :+ computeblindingFactor(nextEphemerealPublicKey, nextSecret), sharedSecrets :+ nextSecret, sessionKey)
     }
 
-  def generateFiller(keyType: String, sharedSecrets: BinaryDataSeq, hopSize: Int,
-                     maxNumberOfHops: Int = maxHops): BinaryData =
-
-    (BinaryData.empty /: sharedSecrets) {
-      case (padding, secret: BinaryData) =>
-        val padding1 = padding ++ zeroes(hopSize)
-        xor(padding1, generateStream(generateKey(keyType, secret),
-          (maxNumberOfHops + 1) * hopSize) takeRight padding1.length)
+  def generateFiller(keyType: String, sharedSecrets: BytesVec, hopSize: Int, maxHops: Int): Bytes =
+    sharedSecrets.foldLeft(Array.emptyByteArray) { case (paddingAccumulator: Bytes, secret: Bytes) =>
+      val stream = generateStream(generateKey(keyType, secret), (maxHops + 1) * hopSize)
+      val pad: Bytes = aconcat(paddingAccumulator, me zeroes hopSize)
+      xor(pad, stream takeRight pad.length)
     }
 
-  case class Header(v: BinaryData, publicKey: BinaryData, hmac: BinaryData, routingInfo: BinaryData) {
-    require(routingInfo.length == (addressLength + macLength) * maxHops, "Invalid routing info length")
-    require(hmac.length == macLength, s"Onion header hmac length should be exactly $macLength bytes")
+  case class Packet(v: Bytes, publicKey: Bytes, routingInfo: Bytes, hmac: Bytes) { self =>
+    require(hmac.length == MacLength, s"Onion header hmac length should be exactly $MacLength bytes")
     require(publicKey.length == 33, "Onion header public key length should be exactly 33 bytes")
-    def version = v.head
+    require(routingInfo.length == DataLength, "Invalid routing info length")
+    def isLast: Boolean = hmac sameElements zeroes(MacLength)
+    def serialize: Bytes = Packet write self
   }
 
-  object Header { me =>
-    def read(in: BinaryData): Header = me read new ByteArrayInputStream(in)
-    def write(header: Header): Bytes = write(new ByteArrayOutputStream(headerLength), header)
+  object Packet { self =>
+    def read(in: Bytes): Packet = self read new ByteArrayInputStream(in)
+    def write(packet: Packet): Bytes = write(new ByteArrayOutputStream(PacketLength), packet)
 
-    private def read(stream: ByteArrayInputStream) =
-      MultiStreamUtils.read(stream, 1, 33, macLength, (addressLength + macLength) * maxHops) match {
-        case Seq(version, publicKey, hmac, routingInfo) => Header(version, publicKey, hmac, routingInfo)
-      }
-
-    private def write(out: ByteArrayOutputStream, header: Header) =
-      MultiStreamUtils.write(out, header.v, header.publicKey,
-        header.hmac, header.routingInfo).toByteArray
-  }
-
-  def parsePacket(privateKey: PrivateKey, associatedData: BinaryData,
-                  packet: BinaryData): ParsedPacket = {
-
-    val header = Header read packet
-    val perHopPayload = packet drop headerLength
-    val sharedSecret = computeSharedSecret(PublicKey(header.publicKey), privateKey)
-    val checkData = header.routingInfo ++ perHopPayload ++ associatedData
-    val muKey = generateKey("mu", sharedSecret)
-
-    require(header.hmac == mac(muKey, checkData),
-      "Onion header mac check has failed")
-
-    val rho = generateKey("rho", sharedSecret)
-    val rhoStream = generateStream(rho, addressLength + macLength + (addressLength + macLength) * maxHops)
-    val bin = xor(header.routingInfo ++ zeroes(addressLength + macLength), rhoStream)
-
-    val address = bin take addressLength
-    val hmac = bin.slice(addressLength, addressLength + macLength)
-    val nextRoutinfo = bin.drop(addressLength + macLength)
-
-    val factor = computeblindingFactor(PublicKey(header.publicKey), sharedSecret)
-    val nextPubKey = blind(PublicKey(header.publicKey), factor)
-
-    val gamma = generateKey("gamma", sharedSecret)
-    val gammaStream = generateStream(gamma, perHopPayloadLength + maxHops * perHopPayloadLength)
-    val bin1 = xor(perHopPayload ++ zeroes(perHopPayloadLength), gammaStream)
-
-    val payload = bin1 take perHopPayloadLength
-    val nextPerHopPayloads = bin1 drop perHopPayloadLength
-    val header1 = Header(1.toByte :: Nil, nextPubKey, hmac, nextRoutinfo)
-    ParsedPacket(payload, address, Header.write(header1) ++ nextPerHopPayloads, sharedSecret)
-  }
-
-  def extractSharedSecrets(packet: BinaryData, privateKey: PrivateKey,
-                           associatedData: BinaryData, acc: BinaryDataSeq = Nil): BinaryDataSeq =
-
-    parsePacket(privateKey, associatedData, packet) match {
-      case ParsedPacket(_, nextAddress, _, ss) if nextAddress == LAST_ADDRESS => acc :+ ss
-      case ParsedPacket(_, _, np, ss) => extractSharedSecrets(np, privateKey, associatedData, acc :+ ss)
+    private def read(stream: ByteArrayInputStream) = {
+      val res = aread(stream, 1, 33, DataLength, MacLength)
+      val Seq(version, publicKey, routingInfo, hmac) = res
+      Packet(version, publicKey, routingInfo, hmac)
     }
 
-  def makeNextPacket(address: BinaryData, payload: BinaryData, associatedData: BinaryData, ephemerealPublicKey: BinaryData,
-                     sharedSecret: BinaryData, packet: BinaryData, routingInfoFiller: BinaryData = BinaryData.empty,
-                     payloadsFiller: BinaryData = BinaryData.empty): BinaryData = {
+    private def write(out: ByteArrayOutputStream, header: Packet) =
+      awrite(out, header.v, header.publicKey, header.routingInfo, header.hmac).toByteArray
+  }
 
-    val header = Header read packet
-    val hopPayloads = packet drop headerLength
+  def parsePacket(privateKey: PrivateKey, associatedData: Bytes, rawPacket: Bytes): ParsedPacket = {
+    require(rawPacket.length == PacketLength, s"Onion packet length is ${rawPacket.length}, it should be $PacketLength")
+
+    val packet = Packet read rawPacket
+    val message = aconcat(packet.routingInfo, associatedData)
+    val sharedSecret = computeSharedSecret(PublicKey(packet.publicKey), privateKey)
+    require(mac(generateKey("mu", sharedSecret), message) sameElements packet.hmac, "Invalid header mac")
+    val stream1 = generateStream(generateKey("rho", sharedSecret), PayloadLength + MacLength + DataLength)
+    val bin = xor(aconcat(packet.routingInfo, me zeroes PayloadLength + MacLength), stream1)
+    val hmac = bin.slice(PayloadLength, PayloadLength + MacLength)
+    val nextRoutinfo = bin.drop(PayloadLength + MacLength)
+
+    val factor = computeblindingFactor(PublicKey(packet.publicKey), sharedSecret)
+    val pubKey = blind(PublicKey(packet.publicKey), factor).toBin.toArray
+    val nextPacket = Packet(Array(Version), pubKey, nextRoutinfo, hmac)
+    ParsedPacket(bin take PayloadLength, nextPacket, sharedSecret)
+  }
+
+
+  def makeNextPacket(payload: Bytes, associatedData: Bytes, ephemerealPublicKey: Bytes,
+                     sharedSecret: Bytes, packet: Packet, routingInfoFiller: Bytes) = {
 
     val nextRoutingInfo = {
-      val stream = generateStream(generateKey("rho", sharedSecret), (addressLength + macLength) * maxHops)
-      val routingInfo1 = address ++ header.hmac ++ header.routingInfo.dropRight(addressLength + macLength)
-      xor(routingInfo1, stream).dropRight(routingInfoFiller.length) ++ routingInfoFiller
+      val stream1 = generateStream(generateKey("rho", sharedSecret), DataLength)
+      val routingInfo1 = aconcat(payload, packet.hmac, packet.routingInfo dropRight PayloadLength + MacLength)
+      aconcat(xor(routingInfo1, stream1).dropRight(routingInfoFiller.length), routingInfoFiller)
     }
 
-    val nexHopPayloads = {
-      val hopPayloads1 = payload ++ hopPayloads.dropRight(perHopPayloadLength)
-      val stream = generateStream(generateKey("gamma", sharedSecret), maxHops * perHopPayloadLength)
-      xor(hopPayloads1, stream).dropRight(payloadsFiller.length) ++ payloadsFiller
-    }
-
-    val checkData = nextRoutingInfo ++ nexHopPayloads ++ associatedData
-    val nextHmac: BinaryData = mac(generateKey("mu", sharedSecret), checkData.toArray)
-    val nextHeader = Header(1.toByte :: Nil, ephemerealPublicKey, nextHmac, nextRoutingInfo)
-    Header.write(nextHeader) ++ nexHopPayloads
+    require(payload.length == PayloadLength)
+    val message = aconcat(nextRoutingInfo, associatedData)
+    val nextHmac = mac(generateKey("mu", sharedSecret), message)
+    Packet(Array(Version), ephemerealPublicKey, nextRoutingInfo, nextHmac)
   }
 
   // Builds an encrypted onion packet that contains payloads and routing information for all nodes
   // Returns an onion packet that can be sent to the first node in the list
 
-  def makePacket(sessionKey: PrivateKey, publicKeys: PublicKeySeq, payloads: BinaryDataSeq, associatedData: BinaryData): OnionPacket = {
-    def loop(packet: BinaryData, pubKeys: PublicKeySeq, hopPayloads: BinaryDataSeq, ephKeys: PublicKeySeq, ss: BinaryDataSeq): BinaryData =
-      if (hopPayloads.isEmpty) packet else loop(makeNextPacket(pubKeys.last.hash160, hopPayloads.last, associatedData, ephKeys.last,
-        ss.last, packet), pubKeys dropRight 1, hopPayloads dropRight 1, ephKeys dropRight 1, ss dropRight 1)
+  def makePacket(seskey: PrivateKey, pubKeys: PublicKeyVec, payloads: BytesVec, assocData: Bytes) = {
+    def loop(packet: Packet, hopPayloads: BytesVec, ephemeralKeys: PublicKeyVec, sharedSecrets: BytesVec): Packet =
+      if (hopPayloads.isEmpty) packet else loop(makeNextPacket(hopPayloads.last, assocData, ephemeralKeys.last.toBin,
+        sharedSecrets.last, packet, Array.emptyByteArray), hopPayloads dropRight 1, ephemeralKeys dropRight 1,
+        sharedSecrets dropRight 1)
 
-    val (ephemerealPublicKeys, sharedsecrets) = computeEphemerealPublicKeysAndSharedSecrets(sessionKey, publicKeys)
-    val filler = generateFiller("rho", sharedsecrets dropRight 1, addressLength + macLength, maxHops)
-    val hopFiller = generateFiller("gamma", sharedsecrets dropRight 1, perHopPayloadLength, maxHops)
-
-    val packet = loop(makeNextPacket(LAST_ADDRESS, payloads.last, associatedData, ephemerealPublicKeys.last,
-      sharedsecrets.last, LAST_PACKET, filler, hopFiller), publicKeys, payloads dropRight 1,
-      ephemerealPublicKeys dropRight 1, ss = sharedsecrets dropRight 1)
-
-    OnionPacket(sharedsecrets zip publicKeys, packet)
+    val (ephemerealPublicKeys, sharedsecrets) = computeEphemerealPublicKeysAndSharedSecrets(pubKeys, seskey)
+    val filler = generateFiller(keyType = "rho", sharedsecrets dropRight 1, hopSize = PayloadLength + MacLength, maxHops = MaxHops)
+    val lastPacket = makeNextPacket(payloads.last, assocData, ephemerealPublicKeys.last.toBin, sharedsecrets.last, LAST_PACKET, filler)
+    val packet = loop(lastPacket, payloads dropRight 1, ephemerealPublicKeys dropRight 1, sharedsecrets dropRight 1)
+    SecretsAndPacket(sharedsecrets zip pubKeys, packet)
   }
 
   // Error packets
 
-  def createErrorPacket(sharedSecret: BinaryData, failure: FailureMessage) = {
-    val message = BinaryData(failureMessageCodec.encode(failure).require.toByteArray)
+  def createErrorPacket(sharedSecret: Bytes, failure: FailureMessage) = {
+    val message: Bytes = failureMessageCodec.encode(failure).require.toByteArray
     if (message.length > 128) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
-    val payload = Protocol.writeUInt16(message.length, ByteOrder.BIG_ENDIAN) ++
-      message ++ Protocol.writeUInt16(128 - message.length, ByteOrder.BIG_ENDIAN) ++
-      zeroes(128 - message.length)
+    val payload = aconcat(Protocol.writeUInt16(message.length, ByteOrder.BIG_ENDIAN),
+      message, Protocol.writeUInt16(128 - message.length, ByteOrder.BIG_ENDIAN),
+        me zeroes 128 - message.length)
 
-    val key = generateKey("um", sharedSecret)
-    val packet = mac(key, payload) ++ payload
-    forwardErrorPacket(packet, sharedSecret)
+    val mac1 = mac(generateKey("um", sharedSecret), payload)
+    forwardErrorPacket(aconcat(mac1, payload), sharedSecret)
   }
 
-  def extractFailureMessage(packet: BinaryData): FailureMessage = {
-    if (packet.length != errLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
-
-    val payload = packet.data drop macLength
-    val len = Protocol.uint16(payload, ByteOrder.BIG_ENDIAN)
-    if (len > 128) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
-
-    val vec = BitVector apply payload.slice(2, len + 2)
-    failureMessageCodec.decode(vec).require.value
+  def extractFailureMessage(packet: Bytes) = packet drop MacLength match { case payload =>
+    if (packet.length != ErrorPacketLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    val failureMessage = BitVector apply payload.slice(2, Protocol.uint16(payload, ByteOrder.BIG_ENDIAN) + 2)
+    failureMessageCodec.decode(failureMessage).require.value
   }
 
-  def forwardErrorPacket(packet: BinaryData, sharedSecret: BinaryData): BinaryData = {
-    if (packet.length != errLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
-    val filler = generateFiller("ammag", sharedSecret :: Nil, errLength, maxNumberOfHops = 1)
-    xor(packet, filler)
+  def forwardErrorPacket(packet: Bytes, sharedSecret: Bytes): Bytes = {
+    if (packet.length != ErrorPacketLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+    val stream = generateStream(generateKey("ammag", sharedSecret), ErrorPacketLength)
+    xor(packet, stream)
   }
 
-  def checkMac(sharedSecret: BinaryData, packet: BinaryData): Boolean =
-    packet.data splitAt macLength match { case (mac1, payload) =>
-      val um = Sphinx.generateKey("um", sharedSecret)
-      BinaryData(mac1) == mac(um, payload)
-    }
-
-  def parseErrorPacket(sharedSecrets: Seq[BinaryAndKey], packet: BinaryData): Option[ErrorPacket] = {
-    if (packet.length != errLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
+  def parseErrorPacket(sharedSecrets: Vector[BytesAndKey], packet: Bytes): Option[ErrorPacket] = {
+    if (packet.length != ErrorPacketLength) throw ChannelException(SPHINX_ERR_PACKET_WRONG_LENGTH)
 
     sharedSecrets match {
-      case (secret, pubkey) :: tail =>
+      case (secret, pubkey) +: tail =>
         val packet1 = forwardErrorPacket(packet, secret)
-        val ok = checkMac(sharedSecret = secret, packet1)
+        val (providedMac, payload) = packet1 splitAt MacLength
+        val macCheck = mac(Sphinx.generateKey("um", secret), payload)
+        val macOk = providedMac sameElements macCheck
 
-        if (!ok) parseErrorPacket(tail, packet1) else {
+        if (!macOk) parseErrorPacket(tail, packet1) else {
           val failureMessage = extractFailureMessage(packet1)
-          val packet = ErrorPacket(pubkey, failureMessage)
-          Some(packet)
+          val errPack = ErrorPacket(pubkey, failureMessage)
+          Some(errPack)
         }
 
-      case Nil =>
+      case _ =>
         None
     }
   }

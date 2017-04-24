@@ -37,7 +37,6 @@
 
     <!-- menu -->
     <string name="action_settings">Налаштувати гаманець</string>
-    <string name="action_bitcoin_request">Запросити суму</string>
     <string name="action_bitcoin_receive">Отримати</string>
     <string name="action_buy">Купити бiткоiни</string>
     <string name="action_bitcoin_send">Послати</string>

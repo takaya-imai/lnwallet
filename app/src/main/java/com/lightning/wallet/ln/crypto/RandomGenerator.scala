@@ -21,15 +21,21 @@ with ByteStream
 }
 
 object MultiStreamUtils {
-  def read(stream: InputStream, nums: Int*) =
+  def aread(stream: InputStream, nums: Int*) =
     for (num <- nums) yield {
       val buffer = new Bytes(num)
       stream.read(buffer)
       buffer
     }
 
-  def write(stream: ByteArrayOutputStream, arrs: Bytes*) = {
+  def awrite(stream: ByteArrayOutputStream, arrs: Bytes*) = {
     for (arrayDataToWrite <- arrs) stream write arrayDataToWrite
     stream
+  }
+
+  def aconcat(arrays: Bytes*): Bytes = {
+    val output = new ByteArrayOutputStream(8)
+    for (array <- arrays) output write array
+    output.toByteArray
   }
 }

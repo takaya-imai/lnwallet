@@ -38,34 +38,45 @@
 
     <com.github.clans.fab.FloatingActionMenu
         fab:menu_icon="@drawable/ic_btc_24dp"
-        fab:menu_animationDelayPerItem="40"
-        fab:menu_labels_textSize="18sp"
-        fab:menu_colorPressed="#0099fe"
-        fab:menu_colorRipple="#0099fe"
-        fab:menu_colorNormal="#0099fe"
-
-        android:layout_margin="@dimen/app_padding"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentRight="true"
-        android:layout_height="wrap_content"
-        android:layout_width="wrap_content"
+        fab:menu_colorPressed="@color/btc"
+        fab:menu_colorNormal="@color/btc"
+        fab:menu_colorRipple="@color/btc"
+        style="@style/FloatingMenu"
         android:id="@+id/fab">
+
+        <com.github.clans.fab.FloatingActionButton
+            android:src="@drawable/ic_flash_24dp"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            fab:fab_colorPressed="@color/ln"
+            fab:fab_colorNormal="@color/ln"
+            fab:fab_colorRipple="@color/ln"
+            android:onClick="goLightning"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_upward_white_18dp"
             fab:fab_label="@string/action_bitcoin_send"
+            fab:fab_colorPressed="@color/btc"
+            fab:fab_colorNormal="@color/btc"
+            fab:fab_colorRipple="@color/btc"
             style="@style/MenuButtonsSmall"
             android:onClick="doPay"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_downward_white_18dp"
             fab:fab_label="@string/action_bitcoin_receive"
+            fab:fab_colorPressed="@color/btc"
+            fab:fab_colorNormal="@color/btc"
+            fab:fab_colorRipple="@color/btc"
             style="@style/MenuButtonsSmall"
             android:onClick="doReceive"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_fullscreen_white_18dp"
             fab:fab_label="@string/action_scan"
+            fab:fab_colorPressed="@color/btc"
+            fab:fab_colorNormal="@color/btc"
+            fab:fab_colorRipple="@color/btc"
             style="@style/MenuButtonsSmall"
             android:onClick="doQRScan"/>
 

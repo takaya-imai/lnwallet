@@ -45,13 +45,18 @@
 
         <EditText
             style="@style/Info"
+            android:minWidth="140dp"
             android:id="@+id/mainPassData"
             android:inputType="textPassword"
-            android:layout_width="wrap_content"
-            android:hint="@string/password_old"/>
+            android:layout_width="wrap_content"/>
+
+        <TextView
+            style="@style/Info"
+            android:text="@string/password_old"
+            android:layout_width="wrap_content"/>
 
         <Button
-            style="@style/Info"
+            style="@style/MarginInfo"
             android:id="@+id/mainPassCheck"
             android:text="@string/ln_unlock"
             android:layout_width="wrap_content"/>

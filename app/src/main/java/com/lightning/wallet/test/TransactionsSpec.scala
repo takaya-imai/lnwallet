@@ -49,10 +49,10 @@ class TransactionsSpec {
       println("compute fees")
       // see BOLT #3 specs
       val htlcs = Set(
-        Htlc(false, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(5000000).amount, 552, Hash.Zeroes, BinaryData("")), null, null, ""),
-        Htlc(false, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(1000000).amount, 553, Hash.Zeroes, BinaryData("")), null, null, ""),
-        Htlc(true, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(7000000).amount, 550, Hash.Zeroes, BinaryData("")), null, null, ""),
-        Htlc(true, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(800000).amount, 551, Hash.Zeroes, BinaryData("")), null, null, "")
+        Htlc(false, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(5000000).amount, 552, Hash.Zeroes, BinaryData("")), null),
+        Htlc(false, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(1000000).amount, 553, Hash.Zeroes, BinaryData("")), null),
+        Htlc(true, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(7000000).amount, 550, Hash.Zeroes, BinaryData("")), null),
+        Htlc(true, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(800000).amount, 551, Hash.Zeroes, BinaryData("")), null)
       )
       val spec = CommitmentSpec(htlcs = htlcs, feeratePerKw = 5000, toLocalMsat = 0, toRemoteMsat = 0)
       val fee = Scripts.commitTxFee(Satoshi(546), spec)
@@ -150,8 +150,8 @@ class TransactionsSpec {
       val htlc2 = UpdateAddHtlc("00" * 32, 1, millibtc2satoshi(MilliBtc(200)).amount * 1000, 300, sha256(paymentPreimage2), BinaryData(""))
       val spec = CommitmentSpec(
         htlcs = Set(
-          Htlc(false, htlc1, null, null, ""),
-          Htlc(true, htlc2, null, null, "")
+          Htlc(false, htlc1, null),
+          Htlc(true, htlc2, null)
         ),
         feeratePerKw = feeratePerKw,
         toLocalMsat = millibtc2satoshi(MilliBtc(400)).amount * 1000,
@@ -270,7 +270,7 @@ class TransactionsSpec {
     }
 
     def htlc(direction: Boolean, amount: Satoshi): Htlc =
-      Htlc(direction, UpdateAddHtlc("00" * 32, 0, amount.amount * 1000, 144, "00" * 32, ""), null, null, "")
+      Htlc(direction, UpdateAddHtlc("00" * 32, 0, amount.amount * 1000, 144, "00" * 32, ""), null)
 
     Future {
       println("BOLT 2 fee tests")

@@ -1,6 +1,7 @@
 package com.lightning.wallet.ln.crypto
 
 import com.lightning.wallet.ln.Exceptions._
+import com.lightning.wallet.ln.crypto.MultiStreamUtils.aconcat
 import org.spongycastle.crypto.params.{KeyParameter, ParametersWithIV}
 import org.spongycastle.crypto.engines.{ChaCha7539Engine, ChaChaEngine}
 import org.spongycastle.crypto.SkippingStreamCipher
@@ -25,10 +26,11 @@ object ChaCha20Poly1305 {
       encrypt = false, skipBlock = true)
   }
 
-  def pack(aad: Bytes, text: Bytes) =
-    aad ++ pad16(aad) ++ text ++ pad16(text) ++
-      writeUInt64(aad.length, LITTLE_ENDIAN) ++
-      writeUInt64(text.length, LITTLE_ENDIAN)
+  def pack(aad: Bytes, txt: Bytes) =
+    aconcat(aad, pad16(aad), txt, pad16(txt),
+      writeUInt64(aad.length, LITTLE_ENDIAN),
+      writeUInt64(txt.length, LITTLE_ENDIAN),
+      Array.emptyByteArray)
 
   def pad16(data: Bytes): Bytes =
     if (data.length % 16 == 0) Array.empty
@@ -59,7 +61,7 @@ object ChaCha20Legacy extends SkippingStreamCipherEngine { def getEngine = new C
 
 object Poly1305 {
   def mac(key: Bytes, data: Bytes) = {
-    val poly = new org.spongycastle.crypto.macs.Poly1305New
+    val poly = new org.spongycastle.crypto.macs.Poly1305
     val out = new Bytes(16)
 
     poly init new KeyParameter(key)

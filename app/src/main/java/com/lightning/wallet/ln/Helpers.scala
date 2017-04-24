@@ -5,36 +5,19 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 
 import scala.util.{Success, Try}
-import fr.acinq.bitcoin.Crypto.{Point, PublicKey, sha256}
-import com.lightning.wallet.ln.crypto.Sphinx.BinaryDataSeq
+import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import com.lightning.wallet.ln.crypto.Generators
 import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
-  def validateHtlc(add: UpdateAddHtlc, bag: InvoiceBag) = bag getExtendedInvoice add.paymentHash match {
-    case Some(extendedInvoice) if extendedInvoice.invoice.sum.amount * 2 < add.amountMsat => Left(IncorrectPaymentAmount)
-    case Some(extendedInvoice) if extendedInvoice.invoice.sum.amount > add.amountMsat => Left(IncorrectPaymentAmount)
-    case Some(extendedInvoice) if extendedInvoice.preimage.isDefined => Right(extendedInvoice.preimage.get)
-    case _ => Left(UnknownPaymentHash)
-  }
-
-  def extractPreimages(tx: Transaction): BinaryDataSeq = tx.txIn.map(_.witness.stack) flatMap {
-    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
-    case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData)
-    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg)
-    case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg)
+  def extractPreimages(tx: Transaction): Seq[BinaryData] = tx.txIn.map(_.witness.stack) flatMap {
+    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData) // htlc-timeout
+    case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 69 + 20): BinaryData) // claim-htlc-timeout
+    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg) // htlc-success
+    case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg) // claim-htlc-success
     case _ => None
   }
-
-  def makeLocalParams(fundingSatoshis: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
-    LocalParams(LNParams.chainHash, dustLimitSatoshis = LNParams.dustLimitSatoshis, defaultFinalScriptPubKey = finalScriptPubKey,
-      maxHtlcValueInFlightMsat = Long.MaxValue, channelReserveSatoshis = (LNParams.reserveToFundingRatio * fundingSatoshis).toLong,
-      htlcMinimumMsat = LNParams.htlcMinimumMsat, toSelfDelay = LNParams.delayBlocks, maxAcceptedHtlcs = LNParams.maxAcceptedHtlcs,
-      fundingPrivKey = LNParams.deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = LNParams.deriveParamsPrivateKey(keyIndex, 1L),
-      paymentKey = LNParams.deriveParamsPrivateKey(keyIndex, 2L), delayedPaymentKey = LNParams.deriveParamsPrivateKey(keyIndex, 3L),
-      shaSeed = sha256(LNParams.deriveParamsPrivateKey(keyIndex, 4L).toBin), isFunder = true,
-      globalFeatures = LNParams.globalFeatures, localFeatures = LNParams.localFeatures)
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,
                    remoteParams: RemoteParams, commitmentInput: InputInfo,
@@ -120,15 +103,14 @@ object Helpers { me =>
 
     def checkClosingSignature(commitments: Commitments, localScriptPubkey: BinaryData,
                               remoteScriptPubkey: BinaryData, remoteClosingFee: Satoshi,
-                              remoteClosingSig: BinaryData): Try[Transaction] = {
+                              remoteClosingSig: BinaryData): (Boolean, Transaction) = {
 
       val (closingTx, closingSigned) = makeClosingTx(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
       val signedClosingTx: ClosingTx = Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
         commitments.remoteParams.fundingPubKey, closingSigned.signature, remoteClosingSig)
 
-      // Map positive check result into transaction
       val check = Scripts checkSpendable signedClosingTx
-      check.map(_ => signedClosingTx.tx)
+      (check.isSuccess, signedClosingTx.tx)
     }
 
     def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi) = {
@@ -137,16 +119,16 @@ object Helpers { me =>
       else resultingClosingFee
     }
 
-    def claimCurrentLocalCommitTxOutputs(commitments: Commitments, tx: Transaction, bag: InvoiceBag, rate: Long) = {
+    def claimCurrentLocalCommitTxOutputs(commitments: Commitments, tx: Transaction, bag: PaymentSpecBag) = {
       require(commitments.localCommit.publishableTxs.commitTx.tx.txid == tx.txid, "Txid mismatch, it's not current commit")
       val localPerCommitmentPoint = Generators.perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)
       val localRevocationPubkey = Generators.revocationPubKey(commitments.remoteParams.revocationBasepoint, localPerCommitmentPoint)
       val localDelayedPrivkey = Generators.derivePrivKey(commitments.localParams.delayedPaymentKey, localPerCommitmentPoint)
       val localTxs = commitments.localCommit.publishableTxs.htlcTxsAndSigs
 
-      def makeClaimDelayedOutput(txn: Transaction, descr: String) = makeTx(descr) apply {
+      def makeClaimDelayedOutput(txn: Transaction, descr: String): Option[Transaction] = makeTx(descr) apply {
         val claimDelayed = Scripts.makeClaimDelayedOutputTx(txn, localRevocationPubkey, commitments.localParams.toSelfDelay,
-          localDelayedPrivkey.publicKey, commitments.localParams.defaultFinalScriptPubKey, feeratePerKw = rate)
+          localDelayedPrivkey.publicKey, commitments.localParams.defaultFinalScriptPubKey, commitments.localCommit.spec.feeratePerKw)
 
         val sig = Scripts.sign(claimDelayed, localDelayedPrivkey)
         Scripts.addSigs(claimDelayed, sig)
@@ -154,9 +136,9 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- localTxs
-        ExtendedInvoice(Some(preimage), _, _, _, _, _) <- bag getExtendedInvoice info.paymentHash
+        preimage <- bag.getPaymentSpec(info.paymentHash).toOption.flatMap(_.preimage)
         success <- makeTx("htlc-success") apply Scripts.addSigs(info, localSig, remoteSig, preimage)
-        successClaim <- makeClaimDelayedOutput(success, "htlc-success-claim-delayed")
+        successClaim <- makeClaimDelayedOutput(txn = success, "htlc-success-claim-delayed")
       } yield success -> successClaim
 
       val allTimeoutTxs = for {
@@ -168,13 +150,13 @@ object Helpers { me =>
       val (successTxs, claimSuccessTxs) = allSuccessTxs.unzip
       val (timeoutTxs, claimTimeoutTxs) = allTimeoutTxs.unzip
 
-      LocalCommitPublished(claimMainDelayedOutputTx = makeClaimDelayedOutput(tx, "main-claim-delayed"),
-        htlcSuccessTxs = successTxs, htlcTimeoutTxs = timeoutTxs, claimHtlcSuccessTxs = claimSuccessTxs,
+      LocalCommitPublished(makeClaimDelayedOutput(tx, "main-claim-delayed").toList,
+        successTxs, htlcTimeoutTxs = timeoutTxs, claimHtlcSuccessTxs = claimSuccessTxs,
         claimHtlcTimeoutTxs = claimTimeoutTxs, commitTx = tx)
     }
 
     def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit,
-                                   tx: Transaction, bag: InvoiceBag, rate: Long) = {
+                                   tx: Transaction, bag: PaymentSpecBag): RemoteCommitPublished = {
 
       val (remoteCommitTx, _, _) = makeRemoteTxs(remoteCommit.index, commitments.localParams,
         commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint,
@@ -190,10 +172,10 @@ object Helpers { me =>
       // for them is really incoming=false for us and vice versa
 
       val claimSuccessTxs = for {
-        Htlc(false, add, _, _, _) <- commitments.remoteCommit.spec.htlcs
-        ExtendedInvoice(Some(preimage), _, _, _, _, _) <- bag getExtendedInvoice add.paymentHash
-        info = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
-          remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, feeratePerKw = rate)
+        Htlc(false, add, _) <- remoteCommit.spec.htlcs
+        preimage <- bag.getPaymentSpec(add.paymentHash).toOption.flatMap(_.preimage)
+        info: ClaimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
+          remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
         sig = Scripts.sign(info, localPrivkey)
         infoWithSigs = Scripts.addSigs(claimHtlcSuccessTx = info, sig, preimage)
@@ -201,9 +183,9 @@ object Helpers { me =>
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
-        Htlc(true, add, _, _, _) <- commitments.remoteCommit.spec.htlcs
-        info = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
-          remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, feeratePerKw = rate)
+        Htlc(true, add, _) <- remoteCommit.spec.htlcs
+        info: ClaimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
+          remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
         sig = Scripts.sign(info, localPrivkey)
         infoWithSigs = Scripts.addSigs(claimHtlcTimeoutTx = info, sig)
@@ -211,18 +193,20 @@ object Helpers { me =>
       } yield claimTimeout
 
       val mainTx = makeTx("claim-p2wpkh-output") apply {
-        val info = Scripts.makeClaimP2WPKHOutputTx(tx, localPrivkey.publicKey,
-          commitments.localParams.defaultFinalScriptPubKey, feeratePerKw = rate)
+        val info: ClaimP2WPKHOutputTx = Scripts.makeClaimP2WPKHOutputTx(tx, localPrivkey.publicKey,
+          commitments.localParams.defaultFinalScriptPubKey, remoteCommit.spec.feeratePerKw)
 
         val sig = Scripts.sign(info, localPrivkey)
         Scripts.addSigs(info, localPrivkey.publicKey, sig)
       }
 
-      RemoteCommitPublished(claimMainOutputTx = mainTx,
+      RemoteCommitPublished(mainTx.toList,
         claimHtlcSuccessTxs = claimSuccessTxs.toSeq,
         claimHtlcTimeoutTxs = claimTimeoutTxs.toSeq,
         commitTx = tx)
     }
+
+    def claimRevokedRemoteCommitTxOutputs(commitments: Commitments, tx: Transaction): Option[RevokedCommitPublished] = ???
   }
 
   object Funding {

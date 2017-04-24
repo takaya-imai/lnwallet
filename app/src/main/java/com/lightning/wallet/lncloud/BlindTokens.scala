@@ -3,10 +3,10 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
-import com.lightning.wallet.lncloud.BlindTokens._
+
 import com.lightning.wallet.lncloud.BlindTokensSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
-import com.lightning.wallet.Utils.{app, string2Ops}
+
 import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.{NodeAnnouncements}
 
@@ -126,19 +126,18 @@ trait LNCloud { me =>
       case _ => throw new ProtocolException
     }
 
-  def http(command: String) = HttpRequest.post(s"http://10.0.2.2:9002/v1/$command", true) connectTimeout 10000
-  def bitVec2Nodes(vec: BitVector): NodeAnnouncements = LightningMessageCodecs.announcementsCodec.decode(vec).require.value
+  val server = "http://10.0.2.2:9002"
+  def http(command: String) = HttpRequest.post(s"$server/v1/$command", true) connectTimeout 10000
   def json2BitVec(raw: JsValue): Option[BitVector] = BitVector fromHex raw.convertTo[String]
 
-  def findRoutes(from: BinaryData, to: BinaryData) = call("router/routes",
+  // A vector of vectors of hops
+  def findRoutes(fromNodeId: BinaryData, toNodeId: BinaryData) = call("router/routes",
     _.flatMap(json2BitVec).map(LightningMessageCodecs.hopsCodec.decode(_).require.value),
-    "from" -> from.toString, "to" -> to.toString)
+    "from" -> fromNodeId.toString, "to" -> toNodeId.toString)
 
-  def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes/find",
-    result => json2BitVec(result.head).map(bitVec2Nodes).get, "query" -> query)
-
-  def listNodes: Obs[NodeAnnouncements] = call("router/nodes/list",
-    result => json2BitVec(result.head).map(bitVec2Nodes).get)
+  def findNodes(query: String): Obs[NodeAnnouncements] = call(command = "router/nodes/find",
+    _.flatMap(json2BitVec).map(LightningMessageCodecs.announcementsCodec.decode(_).require.value),
+    "query" -> query).map(_.head)
 }
 
 trait LNCloudAction {

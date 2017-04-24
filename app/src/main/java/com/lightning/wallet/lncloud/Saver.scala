@@ -10,15 +10,16 @@ import com.lightning.wallet.lncloud.RatesSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.JavaSerializer._
 
-import com.lightning.wallet.ln.{ChannelData, ScheduledTx}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
 import rx.lang.scala.schedulers.IOScheduler
+import com.lightning.wallet.ln.ChannelData
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
+
 
 object JavaSerializer {
   def serialize(source: Serializable): String = {
@@ -61,16 +62,15 @@ trait Saver {
 }
 
 object BlindTokensSaver extends Saver {
-  // Blinding point, clear token and sig
-  type ClearToken = (String, String, String)
+  type ClearToken = (String, String, String) // point, clear token, sig
   type Snapshot = (Set[ClearToken], List[String], BlindProgress)
   def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
   val KEY = "blindTokens"
 }
 
 object ChannelSaver extends Saver {
-  type Snapshot = (List[String], ChannelData)
   def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
+  type Snapshot = (String, ChannelData)
   val KEY = "channel"
 }
 
@@ -79,13 +79,6 @@ object StandaloneCloudSaver extends Saver {
   def saveUrl(url: String) = StorageWrap.put(url, KEY)
   def tryGetUrl: Try[String] = StorageWrap.get(KEY)
   val KEY = "standaloneCloud"
-}
-
-object LocalBroadcasterSaver extends Saver {
-  type Snapshot = (ScheduledTxs, ScheduledTxs)
-  type ScheduledTxs = scala.collection.mutable.Set[ScheduledTx]
-  def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
-  val KEY = "broadcaster"
 }
 
 // Exchange rates and Bitcoin fees
@@ -110,9 +103,8 @@ object RatesSaver extends Saver { me =>
   implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
   implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
   implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
-
-  def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def toRates(src: RatesMap) = Map(strDollar -> src("USD").now, strEuro -> src("EUR").now, strYuan -> src("CNY").now)
+  def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def bitpayNorm(src: String) = jsonFieldAs[BitpayList]("data")(src).map(bitpay => bitpay.code -> bitpay).toMap
 
   private def pickExchangeRate = retry(obsOn(random nextInt 3 match {
@@ -134,6 +126,7 @@ object RatesSaver extends Saver { me =>
   var rates = tryGet[Rates] getOrElse Rates(Map.empty, defaultFee, defaultFee div 2, 0L)
 
   def process = {
+    // Pull feerates from all *responsive* sources at once and filter out those beyond 1st sd
     def allFees = for (orderNum <- 0 until 4) yield pickFeeRate(orderNum).onErrorReturn(_ => None)
     def combined = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate).repeatWhen(_ delay period)
 

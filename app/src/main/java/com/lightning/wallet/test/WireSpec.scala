@@ -2,6 +2,7 @@ package com.lightning.wallet.test
 
 import java.net.{InetAddress, InetSocketAddress}
 
+import com.lightning.wallet.ln.crypto.Sphinx
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import scodec.bits.{BitVector, ByteVector, HexStringSyntax}
@@ -157,7 +158,7 @@ class WireSpec {
       val update_fee = UpdateFee(randomBytes(32), 2)
       val shutdown = Shutdown(randomBytes(32), bin(47, 0))
       val closing_signed = ClosingSigned(randomBytes(32), 2, randomSignature)
-      val update_add_htlc = UpdateAddHtlc(randomBytes(32), 2, 3, 4, bin(32, 0), bin(1254, 0))
+      val update_add_htlc = UpdateAddHtlc(randomBytes(32), 2, 3, 4, bin(32, 0), bin(Sphinx.PacketLength, 0))
       val update_fulfill_htlc = UpdateFulfillHtlc(randomBytes(32), 2, bin(32, 0))
       val update_fail_htlc = UpdateFailHtlc(randomBytes(32), 2, bin(154, 0))
       val update_fail_malformed_htlc = UpdateFailMalformedHtlc(randomBytes(32), 2, randomBytes(32), 1111)
@@ -175,10 +176,9 @@ class WireSpec {
           update_add_htlc :: update_fulfill_htlc :: update_fail_htlc :: update_fail_malformed_htlc :: commit_sig :: revoke_and_ack ::
           channel_announcement :: node_announcement :: channel_update :: announcement_signatures :: ping :: pong :: Nil
 
-      msgs.foreach {
-        case msg => {
+      msgs.foreach { msg => {
           val encoded = lightningMessageCodec.encode(msg)
-          val decoded = encoded.flatMap(lightningMessageCodec.decode(_))
+          val decoded = encoded.flatMap(lightningMessageCodec.decode)
           println(msg == decoded.toOption.get.value)
         }
       }
@@ -186,11 +186,20 @@ class WireSpec {
 
     {
       println("encode/decode per-hop payload")
-      val payload = PerHopPayload(amt_to_forward = 142000, outgoing_cltv_value = 500000)
-      val bin = LightningMessageCodecs.perHopPayload.as[PerHopPayload].encode(payload).toOption.get
-      println(bin.toByteVector.size == 20)
-      val payload1 = LightningMessageCodecs.perHopPayload.as[PerHopPayload].decode(bin).toOption.get.value
+      val payload = PerHopPayload(channel_id = 42, amt_to_forward = 142000, outgoing_cltv_value = 500000)
+      val bin = LightningMessageCodecs.perHopPayloadCodec.encode(payload).require
+      println(bin.toByteVector.size == 33)
+      val payload1 = LightningMessageCodecs.perHopPayloadCodec.decode(bin).require.value
       println(payload == payload1)
+
+      // realm (the first byte) should be 0
+      val bin1 = bin.toByteVector.update(0, 1)
+      try {
+        val payload2 = LightningMessageCodecs.perHopPayloadCodec.decode(bin1.toBitVector).require.value
+        println(payload2 == payload1)
+      } catch {
+        case e: Throwable => println(true)
+      }
     }
   }
 }
