@@ -37,9 +37,8 @@ extends StateMachine[ChannelData] { me =>
         accept.fundingPubkey, accept.revocationBasepoint, accept.paymentBasepoint, accept.delayedPaymentBasepoint,
         waitAccept.cmd.remoteInit.globalFeatures, waitAccept.cmd.remoteInit.localFeatures)
 
-      become(WaitFundingTxData(waitAccept.announce, waitAccept.cmd,
-        accept.firstPerCommitmentPoint, remoteParams, waitAccept.lastSent),
-        state1 = WAIT_FUNDING_CREATED)
+      become(data1 = WaitFundingTxData(waitAccept.announce, waitAccept.cmd,
+        accept.firstPerCommitmentPoint, remoteParams), WAIT_FUNDING_CREATED)
 
     // We now have a funding tx with funding out
     case (Tuple2(funding: Transaction, outIndex: Int), wait: WaitFundingTxData, WAIT_FUNDING_CREATED) =>

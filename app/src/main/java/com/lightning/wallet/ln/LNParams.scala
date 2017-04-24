@@ -31,15 +31,13 @@ object LNParams {
   val reserveToFundingRatio = 0.01 // %
   val htlcMinimumMsat = 1000
   val maxAcceptedHtlcs = 10
-  val smartfeeNBlocks = 3
   val minDepth = 2
 
-  val feeProportionalMillionth = 10
   val dustLimitSatoshis = 542
   val feeBaseMsat = 546000
 
-  val minExpiryBlocks = 6
   val expiryDeltaBlocks = 144
+  val minExpiryBlocks = 6
   val toSelfDelay = 144
 
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =

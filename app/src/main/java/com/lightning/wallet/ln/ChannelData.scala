@@ -6,11 +6,9 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Exceptions._
 
-import com.lightning.wallet.ln.crypto.{Generators, SecretsAndPacket, ShaChain, ShaHashesWithIndex}
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi, Transaction, TxOut}
-import com.lightning.wallet.ln.Tools.{LightningMessages, random}
-
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
+import fr.acinq.bitcoin.{BinaryData, Crypto, Satoshi, Transaction, TxOut}
+import com.lightning.wallet.ln.Tools.LightningMessages
 import com.lightning.wallet.ln.MSat.satFactor
 
 
@@ -24,9 +22,12 @@ case class CMDFundingSpent(tx: Transaction) extends Command
 
 // These exist to distinguish between incoming and outgoing commands in a channel
 case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
-                          initialFeeratePerKw: Long, localParams: LocalParams, remoteInit: Init) extends Command
+                          initialFeeratePerKw: Long, localParams: LocalParams,
+                          remoteInit: Init) extends Command
 
-case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int) extends Command
+case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData,
+                                failureCode: Int) extends Command
+
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
@@ -42,13 +43,15 @@ case class ErrorData(announce: NodeAnnouncement, error: BinaryData) extends Chan
 case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel,
                           lastSent: OpenChannel) extends ChannelData with HasLastSent
 
-case class WaitFundingTxData(announce: NodeAnnouncement, cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
-                             remoteParams: RemoteParams, lastSent: OpenChannel) extends ChannelData with HasLastSent
+case class WaitFundingTxData(announce: NodeAnnouncement,
+                             cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
+                             remoteParams: RemoteParams) extends ChannelData
 
 case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryData, localParams: LocalParams, remoteParams: RemoteParams,
                                  fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
                                  lastSent: FundingCreated) extends ChannelData with HasLastSent
 
+// lastSent here is either FundingCreated or FundingLocked
 case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Commitments, their: Option[FundingLocked],
                                     lastSent: LightningMessage) extends ChannelData with HasLastSent with HasCommitments
 
@@ -88,9 +91,10 @@ object ClosingData {
     bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
       bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
 
-  def extractTxs(closing: ClosingData): Seq[Transaction] =
-    closing.mutualClose ++ closing.localCommit.flatMap(extractTxs) ++ closing.remoteCommit.flatMap(extractTxs) ++
-      closing.nextRemoteCommit.flatMap(extractTxs) ++ closing.revokedCommits.flatMap(extractTxs)
+  // Order of txs broadcasting matters here!
+  def extractTxs(cd: ClosingData): Seq[Transaction] =
+    cd.mutualClose ++ cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
+      cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
 
   def extractWatchScripts(closing: ClosingData): Seq[TxOut] = {
     // On channel breaking we need to watch all commit outputs for preimages
@@ -189,10 +193,10 @@ object Commitments {
 
   def addRemoteProposal(c: Commitments, proposal: LightningMessage): Commitments = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
   def addLocalProposal(c: Commitments, proposal: LightningMessage): Commitments = c.modify(_.localChanges.proposed).using(_ :+ proposal)
-  def addUnackedMessage(c: Commitments, msg: LightningMessage) = c.modify(_.unackedMessages).using(_ :+ msg)
 
   def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filter { case _: RevokeAndAck => false case _ => true } :+ r
   def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
+  def addUnackedMessage(c: Commitments, msg: LightningMessage) = c.modify(_.unackedMessages).using(_ :+ msg)
 
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
@@ -234,9 +238,14 @@ object Commitments {
       else c1
     }
 
+  // Instead of forgetting their htlc proposal
+  // we check if it's an old one before proceeding
   def receiveAdd(c: Commitments, htlc: Htlc, blockCount: Int) =
     if (htlc.add.id < c.remoteNextHtlcId) c
-    else if (htlc.add.amountMsat < c.localParams.htlcMinimumMsat) throw ChannelException(HTLC_VALUE_TOO_SMALL)
+    else doReceiveAdd(c, htlc, blockCount)
+
+  def doReceiveAdd(c: Commitments, htlc: Htlc, blockCount: Int) =
+    if (htlc.add.amountMsat < c.localParams.htlcMinimumMsat) throw ChannelException(HTLC_VALUE_TOO_SMALL)
     else if (htlc.add.expiry < blockCount + LNParams.minExpiryBlocks) throw ChannelException(HTLC_EXPIRY_TOO_SOON)
     else if (htlc.add.id != c.remoteNextHtlcId) throw ChannelException(HTLC_UNEXPECTED_ID)
     else {
@@ -267,6 +276,8 @@ object Commitments {
     }
   }
 
+  // Instead of forgetting their fulfill proposal
+  // we check if it's an old one before proceeding
   def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
     if (Changes all c.remoteChanges contains fulfill) c
     else doReceiveFulfill(c, fulfill)
@@ -294,6 +305,8 @@ object Commitments {
     else addUnackedMessage(addLocalProposal(c, fail), fail)
   }
 
+  // Instead of forgetting their fail proposal
+  // we check if it's an old one before proceeding
   def receiveFail(c: Commitments, fail: FailHtlc) =
     if (Changes all c.remoteChanges contains fail) c
     else doReceiveFail(c, fail)
@@ -337,6 +350,8 @@ object Commitments {
       localChanges = localChanges1, remoteChanges = remoteChanges1), commitSig)
   }
 
+  // Instead of forgetting their commit sig
+  // we check if it's an old one before proceeding
   def receiveCommit(c: Commitments, commit: CommitSig) =
     c.localCommit.commit.hashCode == commit.hashCode match {
       case false if remoteHasChanges(c) => doReceiveCommit(c, commit)

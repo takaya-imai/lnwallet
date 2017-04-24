@@ -244,7 +244,7 @@ object Scripts { me =>
     Transaction.correctlySpends(txinfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
   }
 
-  def checkSig(txinfo: TransactionWithInputInfo, sig: BinaryData, pubKey: PublicKey) =
+  def checkSig(txinfo: TransactionWithInputInfo, sig: BinaryData, pubKey: PublicKey): Boolean =
     Crypto.verifySignature(Transaction.hashForSigning(txinfo.tx, 0, txinfo.input.redeemScript,
       SIGHASH_ALL, txinfo.input.txOut.amount, SIGVERSION_WITNESS_V0), sig, pubKey)
 
