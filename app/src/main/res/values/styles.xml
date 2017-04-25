@@ -90,6 +90,7 @@
     <!-- floating buttons style -->
 
     <style name="FloatingMenu">
+        <item name="menu_shadowColor">#33000000</item>
         <item name="android:layout_margin">@dimen/app_padding</item>
         <item name="android:layout_alignParentBottom">true</item>
         <item name="android:layout_alignParentRight">true</item>
@@ -99,8 +100,8 @@
         <item name="menu_labels_textSize">18sp</item>
     </style>
 
-    <style name="MenuButtonsSmall">
-        <item name="fab_size">mini</item>
+    <style name="FabButton">
+        <item name="fab_shadowColor">#33000000</item>
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
     </style>

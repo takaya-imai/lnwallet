@@ -23,13 +23,12 @@
         android:id="@+id/fab">
 
         <com.github.clans.fab.FloatingActionButton
-            android:layout_height="wrap_content"
-            android:layout_width="wrap_content"
             android:src="@drawable/ic_btc_24dp"
             fab:fab_colorPressed="@color/btc"
             fab:fab_colorNormal="@color/btc"
             fab:fab_colorRipple="@color/btc"
-            android:onClick="goBitcoin"/>
+            android:onClick="goBitcoin"
+            style="@style/FabButton"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_upward_white_18dp"
@@ -37,7 +36,8 @@
             fab:fab_colorPressed="@color/ln"
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
-            style="@style/MenuButtonsSmall"/>
+            style="@style/FabButton"
+            fab:fab_size="mini"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_downward_white_18dp"
@@ -45,7 +45,8 @@
             fab:fab_colorPressed="@color/ln"
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
-            style="@style/MenuButtonsSmall"/>
+            style="@style/FabButton"
+            fab:fab_size="mini"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_fullscreen_white_18dp"
@@ -53,7 +54,8 @@
             fab:fab_colorPressed="@color/ln"
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
-            style="@style/MenuButtonsSmall"/>
+            style="@style/FabButton"
+            fab:fab_size="mini"/>
 
     </com.github.clans.fab.FloatingActionMenu>
 </RelativeLayout>

@@ -46,12 +46,11 @@
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_flash_24dp"
-            android:layout_height="wrap_content"
-            android:layout_width="wrap_content"
             fab:fab_colorPressed="@color/ln"
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
-            android:onClick="goLightning"/>
+            android:onClick="goLightning"
+            style="@style/FabButton"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_upward_white_18dp"
@@ -59,8 +58,9 @@
             fab:fab_colorPressed="@color/btc"
             fab:fab_colorNormal="@color/btc"
             fab:fab_colorRipple="@color/btc"
-            style="@style/MenuButtonsSmall"
-            android:onClick="doPay"/>
+            style="@style/FabButton"
+            android:onClick="doPay"
+            fab:fab_size="mini"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_downward_white_18dp"
@@ -68,8 +68,9 @@
             fab:fab_colorPressed="@color/btc"
             fab:fab_colorNormal="@color/btc"
             fab:fab_colorRipple="@color/btc"
-            style="@style/MenuButtonsSmall"
-            android:onClick="doReceive"/>
+            android:onClick="doReceive"
+            style="@style/FabButton"
+            fab:fab_size="mini"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_fullscreen_white_18dp"
@@ -77,8 +78,9 @@
             fab:fab_colorPressed="@color/btc"
             fab:fab_colorNormal="@color/btc"
             fab:fab_colorRipple="@color/btc"
-            style="@style/MenuButtonsSmall"
-            android:onClick="doQRScan"/>
+            android:onClick="doQRScan"
+            style="@style/FabButton"
+            fab:fab_size="mini"/>
 
     </com.github.clans.fab.FloatingActionMenu>
 </RelativeLayout>
