@@ -147,7 +147,7 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- localTxs
-        preimage <- bag.getPaymentSpec(info.paymentHash).toOption.flatMap(_.preimage)
+        preimage <- bag.getIncomingPaymentSpec(info.paymentHash).map(_.preimage).toOption
         success <- makeTx("htlc-success") apply Scripts.addSigs(info, localSig, remoteSig, preimage)
         successClaim <- makeClaimDelayedOutput(txn = success, "htlc-success-claim-delayed")
       } yield success -> successClaim
@@ -183,8 +183,8 @@ object Helpers { me =>
       // for them is really incoming=false for us and vice versa
 
       val claimSuccessTxs = for {
-        Htlc(false, add, _) <- remoteCommit.spec.htlcs
-        preimage <- bag.getPaymentSpec(add.paymentHash).toOption.flatMap(_.preimage)
+        Htlc(false, add) <- remoteCommit.spec.htlcs
+        preimage <- bag.getIncomingPaymentSpec(add.paymentHash).map(_.preimage).toOption
         info: ClaimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
@@ -194,7 +194,7 @@ object Helpers { me =>
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
-        Htlc(true, add, _) <- remoteCommit.spec.htlcs
+        Htlc(true, add) <- remoteCommit.spec.htlcs
         info: ClaimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 

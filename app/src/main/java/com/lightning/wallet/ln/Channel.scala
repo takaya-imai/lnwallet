@@ -106,25 +106,21 @@ extends StateMachine[ChannelData] { me =>
 
     // NORMAL MODE
 
-    case (htlc: Htlc, norm: NormalData, NORMAL)
+    case (cmd: CMDAddHtlc, norm: NormalData, NORMAL)
       // Throw an exception so we can do something about it
       // GUARD: can't add new outgoing HTLCs when closing is in progress
       if norm.localShutdown.isDefined | norm.remoteShutdown.isDefined =>
-      throw DetailedException(CHANNEL_SHUTDOWN_IN_PROGRESS, htlc)
+      throw DetailedException(CHANNEL_SHUTDOWN_IN_PROGRESS, cmd)
 
-    case (htlc: Htlc, norm: NormalData, NORMAL) =>
+    case (cmd: CMDAddHtlc, norm: NormalData, NORMAL) =>
       val chainHeight: Int = LNParams.broadcaster.currentHeight
-      val c1 = Commitments.sendAdd(norm.commitments, htlc, chainHeight)
+      val c1 = Commitments.sendAdd(norm.commitments, cmd, chainHeight)
       me stayWith norm.copy(commitments = c1)
       process(CMDCommitSig)
 
     case (add: UpdateAddHtlc, norm: NormalData, NORMAL) =>
-      // We have received a new incoming HTLC from them
-      // No extra data since it's an incoming HTLC
-
-      val htlc = Htlc(incoming = true, add, extra = null)
       val chainHeight: Int = LNParams.broadcaster.currentHeight
-      val c1 = Commitments.receiveAdd(norm.commitments, htlc, chainHeight)
+      val c1 = Commitments.receiveAdd(norm.commitments, add, chainHeight)
       me stayWith norm.copy(commitments = c1)
 
     // We're fulfilling an HTLC we got earlier
@@ -217,7 +213,7 @@ extends StateMachine[ChannelData] { me =>
 
       // Let the other node announce our channel availability
       val as = AnnouncementSignatures(commitments.channelId, remote.shortChannelId, localNodeSig, localBitcoinSig)
-      me stayWith norm.copy(commitments = Commitments.addUnackedMessage(commitments, as), announced = true)
+      me stayWith norm.copy(commitments = Commitments.addUnacked(commitments, as), announced = true)
 
     // When initiating or receiving a shutdown message
     // we can't proceed until all local changes are cleared
@@ -313,30 +309,31 @@ extends StateMachine[ChannelData] { me =>
     FundingLocked(cs.channelId, nextPerCommitmentPoint = nextPerCommitmentPoint)
   }
 
+  // We keep sending FundingLocked on reconnects until
   private def becomeNormal(wait: WaitFundingConfirmedData, our: FundingLocked, theirNextPoint: Point) = {
-    val c1 = Commitments.addUnackedMessage(wait.commitments, our).copy(remoteNextCommitInfo = Right apply theirNextPoint)
+    val c1 = wait.commitments.copy(unackedMessages = Vector(our), remoteNextCommitInfo = Right apply theirNextPoint)
     become(NormalData(wait.announce, c1, announced = false, None, None), state1 = NORMAL)
   }
 
   private def initiateShutdown(norm: NormalData) = {
     val local = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
-    me stayWith norm.copy(commitments = Commitments.addUnackedMessage(norm.commitments, local), localShutdown = Some apply local)
+    me stayWith norm.copy(commitments = Commitments.addUnacked(norm.commitments, local), localShutdown = Some apply local)
   }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
     val firstSigned = Closing.makeFirstClosingTx(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
-    become(NegotiationsData(announce, Commitments.addUnackedMessage(cs, firstSigned), firstSigned, local, remote), state1 = NEGOTIATIONS)
+    become(NegotiationsData(announce, Commitments.addUnacked(cs, firstSigned), firstSigned, local, remote), state1 = NEGOTIATIONS)
   }
 
   private def updateNegotiations(neg: NegotiationsData, signed: ClosingSigned) = {
     // Negotiations are in progress, we send our next estimated fee in an attempt of reaching a mutual agreement
-    val neg1 = neg.copy(commitments = Commitments.addUnackedMessage(neg.commitments, signed), localClosingSigned = signed)
+    val neg1 = neg.copy(commitments = Commitments.addUnacked(neg.commitments, signed), localClosingSigned = signed)
     become(neg1, state1 = NEGOTIATIONS)
   }
 
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction, signed: ClosingSigned) = {
     // Negotiations completed successfully and we can broadcast a mutual closing transaction while entering a CLOSING state
-    val closing = ClosingData(neg.announce, Commitments.addUnackedMessage(neg.commitments, signed), mutualClose = closeTx :: Nil)
+    val closing = ClosingData(neg.announce, Commitments.addUnacked(neg.commitments, signed), mutualClose = closeTx :: Nil)
     become(closing, state1 = CLOSING)
   }
 
@@ -393,20 +390,23 @@ object Channel {
 }
 
 trait PaymentListener extends StateMachineListener {
+  // These events will come from counterpary in a while
   def onPaymentFulfilled(fulfill: UpdateFulfillHtlc): Unit
   def onPaymentFailed(fail: FailHtlc): Unit
-  def onPaymentRejected(htlc: Htlc): Unit
-  def onPaymentAdded(htlc: Htlc): Unit
+
+  // These events are our own and immediate
+  def onPaymentRejected(htlc: CMDAddHtlc): Unit
+  def onPaymentAccepted(htlc: CMDAddHtlc): Unit
 
   override def onPostProcess = {
-    case htlc: Htlc => onPaymentAdded(htlc)
+    case cmd: CMDAddHtlc => onPaymentAccepted(cmd)
     case failure: FailHtlc => onPaymentFailed(failure)
     case fulfill: UpdateFulfillHtlc => onPaymentFulfilled(fulfill)
   }
 
   override def onError = {
-    case DetailedException(reason, htlc: Htlc) =>
+    case DetailedException(reason, cmd: CMDAddHtlc) =>
       android.util.Log.d("HTLC Fail", reason)
-      onPaymentRejected(htlc)
+      onPaymentRejected(cmd)
   }
 }

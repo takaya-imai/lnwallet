@@ -14,15 +14,8 @@ import scodec.bits.BitVector
 import scodec.Attempt
 
 
-trait PaymentSpecBag {
-  def addPreimage(preimage: BinaryData): Unit
-  def getPaymentSpec(hash: BinaryData): Try[PaymentSpec]
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
-}
-
-case class Invoice(message: Option[String], nodeId: PublicKey, sum: MilliSatoshi, paymentHash: BinaryData)
-case class PaymentSpec(preimage: Option[BinaryData], amountWithFee: Option[Long], invoice: Invoice, status: String,
-                       incoming: Boolean, expiry: Long, routes: Vector[PaymentRoute], onion: SecretsAndPacket, stamp: Long)
+case class Invoice(message: Option[String], nodeId: PublicKey,
+                   sum: MilliSatoshi, paymentHash: BinaryData)
 
 object Invoice {
   def serialize(invoice: Invoice) = {
@@ -37,6 +30,24 @@ object Invoice {
     Invoice(None, PublicKey(node), MilliSatoshi(sum.toLong), hash)
   }
 }
+
+trait PaymentSpecBag {
+  def addPreimage(preimage: BinaryData): Unit
+  def newPreimage: BinaryData = BinaryData(random getBytes 32)
+  def getIncomingPaymentSpec(hash: BinaryData): Try[IncomingPaymentSpec]
+  def getOutgoingPaymentSpec(hash: BinaryData): Try[OutgoingPaymentSpec]
+}
+
+trait PaymentSpec
+extends Serializable {
+  val invoice: Invoice
+  val status: String
+  val stamp: Long
+}
+
+case class IncomingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: BinaryData) extends PaymentSpec
+case class OutgoingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: Option[BinaryData], expiry: Long,
+                               routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long) extends PaymentSpec
 
 object PaymentSpec {
   // PaymentSpec states
@@ -73,16 +84,16 @@ object PaymentSpec {
 
   def doMakeOutgoingSpec(route: PaymentRoute, rest: Vector[PaymentRoute], finalExpiryBlockCount: Int, inv: Invoice) = {
     val (perHopPayloads, amountWithAllFees, firstExpiry) = buildRoute(inv.sum.amount, finalExpiryBlockCount, route drop 1)
-    PaymentSpec(preimage = None, Some(amountWithAllFees), inv, status = WAIT_VISIBLE, incoming = false, expiry = firstExpiry,
-      routes = rest, onion = buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), System.currentTimeMillis)
+    OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, firstExpiry,
+      routes = rest, buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees)
   }
 
   private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
   private def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
   private def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
 
-  def reduceRoutes(fail: UpdateFailHtlc, spec: PaymentSpec) =
-    parseErrorPacket(spec.onion.sharedSecrets, fail.reason) map {
+  def reduceRoutes(fail: UpdateFailHtlc, spec: OutgoingPaymentSpec) =
+    parseErrorPacket(spec.onion.sharedSecrets, packet = fail.reason) map {
       case ErrorPacket(nodeId, _: Perm) if spec.invoice.nodeId == nodeId =>
         // Permanent error from a final node, nothing we can do here
         Vector.empty
@@ -113,21 +124,18 @@ object PaymentSpec {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
       // We are the final recipient of HTLC, the only viable option
 
-      bag getPaymentSpec add.paymentHash match {
-        case Success(inv) if add.amountMsat > inv.invoice.sum.amount * 2 =>
-          // They have sent too much funds, this is a protective measure
+      bag getIncomingPaymentSpec add.paymentHash match {
+        case Success(spec) if add.amountMsat > spec.invoice.sum.amount * 2 =>
+          // GUARD: they have sent too much funds, this is a protective measure
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(inv) if add.amountMsat < inv.invoice.sum.amount =>
-          // An amount is less than what we requested, this won't do
+        case Success(spec) if add.amountMsat < spec.invoice.sum.amount =>
+          // GUARD: amount is less than what we requested, this won't do
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(inv) if inv.preimage.isDefined =>
-          CMDFulfillHtlc(add.id, inv.preimage.get)
-
-        case _ =>
-          // Could not find a payment preimage
-          failHtlc(sharedSecret, add, UnknownPaymentHash)
+        // We either have a valid spec or we don't
+        case Success(inv) => CMDFulfillHtlc(add.id, inv.preimage)
+        case _ => failHtlc(sharedSecret, add, UnknownPaymentHash)
       }
 
     case (Attempt.Successful(_), _, sharedSecret) =>

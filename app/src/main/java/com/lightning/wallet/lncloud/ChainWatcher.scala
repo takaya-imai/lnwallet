@@ -2,6 +2,7 @@ package com.lightning.wallet.lncloud
 
 import com.lightning.wallet.ln._
 import collection.JavaConverters._
+import com.softwaremill.quicklens._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.lncloud.JavaSerializer._
 import rx.lang.scala.{Subscription, Observable => Obs}
@@ -64,10 +65,12 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     app.getContentResolver.notifyChange(app.db sqlPath PaymentSpecs.table, null)
   }
 
-  def getPaymentSpec(hash: BinaryData): Try[PaymentSpec] = {
-    val basicCursor = app.db.select(PaymentSpecs.selectByHashSql, hash.toString)
-    RichCursor(basicCursor).headTry(_ string PaymentSpecs.data) map deserialize[PaymentSpec]
-  }
+  private def getRawSpec(hash: BinaryData) = RichCursor {
+    app.db.select(PaymentSpecs.selectByHashSql, hash.toString)
+  }.headTry(_ string PaymentSpecs.data)
+
+  def getIncomingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map deserialize[IncomingPaymentSpec]
+  def getOutgoingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map deserialize[OutgoingPaymentSpec]
 
   def putPaymentSpec(spec: PaymentSpec) = app.db txWrap {
     val paymentHashString = spec.invoice.paymentHash.toString
@@ -76,13 +79,13 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     app.getContentResolver.notifyChange(app.db sqlPath PaymentSpecs.table, null)
   }
 
-  def replacePaymentSpec(spec: PaymentSpec) = {
-    val hash: String = spec.invoice.paymentHash.toString
-    app.db.change(PaymentSpecs.updSql, serialize(spec), spec.status, spec.stamp.toString, hash)
-    app.getContentResolver.notifyChange(app.db sqlPath PaymentSpecs.table, null)
-  }
+  def replaceOutgoingPaymentSpec(spec: OutgoingPaymentSpec) =
+    app.db.change(PaymentSpecs.updSql, serialize(spec), spec.status,
+      spec.stamp.toString, spec.invoice.paymentHash.toString)
 
-  def addPreimage(preimage: BinaryData) = sha256(preimage.data) match { case hash =>
-    for (spec <- me getPaymentSpec hash) me replacePaymentSpec spec.copy(preimage = Some apply preimage)
+  def addPreimage(preimage: BinaryData) = {
+    val (hash: BinaryData, complete) = sha256(preimage.data) -> Some(preimage)
+    val completeSpec = getOutgoingPaymentSpec(hash).map(_.modify(_.preimage) setTo complete)
+    completeSpec foreach replaceOutgoingPaymentSpec
   }
 }

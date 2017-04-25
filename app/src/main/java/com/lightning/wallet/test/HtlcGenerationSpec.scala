@@ -116,7 +116,7 @@ class HtlcGenerationSpec {
       println("build a command including the onion")
       val spec = doMakeOutgoingSpec(hops, Vector.empty, currentBlockCount + expiryDeltaBlocks, invoice)
 
-      println(spec.amountWithFee.get > finalAmountMsat)
+      println(spec.amountWithFee > finalAmountMsat)
       println(spec.expiry == currentBlockCount + expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
       println(spec.onion.packet.serialize.length == Sphinx.PacketLength)
 
@@ -148,7 +148,7 @@ class HtlcGenerationSpec {
       println("build a command with no hops")
       val spec = doMakeOutgoingSpec(hops take 1, Vector.empty, currentBlockCount + expiryDeltaBlocks, invoice)
 
-      println(spec.amountWithFee.get == finalAmountMsat)
+      println(spec.amountWithFee == finalAmountMsat)
       println(spec.expiry == currentBlockCount + expiryDeltaBlocks)
       println(spec.onion.packet.serialize.length == Sphinx.PacketLength)
 
