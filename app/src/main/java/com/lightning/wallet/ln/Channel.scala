@@ -391,3 +391,22 @@ object Channel {
   val CLOSING = "Closing"
   val NORMAL = "Normal"
 }
+
+trait PaymentListener extends StateMachineListener {
+  def onPaymentFulfilled(fulfill: UpdateFulfillHtlc): Unit
+  def onPaymentFailed(fail: FailHtlc): Unit
+  def onPaymentRejected(htlc: Htlc): Unit
+  def onPaymentAdded(htlc: Htlc): Unit
+
+  override def onPostProcess = {
+    case htlc: Htlc => onPaymentAdded(htlc)
+    case failure: FailHtlc => onPaymentFailed(failure)
+    case fulfill: UpdateFulfillHtlc => onPaymentFulfilled(fulfill)
+  }
+
+  override def onError = {
+    case DetailedException(reason, htlc: Htlc) =>
+      android.util.Log.d("HTLC Fail", reason)
+      onPaymentRejected(htlc)
+  }
+}

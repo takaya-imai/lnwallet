@@ -82,18 +82,18 @@ object Features {
 
 trait StateMachineListener {
   type Transition = (Any, Any, String, String)
-  def onError: PartialFunction[Throwable, Unit]
-  def onBecome: PartialFunction[Transition, Unit]
-  def onPostProcess: PartialFunction[Any, Unit]
+  def onError: PartialFunction[Throwable, Unit] = none
+  def onPostProcess: PartialFunction[Any, Unit] = none
+  def onBecome: PartialFunction[Transition, Unit] = none
 }
 
 class StateMachineListenerProxy extends StateMachineListener {
   private[this] var listeners = Set.empty[StateMachineListener]
   def removeListeners = listeners = Set.empty[StateMachineListener]
   def addListener(listener: StateMachineListener) = listeners += listener
-  def onError = { case error => for (lst <- listeners) lst onError error }
-  def onBecome = { case trans => for (lst <- listeners) lst onBecome trans }
-  def onPostProcess = { case x => for (lst <- listeners) lst onPostProcess x }
+  override def onError = { case error => for (lst <- listeners) lst onError error }
+  override def onBecome = { case trans => for (lst <- listeners) lst onBecome trans }
+  override def onPostProcess = { case x => for (lst <- listeners) lst onPostProcess x }
 }
 
 abstract class StateMachine[T] { me =>
