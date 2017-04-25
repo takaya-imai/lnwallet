@@ -20,7 +20,7 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
       writer1
   }
 
-  startWith(HandshakeData(reader, BinaryData.empty), HANDSHAKE)
+  become(HandshakeData(reader, BinaryData.empty), HANDSHAKE)
   def doProcess(information: Any) = (data, information, state) match {
     case (HandshakeData(reader1, buffer), bd: BinaryData, HANDSHAKE) =>
       me stayWith HandshakeData(reader1, buffer ++ bd)
