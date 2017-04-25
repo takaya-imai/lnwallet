@@ -68,9 +68,8 @@ extends StateMachine[ChannelData] { me =>
           ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
         // At this point funding tx should be broadcasted
-        // lastSent may contain FundingCreated or FundingLocked
-        become(WaitFundingConfirmedData(wait.announce, commitments,
-          None, wait.lastSent), state1 = WAIT_FUNDING_DONE)
+        become(WaitFundingConfirmedData(wait.announce, None,
+          None, commitments), state1 = WAIT_FUNDING_DONE)
       }
 
     // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED
@@ -80,22 +79,21 @@ extends StateMachine[ChannelData] { me =>
     // FUNDING TX IS BROADCASTED AT THIS POINT
 
     // We have not yet sent a FundingLocked to them but just got a FundingLocked from them so we keep it
-    case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, _, _, _: FundingCreated), WAIT_FUNDING_DONE) =>
+    case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, None, _, _), WAIT_FUNDING_DONE) =>
       me stayWith wait.copy(their = Some apply their)
 
     // We have got a FundingDepthOk blockchain event but have not yet got a confirmation from them
-    case (CMDDepth(LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, None, _), WAIT_FUNDING_DONE) =>
-      val nextPerCommitmentPoint = Generators.perCommitPoint(commitments.localParams.shaSeed, index = 1)
-      val our = FundingLocked(commitments.channelId, nextPerCommitmentPoint)
-      me stayWith wait.copy(lastSent = our)
+    case (CMDDepth(LNParams.minDepth), wait @ WaitFundingConfirmedData(_, _, None, commitments), WAIT_FUNDING_DONE) =>
+      val ourLocked = Some(me makeFundingLocked commitments)
+      me stayWith wait.copy(our = ourLocked)
 
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
-    case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, commitments, _, _: FundingLocked), WAIT_FUNDING_DONE) =>
-      becomeNormal(wait, their.nextPerCommitmentPoint)
+    case (their: FundingLocked, wait @ WaitFundingConfirmedData(_, Some(our), _, _), WAIT_FUNDING_DONE) =>
+      becomeNormal(wait, our, their.nextPerCommitmentPoint)
 
     // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
-    case (CMDDepth(LNParams.minDepth), wait @ WaitFundingConfirmedData(_, commitments, Some(their), _), WAIT_FUNDING_DONE) =>
-      becomeNormal(wait, their.nextPerCommitmentPoint)
+    case (CMDDepth(LNParams.minDepth), wait @ WaitFundingConfirmedData(_, _, Some(their), commitments), WAIT_FUNDING_DONE) =>
+      becomeNormal(wait, me makeFundingLocked commitments, their.nextPerCommitmentPoint)
 
     // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
     case (_: Error, wait: WaitFundingConfirmedData, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
@@ -310,9 +308,14 @@ extends StateMachine[ChannelData] { me =>
       android.util.Log.d("Channel", s"Unhandled $otherwise")
   }
 
-  private def becomeNormal(source: ChannelData with HasCommitments, theirNextPoint: Point) = {
-    val commitments1 = source.commitments.modify(_.remoteNextCommitInfo) setTo Right(theirNextPoint)
-    become(NormalData(source.announce, commitments1, announced = false, None, None), state1 = NORMAL)
+  private def makeFundingLocked(cs: Commitments) = {
+    val nextPerCommitmentPoint = Generators.perCommitPoint(cs.localParams.shaSeed, index = 1)
+    FundingLocked(cs.channelId, nextPerCommitmentPoint = nextPerCommitmentPoint)
+  }
+
+  private def becomeNormal(wait: WaitFundingConfirmedData, our: FundingLocked, theirNextPoint: Point) = {
+    val c1 = Commitments.addUnackedMessage(wait.commitments, our).copy(remoteNextCommitInfo = Right apply theirNextPoint)
+    become(NormalData(wait.announce, c1, announced = false, None, None), state1 = NORMAL)
   }
 
   private def initiateShutdown(norm: NormalData) = {
@@ -327,13 +330,13 @@ extends StateMachine[ChannelData] { me =>
 
   private def updateNegotiations(neg: NegotiationsData, signed: ClosingSigned) = {
     // Negotiations are in progress, we send our next estimated fee in an attempt of reaching a mutual agreement
-    val neg1 = neg.copy(commitments = neg.commitments.copy(unackedMessages = Vector apply signed), localClosingSigned = signed)
+    val neg1 = neg.copy(commitments = Commitments.addUnackedMessage(neg.commitments, signed), localClosingSigned = signed)
     become(neg1, state1 = NEGOTIATIONS)
   }
 
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction, signed: ClosingSigned) = {
     // Negotiations completed successfully and we can broadcast a mutual closing transaction while entering a CLOSING state
-    val closing = ClosingData(neg.announce, neg.commitments.copy(unackedMessages = Vector apply signed), mutualClose = closeTx :: Nil)
+    val closing = ClosingData(neg.announce, Commitments.addUnackedMessage(neg.commitments, signed), mutualClose = closeTx :: Nil)
     become(closing, state1 = CLOSING)
   }
 

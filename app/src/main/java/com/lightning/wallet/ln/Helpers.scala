@@ -11,6 +11,16 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
+  def extractOutgoingMessages(data0: Any, data1: Any) = (data0, data1) match {
+    case (waitFundingConfirmed: WaitFundingConfirmedData, null) => waitFundingConfirmed.our.toVector
+    case (waitFundingSigned: WaitFundingSignedData, null) => Vector(waitFundingSigned.lastSent)
+    case (waitAccept: WaitAcceptData, null) => Vector(waitAccept.lastSent)
+
+    case (current: HasCommitments, next: HasCommitments) => next.commitments.unackedMessages diff current.commitments.unackedMessages
+    case (startupCurrent: HasCommitments, null) => startupCurrent.commitments.unackedMessages
+    case _ => Vector.empty
+  }
+
   def extractPreimages(tx: Transaction): Seq[BinaryData] = tx.txIn.map(_.witness.stack) flatMap {
     case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData) // htlc-timeout
     case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 69 + 20): BinaryData) // claim-htlc-timeout

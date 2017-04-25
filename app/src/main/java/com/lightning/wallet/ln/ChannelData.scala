@@ -34,26 +34,19 @@ case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 // STORABLE CHANNEL DATA
 
 sealed trait ChannelData { val announce: NodeAnnouncement }
-sealed trait HasLastSent { val lastSent: LightningMessage }
 sealed trait HasCommitments { val commitments: Commitments }
 
 case class InitData(announce: NodeAnnouncement) extends ChannelData
-case class ErrorData(announce: NodeAnnouncement, error: BinaryData) extends ChannelData
-
-case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel,
-                          lastSent: OpenChannel) extends ChannelData with HasLastSent
-
-case class WaitFundingTxData(announce: NodeAnnouncement,
-                             cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
+case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel, lastSent: OpenChannel) extends ChannelData
+case class WaitFundingTxData(announce: NodeAnnouncement, cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
                              remoteParams: RemoteParams) extends ChannelData
 
 case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryData, localParams: LocalParams, remoteParams: RemoteParams,
                                  fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
-                                 lastSent: FundingCreated) extends ChannelData with HasLastSent
+                                 lastSent: FundingCreated) extends ChannelData
 
-// lastSent here is either FundingCreated or FundingLocked
-case class WaitFundingConfirmedData(announce: NodeAnnouncement, commitments: Commitments, their: Option[FundingLocked],
-                                    lastSent: LightningMessage) extends ChannelData with HasLastSent with HasCommitments
+case class WaitFundingConfirmedData(announce: NodeAnnouncement, our: Option[FundingLocked], their: Option[FundingLocked],
+                                    commitments: Commitments) extends ChannelData with HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
                       announced: Boolean, localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],
