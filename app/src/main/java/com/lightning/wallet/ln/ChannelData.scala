@@ -26,7 +26,7 @@ abstract class CMDAddHtlc extends Command {
   // this has to be defined beforehand right here
 
   val spec: OutgoingPaymentSpec
-  def whenFailed(reason: String)
+  def whenRejected(reason: String)
   def whenAccepted
 }
 
@@ -118,7 +118,8 @@ case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
                         globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long, htlcs: Set[Htlc] = Set.empty)
+case class CommitmentSpec(feeratePerKw: Long, toLocalMsat: Long,
+                          toRemoteMsat: Long, htlcs: Set[Htlc] = Set.empty)
 
 object CommitmentSpec {
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
@@ -220,9 +221,9 @@ object Commitments {
     } yield htlcIn.add
   }
 
-  // Only expects outgoing PaymentSpec's
   def sendAdd(c: Commitments, cmd: CMDAddHtlc, blockCount: Int) =
     if (cmd.spec.expiry <= blockCount) throw DetailedException(HTLC_EXPIRY_TOO_SOON, cmd)
+    else if (cmd.spec.invoice.sum > LNParams.maxHtlcValue) throw DetailedException(HTLC_VALUE_TOO_LARGE, cmd)
     else if (cmd.spec.amountWithFee < c.remoteParams.htlcMinimumMsat) throw DetailedException(HTLC_VALUE_TOO_SMALL, cmd)
     else {
 

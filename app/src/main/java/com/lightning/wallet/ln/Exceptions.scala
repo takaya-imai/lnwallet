@@ -12,10 +12,11 @@ object Exceptions {
   val HTLC_MISSING_FEES = "Missing fees after accepting an HTLC"
   val HTLC_TOO_MUCH_VALUE_IN_FLIGHT = "In-flight htlcs hold too much value"
   val HTLC_EXPIRY_TOO_SOON = "HTLC expiry is too soon"
+  val HTLC_VALUE_TOO_LARGE = "HTLC value is too large"
   val HTLC_VALUE_TOO_SMALL = "HTLC value is too small"
-  val HTLC_UNEXPECTED_ID = "Unexpected HTLC id"
   val HTLC_INVALID_PREIMAGE = "Invalid HTLC preimage"
   val HTLC_UNKNOWN_PREIMAGE = "Unknown HTLC preimage"
+  val HTLC_UNEXPECTED_ID = "Unexpected HTLC id"
 
   val FEE_FUNDEE_CAN_NOT_PAY = "Fundee won't be able to pay a fee after an update"
 
