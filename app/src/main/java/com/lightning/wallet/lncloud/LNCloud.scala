@@ -9,11 +9,11 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
-import com.lightning.wallet.ln.Tools.{wrap, none}
-import com.lightning.wallet.ln.wire.{LightningMessageCodecs, UpdateFulfillInfo}
+import com.lightning.wallet.ln.Tools.{none, wrap}
+import com.lightning.wallet.ln.wire.{LightningMessageCodecs, UpdateFulfillHtlc}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.NodeAnnouncements
-import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
+import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest
 import rx.lang.scala.schedulers.IOScheduler
@@ -33,7 +33,7 @@ trait LNCloudAct {
 
 case class StandaloneLNCloudData(acts: List[LNCloudAct], url: String)
 abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud { me =>
-  lazy val prefix = LNParams.extendedCloudPrivateKey.publicKey.toString take 8
+  lazy val prefix: String = LNParams.extendedCloudPrivateKey.publicKey.toString take 8
 
   def doProcess(change: Any) = (data, change) match {
     // We need to store it in case of server side error
@@ -70,7 +70,6 @@ abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with 
 
 case class MemoAndInvoice(memo: BlindMemo, invoice: Invoice)
 case class MemoAndSpec(memo: BlindMemo, spec: OutgoingPaymentSpec)
-
 case class LNCloudData(info: Option[MemoAndInvoice], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
 abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
 
@@ -92,12 +91,12 @@ abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudD
       LNParams.channel process SilentAddHtlc(mas.spec)
 
     // Our HTLC has been fulfilled so we can ask for tokens
-    case (LNCloudData(Some(info), _, _), fulfill: UpdateFulfillInfo)
+    case (LNCloudData(Some(info), _, _), fulfill: UpdateFulfillHtlc)
       if fulfill.paymentHash == info.invoice.paymentHash =>
       me resolvePendingPayment info
 
     // No matter what the state is if we have acts and tokens
-    case (LNCloudData(info, token :: tx, act :: ax), CMDStart) =>
+    case (LNCloudData(_, token :: tx, act :: ax), CMDStart) =>
       // 'data' may change while request is on so we always copy it
       def resolveError(srvError: Throwable) = srvError.getMessage match {
         case "tokeninvalid" | "tokenused" => me stayWith data.copy(tokens = tx)
@@ -141,7 +140,7 @@ abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudD
   // LISTENING TO CHANNEL
 
   override def onPostProcess = {
-    case fulfill: UpdateFulfillInfo =>
+    case fulfill: UpdateFulfillHtlc =>
       // This may be our HTLC, check it
       me process fulfill
   }
@@ -193,17 +192,15 @@ trait LNCloud { me =>
     }
   }
 
-  def json2BitVec(raw: JsValue): Option[BitVector] =
-    BitVector fromHex raw.convertTo[String]
+  def json2BitVec(js: JsValue): Option[BitVector] = BitVector fromHex js.convertTo[String]
+  def findNodes(request: String): Obs[NodeAnnouncements] = call(command = "router/nodes/find",
+    _.flatMap(json2BitVec).map(LightningMessageCodecs.nodeAnnouncementCodec.decode(_).require.value),
+    "query" -> request)
 
   // A vector of vectors of hops
   def findRoutes(fromNodeId: BinaryData, toNodeId: PublicKey) = call("router/routes",
     _.flatMap(json2BitVec).map(LightningMessageCodecs.hopsCodec.decode(_).require.value),
     "from" -> fromNodeId.toString, "to" -> toNodeId.toString)
-
-  def findNodes(query: String): Obs[NodeAnnouncements] = call(command = "router/nodes/find",
-    _.flatMap(json2BitVec).map(LightningMessageCodecs.announcementsCodec.decode(_).require.value),
-    "query" -> query).map(_.head)
 }
 
 object LNCloud {

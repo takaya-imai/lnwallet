@@ -17,9 +17,8 @@ case object CMDShutdown extends Command
 case object CMDCommitSig extends Command
 case object CMDClosingFinished extends Command
 
-case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long,
-                          pushMsat: Long, initialFeeratePerKw: Long, localParams: LocalParams,
-                          remoteInit: Init) extends Command
+case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
+                          initialFeeratePerKw: Long, localParams: LocalParams, remoteInit: Init) extends Command
 
 trait CMDAddHtlc extends Command { val spec: OutgoingPaymentSpec }
 case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
@@ -149,14 +148,12 @@ object CommitmentSpec {
       case (spec, _) => spec
     }
 
-    val spec4 = (spec3 /: remoteChanges) {
+    (spec3 /: remoteChanges) {
       case (spec, msg: UpdateFailHtlc) => fail(spec, in = false, msg)
       case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, in = false, msg)
       case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
       case (spec, _) => spec
     }
-
-    spec4
   }
 }
 
@@ -201,8 +198,6 @@ object Commitments {
 
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
-  def revocationPreimage(seed: BinaryData, index: Long) = ShaChain.shaChainFromSeed(seed, ShaChain.largestIndex - index)
-  def revocationHash(seed: BinaryData, index: Long): BinaryData = Crypto sha256 revocationPreimage(seed, index)
 
   def getHtlcCrossSigned(commitments: Commitments, incomingRelativeToLocal: Boolean, htlcId: Long) = {
     val remoteSigned = CommitmentSpec.findHtlcById(commitments.localCommit.spec, htlcId, incomingRelativeToLocal)
@@ -269,9 +264,9 @@ object Commitments {
     }
 
   def sendFulfill(c: Commitments, cmd: CMDFulfillHtlc) = {
-    val fulfill = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
+    val ok = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
     getHtlcCrossSigned(c, incomingRelativeToLocal = true, htlcId = cmd.id) match {
-      case Some(add) if sha256(cmd.preimage) == add.paymentHash => addLocalProposal(c, fulfill)
+      case Some(add) if ok.paymentHash == add.paymentHash => addLocalProposal(c, ok)
       case Some(add) => throw ChannelException(HTLC_INVALID_PREIMAGE)
       case _ => throw ChannelException(HTLC_UNKNOWN_PREIMAGE)
     }
@@ -283,9 +278,9 @@ object Commitments {
     if (Changes all c.remoteChanges contains fulfill) c
     else doReceiveFulfill(c, fulfill)
 
-  private def doReceiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
-    getHtlcCrossSigned(c, incomingRelativeToLocal = false, htlcId = fulfill.id) match {
-      case Some(add) if sha256(fulfill.paymentPreimage.data) == add.paymentHash => addRemoteProposal(c, fulfill)
+  private def doReceiveFulfill(c: Commitments, ok: UpdateFulfillHtlc) =
+    getHtlcCrossSigned(c, incomingRelativeToLocal = false, htlcId = ok.id) match {
+      case Some(add) if ok.paymentHash == add.paymentHash => addRemoteProposal(c, ok)
       case Some(add) => throw ChannelException(HTLC_INVALID_PREIMAGE)
       case _ => throw ChannelException(HTLC_UNKNOWN_PREIMAGE)
     }

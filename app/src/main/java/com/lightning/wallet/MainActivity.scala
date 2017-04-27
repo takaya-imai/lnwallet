@@ -37,7 +37,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       findViewById(R.id.mainPassForm) ::
       findViewById(R.id.mainProgress) :: Nil
 
-  lazy val makeKit = Future {
+  lazy val makeKit = //Future {
     app.kit = new app.WalletKit {
       val stream = new FileInputStream(app.walletFile)
       val proto = try WalletProtobufSerializer parseToProto stream finally stream.close
@@ -51,7 +51,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         exitTo apply classOf[LNActivity]
       }
     }
-  }
+  //}
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
@@ -103,18 +103,15 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         // Also happens if app has become inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
         mainPassCheck setOnClickListener onButtonTap {
-          val proceed = makeKit.map(initialized => setSeed)
+          //val proceed = makeKit.map(initialized => setSeed)
+          val proceed = { makeKit; setSeed; Future(1); }
           <<(proceed, wrong)(passOk => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 
       case (true, true, false) =>
-        // Should not happen but whatever
-        setVis(View.GONE, View.VISIBLE, View.GONE)
-        mainPassCheck setOnClickListener onButtonTap {
-          <(setSeed, wrong)(passOk => app.kit.startAsync)
-          setVis(View.GONE, View.GONE, View.VISIBLE)
-        }
+        // This is not right!
+        System exit 0
     }
 
   def wrong(error: Throwable) = {

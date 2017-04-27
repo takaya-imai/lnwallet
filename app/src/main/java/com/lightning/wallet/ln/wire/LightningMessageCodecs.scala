@@ -4,11 +4,11 @@ import java.net._
 import scodec.codecs._
 import com.lightning.wallet.ln.Exceptions._
 
-import scodec.{Attempt, Codec, Err}
-import scodec.bits.{BitVector, ByteVector}
-import fr.acinq.bitcoin.{BinaryData, Crypto}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
-import com.lightning.wallet.ln.Tools.BinaryDataList
+import fr.acinq.bitcoin.{BinaryData, Crypto}
+import scodec.bits.{BitVector, ByteVector}
+import scodec.{Attempt, Codec, Err}
+
 import com.lightning.wallet.ln.crypto.Sphinx
 import java.math.BigInteger
 
@@ -27,8 +27,8 @@ object LightningMessageCodecs { me =>
     case Attempt.Successful(bin) => BinaryData(bin.toByteArray)
   }
 
-  def deserializationResult(binary: BinaryData) =
-    lightningMessageCodec decode BitVector(binary.data) match {
+  def deserializationResult(transferred: BinaryData) =
+    lightningMessageCodec decode BitVector(transferred.data) match {
       case Attempt.Failure(_) => throw ChannelException(DESERIALIZATION_ERROR)
       case Attempt.Successful(result) => result.value
     }
@@ -116,21 +116,6 @@ object LightningMessageCodecs { me =>
     } yield decodeResult map vec2Bin map PublicKey.apply
   )
 
-  type BinaryDataOption = Option[BinaryData]
-  val optionalSignature = Codec[BinaryDataOption](
-
-    encoder = (_: BinaryDataOption) match {
-      case Some(sig) => bytes(64) encode bin2Vec(me der2wire sig)
-      case None => bytes(64) encode ByteVector.fill[Byte](64)(0)
-    },
-
-    decoder = (wireEncoded: BitVector) => for {
-      decodeResult <- bytes(64) decode wireEncoded
-    } yield decodeResult map vec2Bin map { signature: BinaryData =>
-      if (signature forall 0.==) None else Some(me wire2der signature)
-    }
-  )
-
   private val uint64: Codec[Long] = int64.narrow(long =>
     if (long < 0) Attempt failure Err(s"Overflow for $long")
     else Attempt successful long, identity)
@@ -148,10 +133,8 @@ object LightningMessageCodecs { me =>
 
   val rgb: Codec[RGB] = bytes(3).xmap(bv2Rgb, rgb2Bv)
   def binarydata(size: Int): Codec[BinaryData] = bytes(size).xmap(vec2Bin, bin2Vec)
-  val listofsocketaddresses: Codec[InetSocketAddressList] = listOfN(uint16, socketaddress)
   val varsizebinarydata: Codec[BinaryData] = variableSizeBytesLong(value = bytes.xmap(vec2Bin, bin2Vec), size = uint32)
   val zeropaddedstring: Codec[String] = fixedSizeBytes(32, utf8).xmap(_.takeWhile(_ != '\u0000'), identity)
-  val listofsignatures: Codec[BinaryDataList] = listOfN(uint16, signature)
 
   // Data formats
 
@@ -253,7 +236,7 @@ object LightningMessageCodecs { me =>
   private val commitSig =
     (binarydata(32) withContext "channelId") ::
       (signature withContext "signature") ::
-      (listofsignatures withContext "htlcSignatures")
+      (listOfN(uint16, signature) withContext "htlcSignatures")
 
   private val revokeAndAck =
     (binarydata(32) withContext "channelId") ::
@@ -291,7 +274,7 @@ object LightningMessageCodecs { me =>
       (rgb withContext "rgbColor") ::
       (zeropaddedstring withContext "alias") ::
       (varsizebinarydata withContext "features") ::
-      (listofsocketaddresses withContext "addresses")
+      (listOfN(uint16, socketaddress) withContext "addresses")
 
   private val nodeAnnouncement =
     (signature withContext "signature") ::
@@ -312,7 +295,6 @@ object LightningMessageCodecs { me =>
 
   val channelUpdateCodec: Codec[ChannelUpdate] = channelUpdate.as[ChannelUpdate]
   val nodeAnnouncementCodec: Codec[NodeAnnouncement] = nodeAnnouncement.as[NodeAnnouncement]
-  val announcementsCodec: Codec[NodeAnnouncements] = vectorOfN(uint16, nodeAnnouncementCodec)
 
   private val hop =
     (publicKey withContext "nodeId") ::

@@ -76,21 +76,6 @@ class WireSpec {
     }
 
     {
-      println("encode/decode with optional signature codec")
-
-      {
-        val sig = randomSignature
-        val wire = LightningMessageCodecs.optionalSignature.encode(Some(sig)).toOption.get
-        val Some(sig1) = LightningMessageCodecs.optionalSignature.decode(wire).toOption.get.value
-        println(sig1 == sig)
-      }
-      {
-        val wire = LightningMessageCodecs.optionalSignature.encode(None).toOption.get
-        println(LightningMessageCodecs.optionalSignature.decode(wire).toOption.get.value == None)
-      }
-    }
-
-    {
       println("encode/decode with scalar codec")
 
       val value = Scalar(randomBytes(32))

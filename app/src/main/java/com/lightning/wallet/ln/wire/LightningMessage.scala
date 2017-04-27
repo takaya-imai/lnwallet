@@ -3,7 +3,7 @@ package com.lightning.wallet.ln.wire
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import com.lightning.wallet.ln.Tools.BinaryDataList
-import fr.acinq.bitcoin.BinaryData
+import fr.acinq.bitcoin.{BinaryData, Crypto}
 
 
 trait LightningMessage
@@ -47,7 +47,9 @@ case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expi
 
 case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
-case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId
+case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId {
+  val paymentHash = Crypto sha256 paymentPreimage.data
+}
 
 
 case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: BinaryDataList) extends ChannelMessage
@@ -72,6 +74,3 @@ case class ChannelUpdate(signature: BinaryData, shortChannelId: Long, timestamp:
 // Internal: receiving lists of lists of Hop's from a server
 case class Hop(nodeId: PublicKey, nextNodeId: PublicKey, lastUpdate: ChannelUpdate)
 case class PerHopPayload(channel_id: Long, amt_to_forward: Long, outgoing_cltv_value: Int)
-
-case class UpdateFulfillInfo(paymentHash: BinaryData, channelId: BinaryData,
-                             id: Long, paymentPreimage: BinaryData)
