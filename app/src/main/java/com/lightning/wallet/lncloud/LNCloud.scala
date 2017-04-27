@@ -9,14 +9,14 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
+import com.lightning.wallet.ln.Tools.{wrap, none}
 import com.lightning.wallet.ln.wire.{LightningMessageCodecs, UpdateFulfillInfo}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.NodeAnnouncements
 import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
-import com.lightning.wallet.lncloud.LNCloudSaver.ClearToken
+import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest
 import rx.lang.scala.schedulers.IOScheduler
-import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
@@ -74,13 +74,14 @@ case class MemoAndSpec(memo: BlindMemo, spec: OutgoingPaymentSpec)
 case class LNCloudData(info: Option[MemoAndInvoice], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
 abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
 
-  def reset = me stayWith data.copy(info = None)
-  def doProcess(change: Any) = (data, change) match {
+  private def reset = me stayWith data.copy(info = None)
+  private def resetStart = wrap(me process CMDStart)(reset)
 
+  def doProcess(change: Any) = (data, change) match {
     case (LNCloudData(None, Nil, _), CMDStart) => for {
-      // Start request with empty tokens asks for a payment
-      Tuple2(invoice, memo) <- retry(getInfo, pickInc, 2 to 4)
-      Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 4)
+      // Start request with empty tokens asks for a new payment
+      Tuple2(invoice, memo) <- retry(getInfo, pickInc, 2 to 4 by 2)
+      Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 4 by 2)
     } me process MemoAndSpec(memo, spec)
 
     case (LNCloudData(None, _, _), mas: MemoAndSpec) =>
@@ -90,7 +91,7 @@ abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudD
       me stayWith data.copy(info = Some apply memoAndInvoice)
       LNParams.channel process SilentAddHtlc(mas.spec)
 
-    // Our HTLC has been confirmed so we can ask for tokens
+    // Our HTLC has been fulfilled so we can ask for tokens
     case (LNCloudData(Some(info), _, _), fulfill: UpdateFulfillInfo)
       if fulfill.paymentHash == info.invoice.paymentHash =>
       me resolvePendingPayment info
@@ -104,7 +105,7 @@ abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudD
       }
 
       val result = act.runDefault(token)
-      // Only in a case of a success we remove the used data and try again
+      // We don't try again in case of an error to avoid recursion
       result.foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), none)
       result.foreach(_ => me process CMDStart, resolveError)
 
@@ -112,14 +113,14 @@ abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudD
     // it may be finished already so we ask the bag
     case (LNCloudData(Some(info), _, _), CMDStart) =>
       bag getOutgoingPaymentSpec info.invoice.paymentHash match {
-        case Success(spec1) if spec1.preimage.isDefined => me resolvePendingPayment info
-        case Success(spec1) if spec1.status == PaymentSpec.PERMANENT_FAIL => reset
+        case Success(spec) if spec.preimage.isDefined => me resolvePendingPayment info
+        case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => resetStart
         case Success(_) => me stayWith data
-        case _ => reset
+        case _ => resetStart
       }
 
     case (_, act: LNCloudAct) =>
-      // We must always record an incoming acts
+      // We must always record incoming acts
       val acts1 = act :: data.acts take 1000
       me stayWith data.copy(acts = acts1)
       me process CMDStart

@@ -67,7 +67,7 @@ object ChannelSaver extends Saver {
   val KEY = "channel"
 }
 
-object LNCloudSaver extends Saver {
+object DefaultLNCloudSaver extends Saver {
   type ClearToken = (String, String, String)
   def tryGetObject = tryGet[LNCloudData]
   val KEY = "lnCloud"
