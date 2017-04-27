@@ -21,7 +21,7 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
   }
 
   become(HandshakeData(reader, BinaryData.empty), HANDSHAKE)
-  def doProcess(information: Any) = (data, information, state) match {
+  def doProcess(change: Any): Unit = (data, change, state) match {
     case (HandshakeData(reader1, buffer), bd: BinaryData, HANDSHAKE) =>
       me stayWith HandshakeData(reader1, buffer ++ bd)
       process(Ping)
@@ -89,9 +89,9 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
       me consume plaintext
       process(Ping)
 
-    case otherwise =>
+    case _ =>
       // Let know if received an unhandled message
-      android.util.Log.d("TransportHandler", s"Unhandled $otherwise")
+      android.util.Log.d("TransportHandler", s"Unhandled $data : $change")
   }
 }
 

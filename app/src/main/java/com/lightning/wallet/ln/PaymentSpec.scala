@@ -14,8 +14,10 @@ import scodec.bits.BitVector
 import scodec.Attempt
 
 
-case class Invoice(message: Option[String], nodeId: PublicKey,
-                   sum: MilliSatoshi, paymentHash: BinaryData)
+case class Invoice(message: Option[String], nodeId: PublicKey, sum: MilliSatoshi, paymentHash: BinaryData)
+case class IncomingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: BinaryData) extends PaymentSpec
+case class OutgoingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: Option[BinaryData], expiry: Long,
+                               routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long) extends PaymentSpec
 
 object Invoice {
   def serialize(invoice: Invoice) = {
@@ -45,16 +47,12 @@ extends Serializable {
   val stamp: Long
 }
 
-case class IncomingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: BinaryData) extends PaymentSpec
-case class OutgoingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: Option[BinaryData], expiry: Long,
-                               routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long) extends PaymentSpec
-
 object PaymentSpec {
   // PaymentSpec states
   val WAIT_HIDDEN = "WaitHidden"
   val WAIT_VISIBLE = "WaitVisible"
   val TEMPORARY_FAIL = "TemporaryFail"
-  val PREMANENT_FAIL = "PermanentFail"
+  val PERMANENT_FAIL = "PermanentFail"
   val SUCCESS = "Success"
 
   // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis

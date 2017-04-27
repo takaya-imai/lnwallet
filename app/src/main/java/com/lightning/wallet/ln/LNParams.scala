@@ -7,9 +7,10 @@ import fr.acinq.bitcoin.Crypto.{sha256, PrivateKey}
 
 object LNParams {
   var seedHash: String = _
+  var channel: Channel = _
+  var broadcaster: Broadcaster = _
   var extendedPrivateKey: ExtendedPrivateKey = _
   var extendedCloudPrivateKey: ExtendedPrivateKey = _
-  var broadcaster: Broadcaster = _
 
   def hasSeed: Boolean = seedHash != null
   def setup(seed: BinaryData): Unit = generate(seed) match { case master =>

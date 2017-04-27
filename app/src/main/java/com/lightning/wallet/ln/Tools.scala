@@ -104,6 +104,7 @@ abstract class StateMachine[T] { me =>
   var data: T = _
 
   def become(data1: T, state1: String) = {
+    android.util.Log.d("StateMachine", s"$state1 : $data1")
     val transition = (data, data1, state, state1)
     wrap { data = data1 } { state = state1 }
     events onBecome transition

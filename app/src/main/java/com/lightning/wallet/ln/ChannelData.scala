@@ -17,20 +17,15 @@ case object CMDShutdown extends Command
 case object CMDCommitSig extends Command
 case object CMDClosingFinished extends Command
 
-case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
-                          initialFeeratePerKw: Long, localParams: LocalParams,
+case class CMDOpenChannel(temporaryChannelId: BinaryData, fundingSatoshis: Long,
+                          pushMsat: Long, initialFeeratePerKw: Long, localParams: LocalParams,
                           remoteInit: Init) extends Command
 
-abstract class CMDAddHtlc extends Command {
-  // What we should do when it's accepted or failed
-  // this has to be defined beforehand right here
+trait CMDAddHtlc extends Command { val spec: OutgoingPaymentSpec }
+case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
+case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 
-  val spec: OutgoingPaymentSpec
-  def whenRejected(reason: String)
-  def whenAccepted
-}
-
-case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, failureCode: Int) extends Command
+case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends Command
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 case class CMDFundingSpent(tx: Transaction) extends Command
@@ -43,13 +38,15 @@ sealed trait ChannelData { val announce: NodeAnnouncement }
 sealed trait HasCommitments { val commitments: Commitments }
 
 case class InitData(announce: NodeAnnouncement) extends ChannelData
-case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel, lastSent: OpenChannel) extends ChannelData
-case class WaitFundingTxData(announce: NodeAnnouncement, cmd: CMDOpenChannel, remoteFirstPerCommitmentPoint: Point,
+case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel,
+                          openChannelMessage: OpenChannel) extends ChannelData
+
+case class WaitFundingTxData(announce: NodeAnnouncement, cmd: CMDOpenChannel, firstRemotePoint: Point,
                              remoteParams: RemoteParams) extends ChannelData
 
 case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryData, localParams: LocalParams, remoteParams: RemoteParams,
                                  fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
-                                 lastSent: FundingCreated) extends ChannelData
+                                 fundingCreatedMessage: FundingCreated) extends ChannelData
 
 case class WaitFundingConfirmedData(announce: NodeAnnouncement, our: Option[FundingLocked], their: Option[FundingLocked],
                                     commitments: Commitments) extends ChannelData with HasCommitments
@@ -196,8 +193,8 @@ object Commitments {
   def addLocalProposal(c: Commitments, proposal: LightningMessage): Commitments =
     c.modifyAll(_.localChanges.proposed, _.unackedMessages).using(_ :+ proposal)
 
-  def addUnacked(c: Commitments, message: LightningMessage) =
-    c.modify(_.unackedMessages).using(_ :+ message)
+  def addUnacked(c: Commitments, proposal: LightningMessage) =
+    c.modify(_.unackedMessages).using(_ :+ proposal)
 
   def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filter { case _: RevokeAndAck => false case _ => true } :+ r
   def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
@@ -232,14 +229,13 @@ object Commitments {
         cmd.spec.invoice.paymentHash, cmd.spec.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
-      val reduced: CommitmentSpec = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
+      val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.remoteParams.dustLimitSatoshis), reduced).amount else 0
-
-      // The rest of the guards
       val htlcValueInFlightOverflow = reduced.htlcs.map(_.add.amountMsat).sum > c1.remoteParams.maxHtlcValueInFlightMsat
       val feesOverflow = reduced.toRemoteMsat / satFactor - c1.remoteParams.channelReserveSatoshis - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
+      // The rest of the guards
       if (htlcValueInFlightOverflow) throw DetailedException(HTLC_TOO_MUCH_VALUE_IN_FLIGHT, cmd)
       else if (acceptedHtlcsOverflow) throw DetailedException(HTLC_TOO_MANY_ACCEPTED, cmd)
       else if (feesOverflow) throw DetailedException(HTLC_MISSING_FEES, cmd)
@@ -302,7 +298,7 @@ object Commitments {
   }
 
   def sendFailMalformed(c: Commitments, cmd: CMDFailMalformedHtlc) = {
-    val fail = UpdateFailMalformedHtlc(c.channelId, cmd.id, cmd.onionHash, cmd.failureCode)
+    val fail = UpdateFailMalformedHtlc(c.channelId, cmd.id, cmd.onionHash, cmd.code)
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id)
     if (found.isEmpty) throw ChannelException(HTLC_UNEXPECTED_ID)
     else addLocalProposal(c, fail)

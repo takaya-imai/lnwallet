@@ -61,23 +61,21 @@ trait Saver {
   protected def save(snap: Serializable) = StorageWrap.put(serialize(snap), KEY)
 }
 
-object BlindTokensSaver extends Saver {
-  type ClearToken = (String, String, String) // point, clear token, sig
-  type Snapshot = (Set[ClearToken], List[String], BlindProgress)
-  def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
-  val KEY = "blindTokens"
+object ChannelSaver extends Saver {
+  type Snapshot = (String, ChannelData)
+  def tryGetObject = tryGet[Snapshot]
+  val KEY = "channel"
 }
 
-object ChannelSaver extends Saver {
-  def tryGetObject: Try[Snapshot] = tryGet[Snapshot]
-  type Snapshot = (String, ChannelData)
-  val KEY = "channel"
+object LNCloudSaver extends Saver {
+  type ClearToken = (String, String, String)
+  def tryGetObject = tryGet[LNCloudData]
+  val KEY = "lnCloud"
 }
 
 object StandaloneCloudSaver extends Saver {
   def remove = app.db.change(Storage.killSql, KEY)
-  def saveUrl(url: String) = StorageWrap.put(url, KEY)
-  def tryGetUrl: Try[String] = StorageWrap.get(KEY)
+  def tryGetObject = tryGet[StandaloneLNCloudData]
   val KEY = "standaloneCloud"
 }
 
