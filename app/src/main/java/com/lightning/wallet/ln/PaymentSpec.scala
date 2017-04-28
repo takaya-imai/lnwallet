@@ -65,8 +65,8 @@ object PaymentSpec {
 
     (startConditions /: hops.reverse) { case (Tuple3(payloads, msat, expiry), hop) =>
       val feeMsat = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
-      val perHopPayload1 = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
-      (perHopPayload1, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
+      val perHopPayload = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
+      (perHopPayload, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
     }
   }
 
@@ -77,11 +77,22 @@ object PaymentSpec {
   }
 
   def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice) = rest.headOption map { route =>
+    val (onion, amount, expiry) = makeOutgoingParams(route, inv)
+
     doMakeOutgoingSpec(route, rest.tail, LNParams.broadcaster.currentHeight + LNParams.minExpiryBlocks, inv)
   }
 
   def doMakeOutgoingSpec(route: PaymentRoute, rest: Vector[PaymentRoute], finalExpiryBlockCount: Int, inv: Invoice) = {
     val (perHopPayloads, amountWithAllFees, firstExpiry) = buildRoute(inv.sum.amount, finalExpiryBlockCount, route drop 1)
+    OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, firstExpiry,
+      routes = rest, buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees)
+  }
+
+  def makeOutgoingParams(route: PaymentRoute, inv: Invoice) = {
+    val finalExpiryBlockCount = LNParams.broadcaster.currentHeight + LNParams.minExpiryBlocks
+    val (perHopPayloads, amountWithAllFees, firstExpiry) = buildRoute(inv.sum.amount, finalExpiryBlockCount, route drop 1)
+    (buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees, firstExpiry)
+
     OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, firstExpiry,
       routes = rest, buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees)
   }
