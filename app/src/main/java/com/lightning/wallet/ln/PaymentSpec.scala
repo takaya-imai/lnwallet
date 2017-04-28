@@ -14,6 +14,13 @@ import scodec.bits.BitVector
 import scodec.Attempt
 
 
+trait PaymentSpec
+  extends Serializable {
+  val invoice: Invoice
+  val status: String
+  val stamp: Long
+}
+
 case class Invoice(message: Option[String], nodeId: PublicKey, sum: MilliSatoshi, paymentHash: BinaryData)
 case class IncomingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: BinaryData) extends PaymentSpec
 case class OutgoingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: Option[BinaryData], expiry: Long,
@@ -38,13 +45,6 @@ trait PaymentSpecBag {
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getIncomingPaymentSpec(hash: BinaryData): Try[IncomingPaymentSpec]
   def getOutgoingPaymentSpec(hash: BinaryData): Try[OutgoingPaymentSpec]
-}
-
-trait PaymentSpec
-extends Serializable {
-  val invoice: Invoice
-  val status: String
-  val stamp: Long
 }
 
 object PaymentSpec {

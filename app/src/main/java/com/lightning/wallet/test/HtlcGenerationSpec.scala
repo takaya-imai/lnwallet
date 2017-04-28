@@ -114,7 +114,7 @@ class HtlcGenerationSpec {
 
     {
       println("build a command including the onion")
-      val spec = doMakeOutgoingSpec(hops, Vector.empty, currentBlockCount + expiryDeltaBlocks, invoice)
+      val spec = makeOutgoingSpec(Vector(hops), invoice, currentBlockCount + expiryDeltaBlocks).get
 
       println(spec.amountWithFee > finalAmountMsat)
       println(spec.expiry == currentBlockCount + expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
@@ -146,7 +146,7 @@ class HtlcGenerationSpec {
 
     {
       println("build a command with no hops")
-      val spec = doMakeOutgoingSpec(hops take 1, Vector.empty, currentBlockCount + expiryDeltaBlocks, invoice)
+      val spec = makeOutgoingSpec(Vector(hops take 1), invoice, currentBlockCount + expiryDeltaBlocks).get
 
       println(spec.amountWithFee == finalAmountMsat)
       println(spec.expiry == currentBlockCount + expiryDeltaBlocks)

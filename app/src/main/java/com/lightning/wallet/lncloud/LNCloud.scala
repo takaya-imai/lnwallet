@@ -186,12 +186,10 @@ trait LNCloud { me =>
       case _ => throw new ProtocolException
     }
 
-  def makeOutgoingSpec(invoice: Invoice) = {
-    val from = LNParams.channel.data.announce.nodeId
-    findRoutes(from, invoice.nodeId) map { routes =>
-      PaymentSpec.makeOutgoingSpec(routes, invoice)
+  def makeOutgoingSpec(invoice: Invoice) =
+    findRoutes(LNParams.channel.data.announce.nodeId, invoice.nodeId) map { routes =>
+      PaymentSpec.makeOutgoingSpec(routes, invoice, firstExpiry = LNParams.htlcExpiry)
     }
-  }
 
   def json2BitVec(js: JsValue): Option[BitVector] = BitVector fromHex js.convertTo[String]
   def findNodes(request: String): Obs[NodeAnnouncements] = call(command = "router/nodes/find",
