@@ -76,25 +76,16 @@ object PaymentSpec {
     makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
   }
 
-  def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice) = rest.headOption map { route =>
-    val (onion, amount, expiry) = makeOutgoingParams(route, inv)
-
-    doMakeOutgoingSpec(route, rest.tail, LNParams.broadcaster.currentHeight + LNParams.minExpiryBlocks, inv)
-  }
-
-  def doMakeOutgoingSpec(route: PaymentRoute, rest: Vector[PaymentRoute], finalExpiryBlockCount: Int, inv: Invoice) = {
-    val (perHopPayloads, amountWithAllFees, firstExpiry) = buildRoute(inv.sum.amount, finalExpiryBlockCount, route drop 1)
-    OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, firstExpiry,
+  def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, firstExpiry: Int) = rest.headOption map { route =>
+    val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(inv.sum.amount, firstExpiry, route drop 1)
+    OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, expiryWithAllDeltas,
       routes = rest, buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees)
   }
 
-  def makeOutgoingParams(route: PaymentRoute, inv: Invoice) = {
-    val finalExpiryBlockCount = LNParams.broadcaster.currentHeight + LNParams.minExpiryBlocks
-    val (perHopPayloads, amountWithAllFees, firstExpiry) = buildRoute(inv.sum.amount, finalExpiryBlockCount, route drop 1)
-    (buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees, firstExpiry)
-
-    OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, firstExpiry,
-      routes = rest, buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees)
+  def updateOutgoingSpec(spec: OutgoingPaymentSpec, firstExpiry: Int) = spec.routes.headOption map { route =>
+    val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(spec.invoice.sum.amount, firstExpiry, route drop 1)
+    spec.copy(routes = spec.routes.tail, onion = buildOnion(route.map(_.nextNodeId), perHopPayloads, spec.invoice.paymentHash),
+      expiry = expiryWithAllDeltas, amountWithFee = amountWithAllFees)
   }
 
   private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
