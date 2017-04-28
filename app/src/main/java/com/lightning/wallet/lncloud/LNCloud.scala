@@ -32,8 +32,8 @@ trait LNCloudAct {
 }
 
 case class StandaloneLNCloudData(acts: List[LNCloudAct], url: String)
-abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud { me =>
-  lazy val prefix: String = LNParams.extendedCloudPrivateKey.publicKey.toString take 8
+class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud { me =>
+  lazy val prefix = LNParams.extendedCloudPrivateKey.publicKey.toString take 8
 
   def doProcess(change: Any) = (data, change) match {
     // We need to store it in case of server side error
@@ -71,7 +71,7 @@ abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with 
 case class MemoAndInvoice(memo: BlindMemo, invoice: Invoice)
 case class MemoAndSpec(memo: BlindMemo, spec: OutgoingPaymentSpec)
 case class LNCloudData(info: Option[MemoAndInvoice], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
-abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
+class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
 
   private def reset = me stayWith data.copy(info = None)
   private def resetStart = wrap(me process CMDStart)(reset)
@@ -88,6 +88,7 @@ abstract class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudD
       // We just hope our HTLC gets accepted but will also catch an error
       val memoAndInvoice = MemoAndInvoice(mas.memo, mas.spec.invoice)
       me stayWith data.copy(info = Some apply memoAndInvoice)
+      // Sending a silent command ensures no alerts on ui
       LNParams.channel process SilentAddHtlc(mas.spec)
 
     // Our HTLC has been fulfilled so we can ask for tokens

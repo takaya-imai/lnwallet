@@ -105,9 +105,6 @@ trait InfoActivity extends ToolbarActivity { me =>
   }
 
   class NextTracker(initBlocksLeft: Int) extends MyPeerDataListener {
-    // We only add a SYNC item if we have a large enough lag (more than a day), otherwise no updates are visible
-    if (initBlocksLeft > blocksPerDay) add(app.plurOrZero(syncOps, initBlocksLeft / blocksPerDay), Informer.SYNC)
-
     def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
       if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.SYNC)
       if (blocksLeft < 1) add(me getString info_progress_done, Informer.SYNC).timer.schedule(me del Informer.SYNC, 5000)
@@ -115,6 +112,11 @@ trait InfoActivity extends ToolbarActivity { me =>
       if (blocksLeft < 1) app.kit.wallet saveToFile app.walletFile
       runOnUiThread(ui)
     }
+
+    // We only add a SYNC item if we have a large enough
+    // lag (more than two days), otherwise no updates are visible
+    private val text = app.plurOrZero(syncOps, initBlocksLeft / blocksPerDay)
+    if (initBlocksLeft > blocksPerDay * 2) add(text, Informer.SYNC)
   }
 
   // Settings and helper functions
@@ -350,7 +352,7 @@ trait TimerActivity extends AppCompatActivity { me =>
 
   // Utils
   def hideKeys(run: => Unit) = try {
-    timer.schedule(me anyToRunnable run, 250)
+    timer.schedule(me anyToRunnable run, 225)
     val mgr = getSystemService(INPUT_METHOD_SERVICE).asInstanceOf[InputMethodManager]
     mgr.hideSoftInputFromWindow(getCurrentFocus.getWindowToken, HIDE_NOT_ALWAYS)
   } catch none

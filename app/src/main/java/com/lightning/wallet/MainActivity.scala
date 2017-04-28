@@ -7,13 +7,11 @@ import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.ndeftools.util.activity.NfcReaderActivity
 import org.bitcoinj.wallet.WalletProtobufSerializer
-import concurrent.ExecutionContext.Implicits.global
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
 import java.io.FileInputStream
-import scala.concurrent.Future
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
@@ -37,7 +35,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       findViewById(R.id.mainPassForm) ::
       findViewById(R.id.mainProgress) :: Nil
 
-  lazy val makeKit = //Future {
+  lazy val prepareWalletKit =
     app.kit = new app.WalletKit {
       val stream = new FileInputStream(app.walletFile)
       val proto = try WalletProtobufSerializer parseToProto stream finally stream.close
@@ -51,7 +49,6 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         exitTo apply classOf[LNActivity]
       }
     }
-  //}
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
@@ -103,9 +100,9 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         // Also happens if app has become inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
         mainPassCheck setOnClickListener onButtonTap {
-          //val proceed = makeKit.map(initialized => setSeed)
-          val proceed = { makeKit; setSeed; Future(1); }
-          <<(proceed, wrong)(passOk => app.kit.startAsync)
+          // Not enclosing prepare in try to explicitly
+          // display an error page instead of just hanging
+          timer.schedule(me anyToRunnable startup, 25)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 
@@ -114,14 +111,19 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         System exit 0
     }
 
-  def wrong(error: Throwable) = {
-    setVis(View.GONE, View.VISIBLE, View.GONE)
-    app toast password_wrong
+  def startup = {
+    prepareWalletKit
+    // Lazy val won't run on next calls
+    try putSeed catch { case _: Throwable =>
+      setVis(View.GONE, View.VISIBLE, View.GONE)
+      app toast password_wrong
+    }
   }
 
-  def setSeed = {
+  def putSeed = {
     val pass = mainPassData.getText.toString
     LNParams setup Mnemonic.decrypt(pass).getSeedBytes
+    app.kit.startAsync
   }
 
   def goRestoreWallet(view: View) = me exitTo classOf[WalletRestoreActivity]
