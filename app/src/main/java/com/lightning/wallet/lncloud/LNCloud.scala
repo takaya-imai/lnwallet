@@ -51,7 +51,7 @@ class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud {
 
     case _ =>
       // Let know if received an unhandled message in some state
-      android.util.Log.d("StandaloneCloud", s"Unhandled $data : $change")
+      Tools.log(s"StandaloneCloud: unhandled $data : $change")
   }
 
   def sign(data: BinaryData) = Crypto encodeSignature {
@@ -88,7 +88,6 @@ class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with
       // We just hope our HTLC gets accepted but will also catch an error
       val memoAndInvoice = MemoAndInvoice(mas.memo, mas.spec.invoice)
       me stayWith data.copy(info = Some apply memoAndInvoice)
-      // Sending a silent command ensures no alerts on ui
       LNParams.channel process SilentAddHtlc(mas.spec)
 
     // Our HTLC has been fulfilled so we can ask for tokens
@@ -113,7 +112,7 @@ class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with
     // it may be finished already so we ask the bag
     case (LNCloudData(Some(info), _, _), CMDStart) =>
       bag getOutgoingPaymentSpec info.invoice.paymentHash match {
-        case Success(spec) if spec.preimage.isDefined => me resolvePendingPayment info
+        case Success(spec) if spec.status == PaymentSpec.SUCCESS => me resolvePendingPayment info
         case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => resetStart
         case Success(_) => me stayWith data
         case _ => resetStart
@@ -127,7 +126,7 @@ class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with
 
     case _ =>
       // Let know if received an unhandled message in some state
-      android.util.Log.d("DefaultLNCloud", s"Unhandled $data : $change")
+      Tools.log(s"DefaultLNCloud: unhandled $data : $change")
   }
 
   // RESOLVING A WAIT PAYMENT STATE
@@ -188,7 +187,7 @@ trait LNCloud { me =>
 
   def makeOutgoingSpec(invoice: Invoice) =
     findRoutes(LNParams.channel.data.announce.nodeId, invoice.nodeId) map { routes =>
-      PaymentSpec.makeOutgoingSpec(routes, invoice, firstExpiry = LNParams.htlcExpiry)
+      PaymentSpec.makeOutgoingSpec(routes, invoice, firstExpiry = LNParams.myHtlcExpiry)
     }
 
   def json2BitVec(js: JsValue): Option[BitVector] = BitVector fromHex js.convertTo[String]

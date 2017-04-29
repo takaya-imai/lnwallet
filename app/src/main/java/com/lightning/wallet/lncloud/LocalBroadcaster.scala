@@ -15,7 +15,7 @@ import scala.util.Try
 class LocalBroadcaster extends Broadcaster { me =>
   def broadcast(tx: fr.acinq.bitcoin.Transaction): Unit =
     obsOn(app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get, IOScheduler.apply)
-      .subscribe(tx => android.util.Log.d("LocalBroadcaster", tx.getHashAsString), none)
+      .subscribe(transaction => Tools.log(s"LocalBroadcaster: $transaction"), none)
 
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight

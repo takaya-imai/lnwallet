@@ -44,7 +44,7 @@ object LNParams {
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
     derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
 
-  def htlcExpiry = broadcaster.currentHeight + minExpiryBlocks
+  def myHtlcExpiry = broadcaster.currentHeight + minExpiryBlocks
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 

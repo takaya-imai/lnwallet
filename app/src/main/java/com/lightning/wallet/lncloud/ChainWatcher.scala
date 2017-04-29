@@ -1,6 +1,7 @@
 package com.lightning.wallet.lncloud
 
 import com.lightning.wallet.ln._
+
 import collection.JavaConverters._
 import com.softwaremill.quicklens._
 import org.bitcoinj.wallet.listeners._
@@ -8,11 +9,12 @@ import com.lightning.wallet.lncloud.JavaSerializer._
 import rx.lang.scala.{Subscription, Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, OutPoint}
 import org.bitcoinj.core.{Coin, Transaction}
-
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
+import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 import fr.acinq.bitcoin.Crypto.sha256
 import org.bitcoinj.wallet.Wallet
+
 import scala.util.Try
 
 
@@ -83,9 +85,9 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     app.db.change(PaymentSpecs.updSql, serialize(spec), spec.status,
       spec.stamp.toString, spec.invoice.paymentHash.toString)
 
-  def addPreimage(preimage: BinaryData) = {
-    val (hash: BinaryData, complete) = sha256(preimage.data) -> Some(preimage)
-    val completeSpec = getOutgoingPaymentSpec(hash).map(_.modify(_.preimage) setTo complete)
-    completeSpec foreach replaceOutgoingPaymentSpec
-  }
+  def addPreimage(fulfill: UpdateFulfillHtlc) =
+    for (spec: OutgoingPaymentSpec <- me getOutgoingPaymentSpec fulfill.paymentHash) {
+      val spec1 = spec.copy(preimage = Some(fulfill.paymentPreimage), status = PaymentSpec.SUCCESS)
+      me replaceOutgoingPaymentSpec spec1
+    }
 }

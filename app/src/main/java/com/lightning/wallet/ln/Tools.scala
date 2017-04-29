@@ -17,10 +17,10 @@ object Tools {
   type LightningMessages = Vector[LightningMessage]
   val random = new RandomGenerator
 
-  def none: PartialFunction[Any, Unit] = { case _ => }
   def runAnd[T](result: T)(action: Any): T = result
-  def wrap(run: => Unit)(go: => Unit): Unit =
-    try go catch none finally run
+  def none: PartialFunction[Any, Unit] = { case _ => }
+  def log(message: String) = android.util.Log.d("LN", message)
+  def wrap(run: => Unit)(go: => Unit) = try go catch none finally run
 
   def fromShortId(id: Long): (Int, Int, Int) = {
     val blockNumber = id.>>(40).&(0xFFFFFF).toInt
@@ -104,7 +104,7 @@ abstract class StateMachine[T] { me =>
   var data: T = _
 
   def become(data1: T, state1: String) = {
-    android.util.Log.d("StateMachine", s"$state1 : $data1")
+    Tools.log(s"StateMachine: $state1 : $data1")
     val transition = (data, data1, state, state1)
     wrap { data = data1 } { state = state1 }
     events onBecome transition

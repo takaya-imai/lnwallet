@@ -91,7 +91,7 @@ class TransportHandler(keyPair: KeyPair, rs: Option[BinaryData], consume: Binary
 
     case _ =>
       // Let know if received an unhandled message
-      android.util.Log.d("TransportHandler", s"Unhandled $data : $change")
+      Tools.log(s"TransportHandler: unhandled $data : $change")
   }
 }
 
