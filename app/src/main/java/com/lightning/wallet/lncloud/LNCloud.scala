@@ -9,7 +9,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
-import com.lightning.wallet.ln.Tools.{none, wrap}
+import com.lightning.wallet.ln.Tools.{errLog, wrap}
 import com.lightning.wallet.ln.wire.{LightningMessageCodecs, UpdateFulfillHtlc}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.NodeAnnouncements
 import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
@@ -45,8 +45,8 @@ class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud {
     case (StandaloneLNCloudData(act :: as, _), CMDStart) =>
 
       val result = act runStandalone me
-      // We don't try again in case of error to avoid recursion
-      result.foreach(_ => me stayWith data.copy(acts = as), none)
+      // We don't send again in case of error to avoid recursion
+      result.foreach(_ => me stayWith data.copy(acts = as), errLog)
       result.foreach(_ => me process CMDStart, _ => me stayWith data)
 
     case _ =>
@@ -68,9 +68,8 @@ class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud {
   }
 }
 
-case class MemoAndInvoice(memo: BlindMemo, invoice: Invoice)
 case class MemoAndSpec(memo: BlindMemo, spec: OutgoingPaymentSpec)
-case class LNCloudData(info: Option[MemoAndInvoice], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
+case class LNCloudData(info: Option[MemoAndSpec], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
 class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
 
   private def reset = me stayWith data.copy(info = None)
@@ -83,16 +82,15 @@ class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with
       Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 4 by 2)
     } me process MemoAndSpec(memo, spec)
 
-    case (LNCloudData(None, _, _), mas: MemoAndSpec) =>
+    case (LNCloudData(None, tokens, acts), mas: MemoAndSpec) =>
       // Eliminating possible race condition by locking a change here
-      // We just hope our HTLC gets accepted but will also catch an error
-      val memoAndInvoice = MemoAndInvoice(mas.memo, mas.spec.invoice)
-      me stayWith data.copy(info = Some apply memoAndInvoice)
+      // We hope HTLC gets accepted but will also catch an error
+      me stayWith LNCloudData(info = Some(mas), tokens, acts)
       LNParams.channel process SilentAddHtlc(mas.spec)
 
     // Our HTLC has been fulfilled so we can ask for tokens
     case (LNCloudData(Some(info), _, _), fulfill: UpdateFulfillHtlc)
-      if fulfill.paymentHash == info.invoice.paymentHash =>
+      if fulfill.paymentHash == info.spec.invoice.paymentHash =>
       me resolvePendingPayment info
 
     // No matter what the state is if we have acts and tokens
@@ -104,14 +102,14 @@ class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with
       }
 
       val result = act.runDefault(token)
-      // We don't try again in case of an error to avoid recursion
-      result.foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), none)
+      // We don't send again in case of error to avoid recursion
+      result.foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), errLog)
       result.foreach(_ => me process CMDStart, resolveError)
 
     // Start request while payment is in progress,
     // it may be finished already so we ask the bag
     case (LNCloudData(Some(info), _, _), CMDStart) =>
-      bag getOutgoingPaymentSpec info.invoice.paymentHash match {
+      bag getOutgoingPaymentSpec info.spec.invoice.paymentHash match {
         case Success(spec) if spec.status == PaymentSpec.SUCCESS => me resolvePendingPayment info
         case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => resetStart
         case Success(_) => me stayWith data
@@ -131,9 +129,9 @@ class DefaultLNCloud(bag: PaymentSpecBag) extends StateMachine[LNCloudData] with
 
   // RESOLVING A WAIT PAYMENT STATE
 
-  private def resolvePendingPayment(info: MemoAndInvoice) = {
+  private def resolvePendingPayment(info: MemoAndSpec) = {
     // In case of error we do nothing in hope it will be resolved later, but "notfound" means we have to reset
-    val onSuccess: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = data.tokens ++ plus)
+    val onSuccess: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens)
     getClearTokens(info.memo).map(onSuccess).subscribe(_ => me process CMDStart, err => if (err.getMessage == "notfound") reset)
   }
 

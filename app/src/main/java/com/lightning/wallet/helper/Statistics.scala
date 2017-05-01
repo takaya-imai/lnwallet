@@ -13,7 +13,7 @@ abstract class Statistics[O] {
   } / items.size
 
   def filterWithin(items: Collection, stdDevs: Double) = {
-    // Filter out items whose value of interest is outside
+    // Filter out items whose value of interest is inside
     // of stdDevs standard deviations
 
     val mean1 = mean(items)

@@ -2,21 +2,23 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.Crypto.{sha256, PrivateKey}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import com.lightning.wallet.lncloud.CipherOpenHelper
+import com.lightning.wallet.Utils.app
 
 
 object LNParams {
-  var seedHash: String = _
   var channel: Channel = _
   var broadcaster: Broadcaster = _
   var extendedPrivateKey: ExtendedPrivateKey = _
   var extendedCloudPrivateKey: ExtendedPrivateKey = _
+  var db: CipherOpenHelper = _
 
-  def hasSeed: Boolean = seedHash != null
+  def isSetUp: Boolean = db != null
   def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
     extendedPrivateKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     extendedCloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
-    seedHash = Crypto.hash256(seed).toString
+    db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
   }
 
   val updateFeeMinDiffRatio = 0.25 // Must update

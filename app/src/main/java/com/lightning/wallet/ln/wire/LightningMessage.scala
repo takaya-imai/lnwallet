@@ -1,8 +1,8 @@
 package com.lightning.wallet.ln.wire
 
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import com.lightning.wallet.ln.Tools.{fromShortId, BinaryDataList}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
-import com.lightning.wallet.ln.Tools.BinaryDataList
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 
 
@@ -48,6 +48,7 @@ case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expi
 case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
 case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId {
+
   val paymentHash = Crypto sha256 paymentPreimage.data
 }
 
@@ -62,14 +63,23 @@ case class AnnouncementSignatures(channelId: BinaryData,
 
 case class ChannelAnnouncement(nodeSignature1: BinaryData, nodeSignature2: BinaryData, bitcoinSignature1: BinaryData,
                                bitcoinSignature2: BinaryData, shortChannelId: Long, nodeId1: BinaryData, nodeId2: BinaryData,
-                               bitcoinKey1: BinaryData, bitcoinKey2: BinaryData, features: BinaryData) extends RoutingMessage
+                               bitcoinKey1: BinaryData, bitcoinKey2: BinaryData, features: BinaryData) extends RoutingMessage {
+
+  val (blockHeight, txIndex, outputIndex) = fromShortId(shortChannelId)
+}
 
 case class NodeAnnouncement(signature: BinaryData, timestamp: Long, nodeId: BinaryData, rgbColor: RGB, alias: String,
-                            features: BinaryData, addresses: InetSocketAddressList) extends RoutingMessage
+                            features: BinaryData, addresses: InetSocketAddressList) extends RoutingMessage {
+
+  val identifier = (alias + nodeId.toString).toLowerCase
+}
 
 case class ChannelUpdate(signature: BinaryData, shortChannelId: Long, timestamp: Long, flags: BinaryData,
                          cltvExpiryDelta: Int, htlcMinimumMsat: Long, feeBaseMsat: Long,
-                         feeProportionalMillionths: Long) extends RoutingMessage
+                         feeProportionalMillionths: Long) extends RoutingMessage {
+
+  val lastSeen = System.currentTimeMillis
+}
 
 // Internal: receiving lists of lists of Hop's from a server
 case class Hop(nodeId: PublicKey, nextNodeId: PublicKey, lastUpdate: ChannelUpdate)

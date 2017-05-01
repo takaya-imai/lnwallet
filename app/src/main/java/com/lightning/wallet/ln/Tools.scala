@@ -11,16 +11,17 @@ import wire.LightningMessage
 import java.util.Locale
 
 
-object Tools {
+object Tools { me =>
   type Bytes = Array[Byte]
   type BinaryDataList = List[BinaryData]
   type LightningMessages = Vector[LightningMessage]
   val random = new RandomGenerator
 
   def runAnd[T](result: T)(action: Any): T = result
-  def none: PartialFunction[Any, Unit] = { case _ => }
   def log(message: String) = android.util.Log.d("LN", message)
   def wrap(run: => Unit)(go: => Unit) = try go catch none finally run
+  def errLog: PartialFunction[Throwable, Unit] = { case err => me log err.getMessage }
+  def none: PartialFunction[Any, Unit] = { case _ => }
 
   def fromShortId(id: Long): (Int, Int, Int) = {
     val blockNumber = id.>>(40).&(0xFFFFFF).toInt

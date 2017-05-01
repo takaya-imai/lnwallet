@@ -6,7 +6,6 @@ import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
-import com.lightning.wallet.lncloud.RatesSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.JavaSerializer._
 
@@ -14,7 +13,7 @@ import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
 import rx.lang.scala.schedulers.IOScheduler
-import com.lightning.wallet.ln.ChannelData
+import com.lightning.wallet.ln.LNParams
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
@@ -61,12 +60,6 @@ trait Saver {
   protected def save(snap: Serializable) = StorageWrap.put(serialize(snap), KEY)
 }
 
-object ChannelSaver extends Saver {
-  type Snapshot = (String, ChannelData)
-  def tryGetObject = tryGet[Snapshot]
-  val KEY = "channel"
-}
-
 object DefaultLNCloudSaver extends Saver {
   type ClearToken = (String, String, String)
   def tryGetObject = tryGet[LNCloudData]
@@ -74,64 +67,87 @@ object DefaultLNCloudSaver extends Saver {
 }
 
 object StandaloneCloudSaver extends Saver {
-  def remove = app.db.change(Storage.killSql, KEY)
+  def remove = LNParams.db.change(Storage.killSql, KEY)
   def tryGetObject = tryGet[StandaloneLNCloudData]
   val KEY = "standaloneCloud"
 }
 
-// Exchange rates and Bitcoin fees
-case class Rates(exchange: PriceMap, feeLive: Coin, feeRisky: Coin, stamp: Long)
-case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
-case class LastRate(last: Double) extends Rate { def now = last }
-case class AskRate(ask: Double) extends Rate { def now = ask }
+// Exchange rates and fees
 trait Rate { def now: Double }
+case class AskRate(ask: Double) extends Rate { def now = ask }
+case class LastRate(last: Double) extends Rate { def now = last }
+case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
 
+trait RateProvider { val usd, eur, cny: Rate }
 case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends RateProvider
 case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProvider
-trait RateProvider { val usd, eur, cny: Rate }
+case class Rates(exchange: Map[String, Double], feeHistory: Seq[Double],
+                 feeLive: Coin, feeRisky: Coin, stamp: Long)
 
 object RatesSaver extends Saver { me =>
-  type PriceMap = Map[String, Double]
+  type RatesMap = Map[String, Double]
   type BitpayList = List[BitpayRate]
-  type RatesMap = Map[String, Rate]
-  val KEY = "rates3"
+  val KEY = "rates1"
 
   implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
   implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
   implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
   implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
-  def toRates(src: RatesMap) = Map(strDollar -> src("USD").now, strEuro -> src("EUR").now, strYuan -> src("CNY").now)
   def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
-  def bitpayNorm(src: String) = jsonFieldAs[BitpayList]("data")(src).map(bitpay => bitpay.code -> bitpay).toMap
+
+  def toRates(src: BitpayList) = {
+    // Bitpay provides a list so we convert it to a map
+    val map = src.map(bitpayRate => bitpayRate.code -> bitpayRate).toMap
+    Map(strDollar -> map("USD").now, strEuro -> map("EUR").now, strYuan -> map("CNY").now)
+  }
 
   private def pickExchangeRate = retry(obsOn(random nextInt 3 match {
-    case 0 => me toRates bitpayNorm(get("https://bitpay.com/rates").body)
-    case 1 => me toRates to[Blockchain](get("https://blockchain.info/ticker").body)
-    case _ => me toRates to[Bitaverage](get("https://api.bitcoinaverage.com/ticker/global/all").body)
-  }, IOScheduler.apply), pickInc, 1 to 4 by 2)
+    case 0 => me toRates to[Blockchain](get("https://blockchain.info/ticker").body)
+    case 1 => me toRates to[Bitaverage](get("https://api.bitcoinaverage.com/ticker/global/all").body)
+    case _ => me toRates jsonFieldAs[BitpayList]("data")(get("https://bitpay.com/rates").body)
+  }, IOScheduler.apply), pickInc, 1 to 3)
 
   private def pickFeeRate(orderNum: Int) = obsOn(orderNum match {
-    case 0 => Some(get("https://bitlox.io/api/utils/estimatefee?nbBlocks=9").body) map jsonFieldAs[Double]("9")
-    case 1 => Some(get("https://live.coin.space/api/utils/estimatefee?nbBlocks=9").body) map jsonFieldAs[Double]("9")
-    case 2 => Some(get("https://blockexplorer.com/api/utils/estimatefee?nbBlocks=9").body) map jsonFieldAs[Double]("9")
-    case _ => Some(get("https://localbitcoinschain.com/api/utils/estimatefee?nbBlocks=9").body) map jsonFieldAs[Double]("9")
+    case 0 => jsonFieldAs[Double]("9")(get("https://bitlox.io/api/utils/estimatefee?nbBlocks=9").body)
+    case 1 => jsonFieldAs[Double]("9")(get("https://live.coin.space/api/utils/estimatefee?nbBlocks=9").body)
+    case 2 => jsonFieldAs[Double]("9")(get("https://blockexplorer.com/api/utils/estimatefee?nbBlocks=9").body)
+    case _ => jsonFieldAs[Double]("9")(get("https://localbitcoinschain.com/api/utils/estimatefee?nbBlocks=9").body)
   }, IOScheduler.apply)
 
-  private val period = 60.minutes
-  private val defaultFee = Coin valueOf 40000
-  private val statistics = new Statistics[Double] { def extract(item: Double) = item }
-  var rates = tryGet[Rates] getOrElse Rates(Map.empty, defaultFee, defaultFee div 2, 0L)
+  private val defaultFee = 0.0005D
+  private val updatePeriod = 30.minutes
+  private val statistics = new Statistics[Double] {def extract(item: Double) = item }
+  var rates = tryGet[Rates] getOrElse updatedRates(Nil, Map.empty).copy(stamp = 0L)
 
-  def process = {
-    // Pull feerates from all *responsive* sources at once and filter out those beyond 1st sd
-    def allFees = for (orderNum <- 0 until 4) yield pickFeeRate(orderNum).onErrorReturn(_ => None)
-    def combined = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate).repeatWhen(_ delay period)
+  private def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
+    val fees1 = if (fees.isEmpty) defaultFee :: Nil else fees take 10
+    val feeLive = Coin parseCoin statistics.meanWithin(fees1, stdDevs = 1)
+    Rates(fiat, fees1, feeLive, feeLive div 2, System.currentTimeMillis)
+  }
 
-    withDelay(combined, rates.stamp, period.toMillis) foreach { case (fees, fiatRates) =>
-      val fee1 = if (fees.isEmpty) defaultFee else Coin parseCoin statistics.meanWithin(fees, 1)
-      rates = Rates(fiatRates, fee1, fee1 div 2, System.currentTimeMillis)
+  private def startPeriodicDataUpdate(initDelay: Long) = {
+    // Periodically update fee and fiat rates, initially delayed to limit network activity
+    def attempts = retry(pickFeeRate(random nextInt 4), pickInc, 1 to 3).zip(pickExchangeRate)
+    def periodic = withDelay(attempts.repeatWhen(_ delay updatePeriod), initDelay, updatePeriod.toMillis)
+
+    periodic foreach { case (fee1, fiat) =>
+      val updatedFees = fee1 +: rates.feeHistory
+      rates = updatedRates(updatedFees, fiat)
       me save rates
     }
   }
+
+  def process =
+    // If fees data is too old we reload all the fees from all the sources once, then proceed normally
+    if (System.currentTimeMillis - rates.stamp < 4.days.toMillis) startPeriodicDataUpdate(rates.stamp) else {
+      def allFees = for (ordNum <- 0 until 4) yield pickFeeRate(ordNum).map(Option.apply).onErrorReturn(_ => None)
+      def attempt = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate)
+      startPeriodicDataUpdate(System.currentTimeMillis)
+
+      attempt foreach { case (fees, fiat) =>
+        rates = updatedRates(fees, fiat)
+        me save rates
+      }
+    }
 }

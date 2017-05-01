@@ -15,7 +15,7 @@ import scodec.Attempt
 
 
 trait PaymentSpec
-  extends Serializable {
+extends Serializable {
   val invoice: Invoice
   val status: String
   val stamp: Long

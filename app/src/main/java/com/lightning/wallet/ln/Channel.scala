@@ -9,7 +9,6 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
-import com.lightning.wallet.ln.Tools.none
 
 
 class Channel(bag: PaymentSpecBag)

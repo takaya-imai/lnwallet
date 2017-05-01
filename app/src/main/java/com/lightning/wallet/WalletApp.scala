@@ -7,18 +7,18 @@ import org.bitcoinj.core._
 import org.bitcoinj.uri.{BitcoinURIParseException, OptionalFieldValidationException}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, RequiredFieldValidationException}
-import com.lightning.wallet.lncloud.{CipherOpenHelper, RatesSaver}
 import android.content.{ClipData, ClipboardManager, Context}
-import com.lightning.wallet.ln.{Invoice, LNParams}
 import org.bitcoinj.wallet.{Protos, Wallet}
 
 import listeners.TransactionConfidenceEventListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
+import com.lightning.wallet.lncloud.RatesSaver
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.lightning.wallet.ln.Tools.wrap
+import com.lightning.wallet.ln.Invoice
 import com.google.protobuf.ByteString
 import android.app.Application
 import android.widget.Toast
@@ -30,7 +30,6 @@ import Context.CLIPBOARD_SERVICE
 
 class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val db = new CipherOpenHelper(app, 1, LNParams.seedHash)
   lazy val params = org.bitcoinj.params.TestNet3Params.get
   var walletFile, chainFile: java.io.File = _
   var kit: WalletKit = _

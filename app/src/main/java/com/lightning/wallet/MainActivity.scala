@@ -91,7 +91,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     finish, dialog_ok, dialog_cancel).setMessage(code).create)
 
   def next =
-    (app.walletFile.exists, app.isAlive, LNParams.hasSeed) match {
+    (app.walletFile.exists, app.isAlive, LNParams.isSetUp) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
       case (true, true, true) => exitTo apply classOf[LNActivity]
 
