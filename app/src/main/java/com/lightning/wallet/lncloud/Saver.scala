@@ -1,37 +1,23 @@
 package com.lightning.wallet.lncloud
 
-import java.io._
 import spray.json._
 import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
-import com.lightning.wallet.lncloud.JavaSerializer._
+import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 
 import rx.lang.scala.{Scheduler, Observable => Obs}
+import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.ln.LNParams
-import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
 
-
-object JavaSerializer {
-  def serialize(source: Serializable): String = {
-    val output: ByteArrayOutputStream = new ByteArrayOutputStream
-    new ObjectOutputStream(output) writeObject source
-    HEX encode output.toByteArray
-  }
-
-  def deserialize[T](hex: String): T = {
-    val input = new ByteArrayInputStream(HEX decode hex)
-    new ObjectInputStream(input).readObject.asInstanceOf[T]
-  }
-}
 
 object JsonHttpUtils {
   def obsOn[T](provider: => T, scheduler: Scheduler): Obs[T] =
@@ -56,56 +42,47 @@ object JsonHttpUtils {
 
 trait Saver {
   val KEY: String
-  protected def tryGet[T]: Try[T] = StorageWrap get KEY map deserialize[T]
-  protected def save(snap: Serializable) = StorageWrap.put(serialize(snap), KEY)
+  def tryGet: Try[String] = StorageWrap.get(KEY)
+  def save(snap: JsValue) = StorageWrap.put(snap.toString, KEY)
 }
 
 object DefaultLNCloudSaver extends Saver {
   type ClearToken = (String, String, String)
-  def tryGetObject = tryGet[LNCloudData]
-  val KEY = "lnCloud"
+  def tryGetObject = tryGet map to[LNCloudData]
+  def saveObject(data: LNCloudData) = save(data.toJson)
+  val KEY = "lnCloud9"
 }
 
 object StandaloneCloudSaver extends Saver {
   def remove = LNParams.db.change(Storage.killSql, KEY)
-  def tryGetObject = tryGet[StandaloneLNCloudData]
-  val KEY = "standaloneCloud"
+  def tryGetObject = tryGet map to[StandaloneLNCloudData]
+  def saveObject(data: StandaloneLNCloudData) = save(data.toJson)
+  val KEY = "standaloneCloud9"
 }
 
-// Exchange rates and fees
 trait Rate { def now: Double }
+trait ExchangeRateProvider { val usd, eur, cny: Rate }
 case class AskRate(ask: Double) extends Rate { def now = ask }
 case class LastRate(last: Double) extends Rate { def now = last }
 case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
-
-trait RateProvider { val usd, eur, cny: Rate }
-case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends RateProvider
-case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends RateProvider
-case class Rates(exchange: Map[String, Double], feeHistory: Seq[Double],
-                 feeLive: Coin, feeRisky: Coin, stamp: Long)
+case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends ExchangeRateProvider
+case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends ExchangeRateProvider
+case class Rates(exchange: RatesMap, feeHistory: Seq[Double], feeLive: Coin, feeRisky: Coin, stamp: Long)
 
 object RatesSaver extends Saver { me =>
+  type BitpayRatesList = List[BitpayRate]
+  type BitpayRatesMap = Map[String, BitpayRate]
   type RatesMap = Map[String, Double]
-  type BitpayList = List[BitpayRate]
-  val KEY = "rates1"
+  val KEY = "rates9"
 
-  implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
-  implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
-  implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
-  implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
-  implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
-  def toRates(src: RateProvider) = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
-
-  def toRates(src: BitpayList) = {
-    // Bitpay provides a list so we convert it to a map
-    val map = src.map(bitpayRate => bitpayRate.code -> bitpayRate).toMap
-    Map(strDollar -> map("USD").now, strEuro -> map("EUR").now, strYuan -> map("CNY").now)
-  }
+  def toRates(src: ExchangeRateProvider): RatesMap = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
+  def toRates(map: BitpayRatesMap): RatesMap = Map(strDollar -> map("USD").now, strEuro -> map("EUR").now, strYuan -> map("CNY").now)
+  def bitpayNormalize(src: BitpayRatesList): RatesMap = toRates(src.map(bitpayRate => bitpayRate.code -> bitpayRate).toMap)
 
   private def pickExchangeRate = retry(obsOn(random nextInt 3 match {
     case 0 => me toRates to[Blockchain](get("https://blockchain.info/ticker").body)
     case 1 => me toRates to[Bitaverage](get("https://api.bitcoinaverage.com/ticker/global/all").body)
-    case _ => me toRates jsonFieldAs[BitpayList]("data")(get("https://bitpay.com/rates").body)
+    case _ => me bitpayNormalize jsonFieldAs[BitpayRatesList]("data")(get("https://bitpay.com/rates").body)
   }, IOScheduler.apply), pickInc, 1 to 3)
 
   private def pickFeeRate(orderNum: Int) = obsOn(orderNum match {
@@ -118,9 +95,9 @@ object RatesSaver extends Saver { me =>
   private val defaultFee = 0.0005D
   private val updatePeriod = 30.minutes
   private val statistics = new Statistics[Double] {def extract(item: Double) = item }
-  var rates = tryGet[Rates] getOrElse updatedRates(Nil, Map.empty).copy(stamp = 0L)
+  var rates = tryGet map to[Rates] getOrElse updatedRates(Nil, Map.empty).copy(stamp = 0L)
 
-  private def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
+  def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
     val fees1 = if (fees.isEmpty) defaultFee :: Nil else fees take 10
     val feeLive = Coin parseCoin statistics.meanWithin(fees1, stdDevs = 1)
     Rates(fiat, fees1, feeLive, feeLive div 2, System.currentTimeMillis)
@@ -134,12 +111,12 @@ object RatesSaver extends Saver { me =>
     periodic foreach { case (fee1, fiat) =>
       val updatedFees = fee1 +: rates.feeHistory
       rates = updatedRates(updatedFees, fiat)
-      me save rates
+      save(rates.toJson)
     }
   }
 
   def process =
-    // If fees data is too old we reload all the fees from all the sources once, then proceed normally
+  // If fees data is too old we reload all the fees from all the sources once, then proceed normally
     if (System.currentTimeMillis - rates.stamp < 4.days.toMillis) startPeriodicDataUpdate(rates.stamp) else {
       def allFees = for (ordNum <- 0 until 4) yield pickFeeRate(ordNum).map(Option.apply).onErrorReturn(_ => None)
       def attempt = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate)
@@ -147,7 +124,7 @@ object RatesSaver extends Saver { me =>
 
       attempt foreach { case (fees, fiat) =>
         rates = updatedRates(fees, fiat)
-        me save rates
+        save(rates.toJson)
       }
     }
 }

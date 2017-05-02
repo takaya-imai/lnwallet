@@ -49,7 +49,6 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
         createWallet setText buttonMessage
       }
     }
-
   }
 
   def makeNewWallet =

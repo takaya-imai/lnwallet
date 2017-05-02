@@ -9,8 +9,9 @@ import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import org.bitcoinj.core.Utils.HEX
 import android.content.DialogInterface.BUTTON_POSITIVE
+
 import collection.JavaConverters.seqAsJavaListConverter
-import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
+import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.widget._
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import org.ndeftools.Message
@@ -30,6 +31,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.helper._
 import com.lightning.wallet.ln.wire.UpdateAddHtlc
 import com.lightning.wallet.ln._
+import com.lightning.wallet.test.LNCloudSpec
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import org.bitcoinj.core.{Address, Sha256Hash, Transaction}
 import rx.lang.scala.schedulers.IOScheduler
@@ -137,6 +139,8 @@ with ListUpdater { me =>
     super.onCreate(savedState)
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
+
+    (new LNCloudSpec).allTests
 
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run

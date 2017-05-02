@@ -12,10 +12,12 @@ import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
 import java.io.FileInputStream
+
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.view.View
+import com.lightning.wallet.test.LNCloudSpec
 
 
 trait ViewSwitch {

@@ -1,9 +1,12 @@
 package com.lightning.wallet.lncloud
 
+import spray.json._
 import com.lightning.wallet.ln._
 import collection.JavaConverters._
 import org.bitcoinj.wallet.listeners._
-import com.lightning.wallet.lncloud.JavaSerializer._
+import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+
 import rx.lang.scala.{Subscription, Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, OutPoint}
 import org.bitcoinj.core.{Coin, Transaction}
@@ -50,6 +53,7 @@ object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {
     LNParams.db.change(sql = Storage.newSql, params = value, key)
     LNParams.db.change(sql = Storage.updSql, params = value, key)
+    Tools.log(s"$key: $value")
   }
 
   def get(key: String): Try[String] = {
@@ -68,19 +72,19 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     LNParams.db.select(PaymentSpecs.selectByHashSql, hash.toString)
   }.headTry(_ string PaymentSpecs.data)
 
-  def getIncomingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map deserialize[IncomingPaymentSpec]
-  def getOutgoingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map deserialize[OutgoingPaymentSpec]
+  def getIncomingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map to[IncomingPaymentSpec]
+  def getOutgoingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map to[OutgoingPaymentSpec]
 
   def putPaymentSpec(spec: PaymentSpec) = LNParams.db txWrap {
     val paymentHashString: String = spec.invoice.paymentHash.toString
-    LNParams.db.change(PaymentSpecs.newSql, serialize(spec), paymentHashString, spec.status, spec.stamp.toString)
+    LNParams.db.change(PaymentSpecs.newSql, spec.toJson.toString, paymentHashString, spec.status, spec.stamp.toString)
     LNParams.db.change(PaymentSpecs.newVirtualSql, s"${spec.invoice.message.orNull} $paymentHashString", paymentHashString)
     app.getContentResolver.notifyChange(LNParams.db sqlPath PaymentSpecs.table, null)
   }
 
   def replaceOutgoingPaymentSpec(spec: OutgoingPaymentSpec) =
-    LNParams.db.change(PaymentSpecs.updSql, serialize(spec), spec.status,
-      spec.stamp.toString, spec.invoice.paymentHash.toString)
+    LNParams.db.change(PaymentSpecs.updSql, spec.toJson.toString,
+      spec.status, spec.stamp.toString, spec.invoice.paymentHash.toString)
 
   def addPreimage(fulfill: UpdateFulfillHtlc) =
     for (spec: OutgoingPaymentSpec <- me getOutgoingPaymentSpec fulfill.paymentHash) {
