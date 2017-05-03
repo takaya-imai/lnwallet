@@ -45,7 +45,6 @@ object Invoice {
 }
 
 trait PaymentSpecBag {
-  def addPreimage(fulfill: UpdateFulfillHtlc): Unit
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getIncomingPaymentSpec(hash: BinaryData): Try[IncomingPaymentSpec]
   def getOutgoingPaymentSpec(hash: BinaryData): Try[OutgoingPaymentSpec]

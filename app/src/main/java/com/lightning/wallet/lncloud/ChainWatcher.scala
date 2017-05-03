@@ -53,7 +53,6 @@ object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {
     LNParams.db.change(sql = Storage.newSql, params = value, key)
     LNParams.db.change(sql = Storage.updSql, params = value, key)
-    Tools.log(s"$key: $value")
   }
 
   def get(key: String): Try[String] = {
@@ -68,9 +67,10 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     app.getContentResolver.notifyChange(LNParams.db sqlPath PaymentSpecs.table, null)
   }
 
-  private def getRawSpec(hash: BinaryData) = RichCursor {
-    LNParams.db.select(PaymentSpecs.selectByHashSql, hash.toString)
-  }.headTry(_ string PaymentSpecs.data)
+  private def getRawSpec(hash: BinaryData) = {
+    val cursor = LNParams.db.select(PaymentSpecs.selectByHashSql, hash.toString)
+    RichCursor(cursor).headTry(_ string PaymentSpecs.data)
+  }
 
   def getIncomingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map to[IncomingPaymentSpec]
   def getOutgoingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map to[OutgoingPaymentSpec]
@@ -86,9 +86,8 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     LNParams.db.change(PaymentSpecs.updSql, spec.toJson.toString,
       spec.status, spec.stamp.toString, spec.invoice.paymentHash.toString)
 
-  def addPreimage(fulfill: UpdateFulfillHtlc) =
-    for (spec: OutgoingPaymentSpec <- me getOutgoingPaymentSpec fulfill.paymentHash) {
-      val spec1 = spec.copy(preimage = Some(fulfill.paymentPreimage), status = PaymentSpec.SUCCESS)
-      me replaceOutgoingPaymentSpec spec1
-    }
+  def addPreimage(preimage: BinaryData)(spec: OutgoingPaymentSpec): Unit = {
+    val spec1 = spec.copy(preimage = Some(preimage), status = PaymentSpec.SUCCESS)
+    me replaceOutgoingPaymentSpec spec1
+  }
 }

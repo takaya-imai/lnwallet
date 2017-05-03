@@ -12,7 +12,7 @@ import fr.acinq.bitcoin.Transaction
 import scala.util.Try
 
 
-class LocalBroadcaster extends Broadcaster { me =>
+object LocalBroadcaster extends Broadcaster { me =>
   def broadcast(tx: fr.acinq.bitcoin.Transaction): Unit =
     obsOn(app.kit.peerGroup.broadcastTransaction(tx, 1).broadcast.get, IOScheduler.apply)
       .subscribe(transaction => Tools.log(s"LocalBroadcaster: $transaction"), none)

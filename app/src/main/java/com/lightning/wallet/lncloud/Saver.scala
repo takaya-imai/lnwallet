@@ -94,7 +94,7 @@ object RatesSaver extends Saver { me =>
 
   private val defaultFee = 0.0005D
   private val updatePeriod = 30.minutes
-  private val statistics = new Statistics[Double] {def extract(item: Double) = item }
+  private val statistics = new Statistics[Double] { def extract(item: Double) = item }
   var rates = tryGet map to[Rates] getOrElse updatedRates(Nil, Map.empty).copy(stamp = 0L)
 
   def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
@@ -116,8 +116,8 @@ object RatesSaver extends Saver { me =>
   }
 
   def process =
-  // If fees data is too old we reload all the fees from all the sources once, then proceed normally
-    if (System.currentTimeMillis - rates.stamp < 4.days.toMillis) startPeriodicDataUpdate(rates.stamp) else {
+    // If fees data is too old we reload all the fees from all the sources once, then proceed normally
+    if (System.currentTimeMillis - rates.stamp < 5.days.toMillis) startPeriodicDataUpdate(rates.stamp) else {
       def allFees = for (ordNum <- 0 until 4) yield pickFeeRate(ordNum).map(Option.apply).onErrorReturn(_ => None)
       def attempt = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate)
       startPeriodicDataUpdate(System.currentTimeMillis)

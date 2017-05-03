@@ -3,12 +3,11 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import com.lightning.wallet.lncloud.CipherOpenHelper
+import com.lightning.wallet.lncloud.{CipherOpenHelper, LocalBroadcaster}
 import com.lightning.wallet.Utils.app
 
 
 object LNParams {
-  var channel: Channel = _
   var broadcaster: Broadcaster = _
   var extendedPrivateKey: ExtendedPrivateKey = _
   var extendedCloudPrivateKey: ExtendedPrivateKey = _
@@ -19,6 +18,7 @@ object LNParams {
     extendedPrivateKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     extendedCloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
+    broadcaster = LocalBroadcaster
   }
 
   val updateFeeMinDiffRatio = 0.25 // Must update
@@ -32,14 +32,12 @@ object LNParams {
 
   val maxReserveToFundingRatio = 0.05 // %
   val reserveToFundingRatio = 0.01 // %
-  val htlcMinimumMsat = 1000
+  val htlcMinimumMsat = 500
   val maxAcceptedHtlcs = 10
   val minDepth = 2
 
   val dustLimitSatoshis = 542
   val feeBaseMsat = 546000
-
-  val expiryDeltaBlocks = 144
   val minExpiryBlocks = 6
   val toSelfDelay = 144
 

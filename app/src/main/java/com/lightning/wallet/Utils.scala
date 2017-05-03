@@ -375,7 +375,7 @@ class RateManager(val content: View) { me =>
 
   val fiatListener = new TextChangedWatcher {
     def fiatDecimal = BigDecimal(fiatInput.getText.toString.noCommas)
-    def upd = setSum(currentRate.map(perBtc => fiatDecimal / perBtc) map btcBigDecimal2MilliSatoshi)
+    def upd = setSum(currentRate.map(fiatDecimal / _) map btcBigDecimal2MilliSatoshi)
     def onTextChanged(s: CharSequence, start: Int, b: Int, c: Int) = if (fiatInput.hasFocus) upd
   }
 

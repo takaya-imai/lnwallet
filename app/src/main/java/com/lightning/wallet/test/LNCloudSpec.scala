@@ -1,11 +1,14 @@
 package com.lightning.wallet.test
 
+import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools._
-import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop}
+import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop, NodeAnnouncement, UpdateFulfillHtlc}
 import com.lightning.wallet.lncloud.DefaultLNCloudSaver._
+import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import fr.acinq.bitcoin.Crypto.PrivateKey
+import rx.lang.scala.schedulers.IOScheduler
 import rx.lang.scala.{Observable => Obs}
 
 
@@ -20,39 +23,66 @@ class LNCloudSpec {
   val channelUpdate_cd = defaultChannelUpdate.copy(shortChannelId = 3, cltvExpiryDelta = 10, feeBaseMsat = 60000, feeProportionalMillionths = 1)
   val channelUpdate_de = defaultChannelUpdate.copy(shortChannelId = 4, cltvExpiryDelta = 7, feeBaseMsat = 766000, feeProportionalMillionths = 10)
 
+  val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
+
   val hops = Vector(
     Hop(a, b, channelUpdate_ab),
     Hop(b, c, channelUpdate_bc),
     Hop(c, d, channelUpdate_cd),
     Hop(d, e, channelUpdate_de))
 
-  def getCloud = ???
-//    DefaultLNCloudSaver.tryGetObject.map { savedData =>
-//      println(s"Got LNCloudData from db: $savedData")
-//      val cloud = new DefaultLNCloud(PaymentSpecWrap)
-//      cloud.become(savedData, LNCloud.OPERATIONAL)
-//      cloud
-//    } getOrElse {
-//      val data = LNCloudData(info = None, tokens = Nil, acts = Nil)
-//      println(s"Creating a new LNCloudData")
-//      val cloud = new DefaultLNCloud(PaymentSpecWrap)
-//      cloud.become(data, LNCloud.OPERATIONAL)
-//      cloud
-//    }
+  val chan = new StateMachine[ChannelData] { me =>
+
+    data = InitData(NodeAnnouncement(null, 1, e, null, null, null, null))
+
+    def doProcess(change: Any) = change match {
+      case SilentAddHtlc(spec) =>
+        println(s"Channel mock got a silent spec: $spec")
+        me process UpdateFulfillHtlc(null, 1, preimage)
+
+      case _ =>
+        println(s"Channel mock got something: $change")
+    }
+
+  }
+
+  def getCloud =
+    DefaultLNCloudSaver.tryGetObject.map { savedData =>
+      println(s"Got LNCloudData from db: $savedData")
+
+      new DefaultLNCloud {
+        val bag = PaymentSpecWrap
+        lazy val channel = chan
+        state = LNCloud.OPERATIONAL
+        data = savedData
+
+        override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
+          PaymentSpec.makeOutgoingSpec(Vector(hops), invoice, LNParams.myHtlcExpiry)
+        }, IOScheduler.apply)
+      }
+
+    } getOrElse {
+      val data = LNCloudData(info = None, tokens = Nil, acts = Nil)
+      println(s"Creating a new LNCloudData")
+
+      new DefaultLNCloud {
+        val bag = PaymentSpecWrap
+        lazy val channel = chan
+        state = LNCloud.OPERATIONAL
+        data = data
+
+        override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
+          PaymentSpec.makeOutgoingSpec(Vector(hops), invoice, LNParams.myHtlcExpiry)
+        }, IOScheduler.apply)
+      }
+
+    }
 
   def allTests = {
 
-//    val a = System.currentTimeMillis()
-//    val cloud1 = getCloud
-//    println(cloud1)
-//    DefaultLNCloudSaver.saveObject(cloud1.data)
-//
-//    val cloud2 = getCloud
-//    println(cloud2)
-//
-//    cloud2 process PingCloudAct(System.currentTimeMillis.toString)
-//    println(cloud2.data)
-//    DefaultLNCloudSaver.saveObject(cloud2.data)
-//    println(System.currentTimeMillis() - a)
+    val cloud1 = getCloud
+    println(cloud1.data.acts.size)
+    cloud1 process PingCloudAct(System.currentTimeMillis.toString)
+
   }
 }

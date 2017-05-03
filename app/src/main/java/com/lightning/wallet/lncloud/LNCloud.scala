@@ -9,10 +9,9 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
-import com.lightning.wallet.ln.Tools.{errLog, wrap}
+import com.lightning.wallet.ln.Tools.{errLog, wrap, none}
 import com.lightning.wallet.ln.wire.{LightningMessageCodecs, UpdateFulfillHtlc}
 import com.lightning.wallet.lncloud.ImplicitJsonFormats.{json2BitVec, jsonToString}
-
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.NodeAnnouncements
 import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
 import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
@@ -28,13 +27,14 @@ import scala.util.Success
 
 
 trait LNCloudAct {
-  def runDefault(cloud: DefaultLNCloud, ct: ClearToken): Obs[Unit]
+  def runDefault(base: Seq[HttpParam], cloud: DefaultLNCloud): Obs[Unit]
   def runStandalone(cloud: StandaloneCloud): Obs[Unit]
 }
 
+// Used mainly for testing purposes
 case class PingCloudAct(data: String, kind: String = "PingCloudAct") extends LNCloudAct {
-  def runDefault(cloud: DefaultLNCloud, ct: ClearToken): Obs[Unit] = cloud.call("ping", println, "data" -> data)
-  def runStandalone(cloud: StandaloneCloud): Obs[Unit] = cloud.call("ping", println, "data" -> data)
+  def runDefault(base: Seq[HttpParam], cloud: DefaultLNCloud) = cloud.send(base :+ ("data", data), "ping")
+  def runStandalone(cloud: StandaloneCloud): Obs[Unit] = cloud.send(params = Seq("data" -> data), "ping")
 }
 
 case class StandaloneLNCloudData(acts: List[LNCloudAct], url: String)
@@ -48,12 +48,10 @@ abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with 
       me process CMDStart
 
     // Always try to process all the remaining acts
-    case (StandaloneLNCloudData(act :: as, _), CMDStart) =>
-
-      val result = act runStandalone me
-      // We don't send again in case of error to avoid recursion
-      result.foreach(_ => me stayWith data.copy(acts = as), errLog)
-      result.foreach(_ => me process CMDStart, _ => me stayWith data)
+    case (StandaloneLNCloudData(act :: ax, _), CMDStart) =>
+      def stayWithoutToken = me stayWith data.copy(acts = ax)
+      act.runStandalone(me).map(_ => stayWithoutToken)
+        .foreach(_ => me process CMDStart, errLog)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -74,9 +72,19 @@ case class LNCloudData(info: Option[MemoAndSpec], tokens: List[ClearToken] = Nil
 abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
 
   val bag: PaymentSpecBag
-  def onTokenHtlcCreated(cmd: CMDAddHtlc): Unit
   private def reset = me stayWith data.copy(info = None)
   private def resetStart = wrap(me process CMDStart)(reset)
+
+  // LISTENING TO CHANNEL
+
+  channel.events addListener me
+  override def onPostProcess = {
+    case fulfill: UpdateFulfillHtlc =>
+      // This may be our HTLC, check it
+      me process fulfill
+  }
+
+  // STATE MACHINE STUFF
 
   def doProcess(change: Any) = (data, change) match {
     case (LNCloudData(None, Nil, _), CMDStart) => for {
@@ -88,7 +96,7 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
       // Eliminating possible race condition by locking a change here
       // We hope HTLC gets accepted but will also catch an error
       me stayWith LNCloudData(info = Some(mas), tokens, acts)
-      me onTokenHtlcCreated SilentAddHtlc(mas.spec)
+      channel process SilentAddHtlc(mas.spec)
 
     // Our HTLC has been fulfilled so we can ask for tokens
     case (LNCloudData(Some(info), _, _), fulfill: UpdateFulfillHtlc)
@@ -96,17 +104,16 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
       me resolvePayment info
 
     // No matter what the state is if we have acts and tokens
-    case (LNCloudData(_, token :: tx, act :: ax), CMDStart) =>
+    case (LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax), CMDStart) =>
+      val base = ("point", blindPoint) :: ("cleartoken", clearToken) :: ("clearsig", clearSignature) :: Nil
+      act.runDefault(base, me).map(_ => stayWithoutData).foreach(_ => me process CMDStart, resolveError)
+
       // 'data' may change while request is on so we always copy it
-      def resolveError(srvError: Throwable) = srvError.getMessage match {
+      def stayWithoutData = me stayWith data.copy(tokens = tx, acts = ax)
+      def resolveError(servError: Throwable) = servError.getMessage match {
         case "tokeninvalid" | "tokenused" => me stayWith data.copy(tokens = tx)
         case _ => me stayWith data
       }
-
-      val result = act.runDefault(me, token)
-      // We don't send again in case of error to avoid infinite recursion
-      result.foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), errLog)
-      result.foreach(_ => me process CMDStart, resolveError)
 
     // Start request while payment is in progress,
     // it may be finished already so we ask the bag
@@ -137,14 +144,6 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
     getClearTokens(info.memo).map(onSuccess).subscribe(_ => me process CMDStart, err => if (err.getMessage == "notfound") reset)
   }
 
-  // LISTENING TO CHANNEL
-
-  override def onPostProcess = {
-    case fulfill: UpdateFulfillHtlc =>
-      // This may be our HTLC, check it
-      me process fulfill
-  }
-
   // TALKING TO SERVER
 
   def augmentInvoice(invoice: Invoice, howMuch: Int) = {
@@ -173,21 +172,26 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
 }
 
 trait LNCloud { me =>
-  type OutgoingPaymentSpecOpt = Option[OutgoingPaymentSpec]
-  def makeOutgoingSpec(invoice: Invoice): Obs[OutgoingPaymentSpecOpt]
+  val channel: StateMachine[ChannelData]
+  def makeOutgoingSpec(invoice: Invoice) =
+    findRoutes(channel.data.announce.nodeId, invoice.nodeId) map { routes =>
+      PaymentSpec.makeOutgoingSpec(routes, invoice, LNParams.myHtlcExpiry)
+    }
 
   def http(way: String) = {
     val address = s"http://10.0.2.2:9002/v1/$way"
     post(address, true) connectTimeout 10000
   }
 
-  def call[T](command: String, trans: Vector[JsValue] => T, params: (String, Object)*) =
+  def call[T](command: String, trans: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
       case JsArray(JsString("ok") +: responses) => trans(responses)
       case err => throw new ProtocolException
     }
 
+  // We are only interested if a call has been successful, not in it's specifics
+  def send(params: Seq[HttpParam], command: String) = call(command, none, params:_*)
   def findNodes(request: String): Obs[NodeAnnouncements] = call(command = "router/nodes/find",
     _.flatMap(json2BitVec).map(LightningMessageCodecs.nodeAnnouncementCodec.decode(_).require.value),
     "query" -> request)
@@ -199,6 +203,7 @@ trait LNCloud { me =>
 }
 
 object LNCloud {
+  type HttpParam = (String, Object)
   val OPERATIONAL = "Operational"
   val CMDStart = "CMDStart"
 }
