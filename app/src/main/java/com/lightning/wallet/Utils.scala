@@ -78,7 +78,7 @@ object Utils { me =>
   // Fiat rates related functions, all transform a Try monad
   // Rate is fiat per BTC so we need to divide by btc factor in the end
   def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
-  def inFiat(ms: MilliSatoshi): Try[Double] = currentRate.map(ms.amount * _ / btcFactor)
+  def inFiat(ms: MilliSatoshi) = currentRate.map(perBtc => ms.amount * perBtc / btcFactor)
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
 
   // Convert pairs of strings into Java bundle
@@ -248,7 +248,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       lst.setItemChecked(0, true)
 
       def sendTx: Unit = rm(alert) {
-        val fee: Coin = if (lst.getCheckedItemPosition == 0) RatesSaver.rates.feeRisky else RatesSaver.rates.feeLive
+        val fee = if (lst.getCheckedItemPosition == 0) RatesSaver.rates.feeRisky else RatesSaver.rates.feeLive
         <(app.kit.peerGroup.broadcastTransaction(makeTx(password, pay, fee), 1).broadcast.get, errorReact)(none)
         add(me getString tx_announce, Informer.BTCEVENT).ui.run
       }
@@ -375,7 +375,7 @@ class RateManager(val content: View) { me =>
 
   val fiatListener = new TextChangedWatcher {
     def fiatDecimal = BigDecimal(fiatInput.getText.toString.noCommas)
-    def upd = setSum(currentRate.map(fiatDecimal / _) map btcBigDecimal2MilliSatoshi)
+    def upd = setSum(currentRate.map(perBtc => fiatDecimal / perBtc) map btcBigDecimal2MilliSatoshi)
     def onTextChanged(s: CharSequence, start: Int, b: Int, c: Int) = if (fiatInput.hasFocus) upd
   }
 
@@ -405,7 +405,7 @@ class BtcManager(val man: RateManager) { me =>
   def getAddress = addressData.getTag.asInstanceOf[Address]
 
   addressPaste setOnClickListener new OnClickListener {
-    def onClick(paste: View) = try setAddress(app getTo app.getBuffer)
+    def onClick(button: View) = try setAddress(app getTo app.getBuffer)
       catch { case _: Throwable => app toast dialog_addr_absent }
   }
 

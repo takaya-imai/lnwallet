@@ -49,9 +49,8 @@ abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with 
 
     // Always try to process all the remaining acts
     case (StandaloneLNCloudData(act :: ax, _), CMDStart) =>
-      def stayWithoutToken = me stayWith data.copy(acts = ax)
-      act.runStandalone(me).map(_ => stayWithoutToken)
-        .foreach(_ => me process CMDStart, errLog)
+      act.runStandalone(me).foreach(_ => me stayWith data.copy(acts = ax),
+        errLog, (/* call successfully completed */) => me process CMDStart)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -105,11 +104,11 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
 
     // No matter what the state is if we have acts and tokens
     case (LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax), CMDStart) =>
-      val base = ("point", blindPoint) :: ("cleartoken", clearToken) :: ("clearsig", clearSignature) :: Nil
-      act.runDefault(base, me).map(_ => stayWithoutData).foreach(_ => me process CMDStart, resolveError)
+      val base = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature)
+      act.runDefault(base, me).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax),
+        resolveError, (/* call successfully completed */) => me process CMDStart)
 
       // 'data' may change while request is on so we always copy it
-      def stayWithoutData = me stayWith data.copy(tokens = tx, acts = ax)
       def resolveError(servError: Throwable) = servError.getMessage match {
         case "tokeninvalid" | "tokenused" => me stayWith data.copy(tokens = tx)
         case _ => me stayWith data
