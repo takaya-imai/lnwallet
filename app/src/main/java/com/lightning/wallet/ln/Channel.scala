@@ -39,8 +39,8 @@ extends StateMachine[ChannelData] { me =>
         cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
 
       val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) = Funding.makeFirstFunderCommitTxs(cmd.localParams,
-        remoteParams, cmd.funding.txOut(cmd.outIndex).amount.toLong, cmd.pushMsat, cmd.initialFeeratePerKw, cmd.funding.hash,
-        cmd.outIndex, accept.firstPerCommitmentPoint)
+        remoteParams, cmd.funding.txOut(cmd.outIndex).amount.toLong, cmd.pushMsat, cmd.initialFeeratePerKw,
+        cmd.funding.hash, cmd.outIndex, accept.firstPerCommitmentPoint)
 
       val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
       val fundingCreated = FundingCreated(cmd.temporaryChannelId, cmd.funding.hash, cmd.outIndex, localSigOfRemoteTx)

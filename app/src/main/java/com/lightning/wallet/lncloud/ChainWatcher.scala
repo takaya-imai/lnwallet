@@ -87,7 +87,7 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     LNParams.db.change(PaymentSpecs.updSql, spec.toJson.toString,
       spec.status, spec.stamp.toString, spec.invoice.paymentHash.toString)
 
-  def addPreimage(preimage: BinaryData)(spec: OutgoingPaymentSpec): Unit = {
+  def addPreimage(spec: OutgoingPaymentSpec)(preimage: BinaryData): Unit = {
     val spec1 = spec.copy(preimage = Some(preimage), status = PaymentSpec.SUCCESS)
     me replaceOutgoingPaymentSpec spec1
   }

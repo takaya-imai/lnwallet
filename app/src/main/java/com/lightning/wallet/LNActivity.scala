@@ -140,8 +140,6 @@ with ListUpdater { me =>
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
-    (new LNCloudSpec).allTests
-
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 //      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LN).commit

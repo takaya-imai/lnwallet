@@ -20,6 +20,7 @@
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="wallet_empty">Bitcoin wallet is empty</string>
     <string name="wallet_create">Create New Wallet</string>
+    <string name="unlock">Unlock Wallet</string>
 
     <string name="sets_pass_change">Change wallet password</string>
     <string name="sets_mnemonic">View mnemonic code</string>
@@ -68,7 +69,7 @@
     <string name="tx_sent">Just sent %1$s</string>
 
     <array name="info_progress">
-        <item>Sync complete</item>
+        <item>Sync is complete</item>
         <item>Sync: %1$d day behind</item>
         <item>Sync: %1$d days behind</item>
     </array>
@@ -89,6 +90,7 @@
     <string name="restore_wallet">Restore Wallet</string>
 
     <!-- activity_btc -->
+    <string name="txs_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s]]></string>
     <string name="txs_fee_incoming"><![CDATA[<strong>Incoming transaction</strong><br>%1$s]]></string>
     <string name="txs_fee_details"><![CDATA[<strong>Outgoing transaction</strong><br>%2$s<br><strong>%1$s</strong> fee]]></string>
     <string name="txs_fee_absent"><![CDATA[<strong>Outgoing transaction</strong><br>%1$s<br><strong>No fee</strong>]]></string>
@@ -97,7 +99,7 @@
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
     <string name="txs_view_outside">View on BlockExplorer.com</string>
     <string name="txs_nothing_to_copy">Nothing to copy here</string>
-    <string name="txs_p2wsh">Channel funding</string>
+    <string name="txs_p2wsh">Payment Channel funding</string>
 
     <array name="txs_confs">
         <item><![CDATA[<font color=#E31300>Not confirmed yet</font>]]></item>
@@ -107,8 +109,8 @@
 
     <!-- errors -->
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
-    <string name="err_not_enough_funds">Failed because you don\'t currently have enough coins in a wallet. Please add some funds and then try again</string>
-    <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees without violating a protocol rules. Please add some funds and then try again</string>
+    <string name="err_not_enough_funds">Failed because you don\'t currently have enough coins in a wallet. Please add some funds and try again</string>
+    <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees without violating a protocol rules. Please add some funds and try again</string>
     <string name="err_transaction_too_large">Failed because it is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
     <string name="err_optional_field">Failed because request contains a malformed amount which could not be parsed</string>
@@ -118,56 +120,36 @@
     <string name="err_neg">Failed because request contains a negative sum amount</string>
     <string name="err_general">Failed because an unexpected error has occurred</string>
 
-    <!-- SPECIFIC TO LIGHTNING NETWORK -->
-
-    <!-- titles -->
-    <string name="btc_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s]]></string>
-    <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
-    <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
-
-    <!-- activity_ln, activity_ln_pass -->
-    <string name="ln_unlock">Unlock Wallet</string>
-    <string name="ln_backup">Set Backup Server</string>
-    <string name="ln_search">Find payments</string>
-    <string name="ln_close">Close channel</string>
-
-    <!-- setting a private backup server -->
-    <string name="ln_backup_ip">Backup server address</string>
-    <string name="ln_backup_key"><![CDATA[<small>Not sure what all this is about?<br><a href=https://lightning-wallet.com/>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
-    <string name="ln_backup_key_error">Could not set a private Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server has your backup public key and try again</string>
-    <string name="ln_backup_sig_error">Could not set a private Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
-    <string name="ln_backup_url_error">Could not set a private Backup Server because it\'s address seems to be invalid</string>
-    <string name="ln_backup_net_error">Could not set a private Backup Server because it is not reachable</string>
-    <string name="ln_backup_success">Private Backup Server has been set successfully</string>
-
-    <!-- activity_channel_ops -->
-    <string name="ln_trans_act_open">Open new channel</string>
-    <string name="ln_trans_act_close_now">Close channel now</string>
-
-    <!-- various messages -->
-    <string name="ln_state_none">A payment channel should be opened in order to send and receive LN payments\n\nPlease <a href='https://lightning-wallet.com/'>read more</a> on payment channels and Lightning network in general before proceeding</string>
-    <string name="ln_state_wait_anchor"><![CDATA[Payment channel has been established but before it becomes operational an <a href=https://lightning-wallet.com/>funding transaction</a> needs to get %1$s on a Blockchain.<br><br>Please wait a bit&#8230;<br>%2$s left]]></string>
-    <string name="ln_state_recharge"><![CDATA[Payment channel is being recharged and the new balance will be %1$s. Recharge Bitcoin transaction needs to get %1$s on a Blockchain for your channel to become operational again<br><br>Please wait a bit&#8230;<br>%3$s left]]></string>
-    <string name="ln_state_biclose_prepare">A <a href='https://lightning-wallet.com/'>mutual channel closing</a> has been initiated. Available channel balance will be transferred to your Bitcoin wallet in a <a href='https://lightning-wallet.com/'>refund Bitcoin transaction</a></string>
-    <string name="ln_state_close_tx_wait"><![CDATA[Refund Bitcoin transaction has been broadcasted. It needs to get %1$s for your current channel to become fully closed, %2$s has been sent to your Bitcoin wallet<br><br>Please wait a bit&#8230;<br>%3$s left]]></string>
-    <string name="ln_state_uniclose_sure">It would take a few days for your channel balance to be refunded to your Bitcoin wallet in a case of a <a href='https://lightning-wallet.com/'>forced close</a>.\n\nWould you like to proceed anyway?</string>
-    <string name="ln_state_uniclose"><![CDATA[Forced payment channel closing has been initiaited. <a href=https://lightning-wallet.com/>Refund Bitcoin transactions</a> listed below will be sent to your Bitcoin wallet<br><br>%1$s]]></string>
-    <string name="ln_state_uniclose_payout">%1$s in %2$s</string>
-
-    <!-- detailed info about channel opening + errors -->
-    <string name="ln_open_wait">Opening a new channel\nPlease wait a bit&#8230;</string>
-    <string name="ln_err_net">Could not proceed with your channel because of a network error</string>
-
-    <!-- ln notifications -->
-    <string name="ln_notify_connecting">Connecting&#8230;</string>
-    <string name="ln_notify_operational">Channel is ready</string>
-
     <!-- LN QR and NFC related messages -->
     <string name="nfc_enabled">NFC is on</string>
     <string name="nfc_settings">Enable NFC</string>
     <string name="nfc_got">Got an NFC payment request, would you like to proceed?</string>
     <string name="nfc_error">Could not process an NFC message\nbecause it is malformed or empty</string>
     <string name="ln_qr_warning"><![CDATA[<small>Disposable LN payment request</small><br>Do not reuse this QR code]]></string>
-    <string name="nfc_payee_tip">This payment request can be sent by touching two devices back-to-back provided payer\'s device also supports NFC technology</string>
+    <string name="nfc_payee_tip">This payment request can be sent by touching two devices back-to-back if the other device also supports NFC technology</string>
+
+    <!-- SPECIFIC TO LIGHTNING NETWORK -->
+
+    <!-- titles -->
+    <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
+    <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
+
+    <!-- activity_ln, activity_ln_pass -->
+    <string name="ln_backup">Set Backup Server</string>
+    <string name="ln_search">Find payments</string>
+    <string name="ln_close">Close channel</string>
+
+    <!-- setting a private backup server -->
+    <string name="ln_backup_ip">Backup server address</string>
+    <string name="ln_backup_key"><![CDATA[<small>Not sure what is this about?<br><a href=https://lightning-wallet.com/>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
+    <string name="ln_backup_key_error">Could not set a Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server knows your backup public key and try again</string>
+    <string name="ln_backup_sig_error">Could not set a Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
+    <string name="ln_backup_url_error">Could not set a Backup Server because it\'s address seems to be invalid</string>
+    <string name="ln_backup_net_error">Could not set a Backup Server because it is not reachable</string>
+    <string name="ln_backup_success">Backup Server has been set successfully</string>
+
+    <!-- ln notifications -->
+    <string name="ln_notify_connecting">Connecting&#8230;</string>
+    <string name="ln_notify_operational">Channel is ready</string>
 
 </resources>

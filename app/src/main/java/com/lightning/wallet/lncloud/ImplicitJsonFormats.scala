@@ -2,17 +2,17 @@ package com.lightning.wallet.lncloud
 
 import spray.json._
 import spray.json.DefaultJsonProtocol._
-
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket}
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.{lightningMessageCodec, hopsCodec}
 import com.lightning.wallet.ln.{IncomingPaymentSpec, Invoice, OutgoingPaymentSpec, PaymentSpec}
 
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.hopsCodec
 import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
+import com.lightning.wallet.ln.wire.LightningMessage
 import org.bitcoinj.core.ECKey.CURVE.getCurve
 import com.lightning.wallet.ln.Tools.Bytes
 import org.spongycastle.math.ec.ECPoint
@@ -23,7 +23,7 @@ import java.math.BigInteger
 
 
 object ImplicitJsonFormats { me =>
-  val jsonToString: JsValue => String = _.convertTo[String]
+  val jsonToString = (_: JsValue).convertTo[String]
   def json2BitVec(json: JsValue): Option[BitVector] =
     BitVector fromHex jsonToString(json)
 
@@ -61,12 +61,17 @@ object ImplicitJsonFormats { me =>
     }
   }
 
-  implicit object CoinJson extends JsonFormat[Coin] {
+  implicit object CoinFmt extends JsonFormat[Coin] {
     def read(json: JsValue) = Coin valueOf json.convertTo[Long]
     def write(coin: Coin) = coin.value.toJson
   }
 
-  implicit object PaymentRouteJson extends JsonFormat[PaymentRoute] {
+  implicit object LightningMessageFmt extends JsonFormat[LightningMessage] {
+    def read(rawJson: JsValue) = lightningMessageCodec.decode(json2BitVec(rawJson).get).require.value
+    def write(message: LightningMessage) = lightningMessageCodec.encode(message).require.toHex.toJson
+  }
+
+  implicit object PaymentRouteFmt extends JsonFormat[PaymentRoute] {
     def read(rawJson: JsValue) = hopsCodec.decode(json2BitVec(rawJson).get).require.value
     def write(route: PaymentRoute) = hopsCodec.encode(route).require.toHex.toJson
   }

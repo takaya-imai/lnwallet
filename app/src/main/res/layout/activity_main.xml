@@ -57,8 +57,8 @@
 
         <Button
             style="@style/MarginInfo"
+            android:text="@string/unlock"
             android:id="@+id/mainPassCheck"
-            android:text="@string/ln_unlock"
             android:layout_width="wrap_content"/>
 
     </LinearLayout>

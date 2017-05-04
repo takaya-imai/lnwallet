@@ -108,7 +108,7 @@ with ListUpdater { me =>
   lazy val feeDetails = getString(txs_fee_details)
   lazy val feeAbsent = getString(txs_fee_absent)
   lazy val walletEmpty = getString(wallet_empty)
-  lazy val btcTitle = getString(btc_title)
+  lazy val btcTitle = getString(txs_title)
   lazy val adapter = new BtcAdapter
 
   private[this] val txsTracker =

@@ -7,7 +7,7 @@ import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
-import fr.acinq.bitcoin.{BinaryData, Crypto, Satoshi, Transaction, TxOut}
+import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.Tools.LightningMessages
 import com.lightning.wallet.ln.MSat.satFactor
 
