@@ -10,6 +10,7 @@ import android.text.Html
 
 object ImplicitConversions {
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
+
   implicit def rawScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
     new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis)
 

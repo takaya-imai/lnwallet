@@ -137,11 +137,10 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
 
   // RESOLVING A WAIT PAYMENT STATE
 
-  private def resolvePayment(info: MemoAndSpec) = {
+  private def resolvePayment(info: MemoAndSpec) =
     // In case of error we do nothing in hope it will be resolved later, but "notfound" means we have to reset
-    val onSuccess: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens)
-    getClearTokens(info.memo).map(onSuccess).subscribe(_ => me process CMDStart, err => if (err.getMessage == "notfound") reset)
-  }
+    getClearTokens(info.memo).subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
+      err => if (err.getMessage == "notfound") reset, (/* after we got tokens */) => me process CMDStart)
 
   // TALKING TO SERVER
 

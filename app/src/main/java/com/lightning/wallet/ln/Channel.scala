@@ -18,41 +18,37 @@ extends StateMachine[ChannelData] { me =>
     case (InitData(announce), cmd: CMDOpenChannel, WAIT_FOR_INIT) =>
 
       val lp = cmd.localParams
-      val open = OpenChannel(lp.chainHash, cmd.temporaryChannelId, cmd.fundingSatoshis, cmd.pushMsat, lp.dustLimitSatoshis,
-        lp.maxHtlcValueInFlightMsat, lp.channelReserveSatoshis, lp.htlcMinimumMsat, cmd.initialFeeratePerKw, lp.toSelfDelay,
-        lp.maxAcceptedHtlcs, lp.fundingPrivKey.publicKey, lp.revocationSecret.toPoint, lp.paymentKey.toPoint,
-        Generators.perCommitPoint(lp.shaSeed, 0), lp.delayedPaymentKey.toPoint)
+      val open = OpenChannel(lp.chainHash, cmd.temporaryChannelId, cmd.funding.txOut(cmd.outIndex).amount.toLong,
+        cmd.pushMsat, lp.dustLimitSatoshis, lp.maxHtlcValueInFlightMsat, lp.channelReserveSatoshis, lp.htlcMinimumMsat,
+        cmd.initialFeeratePerKw, lp.toSelfDelay, lp.maxAcceptedHtlcs, lp.fundingPrivKey.publicKey, lp.revocationSecret.toPoint,
+        lp.paymentKey.toPoint, Generators.perCommitPoint(lp.shaSeed, 0), lp.delayedPaymentKey.toPoint)
 
       val data1 = WaitAcceptData(announce, cmd, open)
       become(data1, state1 = WAIT_FOR_ACCEPT)
 
-    case (waitAccept: WaitAcceptData, accept: AcceptChannel, WAIT_FOR_ACCEPT)
-      // GUARD: remote requires local to keep too much in reserve which is unacceptable
-      if LNParams.exceedsReserve(accept.channelReserveSatoshis, waitAccept.cmd.fundingSatoshis) =>
+    case (waitAccept @ WaitAcceptData(_, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT)
+      // GUARD: remote requires local to keep way too much in local reserve which is not acceptable
+      if LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.funding.txOut(cmd.outIndex).amount.toLong) =>
       become(waitAccept, FINISHED)
 
-    case (waitAccept: WaitAcceptData, accept: AcceptChannel, WAIT_FOR_ACCEPT) =>
+    // They have accepted our proposal, now let them sign a first commit tx
+    case (WaitAcceptData(announce, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT) =>
       val remoteParams = RemoteParams(accept.dustLimitSatoshis, accept.maxHtlcValueInFlightMsat,
         accept.channelReserveSatoshis, accept.htlcMinimumMsat, accept.toSelfDelay, accept.maxAcceptedHtlcs,
         accept.fundingPubkey, accept.revocationBasepoint, accept.paymentBasepoint, accept.delayedPaymentBasepoint,
-        waitAccept.cmd.remoteInit.globalFeatures, waitAccept.cmd.remoteInit.localFeatures)
+        cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
 
-      become(data1 = WaitFundingTxData(waitAccept.announce, waitAccept.cmd,
-        accept.firstPerCommitmentPoint, remoteParams), WAIT_FUNDING_CREATED)
+      val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) = Funding.makeFirstFunderCommitTxs(cmd.localParams,
+        remoteParams, cmd.funding.txOut(cmd.outIndex).amount.toLong, cmd.pushMsat, cmd.initialFeeratePerKw, cmd.funding.hash,
+        cmd.outIndex, accept.firstPerCommitmentPoint)
 
-    // We now have a funding tx with funding out
-    case (wait: WaitFundingTxData, Tuple2(funding: Transaction, outIndex: Int), WAIT_FUNDING_CREATED) =>
-      val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) = Funding.makeFirstFunderCommitTxs(wait.cmd.localParams,
-        wait.remoteParams, wait.cmd.fundingSatoshis, wait.cmd.pushMsat, wait.cmd.initialFeeratePerKw, funding.hash,
-        outIndex, wait.firstRemotePoint)
+      val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
+      val fundingCreated = FundingCreated(cmd.temporaryChannelId, cmd.funding.hash, cmd.outIndex, localSigOfRemoteTx)
+      val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
 
-      val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, wait.cmd.localParams.fundingPrivKey)
-      val fundingCreated = FundingCreated(wait.cmd.temporaryChannelId, funding.hash, outIndex, localSigOfRemoteTx)
-      val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, wait.firstRemotePoint)
-
-      become(WaitFundingSignedData(wait.announce, Tools.toLongId(funding.hash, outIndex),
-        wait.cmd.localParams, wait.remoteParams, funding, localSpec, localCommitTx,
-        firstRemoteCommit, fundingCreated), state1 = WAIT_FUNDING_SIGNED)
+      become(WaitFundingSignedData(announce, Tools.toLongId(cmd.funding.hash, cmd.outIndex),
+        cmd.localParams, remoteParams, cmd.funding, localSpec, localCommitTx, firstRemoteCommit,
+        fundingCreated), state1 = WAIT_FUNDING_SIGNED)
 
     // They have signed our first commit tx, we can broadcast a funding tx
     case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED) =>

@@ -6,12 +6,12 @@ import collection.JavaConverters._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import rx.lang.scala.{Subscription, Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, OutPoint}
 import org.bitcoinj.core.{Coin, Transaction}
 
-import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.wallet.Wallet
@@ -31,6 +31,7 @@ object ChainWatcher {
 
   def watchInputUsedLocal(fundPoint: OutPoint) = Obs[Transaction] { obs =>
     val usesInput = (_: Transaction).getInputs.asScala.map(_.getOutpoint) exists { point =>
+      // We are looking for an input which spends exactly our funding tx hash and output index
       point.getIndex == fundPoint.index && point.getHash.toString == fundPoint.hash.toString
     }
 
