@@ -105,15 +105,15 @@ abstract class StateMachine[T] { me =>
   var data: T = _
 
   def become(data1: T, state1: String) = {
-    Tools.log(s"StateMachine: $state1 : $data1")
     // Should be defined before the vars are updated
     val transition = (data, data1, state, state1)
     wrap { data = data1 } { state = state1 }
     events onBecome transition
   }
 
-  def process(change: Any) = try {
-    me synchronized doProcess(change)
-    events onPostProcess change
-  } catch events.onError
+  def process(x: Any) =
+    try me synchronized {
+      doProcess(change = x)
+      events onPostProcess x
+    } catch events.onError
 }
