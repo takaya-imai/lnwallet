@@ -5,11 +5,10 @@ import spray.json.DefaultJsonProtocol._
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.{lightningMessageCodec, hopsCodec}
+import com.lightning.wallet.lncloud.LNCloud.{ClearToken, MemoAndInvoice}
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.{hopsCodec, lightningMessageCodec}
 import com.lightning.wallet.ln.{IncomingPaymentSpec, Invoice, OutgoingPaymentSpec, PaymentSpec}
-
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
-import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.ln.wire.LightningMessage
@@ -23,17 +22,17 @@ import java.math.BigInteger
 
 
 object ImplicitJsonFormats { me =>
-  val jsonToString = (_: JsValue).convertTo[String]
+  val json2String = (_: JsValue).convertTo[String]
   def json2BitVec(json: JsValue): Option[BitVector] =
-    BitVector fromHex jsonToString(json)
+    BitVector fromHex json2String(json)
 
   implicit object BigIntegerFmt extends JsonFormat[BigInteger] {
-    def read(json: JsValue) = new BigInteger(me jsonToString json)
+    def read(json: JsValue) = new BigInteger(me json2String json)
     def write(internal: BigInteger) = internal.toString.toJson
   }
 
   implicit object ECPointFmt extends JsonFormat[ECPoint] {
-    def read(json: JsValue) = (jsonToString andThen HEX.decode andThen getCurve.decodePoint)(json)
+    def read(json: JsValue) = (json2String andThen HEX.decode andThen getCurve.decodePoint)(json)
     def write(internal: ECPoint): JsValue = HEX.encode(internal getEncoded true).toJson
   }
 
@@ -107,17 +106,14 @@ object ImplicitJsonFormats { me =>
   implicit val ratesFmt = jsonFormat[RatesMap, Seq[Double], Coin, Coin, Long,
     Rates](Rates.apply, "exchange", "feeHistory", "feeLive", "feeRisky", "stamp")
 
-  implicit val memoAndSpecFmt = jsonFormat[BlindMemo, OutgoingPaymentSpec,
-    MemoAndSpec](MemoAndSpec.apply, "memo", "spec")
-
   implicit val pingLNCLoudAct = jsonFormat[String, String,
     PingCloudAct](PingCloudAct.apply, "data", "kind")
 
-  implicit val lnCloudDataFmt = jsonFormat[Option[MemoAndSpec], List[ClearToken], List[LNCloudAct],
+  implicit val lnCloudDataFmt = jsonFormat[Option[MemoAndInvoice], List[ClearToken], List[LNCloudAct],
     LNCloudData](LNCloudData.apply, "info", "tokens", "acts")
 
-  implicit val standaloneLNCloudDataFmt = jsonFormat[List[LNCloudAct], String,
-    StandaloneLNCloudData](StandaloneLNCloudData.apply, "acts", "url")
+  implicit val lbCloudDataPrivateFmt = jsonFormat[List[LNCloudAct], String,
+    LNCloudDataPrivate](LNCloudDataPrivate.apply, "acts", "url")
 
   implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")

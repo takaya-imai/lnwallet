@@ -67,6 +67,7 @@ object Utils { me =>
   lazy val sumIn = app getString txs_sum_in
   lazy val sumOut = app getString txs_sum_out
 
+  def humanPubkey(key: String) = key grouped 2 mkString "\u0020"
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   def humanFiat(amount: Try[Double], prefix: String): String = amount match {
     case Success(amt) if currentFiatName == strYuan => s"$prefix<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
@@ -80,12 +81,6 @@ object Utils { me =>
   def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
   def inFiat(ms: MilliSatoshi) = currentRate.map(perBtc => ms.amount * perBtc / btcFactor)
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
-
-  // Convert pairs of strings into Java bundle
-  def mkBundle(args:(String, String)*) = new Bundle match { case bundle =>
-    for (Tuple2(key, value) <- args) bundle.putString(key, value)
-    bundle
-  }
 }
 
 trait InfoActivity extends ToolbarActivity { me =>

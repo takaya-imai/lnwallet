@@ -242,7 +242,7 @@ object Commitments {
 
   private def doReceiveAdd(c: Commitments, add: UpdateAddHtlc, blockCount: Int) =
     if (add.amountMsat < c.localParams.htlcMinimumMsat) throw ChannelException(HTLC_VALUE_TOO_SMALL)
-    else if (add.expiry < blockCount + LNParams.minExpiryBlocks) throw ChannelException(HTLC_EXPIRY_TOO_SOON)
+    else if (add.expiry < blockCount + LNParams.untilExpiryBlocks) throw ChannelException(HTLC_EXPIRY_TOO_SOON)
     else if (add.id != c.remoteNextHtlcId) throw ChannelException(HTLC_UNEXPECTED_ID)
     else {
 

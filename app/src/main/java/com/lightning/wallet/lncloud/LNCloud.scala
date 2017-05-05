@@ -6,18 +6,18 @@ import com.lightning.wallet.ln._
 import com.softwaremill.quicklens._
 import com.lightning.wallet.lncloud.LNCloud._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
-import com.lightning.wallet.ln.Tools.{errLog, wrap, none}
-import com.lightning.wallet.ln.wire.{LightningMessageCodecs, UpdateFulfillHtlc}
-import com.lightning.wallet.lncloud.ImplicitJsonFormats.{json2BitVec, jsonToString}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.NodeAnnouncements
-import com.lightning.wallet.lncloud.DefaultLNCloudSaver.ClearToken
-import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
+
 import collection.JavaConverters.mapAsJavaMapConverter
+import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 import com.github.kevinsawicki.http.HttpRequest.post
 import rx.lang.scala.schedulers.IOScheduler
+import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
@@ -26,53 +26,36 @@ import org.bitcoinj.core.ECKey
 import scala.util.Success
 
 
-trait LNCloudAct {
-  def runDefault(base: Seq[HttpParam], cloud: DefaultLNCloud): Obs[Unit]
-  def runStandalone(cloud: StandaloneCloud): Obs[Unit]
-}
-
-// Used mainly for testing purposes
-case class PingCloudAct(data: String, kind: String = "PingCloudAct") extends LNCloudAct {
-  def runDefault(base: Seq[HttpParam], cloud: DefaultLNCloud) = cloud.send(base :+ ("data", data), "ping")
-  def runStandalone(cloud: StandaloneCloud): Obs[Unit] = cloud.send(params = Seq("data" -> data), "ping")
-}
-
-case class StandaloneLNCloudData(acts: List[LNCloudAct], url: String)
-abstract class StandaloneCloud extends StateMachine[StandaloneLNCloudData] with LNCloud { me =>
-  override def http(way: String) = post(s"http://${data.url}/v1/$way", true) connectTimeout 10000
+case class LNCloudDataPrivate(acts: List[LNCloudAct], url: String)
+abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Pathfinder { me =>
+  def tryIfWorks(dummy: BinaryData) = lnCloud.call("sig/check", identity, sign(dummy):_*)
   lazy val prefix = LNParams.extendedCloudPrivateKey.publicKey.toString take 8
 
   def doProcess(change: Any) = (data, change) match {
-    case (StandaloneLNCloudData(acts, url), act: LNCloudAct) =>
-      me stayWith StandaloneLNCloudData(act :: acts take 1000, url)
+    case (LNCloudDataPrivate(acts, url), act: LNCloudAct) =>
+      me stayWith data.copy(acts = act :: acts take 1000)
       me process CMDStart
 
-    // Always try to process all the remaining acts
-    case (StandaloneLNCloudData(act :: ax, _), CMDStart) =>
-      act.runStandalone(me).foreach(_ => me stayWith data.copy(acts = ax),
-        errLog, (/* call successfully completed */) => me process CMDStart)
+    case (LNCloudDataPrivate(act :: ax, _), CMDStart) =>
+      act.runPrivate(me).foreach(_ => me stayWith data.copy(acts = ax),
+        none, (/* successfully completed */) => me process CMDStart)
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools.log(s"StandaloneCloud: unhandled $data : $change")
+      Tools.log(s"LNCloudPrivate: unhandled $data : $change")
   }
 
-  def sign(data: BinaryData) = Crypto encodeSignature {
+  def sign(data: BinaryData) = {
     val signKey = LNParams.extendedCloudPrivateKey.privateKey
-    Crypto.sign(data, signKey)
+    val signature = Crypto encodeSignature Crypto.sign(data, signKey)
+    Seq("sig" -> signature.toString, "prefix" -> prefix, body -> data.toString)
   }
-
-  def tryIfWorks(data: BinaryData) = call(command = "sig/check", identity,
-    "sig" -> sign(data).toString, "data" -> data.toString, "prefix" -> prefix)
 }
 
-case class MemoAndSpec(memo: BlindMemo, spec: OutgoingPaymentSpec)
-case class LNCloudData(info: Option[MemoAndSpec], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
-abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud with StateMachineListener { me =>
-
-  val bag: PaymentSpecBag
+case class LNCloudData(info: Option[MemoAndInvoice], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
+abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder with StateMachineListener { me =>
   private def reset = me stayWith data.copy(info = None)
-  private def resetStart = wrap(me process CMDStart)(reset)
+  val bag: PaymentSpecBag
 
   // LISTENING TO CHANNEL
 
@@ -80,33 +63,28 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
   override def onPostProcess = {
     case fulfill: UpdateFulfillHtlc =>
       // This may be our HTLC, check it
-      me process fulfill
+      me process CMDStart
   }
 
-  // STATE MACHINE STUFF
+  // STATE MACHINE
 
   def doProcess(change: Any) = (data, change) match {
     case (LNCloudData(None, Nil, _), CMDStart) => for {
       Tuple2(invoice, memo) <- retry(getInfo, pickInc, 1 to 3)
       Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 1 to 3)
-    } me process MemoAndSpec(memo, spec)
+    } me process Tuple2(memo, spec)
 
-    case (LNCloudData(None, tokens, acts), mas: MemoAndSpec) =>
-      // Eliminating possible race condition by locking a change here
-      // We hope HTLC gets accepted but will also catch an error
-      me stayWith LNCloudData(info = Some(mas), tokens, acts)
-      channel process SilentAddHtlc(mas.spec)
-
-    // Our HTLC has been fulfilled so we can ask for tokens
-    case (LNCloudData(Some(info), _, _), fulfill: UpdateFulfillHtlc)
-      if fulfill.paymentHash == info.spec.invoice.paymentHash =>
-      me resolvePayment info
+    // This payment request may arrive in some time after an initialization above,
+    // hence we explicitly state that it can only be accepted if info == None to avoid race condition
+    case (LNCloudData(None, _, _), (memo: BlindMemo, spec: OutgoingPaymentSpec) /* payment request */) =>
+      me stayWith data.copy(info = Some apply memo -> spec.invoice)
+      channel process SilentAddHtlc(spec)
 
     // No matter what the state is if we have acts and tokens
     case (LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax), CMDStart) =>
       val base = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature)
-      act.runDefault(base, me).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax),
-        resolveError, (/* call successfully completed */) => me process CMDStart)
+      act.runPublic(base, me).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError,
+        (/* successfully completed */) => me process CMDStart)
 
       // 'data' may change while request is on so we always copy it
       def resolveError(servError: Throwable) = servError.getMessage match {
@@ -116,12 +94,12 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
 
     // Start request while payment is in progress,
     // it may be finished already so we ask the bag
-    case (LNCloudData(Some(info), _, _), CMDStart) =>
-      bag getOutgoingPaymentSpec info.spec.invoice.paymentHash match {
-        case Success(spec) if spec.status == PaymentSpec.SUCCESS => me resolvePayment info
-        case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => resetStart
+    case (LNCloudData(Some(memo >< invoice), _, _), CMDStart) =>
+      bag.getOutgoingPaymentSpec(hash = invoice.paymentHash) match {
+        case Success(spec) if spec.status == PaymentSpec.SUCCESS => me resolve memo
+        case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => reset
         case Success(_) => me stayWith data
-        case _ => resetStart
+        case _ => reset
       }
 
     case (_, act: LNCloudAct) =>
@@ -132,14 +110,15 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools.log(s"DefaultLNCloud: unhandled $data : $change")
+      Tools.log(s"LNCloudPublic: unhandled $data : $change")
   }
 
-  // RESOLVING A WAIT PAYMENT STATE
+  // PAYMENT STATE MANAGEMENT
 
-  private def resolvePayment(info: MemoAndSpec) =
-    // In case of error we do nothing in hope it will be resolved later, but "notfound" means we have to reset
-    getClearTokens(info.memo).subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
+  def resolve(memo: BlindMemo) =
+    // Discard info which is irrelevant now and add tokens
+    // In case of error we do nothing, but "notfound" means we have to reset
+    getClearTokens(memo).subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
       err => if (err.getMessage == "notfound") reset, (/* after we got tokens */) => me process CMDStart)
 
   // TALKING TO SERVER
@@ -150,58 +129,86 @@ abstract class DefaultLNCloud extends StateMachine[LNCloudData] with LNCloud wit
     invoice.modify(_.message) setTo Some(text)
   }
 
-  def getInfo = call("blindtokens/info", identity) flatMap { raw =>
-    val JsString(pubQ) +: JsString(pubR) +: JsNumber(qty) +: _ = raw
-    val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubR)
-    val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubQ)
+  def getInfo = lnCloud.call("blindtokens/info", identity) flatMap { raw =>
+    val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
+    val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubKeyR)
+    val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubKeyQ)
 
     // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
     val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
     val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
 
-    call("blindtokens/buy", jsonToString andThen Invoice.parse apply _.head,
+    lnCloud.call("blindtokens/buy", jsons => Invoice parse json2String(jsons.head),
       "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.toString.hex)
-        .filter(_.sum.amount < 50000000).map(augmentInvoice(_, qty.toInt) -> memo)
+      .map(augmentInvoice(_, qty.toInt) -> memo)
   }
 
-  def getClearTokens(memo: BlindMemo) = call("blindtokens/redeem",
-    sigHats => for (blind <- sigHats) yield jsonToString(blind).bigInteger,
-    "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
+  def getClearTokens(memo: BlindMemo) =
+    lnCloud.call("blindtokens/redeem", _.map(json2String(_).bigInteger),
+      "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
 }
 
-trait LNCloud { me =>
+// Concrete cloud acts
+
+trait LNCloudAct {
+  def runPublic(base: Seq[HttpParam], cloud: LNCloudPublic): Obs[Unit]
+  def runPrivate(cloud: LNCloudPrivate): Obs[Unit]
+}
+
+// Used for testing purposes
+case class PingCloudAct(data: String, kind: String = "PingCloudAct") extends LNCloudAct {
+  def runPublic(base: Seq[HttpParam], cloud: LNCloudPublic) = cloud.lnCloud.call("ping", println, body -> data)
+  def runPrivate(cloud: LNCloudPrivate): Obs[Unit] = cloud.lnCloud.call("ping", println, body -> data)
+}
+
+// Pathfinder needs a channel reference
+// to search for outgoing routes
+
+trait Pathfinder {
+  val lnCloud: LNCloud
   val channel: StateMachine[ChannelData]
-  def makeOutgoingSpec(invoice: Invoice) =
-    findRoutes(channel.data.announce.nodeId, invoice.nodeId) map { routes =>
-      PaymentSpec.makeOutgoingSpec(routes, invoice, LNParams.myHtlcExpiry)
-    }
 
-  def http(way: String) = {
-    val address = s"http://10.0.2.2:9002/v1/$way"
-    post(address, true) connectTimeout 10000
+  def makeOutgoingSpec(invoice: Invoice) = {
+    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId)
+    for (routes <- routesObs) yield PaymentSpec.makeOutgoingSpec(routes, invoice, LNParams.myHtlcExpiry)
   }
+}
 
-  def call[T](command: String, trans: Vector[JsValue] => T, params: HttpParam*) =
+// This is a basic interface to cloud which does not require a channel
+// failover invariant will fall back to default in case of failure
+
+class LNCloud(url: String = "10.0.2.2:9002") {
+  def http(way: String) = post(s"http://$url/v1/$way", true) connectTimeout 7500
+  def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
-      case JsArray(JsString("ok") +: responses) => trans(responses)
+      case JsArray(JsString("ok") +: responses) => process(responses)
       case err => throw new ProtocolException
     }
 
-  // We are only interested if a call has been successful, not in it's specifics
-  def send(params: Seq[HttpParam], command: String) = call(command, none, params:_*)
-  def findNodes(request: String): Obs[NodeAnnouncements] = call(command = "router/nodes/find",
-    _.flatMap(json2BitVec).map(LightningMessageCodecs.nodeAnnouncementCodec.decode(_).require.value),
-    "query" -> request)
+  def getRawData(key: String) = call("data/get", _.head, "key" -> key)
+  def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes/find",
+    _.flatMap(json2BitVec).map(nodeAnnouncementCodec.decode(_).require.value),
+    "query" -> query)
 
   // A vector of vectors of hops
-  def findRoutes(fromNodeId: BinaryData, toNodeId: PublicKey) = call("router/routes",
-    _.flatMap(json2BitVec).map(LightningMessageCodecs.hopsCodec.decode(_).require.value),
-    "from" -> fromNodeId.toString, "to" -> toNodeId.toString)
+  def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes",
+    _.flatMap(json2BitVec).map(hopsCodec.decode(_).require.value),
+    "from" -> from.toString, "to" -> to.toString)
+}
+
+class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
+  override def getRawData(key: String) = super.getRawData(key).onErrorResumeNext(_ => failover getRawData key)
+  override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
+  override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to)
+    .onErrorResumeNext(_ => failover.findRoutes(from, to) /* failover */)
 }
 
 object LNCloud {
   type HttpParam = (String, Object)
+  type ClearToken = (String, String, String)
+  type MemoAndInvoice = (BlindMemo, Invoice)
   val OPERATIONAL = "Operational"
   val CMDStart = "CMDStart"
+  val body = "body"
 }

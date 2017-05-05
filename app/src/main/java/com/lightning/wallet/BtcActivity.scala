@@ -246,7 +246,7 @@ with ListUpdater { me =>
   }
 
   override def onResume = {
-    wrap(super.onResume)(checkTrans)
+    wrap(super.onResume)(checkTransData)
     app.TransData.value = null
   }
 
@@ -254,7 +254,7 @@ with ListUpdater { me =>
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
     app.TransData parseValue asText
-    checkTrans
+    checkTransData
 
   } catch { case _: Throwable =>
     // Could not process a message
@@ -262,7 +262,7 @@ with ListUpdater { me =>
   }
 
   // Working with transitional data and NFC
-  def checkTrans = app.TransData.value match {
+  def checkTransData = app.TransData.value match {
     case uri: BitcoinURI => pay.set(Try(uri.getAmount), uri.getAddress)
     case bitcoinAddress: Address => pay setAddress bitcoinAddress
     case unusable => println(s"Unknown TransData: $unusable")

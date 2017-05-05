@@ -3,13 +3,13 @@ package com.lightning.wallet.test
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop, NodeAnnouncement, UpdateFulfillHtlc}
-import com.lightning.wallet.lncloud.DefaultLNCloudSaver._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import rx.lang.scala.schedulers.IOScheduler
-import rx.lang.scala.{Observable => Obs}
+
+import scala.util.Try
 
 
 class LNCloudSpec {
@@ -25,20 +25,26 @@ class LNCloudSpec {
 
   val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
 
+  object TestPaymentSpecBag extends PaymentSpecBag {
+    def getIncomingPaymentSpec(hash: BinaryData) = ???
+    def getOutgoingPaymentSpec(hash: BinaryData) = Try(OutgoingPaymentSpec(null, PaymentSpec.SUCCESS, 1, None, 1,
+      null, null, 1))
+  }
+
   val hops = Vector(
     Hop(a, b, channelUpdate_ab),
     Hop(b, c, channelUpdate_bc),
     Hop(c, d, channelUpdate_cd),
     Hop(d, e, channelUpdate_de))
 
-  val chan = new StateMachine[ChannelData] { me =>
+  val chan = new StateMachine[ChannelData] {
 
     data = InitData(NodeAnnouncement(null, 1, e, null, null, null, null))
 
     def doProcess(change: Any) = change match {
       case SilentAddHtlc(spec) =>
         println(s"Channel mock got a silent spec: $spec")
-        me process UpdateFulfillHtlc(null, 1, preimage)
+        process(UpdateFulfillHtlc(null, 1, preimage))
 
       case _ =>
         println(s"Channel mock got something: $change")
@@ -47,12 +53,13 @@ class LNCloudSpec {
   }
 
   def getCloud =
-    DefaultLNCloudSaver.tryGetObject.map { savedData =>
+    LNCloudPublicSaver.tryGetObject.map { savedData =>
       println(s"Got LNCloudData from db: $savedData")
 
-      new DefaultLNCloud {
-        val bag = PaymentSpecWrap
+      new LNCloudPublic {
+        val bag = TestPaymentSpecBag
         lazy val channel = chan
+        lazy val lnCloud = new LNCloud
         state = LNCloud.OPERATIONAL
         data = savedData
 
@@ -62,14 +69,15 @@ class LNCloudSpec {
       }
 
     } getOrElse {
-      val data = LNCloudData(info = None, tokens = Nil, acts = Nil)
+      val data1 = LNCloudData(info = None, tokens = Nil, acts = for (n <- (0 to 400).toList) yield PingCloudAct(s"call $n"))
       println(s"Creating a new LNCloudData")
 
-      new DefaultLNCloud {
-        val bag = PaymentSpecWrap
+      new LNCloudPublic {
+        val bag = TestPaymentSpecBag
         lazy val channel = chan
+        lazy val lnCloud = new LNCloud
         state = LNCloud.OPERATIONAL
-        data = data
+        data = data1
 
         override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
           PaymentSpec.makeOutgoingSpec(Vector(hops), invoice, LNParams.myHtlcExpiry)
@@ -81,8 +89,6 @@ class LNCloudSpec {
   def allTests = {
 
     val cloud1 = getCloud
-    println(cloud1.data.acts.size)
-    cloud1 process PingCloudAct(System.currentTimeMillis.toString)
-
+    cloud1 process PingCloudAct("call a")
   }
 }

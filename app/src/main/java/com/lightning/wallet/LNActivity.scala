@@ -24,7 +24,7 @@ import android.os.Bundle
 import Utils.app
 import android.database.Cursor
 import android.support.v4.view.MenuItemCompat
-import android.support.v7.widget.SearchView.OnCloseListener
+import android.support.v7.widget.SearchView.{OnCloseListener, OnQueryTextListener}
 import android.view.View.OnClickListener
 import android.webkit.URLUtil
 import com.lightning.wallet.lncloud.JsonHttpUtils._
@@ -40,9 +40,33 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 
+trait SearchBar { me =>
+  import android.support.v7.widget.SearchView
+  protected[this] var search: SearchView = _
+
+  private[this] val lst = new OnQueryTextListener {
+    def onQueryTextSubmit(queryText: String) = true
+    def onQueryTextChange(queryText: String) =
+      runAnd(true)(me react queryText)
+  }
+
+  def setupSearch(menu: Menu) = {
+    val item = menu findItem R.id.action_search
+    val view = MenuItemCompat.getActionView(item)
+    search = view.asInstanceOf[SearchView]
+    search setOnQueryTextListener lst
+  }
+
+  def react(query: String)
+  def mkBundle(args:(String, String)*) = new Bundle match { case bundle =>
+    for (Tuple2(key, value) <- args) bundle.putString(key, value)
+    bundle
+  }
+}
+
 class LNActivity extends NfcReaderActivity
 with ToolbarActivity with HumanTimeDisplay
-with ListUpdater { me =>
+with ListUpdater with SearchBar { me =>
 
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   lazy val lnItemsList = findViewById(R.id.lnItemsList).asInstanceOf[ListView]
@@ -140,6 +164,8 @@ with ListUpdater { me =>
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
+    //me exitTo classOf[LNOpsActivity]
+
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 //      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LN).commit
@@ -184,21 +210,11 @@ with ListUpdater { me =>
   }
 
   // Menu area
-  import android.support.v7.widget.SearchView
+
+  def react(query: String) = println(query)
   override def onCreateOptionsMenu(menu: Menu) = {
-    getMenuInflater.inflate(R.menu.ln_ops, menu)
-    val view = MenuItemCompat.getActionView(menu findItem R.id.action_search)
-    val search = view.asInstanceOf[SearchView]
-
-    search setOnQueryTextListener
-      new SearchView.OnQueryTextListener {
-        override def onQueryTextSubmit(text: String) = true
-        override def onQueryTextChange(text: String) = runAnd(true) {
-          val bundle = if (text.isEmpty) null else mkBundle(TEXT -> text)
-          //recentPayments reload bundle
-        }
-      }
-
+    getMenuInflater.inflate(R.menu.ln_normal_ops, menu)
+    setupSearch(menu)
     true
   }
 

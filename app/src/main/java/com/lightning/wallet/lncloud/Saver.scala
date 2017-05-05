@@ -46,18 +46,17 @@ trait Saver {
   def save(snap: JsValue) = StorageWrap.put(snap.toString, KEY)
 }
 
-object DefaultLNCloudSaver extends Saver {
-  type ClearToken = (String, String, String)
+object LNCloudPublicSaver extends Saver {
   def tryGetObject = tryGet map to[LNCloudData]
   def saveObject(data: LNCloudData) = save(data.toJson)
-  val KEY = "lnCloud9"
+  val KEY = "lnCloudPublic1"
 }
 
-object StandaloneCloudSaver extends Saver {
+object LNCloudPrivateSaver extends Saver {
+  def tryGetObject = tryGet map to[LNCloudDataPrivate]
+  def saveObject(data: LNCloudDataPrivate) = save(data.toJson)
   def remove = LNParams.db.change(Storage.killSql, KEY)
-  def tryGetObject = tryGet map to[StandaloneLNCloudData]
-  def saveObject(data: StandaloneLNCloudData) = save(data.toJson)
-  val KEY = "standaloneCloud9"
+  val KEY = "lnCloudPrivate1"
 }
 
 trait Rate { def now: Double }
@@ -73,7 +72,7 @@ object RatesSaver extends Saver { me =>
   type BitpayRatesList = List[BitpayRate]
   type BitpayRatesMap = Map[String, BitpayRate]
   type RatesMap = Map[String, Double]
-  val KEY = "rates9"
+  val KEY = "rates10"
 
   def toRates(src: ExchangeRateProvider): RatesMap = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def toRates(map: BitpayRatesMap): RatesMap = Map(strDollar -> map("USD").now, strEuro -> map("EUR").now, strYuan -> map("CNY").now)

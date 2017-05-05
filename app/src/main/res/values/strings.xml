@@ -152,4 +152,8 @@
     <string name="ln_notify_connecting">Connecting&#8230;</string>
     <string name="ln_notify_operational">Channel is ready</string>
 
+    <!-- activity_ln_ops -->
+    <string name="ln_ops_description">Bitcoin Lightning Network allows for fast and secure micropayments with a near zero transaction fees\n\nIn order to send and receive Lightning payments you need to open a Payment Channel with one of network nodes and fund it with a single Bitcoin transaction</string>
+    <string name="ln_ops_more"><a href='https://lightning-wallet.com/#mnemonic-code'>Read more about\nLightning Network</a></string>
+    <string name="ln_ops_start">Open Payment Channel</string>
 </resources>

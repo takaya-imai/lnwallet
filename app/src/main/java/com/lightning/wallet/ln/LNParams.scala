@@ -8,9 +8,9 @@ import com.lightning.wallet.Utils.app
 
 
 object LNParams {
-  var broadcaster: Broadcaster = _
   var extendedPrivateKey: ExtendedPrivateKey = _
   var extendedCloudPrivateKey: ExtendedPrivateKey = _
+  var broadcaster: Broadcaster = _
   var db: CipherOpenHelper = _
 
   def isSetUp: Boolean = db != null
@@ -22,29 +22,17 @@ object LNParams {
   }
 
   val updateFeeMinDiffRatio = 0.25 // Must update
-  val chainHash = Block.TestnetGenesisBlock.blockId
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val maxHtlcValue = MilliSatoshi(4294967295L)
-
-  // mandatory public channel, sync off
-  val localFeatures = BinaryData("01")
-  val globalFeatures = BinaryData("")
-
   val maxReserveToFundingRatio = 0.05 // %
   val reserveToFundingRatio = 0.01 // %
-  val htlcMinimumMsat = 500
-  val maxAcceptedHtlcs = 10
+  val untilExpiryBlocks = 6
   val minDepth = 2
-
-  val dustLimitSatoshis = 542
-  val feeBaseMsat = 546000
-  val minExpiryBlocks = 6
-  val toSelfDelay = 144
 
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
     derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
 
-  def myHtlcExpiry = broadcaster.currentHeight + minExpiryBlocks
+  def myHtlcExpiry = broadcaster.currentHeight + untilExpiryBlocks
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
@@ -54,12 +42,11 @@ object LNParams {
   }
 
   def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
-    LocalParams(chainHash = chainHash, dustLimitSatoshis = dustLimitSatoshis, maxHtlcValueInFlightMsat = Long.MaxValue,
-      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat, toSelfDelay, maxAcceptedHtlcs,
-      fundingPrivKey = deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = deriveParamsPrivateKey(keyIndex, 1L),
-      paymentKey = deriveParamsPrivateKey(keyIndex, 2L), delayedPaymentKey = deriveParamsPrivateKey(keyIndex, 3L),
-      defaultFinalScriptPubKey = finalScriptPubKey, shaSeed = sha256(deriveParamsPrivateKey(keyIndex, 4L).toBin),
-      isFunder = true, globalFeatures, localFeatures)
+    LocalParams(Block.TestnetGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
+      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 10,
+      fundingPrivKey = deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = deriveParamsPrivateKey(keyIndex, 1L), paymentKey = deriveParamsPrivateKey(keyIndex, 2L),
+      delayedPaymentKey = deriveParamsPrivateKey(keyIndex, 3L), defaultFinalScriptPubKey = finalScriptPubKey, shaSeed = sha256(deriveParamsPrivateKey(keyIndex, 4L).toBin),
+      isFunder = true, globalFeatures = "", localFeatures = "01")
 }
 
 trait Broadcaster {
