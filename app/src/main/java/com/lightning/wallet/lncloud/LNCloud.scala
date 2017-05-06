@@ -187,7 +187,7 @@ class LNCloud(url: String = "10.0.2.2:9002") {
     }
 
   def getRawData(key: String) = call("data/get", _.head, "key" -> key)
-  def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes/find",
+  def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes",
     _.flatMap(json2BitVec).map(nodeAnnouncementCodec.decode(_).require.value),
     "query" -> query)
 
@@ -200,15 +200,19 @@ class LNCloud(url: String = "10.0.2.2:9002") {
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def getRawData(key: String) = super.getRawData(key).onErrorResumeNext(_ => failover getRawData key)
   override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
-  override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to)
-    .onErrorResumeNext(_ => failover.findRoutes(from, to) /* failover */)
+  override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to).onErrorResumeNext {
+    // Our counterparty may be blacklisted which means our channel is unusable so we account for this case
+    error => if (error.getMessage == fromBlacklisted) Obs error error else failover.findRoutes(from, to)
+  }
 }
 
 object LNCloud {
   type HttpParam = (String, Object)
   type ClearToken = (String, String, String)
   type MemoAndInvoice = (BlindMemo, Invoice)
+  val fromBlacklisted = "fromblacklisted"
+  val body = "body"
+
   val OPERATIONAL = "Operational"
   val CMDStart = "CMDStart"
-  val body = "body"
 }
