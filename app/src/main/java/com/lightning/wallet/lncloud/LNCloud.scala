@@ -138,7 +138,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
     val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
     val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
 
-    lnCloud.call("blindtokens/buy", jsons => Invoice parse json2String(jsons.head),
+    lnCloud.call("blindtokens/buy", json => Invoice parse json2String(json.head),
       "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.toString.hex)
       .map(augmentInvoice(_, qty.toInt) -> memo)
   }

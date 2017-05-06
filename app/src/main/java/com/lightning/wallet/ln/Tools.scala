@@ -97,7 +97,7 @@ class StateMachineListenerProxy extends StateMachineListener {
   override def onPostProcess = { case x => for (lst <- listeners) lst onPostProcess x }
 }
 
-abstract class StateMachine[T] { me =>
+abstract class StateMachine[T] { self =>
   val events = new StateMachineListenerProxy
   def stayWith(data1: T) = become(data1, state)
   def doProcess(change: Any)
@@ -111,9 +111,9 @@ abstract class StateMachine[T] { me =>
     events onBecome transition
   }
 
-  def process(x: Any) =
-    try me synchronized {
-      doProcess(change = x)
-      events onPostProcess x
+  def process(some: Any) =
+    try self synchronized {
+      doProcess(change = some)
+      events onPostProcess some
     } catch events.onError
 }

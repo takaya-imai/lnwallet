@@ -4,8 +4,10 @@ import java.net.InetSocketAddress
 
 import com.lightning.wallet.ln.Announcements._
 import fr.acinq.bitcoin.BinaryData
-import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 
+import concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.util.Random
 
 
@@ -16,7 +18,18 @@ class AnnouncementsSpec {
     bin
   }, compressed = true)
 
-  def allTests = {
+  val alicePk = PrivateKey(BinaryData("cc" * 32), compressed = true)
+
+  def allTests = Future {
+
+    {
+      println("check nodeId1/nodeId2 lexical ordering")
+      val node1 = PublicKey("027710df7a1d7ad02e3572841a829d141d9f56b17de9ea124d2f83ea687b2e0461")
+      val node2 = PublicKey("0306a730778d55deec162a74409e006034a24c46d541c67c6c45f89a2adde3d9b4")
+      // NB: node1 < node2
+      println(isNode1(node1.toBin, node2.toBin))
+      println(!isNode1(node2.toBin, node1.toBin))
+    }
 
     {
       println("create valid signed channel announcement")
@@ -28,7 +41,12 @@ class AnnouncementsSpec {
       println(!checkSigs(ann.copy(nodeId1 = randomKey.publicKey)))
     }
 
-    val alicePk = PrivateKey(BinaryData("cc" * 32), compressed = true)
+    {
+      println("create valid signed channel update announcement")
+      val ann = makeChannelUpdate(alicePk, randomKey.publicKey, 45561, 144, 0, 546000, 10, isEnabled = true, System.currentTimeMillis / 1000)
+      println(checkSig(ann, alicePk.publicKey))
+      println(!checkSig(ann, randomKey.publicKey))
+    }
 
     {
       println("create valid signed node announcement")
@@ -38,10 +56,28 @@ class AnnouncementsSpec {
     }
 
     {
-      println("create valid signed channel update announcement")
-      val ann = makeChannelUpdate(alicePk, randomKey.publicKey, 45561, 144, 0, 546000, 10, System.currentTimeMillis / 1000)
-      println(checkSig(ann, alicePk.publicKey))
-      println(!checkSig(ann, randomKey.publicKey))
+      println("check flags")
+      val node1_priv = PrivateKey("5f447b05d86de82de6b245a65359d22f844ae764e2ae3824ac4ace7d8e1c749b01")
+      val node2_priv = PrivateKey("eff467c5b601fdcc07315933767013002cd0705223d8e526cbb0c1bc75ccb62901")
+      // NB: node1 < node2 (public keys)
+      println(isNode1(node1_priv.publicKey.toBin, node2_priv.publicKey.toBin))
+      println(!isNode1(node2_priv.publicKey.toBin, node1_priv.publicKey.toBin))
+      val channelUpdate1 = makeChannelUpdate(node1_priv, node2_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = true, System.currentTimeMillis / 1000)
+      val channelUpdate1_disabled = makeChannelUpdate(node1_priv, node2_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = false, System.currentTimeMillis / 1000)
+      val channelUpdate2 = makeChannelUpdate(node2_priv, node1_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = true, System.currentTimeMillis / 1000)
+      val channelUpdate2_disabled = makeChannelUpdate(node2_priv, node1_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = false, System.currentTimeMillis / 1000)
+      println(channelUpdate1.flags == BinaryData("0000")) // ....00
+      println(channelUpdate1_disabled.flags == BinaryData("0002")) // ....10
+      println(channelUpdate2.flags == BinaryData("0001")) // ....01
+      println(channelUpdate2_disabled.flags == BinaryData("0003")) // ....11
+      println(isNode1(channelUpdate1.flags))
+      println(isNode1(channelUpdate1_disabled.flags))
+      println(!isNode1(channelUpdate2.flags))
+      println(!isNode1(channelUpdate2_disabled.flags))
+      println(isEnabled(channelUpdate1.flags))
+      println(!isEnabled(channelUpdate1_disabled.flags))
+      println(isEnabled(channelUpdate2.flags))
+      println(!isEnabled(channelUpdate2_disabled.flags))
     }
 
   }
