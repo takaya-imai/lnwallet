@@ -168,10 +168,11 @@ trait Pathfinder {
   val lnCloud: LNCloud
   val channel: StateMachine[ChannelData]
 
-  def makeOutgoingSpec(invoice: Invoice) = {
-    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId)
-    for (routes <- routesObs) yield PaymentSpec.makeOutgoingSpec(routes, invoice, LNParams.myHtlcExpiry)
-  }
+  def makeOutgoingSpec(invoice: Invoice) =
+    if (invoice.nodeId == LNParams.nodeId) Obs just None
+    else lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
+      PaymentSpec.makeOutgoingSpec(_, invoice, firstExpiry = LNParams.myHtlcExpiry)
+    }
 }
 
 // This is a basic interface to cloud which does not require a channel
@@ -202,7 +203,7 @@ class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
   override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to).onErrorResumeNext {
     // Our counterparty may be blacklisted which means our channel is unusable so we account for this case
-    error => if (error.getMessage == fromBlacklisted) Obs error error else failover.findRoutes(from, to)
+    exc => if (exc.getMessage == fromBlacklisted) Obs error exc else failover.findRoutes(from, to)
   }
 }
 

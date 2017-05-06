@@ -2,12 +2,13 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lncloud.{CipherOpenHelper, LocalBroadcaster}
 import com.lightning.wallet.Utils.app
 
 
 object LNParams {
+  var nodeId: PublicKey = _
   var extendedPrivateKey: ExtendedPrivateKey = _
   var extendedCloudPrivateKey: ExtendedPrivateKey = _
   var broadcaster: Broadcaster = _
@@ -18,6 +19,7 @@ object LNParams {
     extendedPrivateKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     extendedCloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
+    nodeId = extendedPrivateKey.publicKey
     broadcaster = LocalBroadcaster
   }
 
