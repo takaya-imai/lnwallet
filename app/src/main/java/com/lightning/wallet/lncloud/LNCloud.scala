@@ -52,7 +52,7 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
   }
 }
 
-case class LNCloudData(info: Option[MemoAndInvoice], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
+case class LNCloudData(info: Option[InvoiceAndMemo], tokens: List[ClearToken] = Nil, acts: List[LNCloudAct] = Nil)
 abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder with StateMachineListener { me =>
   private def reset = me stayWith data.copy(info = None)
   val bag: PaymentSpecBag
@@ -69,19 +69,19 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
   // STATE MACHINE
 
   def doProcess(change: Any) = (data, change) match {
-    case (LNCloudData(None, Nil, _), CMDStart) => for {
-      Tuple2(invoice, memo) <- retry(getInfo, pickInc, 1 to 3)
-      Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 1 to 3)
-    } me process Tuple2(memo, spec)
+    case LNCloudData(None, Nil, _) ~ CMDStart => for {
+      Tuple2(invoice, memo) <- retry(getInfo, pickInc, 2 to 3)
+      Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 3)
+    } me process Tuple2(spec, memo)
 
     // This payment request may arrive in some time after an initialization above,
-    // hence we explicitly state that it can only be accepted if info == None to avoid race condition
-    case (LNCloudData(None, _, _), (memo: BlindMemo, spec: OutgoingPaymentSpec) /* payment request */) =>
-      me stayWith data.copy(info = Some apply memo -> spec.invoice)
+    // hence we state that it can only be accepted if info == None to avoid race condition
+    case LNCloudData(None, tokens, _) ~ Tuple2(spec: OutgoingPaymentSpec, memo: BlindMemo) =>
+      me stayWith data.copy(info = Some(spec.invoice, memo), tokens = tokens)
       channel process SilentAddHtlc(spec)
 
     // No matter what the state is if we have acts and tokens
-    case (LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax), CMDStart) =>
+    case LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax) ~ CMDStart =>
       val base = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature)
       act.runPublic(base, me).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError,
         (/* successfully completed */) => me process CMDStart)
@@ -94,7 +94,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
 
     // Start request while payment is in progress,
     // it may be finished already so we ask the bag
-    case (LNCloudData(Some(memo >< invoice), _, _), CMDStart) =>
+    case LNCloudData(Some(invoice ~ memo), _, _) ~ CMDStart =>
       bag.getOutgoingPaymentSpec(hash = invoice.paymentHash) match {
         case Success(spec) if spec.status == PaymentSpec.SUCCESS => me resolve memo
         case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => reset
@@ -137,10 +137,8 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
     // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
     val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
     val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
-
-    lnCloud.call("blindtokens/buy", json => Invoice parse json2String(json.head),
-      "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.toString.hex)
-      .map(augmentInvoice(_, qty.toInt) -> memo)
+    lnCloud.call("blindtokens/buy", json => Invoice parse json2String(json.head), "seskey" -> memo.sesPubKeyHex,
+      "tokens" -> memo.makeBlindTokens.toJson.toString.hex).map(augmentInvoice(_, qty.toInt) -> memo)
   }
 
   def getClearTokens(memo: BlindMemo) =
@@ -201,16 +199,14 @@ class LNCloud(url: String = "10.0.2.2:9002") {
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def getRawData(key: String) = super.getRawData(key).onErrorResumeNext(_ => failover getRawData key)
   override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
-  override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to).onErrorResumeNext {
-    // Our counterparty may be blacklisted which means our channel is unusable so we account for this case
-    exc => if (exc.getMessage == fromBlacklisted) Obs error exc else failover.findRoutes(from, to)
-  }
+  override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to)
+    .onErrorResumeNext(_ => failover.findRoutes(from, to) /* failover */)
 }
 
 object LNCloud {
   type HttpParam = (String, Object)
   type ClearToken = (String, String, String)
-  type MemoAndInvoice = (BlindMemo, Invoice)
+  type InvoiceAndMemo = (Invoice, BlindMemo)
   val fromBlacklisted = "fromblacklisted"
   val body = "body"
 

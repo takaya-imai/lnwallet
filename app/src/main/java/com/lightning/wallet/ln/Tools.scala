@@ -11,7 +11,7 @@ import wire.LightningMessage
 import java.util.Locale
 
 
-object >< {
+object ~ {
   // Matching Tuple2 via arrows with much less noise
   def unapply[A, B](t: (A, B) /* got a tuple */) = Some(t)
 }

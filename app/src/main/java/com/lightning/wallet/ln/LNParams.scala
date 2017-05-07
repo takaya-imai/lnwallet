@@ -31,9 +31,6 @@ object LNParams {
   val untilExpiryBlocks = 6
   val minDepth = 2
 
-  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
-    derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
-
   def myHtlcExpiry = broadcaster.currentHeight + untilExpiryBlocks
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
@@ -43,12 +40,17 @@ object LNParams {
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
   }
 
-  def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) =
+  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
+    derivePrivateKey(extendedPrivateKey, index :: n :: Nil).privateKey
+
+  def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
+    val Seq(funding, revocation, payment, delayed, sha) = for (n <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, n)
     LocalParams(Block.TestnetGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
-      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 10,
-      fundingPrivKey = deriveParamsPrivateKey(keyIndex, 0L), revocationSecret = deriveParamsPrivateKey(keyIndex, 1L), paymentKey = deriveParamsPrivateKey(keyIndex, 2L),
-      delayedPaymentKey = deriveParamsPrivateKey(keyIndex, 3L), defaultFinalScriptPubKey = finalScriptPubKey, shaSeed = sha256(deriveParamsPrivateKey(keyIndex, 4L).toBin),
+      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144,
+      maxAcceptedHtlcs = 10, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
+      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin),
       isFunder = true, globalFeatures = "", localFeatures = "01")
+  }
 }
 
 trait Broadcaster {

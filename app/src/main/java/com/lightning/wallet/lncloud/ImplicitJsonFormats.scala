@@ -5,7 +5,7 @@ import spray.json.DefaultJsonProtocol._
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket}
-import com.lightning.wallet.lncloud.LNCloud.{ClearToken, MemoAndInvoice}
+import com.lightning.wallet.lncloud.LNCloud.{ClearToken, InvoiceAndMemo}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.{hopsCodec, lightningMessageCodec}
 import com.lightning.wallet.ln.{IncomingPaymentSpec, Invoice, OutgoingPaymentSpec, PaymentSpec}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
@@ -109,7 +109,7 @@ object ImplicitJsonFormats { me =>
   implicit val pingLNCLoudAct = jsonFormat[String, String,
     PingCloudAct](PingCloudAct.apply, "data", "kind")
 
-  implicit val lnCloudDataFmt = jsonFormat[Option[MemoAndInvoice], List[ClearToken], List[LNCloudAct],
+  implicit val lnCloudDataFmt = jsonFormat[Option[InvoiceAndMemo], List[ClearToken], List[LNCloudAct],
     LNCloudData](LNCloudData.apply, "info", "tokens", "acts")
 
   implicit val lbCloudDataPrivateFmt = jsonFormat[List[LNCloudAct], String,
