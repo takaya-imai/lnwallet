@@ -29,7 +29,7 @@ import scala.util.Success
 case class LNCloudDataPrivate(acts: List[LNCloudAct], url: String)
 abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Pathfinder { me =>
   def tryIfWorks(dummy: BinaryData) = lnCloud.call("sig/check", identity, sign(dummy):_*)
-  lazy val prefix = LNParams.extendedCloudPrivateKey.publicKey.toString take 8
+  lazy val prefix = LNParams.cloudPrivateKey.publicKey.toString take 8
 
   def doProcess(change: Any) = (data, change) match {
     case (LNCloudDataPrivate(acts, url), act: LNCloudAct) =>
@@ -37,8 +37,8 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
       me process CMDStart
 
     case (LNCloudDataPrivate(act :: ax, _), CMDStart) =>
-      act.runPrivate(me).foreach(_ => me stayWith data.copy(acts = ax),
-        none, (/* successfully completed */) => me process CMDStart)
+      act.runPrivate(me).doOnCompleted(me process CMDStart)
+        .subscribe(_ => me stayWith data.copy(acts = ax), none)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -46,8 +46,7 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
   }
 
   def sign(data: BinaryData) = {
-    val signKey = LNParams.extendedCloudPrivateKey.privateKey
-    val signature = Crypto encodeSignature Crypto.sign(data, signKey)
+    val signature = Crypto encodeSignature Crypto.sign(data, LNParams.cloudPrivateKey)
     Seq("sig" -> signature.toString, "prefix" -> prefix, body -> data.toString)
   }
 }
@@ -59,7 +58,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
 
   // LISTENING TO CHANNEL
 
-  channel.events addListener me
+  channel.listeners += me
   override def onPostProcess = {
     case fulfill: UpdateFulfillHtlc =>
       // This may be our HTLC, check it
@@ -77,14 +76,13 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
     case LNCloudData(None, tokens, _) ~ Tuple2(spec: OutgoingPaymentSpec, memo: BlindMemo) =>
-      me stayWith data.copy(info = Some(spec.invoice, memo), tokens = tokens)
+      me stayWith data.copy(info = Some(spec.invoice -> memo), tokens = tokens)
       channel process SilentAddHtlc(spec)
 
     // No matter what the state is if we have acts and tokens
     case LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax) ~ CMDStart =>
-      val base = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature)
-      act.runPublic(base, me).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError,
-        (/* successfully completed */) => me process CMDStart)
+      act.runPublic(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature), me)
+        .doOnCompleted(me process CMDStart).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError)
 
       // 'data' may change while request is on so we always copy it
       def resolveError(servError: Throwable) = servError.getMessage match {
@@ -113,13 +111,13 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
       Tools.log(s"LNCloudPublic: unhandled $data : $change")
   }
 
-  // PAYMENT STATE MANAGEMENT
+  // ADDING NEW TOKENS
 
-  def resolve(memo: BlindMemo) =
-    // Discard info which is irrelevant now and add tokens
-    // In case of error we do nothing, but "notfound" means we have to reset
-    getClearTokens(memo).subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
-      err => if (err.getMessage == "notfound") reset, (/* after we got tokens */) => me process CMDStart)
+  def resolve(memo: BlindMemo) = {
+    val refill: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens)
+    getClearTokens(memo).doOnCompleted(me process CMDStart).subscribe(refill, err => if (err.getMessage == "notfound") reset)
+  }
+
 
   // TALKING TO SERVER
 
@@ -167,7 +165,7 @@ trait Pathfinder {
   val channel: StateMachine[ChannelData]
 
   def makeOutgoingSpec(invoice: Invoice) =
-    if (invoice.nodeId == LNParams.nodeId) Obs just None
+    if (invoice.nodeId == LNParams.extendedNodeKey.publicKey) Obs just None
     else lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
       PaymentSpec.makeOutgoingSpec(_, invoice, firstExpiry = LNParams.myHtlcExpiry)
     }
@@ -207,9 +205,9 @@ object LNCloud {
   type HttpParam = (String, Object)
   type ClearToken = (String, String, String)
   type InvoiceAndMemo = (Invoice, BlindMemo)
-  val fromBlacklisted = "fromblacklisted"
-  val body = "body"
 
+  val body = "body"
+  val fromBlacklisted = "fromblacklisted"
   val OPERATIONAL = "Operational"
   val CMDStart = "CMDStart"
 }

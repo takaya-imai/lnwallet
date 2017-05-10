@@ -55,6 +55,8 @@ case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends ChannelData with HasCommitments
 
+// Storing all the tx types to be published
+
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments,
                        mutualClose: Seq[Transaction] = Nil, localCommit: Seq[LocalCommitPublished] = Nil,
                        remoteCommit: Seq[RemoteCommitPublished] = Nil, nextRemoteCommit: Seq[RemoteCommitPublished] = Nil,
@@ -243,6 +245,7 @@ object Commitments {
   private def doReceiveAdd(c: Commitments, add: UpdateAddHtlc, blockCount: Int) =
     if (add.amountMsat < c.localParams.htlcMinimumMsat) throw ChannelException(HTLC_VALUE_TOO_SMALL)
     else if (add.expiry < blockCount + LNParams.untilExpiryBlocks) throw ChannelException(HTLC_EXPIRY_TOO_SOON)
+    else if (add.paymentHash.size != 32) throw ChannelException(HTLC_INVALID_PAYMENT_HASH)
     else if (add.id != c.remoteNextHtlcId) throw ChannelException(HTLC_UNEXPECTED_ID)
     else {
 

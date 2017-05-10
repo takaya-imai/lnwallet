@@ -2,6 +2,7 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
+
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -24,7 +25,9 @@ trait ViewSwitch {
   }
 }
 
-class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
+class MainActivity extends NfcReaderActivity
+with TimerActivity with ViewSwitch { me =>
+
   lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
   lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
   lazy val greet = findViewById(R.id.mainGreetings).asInstanceOf[TextView]
@@ -119,7 +122,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     }
   }
 
-  def putSeed = {
+  private def putSeed = {
     val pass = mainPassData.getText.toString
     LNParams setup Mnemonic.decrypt(pass).getSeedBytes
     app.kit.startAsync

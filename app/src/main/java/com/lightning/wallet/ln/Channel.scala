@@ -205,7 +205,7 @@ extends StateMachine[ChannelData] { me =>
     // Can only send announcement signatures when no closing is in progress
     case (norm @ NormalData(_, commitments, false, None, None, _), remote: AnnouncementSignatures, NORMAL) =>
       val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(shortChannelId = remote.shortChannelId,
-        LNParams.extendedPrivateKey.privateKey, PublicKey(norm.announce.nodeId), commitments.localParams.fundingPrivKey,
+        LNParams.extendedNodeKey.privateKey, PublicKey(norm.announce.nodeId), commitments.localParams.fundingPrivKey,
         commitments.remoteParams.fundingPubKey, commitments.localParams.globalFeatures)
 
       // Let the other node announce our channel availability

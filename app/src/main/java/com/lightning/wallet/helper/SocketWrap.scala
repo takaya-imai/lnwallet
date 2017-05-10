@@ -1,54 +1,49 @@
 package com.lightning.wallet.helper
 
 import com.lightning.wallet.ln.Tools.{Bytes, none}
+import com.lightning.wallet.ln.{DataTransport, Tools}
 import java.net.{InetAddress, InetSocketAddress, Socket}
 import concurrent.ExecutionContext.Implicits.global
-import com.lightning.wallet.ln.DataTransport
-import com.lightning.wallet.Utils.nullFail
 import fr.acinq.bitcoin.BinaryData
 import scala.concurrent.Future
-import scala.util.Try
 
 
 class SocketWrap(ip: InetAddress, port: Int) extends DataTransport {
-  def send(data: BinaryData) = wrapOpt.foreach(_.socket.getOutputStream write data)
-  def shutdown = wrapOpt.foreach(_.socket.close)
-  def restart = wrapOpt = Try(new Worker)
+  def send(data: BinaryData) = worker.socket.getOutputStream write data
+  def shutdown = try worker.socket.close catch none
+  def start = worker = new Worker
 
-  private var wrapOpt: Try[Worker] = nullFail
-  var reactors = Set.empty[SocketReactor]
-
-  private val proxy = new SocketReactor {
-    override def onConnect = for (react <- reactors) react.onConnect
-    override def onData(chunk: Bytes) = for (react <- reactors) react onData chunk
-    override def onDisconnect = { case any => for (react <- reactors) react onDisconnect any }
-    override def onError = { case error => for (react <- reactors) react onError error }
+  private var worker: Worker = _
+  var listeners = Set.empty[SocketListener]
+  private val events = new SocketListener {
+    override def onConnect = for (lst <- listeners) lst.onConnect
+    override def onDisconnect = for (lst <- listeners) lst.onDisconnect
+    override def onData(chunk: BinaryData) = for (lst <- listeners) lst onData chunk
   }
 
   class Worker {
     val socket = new Socket
     private val BUFFER_SIZE = 1024
     private val buffer = new Bytes(BUFFER_SIZE)
+    private val where = new InetSocketAddress(ip, port)
 
     Future {
-      socket.connect(new InetSocketAddress(ip, port), 10000)
-      try proxy.onConnect catch proxy.onError
+      socket.connect(where, 10000)
+      events.onConnect
 
       while (true) {
         val read = socket.getInputStream.read(buffer, 0, BUFFER_SIZE)
-        if (read > 0) try proxy.onData(buffer take read) catch proxy.onError
-        else if (read < 0) throw new RuntimeException
+        if (read < 0) throw new RuntimeException("Socket closed")
+        else events onData BinaryData(buffer take read)
       }
-    } onComplete { result =>
-      try socket.close catch none
-      proxy onDisconnect result
+    } onComplete { _ =>
+      events.onDisconnect
     }
   }
 }
 
-class SocketReactor {
+class SocketListener {
   def onConnect: Unit = none
-  def onData(chunk: Bytes): Unit = none
-  def onDisconnect: PartialFunction[Any, Unit] = none
-  def onError: PartialFunction[Throwable, Unit] = none
+  def onDisconnect: Unit = none
+  def onData(chunk: BinaryData): Unit = none
 }

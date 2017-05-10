@@ -6,7 +6,7 @@ import fr.acinq.bitcoin.BinaryData
 
 import concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import TransportHandler.Send
+import TransportHandler.{HandshakeData, Send}
 
 
 class TransportHandlerSpec {
@@ -19,7 +19,7 @@ class TransportHandlerSpec {
       val s = Noise.Secp256k1DHFunctions.generateKeyPair("2121212121212121212121212121212121212121212121212121212121212121")
     }
 
-    lazy val bob: TransportHandler = new TransportHandler(Initiator.s, Some(Responder.s.pub),
+    lazy val bob: TransportHandler = new TransportHandler(Initiator.s, Responder.s.pub,
       data => println("Bob channel got: " + new String(data.toArray, "UTF-8")),
       new DataTransport {
         def send(data: BinaryData) = Future {
@@ -28,19 +28,27 @@ class TransportHandlerSpec {
         }
       })
 
-    lazy val alice: TransportHandler = new TransportHandler(Responder.s, None,
+    lazy val alice: TransportHandler = new TransportHandler(Responder.s, null,
       data => println("Alice channel got: " + new String(data.toArray, "UTF-8")),
       new DataTransport {
         def send(data: BinaryData) = Future {
           Thread.sleep(1000)
           bob.process(data)
         }
-      })
+      }) {
 
-    bob
+      override def init: Unit = {
+        val reader = TransportHandler.makeReader(Responder.s)
+        become(HandshakeData(reader, BinaryData.empty), TransportHandler.HANDSHAKE)
+      }
+    }
+
+    alice.init
+    bob.init
+
     bob.process((Send, BinaryData("unhandled 1" getBytes "UTF-8")))
     bob.process((Send, BinaryData("unhandled 2" getBytes "UTF-8")))
-    alice
+
     alice.process((Send, BinaryData("unhandled 1" getBytes "UTF-8")))
     alice.process((Send, BinaryData("unhandled 2" getBytes "UTF-8")))
 
