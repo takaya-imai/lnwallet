@@ -15,7 +15,7 @@ class SocketWrap(ip: InetAddress, port: Int) extends DataTransport {
 
   private var worker: Worker = _
   var listeners = Set.empty[SocketListener]
-  private val events = new SocketListener {
+  val events: SocketListener = new SocketListener {
     override def onConnect = for (lst <- listeners) lst.onConnect
     override def onDisconnect = for (lst <- listeners) lst.onDisconnect
     override def onData(chunk: BinaryData) = for (lst <- listeners) lst onData chunk

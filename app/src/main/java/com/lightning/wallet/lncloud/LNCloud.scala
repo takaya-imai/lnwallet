@@ -31,13 +31,13 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
   def tryIfWorks(dummy: BinaryData) = lnCloud.call("sig/check", identity, sign(dummy):_*)
   lazy val prefix = LNParams.cloudPrivateKey.publicKey.toString take 8
 
-  def doProcess(change: Any) = (data, change) match {
+  def doProcess(change: Any): Unit = (data, change) match {
     case (LNCloudDataPrivate(acts, url), act: LNCloudAct) =>
       me stayWith data.copy(acts = act :: acts take 1000)
-      me process CMDStart
+      me doProcess CMDStart
 
     case (LNCloudDataPrivate(act :: ax, _), CMDStart) =>
-      act.runPrivate(me).doOnCompleted(me process CMDStart)
+      act.runPrivate(me).doOnCompleted(me doProcess CMDStart)
         .subscribe(_ => me stayWith data.copy(acts = ax), none)
 
     case _ =>
@@ -62,7 +62,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
   override def onPostProcess = {
     case fulfill: UpdateFulfillHtlc =>
       // This may be our HTLC, check it
-      me process CMDStart
+      me doProcess CMDStart
   }
 
   // STATE MACHINE
@@ -71,18 +71,18 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
     case LNCloudData(None, Nil, _) ~ CMDStart => for {
       Tuple2(invoice, memo) <- retry(getInfo, pickInc, 2 to 3)
       Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 3)
-    } me process Tuple2(spec, memo)
+    } me doProcess Tuple2(spec, memo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
     case LNCloudData(None, tokens, _) ~ Tuple2(spec: OutgoingPaymentSpec, memo: BlindMemo) =>
       me stayWith data.copy(info = Some(spec.invoice -> memo), tokens = tokens)
-      channel process SilentAddHtlc(spec)
+      channel doProcess SilentAddHtlc(spec)
 
     // No matter what the state is if we have acts and tokens
     case LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax) ~ CMDStart =>
       act.runPublic(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature), me)
-        .doOnCompleted(me process CMDStart).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError)
+        .doOnCompleted(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError)
 
       // 'data' may change while request is on so we always copy it
       def resolveError(servError: Throwable) = servError.getMessage match {
@@ -90,12 +90,13 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
         case _ => me stayWith data
       }
 
-    // Start request while payment is in progress,
-    // it may be finished already so we ask the bag
+    // Start request while payment is in progress
     case LNCloudData(Some(invoice ~ memo), _, _) ~ CMDStart =>
-      bag.getOutgoingPaymentSpec(hash = invoice.paymentHash) match {
-        case Success(spec) if spec.status == PaymentSpec.SUCCESS => me resolve memo
-        case Success(spec) if spec.status == PaymentSpec.PERMANENT_FAIL => reset
+      // Payment may be finished already so we ask the bag
+
+      bag getPaymentStatus invoice.paymentHash match {
+        case Success(PaymentSpec.SUCCESS) => me resolve memo
+        case Success(PaymentSpec.FAIL) => reset
         case Success(_) => me stayWith data
         case _ => reset
       }
@@ -104,7 +105,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
       // We must always record incoming acts
       val acts1 = act :: data.acts take 1000
       me stayWith data.copy(acts = acts1)
-      me process CMDStart
+      me doProcess CMDStart
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -115,7 +116,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
 
   def resolve(memo: BlindMemo) = {
     val refill: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens)
-    getClearTokens(memo).doOnCompleted(me process CMDStart).subscribe(refill, err => if (err.getMessage == "notfound") reset)
+    getClearTokens(memo).doOnCompleted(me doProcess CMDStart).subscribe(refill, err => if (err.getMessage == "notfound") reset)
   }
 
 

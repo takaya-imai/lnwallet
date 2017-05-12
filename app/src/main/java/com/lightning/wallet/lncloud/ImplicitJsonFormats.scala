@@ -95,13 +95,11 @@ object ImplicitJsonFormats { me =>
   implicit val secretsAndPacketFmt = jsonFormat[Vector[BytesAndKey], Packet,
     SecretsAndPacket](SecretsAndPacket.apply, "sharedSecrets", "packet")
 
-  implicit val outgoingPaymentSpecFmt = jsonFormat[Invoice, String, Long,
-    Option[BinaryData], Long, Vector[PaymentRoute], SecretsAndPacket, Long, String,
-    OutgoingPaymentSpec](OutgoingPaymentSpec.apply, "invoice", "status", "stamp",
-    "preimage", "expiry", "routes", "onion", "amountWithFee", "kind")
+  implicit val outgoingPaymentSpecFmt = jsonFormat[Invoice, Option[BinaryData], Vector[PaymentRoute], SecretsAndPacket, Long, Long, String,
+    OutgoingPaymentSpec](OutgoingPaymentSpec.apply, "invoice", "preimage", "routes", "onion", "amountWithFee", "expiry", "kind")
 
-  implicit val incomingPaymentSpecFmt = jsonFormat[Invoice, String, Long, BinaryData, String,
-    IncomingPaymentSpec](IncomingPaymentSpec.apply, "invoice", "status", "stamp", "preimage", "kind")
+  implicit val incomingPaymentSpecFmt = jsonFormat[Invoice, BinaryData, String,
+    IncomingPaymentSpec](IncomingPaymentSpec.apply, "invoice", "preimage", "kind")
 
   implicit val ratesFmt = jsonFormat[RatesMap, Seq[Double], Coin, Coin, Long,
     Rates](Rates.apply, "exchange", "feeHistory", "feeLive", "feeRisky", "stamp")

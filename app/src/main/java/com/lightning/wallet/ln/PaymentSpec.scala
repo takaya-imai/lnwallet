@@ -6,57 +6,37 @@ import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
 import scala.util.{Success, Try}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
 import com.lightning.wallet.ln.Tools.random
+import fr.acinq.bitcoin.BinaryData
 import scodec.bits.BitVector
 import scodec.Attempt
 
 
-trait PaymentSpec {
-  val invoice: Invoice
-  val status: String
-  val stamp: Long
-}
-
-case class IncomingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: BinaryData,
-                               kind: String = "IncomingPaymentSpec") extends PaymentSpec
-
-case class OutgoingPaymentSpec(invoice: Invoice, status: String, stamp: Long, preimage: Option[BinaryData], expiry: Long,
-                               routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long,
-                               kind: String = "OutgoingPaymentSpec") extends PaymentSpec
-
-case class Invoice(message: Option[String], nodeId: PublicKey,
-                   sum: MilliSatoshi, paymentHash: BinaryData)
-
-object Invoice {
-  def serialize(invoice: Invoice) = {
-    val hash = invoice.paymentHash.toString
-    val node = invoice.nodeId.toString
-    val sum = invoice.sum.amount
-    s"$node:$sum:$hash"
-  }
-
-  def parse(encoded: String) = {
-    val Array(node, sum, hash) = encoded.split(':')
-    Invoice(None, PublicKey(node), MilliSatoshi(sum.toLong), hash)
-  }
-}
+trait PaymentSpec { val invoice: Invoice }
+case class IncomingPaymentSpec(invoice: Invoice, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
+case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
+                               amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
 
 trait PaymentSpecBag {
+  def getPaymentStatus(paymentHash: BinaryData): Try[String]
+  def updatePaymentStatus(paymentHash: BinaryData, status: String): Unit
+
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
+  def addPreimage(spec: OutgoingPaymentSpec)(preimage: BinaryData): Unit
   def getIncomingPaymentSpec(hash: BinaryData): Try[IncomingPaymentSpec]
   def getOutgoingPaymentSpec(hash: BinaryData): Try[OutgoingPaymentSpec]
+  def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit
+  def putPaymentSpec(spec: PaymentSpec, status: String): Unit
 }
 
 object PaymentSpec {
   // PaymentSpec states
-  val WAIT_HIDDEN = "WaitHidden"
-  val WAIT_VISIBLE = "WaitVisible"
-  val TEMPORARY_FAIL = "TemporaryFail"
-  val PERMANENT_FAIL = "PermanentFail"
-  val SUCCESS = "Success"
+  final val WAIT_HIDDEN = "WaitHidden"
+  final val WAIT_VISIBLE = "WaitVisible"
+  final val SUCCESS = "Success"
+  final val FAIL = "Fail"
 
   // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
@@ -81,14 +61,8 @@ object PaymentSpec {
 
   def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, firstExpiry: Int) = rest.headOption map { route =>
     val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(inv.sum.amount, firstExpiry, route drop 1)
-    OutgoingPaymentSpec(inv, status = WAIT_VISIBLE, stamp = System.currentTimeMillis, preimage = None, expiryWithAllDeltas,
-      routes = rest, buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash), amountWithAllFees)
-  }
-
-  def updateOutgoingSpec(spec: OutgoingPaymentSpec, firstExpiry: Int) = spec.routes.headOption map { route =>
-    val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(spec.invoice.sum.amount, firstExpiry, route drop 1)
-    spec.copy(routes = spec.routes.tail, onion = buildOnion(route.map(_.nextNodeId), perHopPayloads, spec.invoice.paymentHash),
-      expiry = expiryWithAllDeltas, amountWithFee = amountWithAllFees)
+    OutgoingPaymentSpec(invoice = inv, onion = buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash),
+      preimage = None, routes = rest, expiry = expiryWithAllDeltas, amountWithFee = amountWithAllFees)
   }
 
   private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
@@ -137,7 +111,7 @@ object PaymentSpec {
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
         // We either have a valid spec or we don't
-        case Success(inv) => CMDFulfillHtlc(add.id, inv.preimage)
+        case Success(spec) => CMDFulfillHtlc(add.id, spec.preimage)
         case _ => failHtlc(sharedSecret, add, UnknownPaymentHash)
       }
 

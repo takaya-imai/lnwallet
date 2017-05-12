@@ -55,7 +55,7 @@ object LNCloudPublicSaver extends Saver {
 object LNCloudPrivateSaver extends Saver {
   def tryGetObject = tryGet map to[LNCloudDataPrivate]
   def saveObject(data: LNCloudDataPrivate) = save(data.toJson)
-  def remove = LNParams.db.change(Storage.killSql, KEY)
+  def remove = LNParams.db.change(StorageTable.killSql, KEY)
   val KEY = "lnCloudPrivate1"
 }
 

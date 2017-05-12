@@ -1,20 +1,21 @@
 package com.lightning.wallet.lncloud
 
+import android.database.Cursor
 import spray.json._
 import com.lightning.wallet.ln._
+
 import collection.JavaConverters._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import rx.lang.scala.{Subscription, Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, OutPoint}
 import org.bitcoinj.core.{Coin, Transaction}
-
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.wallet.Wallet
+
 import scala.util.Try
 
 
@@ -52,43 +53,41 @@ object ChainWatcher {
 
 object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {
-    LNParams.db.change(sql = Storage.newSql, params = value, key)
-    LNParams.db.change(sql = Storage.updSql, params = value, key)
+    LNParams.db.change(sql = StorageTable.newSql, params = value, key)
+    LNParams.db.change(sql = StorageTable.updSql, params = value, key)
   }
 
   def get(key: String): Try[String] = {
-    val cursor = LNParams.db.select(Storage.selectSql, key)
-    RichCursor(cursor).headTry(_ string Storage.value)
+    val cursor = LNParams.db.select(StorageTable.selectSql, key)
+    RichCursor(cursor).headTry(_ string StorageTable.value)
   }
 }
 
 object PaymentSpecWrap extends PaymentSpecBag { me =>
-  def updateStatus(status: String, hash: BinaryData) = {
-    LNParams.db.change(PaymentSpecs.updStatusSql, status, hash.toString)
-    app.getContentResolver.notifyChange(LNParams.db sqlPath PaymentSpecs.table, null)
+  import PaymentSpecTable.{data, status, stamp, table, searchData}
+  private def byHash(hash: BinaryData): Cursor = LNParams.db.select(PaymentSpecTable.selectByHashSql, hash.toString)
+  def getIncomingPaymentSpec(hash: BinaryData) = RichCursor(me byHash hash).headTry(_ string data) map to[IncomingPaymentSpec]
+  def getOutgoingPaymentSpec(hash: BinaryData) = RichCursor(me byHash hash).headTry(_ string data) map to[OutgoingPaymentSpec]
+  def getPaymentStatus(hash: BinaryData) = RichCursor(me byHash hash).headTry(_ string status)
+
+  def updatePaymentStatus(paymentHash: BinaryData, status: String): Unit = {
+    LNParams.db.change(PaymentSpecTable.updStatusSql, status, paymentHash.toString)
+    app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 
-  private def getRawSpec(hash: BinaryData) = {
-    val cursor = LNParams.db.select(PaymentSpecs.selectByHashSql, hash.toString)
-    RichCursor(cursor).headTry(_ string PaymentSpecs.data)
+  def putPaymentSpec(spec: PaymentSpec, status: String) = LNParams.db txWrap {
+    val hash ~ timestamp = spec.invoice.paymentHash.toString -> System.currentTimeMillis.toString
+    LNParams.db.change(PaymentSpecTable.newVirtualSql, s"${spec.invoice.message.orNull} $hash", hash)
+    LNParams.db.change(PaymentSpecTable.newSql, spec.toJson.toString, hash, status, timestamp)
+    app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 
-  def getIncomingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map to[IncomingPaymentSpec]
-  def getOutgoingPaymentSpec(hash: BinaryData) = getRawSpec(hash) map to[OutgoingPaymentSpec]
-
-  def putPaymentSpec(spec: PaymentSpec) = LNParams.db txWrap {
-    val paymentHashString: String = spec.invoice.paymentHash.toString
-    LNParams.db.change(PaymentSpecs.newSql, spec.toJson.toString, paymentHashString, spec.status, spec.stamp.toString)
-    LNParams.db.change(PaymentSpecs.newVirtualSql, s"${spec.invoice.message.orNull} $paymentHashString", paymentHashString)
-    app.getContentResolver.notifyChange(LNParams.db sqlPath PaymentSpecs.table, null)
+  def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit = {
+    val hash ~ data = spec.invoice.paymentHash.toString -> spec.toJson.toString
+    LNParams.db.change(sql = PaymentSpecTable.updDataSql, params = hash, data)
+    app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 
-  def replaceOutgoingPaymentSpec(spec: OutgoingPaymentSpec) =
-    LNParams.db.change(PaymentSpecs.updSql, spec.toJson.toString,
-      spec.status, spec.stamp.toString, spec.invoice.paymentHash.toString)
-
-  def addPreimage(spec: OutgoingPaymentSpec)(preimage: BinaryData): Unit = {
-    val spec1 = spec.copy(preimage = Some(preimage), status = PaymentSpec.SUCCESS)
-    me replaceOutgoingPaymentSpec spec1
-  }
+  def addPreimage(spec: OutgoingPaymentSpec)(preimage: BinaryData): Unit =
+    me updateOutgoingPaymentSpec spec.copy(preimage = Some apply preimage)
 }

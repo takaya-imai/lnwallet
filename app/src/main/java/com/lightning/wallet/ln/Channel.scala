@@ -14,7 +14,7 @@ import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 class Channel(bag: PaymentSpecBag)
 extends StateMachine[ChannelData] { me =>
 
-  def doProcess(change: Any) = (data, change, state) match {
+  def doProcess(change: Any): Unit = (data, change, state) match {
     case (InitData(announce), cmd: CMDOpenChannel, WAIT_FOR_INIT) =>
 
       val lp = cmd.localParams
@@ -113,7 +113,7 @@ extends StateMachine[ChannelData] { me =>
       val chainHeight: Int = LNParams.broadcaster.currentHeight
       val c1 = Commitments.sendAdd(norm.commitments, cmd, chainHeight)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     case (norm: NormalData, add: UpdateAddHtlc, NORMAL) =>
       val chainHeight: Int = LNParams.broadcaster.currentHeight
@@ -124,7 +124,7 @@ extends StateMachine[ChannelData] { me =>
     case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>
       val c1 = Commitments.sendFulfill(norm.commitments, cmd)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     // Got a fulfill for an HTLC we sent earlier
     case (norm: NormalData, fulfill: UpdateFulfillHtlc, NORMAL) =>
@@ -135,12 +135,12 @@ extends StateMachine[ChannelData] { me =>
     case (norm: NormalData, cmd: CMDFailHtlc, NORMAL) =>
       val c1 = Commitments.sendFail(norm.commitments, cmd)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     case (norm: NormalData, cmd: CMDFailMalformedHtlc, NORMAL) =>
       val c1 = Commitments.sendFailMalformed(norm.commitments, cmd)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     // Got a failure for an HTLC we sent earlier
     case (norm: NormalData, fail: FailHtlc, NORMAL) =>
@@ -166,13 +166,13 @@ extends StateMachine[ChannelData] { me =>
       val canStartNegotiations = Commitments hasNoPendingHtlcs c1
       if (canStartNegotiations) startNegotiations(announce, c1, local, remote)
       if (!canStartNegotiations) me stayWith norm.copy(commitments = c1)
-      if (!canStartNegotiations) process(CMDCommitSig)
+      if (!canStartNegotiations) doProcess(CMDCommitSig)
 
     // We received a commit sig from them
     case (norm: NormalData, sig: CommitSig, NORMAL) =>
       val c1 = Commitments.receiveCommit(norm.commitments, sig)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     // GUARD: we have received a revocation from them when shutdown is fully confirmed by both parties
     case (norm @ NormalData(announce, commitments, _, Some(local), Some(remote), _), rev: RevokeAndAck, NORMAL) =>
@@ -181,13 +181,13 @@ extends StateMachine[ChannelData] { me =>
       val canStartNegotiations = Commitments hasNoPendingHtlcs c1
       if (canStartNegotiations) startNegotiations(announce, c1, local, remote)
       if (!canStartNegotiations) me stayWith norm.copy(commitments = c1)
-      if (!canStartNegotiations) process(CMDCommitSig)
+      if (!canStartNegotiations) doProcess(CMDCommitSig)
 
     // We received a revocation because we sent a sig
     case (norm: NormalData, rev: RevokeAndAck, NORMAL) =>
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     // Periodic fee updates
     case (norm: NormalData, CMDFeerate(rate), NORMAL)
@@ -195,7 +195,7 @@ extends StateMachine[ChannelData] { me =>
       if LNParams.shouldUpdateFee(norm.commitments.localCommit.spec.feeratePerKw, rate) =>
       val c1 = Commitments.sendFee(norm.commitments, rate)
       me stayWith norm.copy(commitments = c1)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     // Periodic watch for timed-out outgoing HTLCs
     case (norm: NormalData, CMDDepth(confirmationCount), NORMAL)
@@ -220,7 +220,7 @@ extends StateMachine[ChannelData] { me =>
       // GUARD: postpone shutdown if we have changes
       if Commitments localHasChanges norm.commitments =>
       me stayWith norm.copy(afterCommit = Some apply CMDShutdown)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     case (norm: NormalData, CMDShutdown, NORMAL) =>
       initiateShutdown(norm)
@@ -234,12 +234,12 @@ extends StateMachine[ChannelData] { me =>
       // GUARD: postpone our reply if we have changes
       if Commitments localHasChanges norm.commitments =>
       me stayWith norm.copy(afterCommit = Some apply remote)
-      process(CMDCommitSig)
+      doProcess(CMDCommitSig)
 
     // We have not yet send or received a shutdown so send it and retry
     case (norm @ NormalData(_, _, _, None, None, _), remote: Shutdown, NORMAL) =>
       initiateShutdown(norm)
-      process(remote)
+      doProcess(remote)
 
     // We have already sent a shutdown (initially or in response to their shutdown)
     case (norm @ NormalData(announce, commitments, _, Some(local), None, _), remote: Shutdown, NORMAL) =>
