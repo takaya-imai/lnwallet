@@ -28,10 +28,15 @@ import scala.util.Success
 
 case class LNCloudDataPrivate(acts: List[LNCloudAct], url: String)
 abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Pathfinder { me =>
-  def tryIfWorks(dummy: BinaryData) = lnCloud.call("sig/check", identity, sign(dummy):_*)
-  lazy val prefix = LNParams.cloudPrivateKey.publicKey.toString take 8
+  def tryIfWorks(dummy: BinaryData) = lnCloud.call("sigcheck", identity, sign(dummy):_*)
 
-  def doProcess(change: Any): Unit = (data, change) match {
+  def sign(data: BinaryData): Seq[HttpParam] = {
+    // Users may want to use a key pair instead of blind tokens so this is a helper for that
+    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, LNParams.cloudPrivateKey)
+    Seq("sig" -> signature.toString, "key" -> LNParams.cloudPrivateKey.publicKey.toString, body -> data.toString)
+  }
+
+  def doProcess(some: Any): Unit = (data, some) match {
     case (LNCloudDataPrivate(acts, url), act: LNCloudAct) =>
       me stayWith data.copy(acts = act :: acts take 1000)
       me doProcess CMDStart
@@ -42,12 +47,7 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools.log(s"LNCloudPrivate: unhandled $data : $change")
-  }
-
-  def sign(data: BinaryData) = {
-    val signature = Crypto encodeSignature Crypto.sign(data, LNParams.cloudPrivateKey)
-    Seq("sig" -> signature.toString, "prefix" -> prefix, body -> data.toString)
+      Tools.log(s"LNCloudPrivate: unhandled $data : $some")
   }
 }
 
@@ -67,7 +67,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
 
   // STATE MACHINE
 
-  def doProcess(change: Any) = (data, change) match {
+  def doProcess(some: Any) = (data, some) match {
     case LNCloudData(None, Nil, _) ~ CMDStart => for {
       Tuple2(invoice, memo) <- retry(getInfo, pickInc, 2 to 3)
       Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 3)
@@ -79,7 +79,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
       me stayWith data.copy(info = Some(spec.invoice -> memo), tokens = tokens)
       channel doProcess SilentAddHtlc(spec)
 
-    // No matter what the state is if we have acts and tokens
+    // No matter what the state is: do it if we have acts and tokens
     case LNCloudData(_, (blindPoint, clearToken, clearSignature) :: tx, act :: ax) ~ CMDStart =>
       act.runPublic(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature), me)
         .doOnCompleted(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = tx, acts = ax), resolveError)
@@ -91,11 +91,10 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
       }
 
     // Start request while payment is in progress
+    // Payment may be finished already so we ask the bag
     case LNCloudData(Some(invoice ~ memo), _, _) ~ CMDStart =>
-      // Payment may be finished already so we ask the bag
-
-      bag getPaymentStatus invoice.paymentHash match {
-        case Success(PaymentSpec.SUCCESS) => me resolve memo
+      bag.getInfoByHash(invoice.paymentHash).map(_.status) match {
+        case Success(PaymentSpec.SUCCESS) => me resolveSuccess memo
         case Success(PaymentSpec.FAIL) => reset
         case Success(_) => me stayWith data
         case _ => reset
@@ -109,16 +108,15 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools.log(s"LNCloudPublic: unhandled $data : $change")
+      Tools.log(s"LNCloudPublic: unhandled $data : $some")
   }
 
   // ADDING NEW TOKENS
 
-  def resolve(memo: BlindMemo) = {
+  def resolveSuccess(memo: BlindMemo) = {
     val refill: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens)
     getClearTokens(memo).doOnCompleted(me doProcess CMDStart).subscribe(refill, err => if (err.getMessage == "notfound") reset)
   }
-
 
   // TALKING TO SERVER
 

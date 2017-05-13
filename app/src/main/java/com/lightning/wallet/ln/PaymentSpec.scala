@@ -15,26 +15,25 @@ import scodec.Attempt
 
 
 trait PaymentSpec { val invoice: Invoice }
+case class ExtendedPaymentInfo(spec: PaymentSpec, status: String, stamp: Long)
 case class IncomingPaymentSpec(invoice: Invoice, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
 case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
 
 trait PaymentSpecBag {
-  def getPaymentStatus(paymentHash: BinaryData): Try[String]
-  def updatePaymentStatus(paymentHash: BinaryData, status: String): Unit
+  def getRecentInfos: Vector[ExtendedPaymentInfo]
+  def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
 
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
-  def addPreimage(spec: OutgoingPaymentSpec)(preimage: BinaryData): Unit
-  def getIncomingPaymentSpec(hash: BinaryData): Try[IncomingPaymentSpec]
-  def getOutgoingPaymentSpec(hash: BinaryData): Try[OutgoingPaymentSpec]
+  def putInfo(info: ExtendedPaymentInfo): Unit
+  def updatePaymentStatus(hash: BinaryData, status: String): Unit
   def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit
-  def putPaymentSpec(spec: PaymentSpec, status: String): Unit
+  def newPreimage: BinaryData = BinaryData(random getBytes 32)
 }
 
 object PaymentSpec {
   // PaymentSpec states
-  final val WAIT_HIDDEN = "WaitHidden"
-  final val WAIT_VISIBLE = "WaitVisible"
+  final val HIDDEN = "WaitHidden"
+  final val VISIBLE = "WaitVisible"
   final val SUCCESS = "Success"
   final val FAIL = "Fail"
 
@@ -46,7 +45,7 @@ object PaymentSpec {
   def buildRoute(finalAmountMsat: Long, finalExpiryBlockCount: Int, hops: PaymentRoute) = {
     val startConditions = (Vector.empty[PerHopPayload], finalAmountMsat, finalExpiryBlockCount)
 
-    (startConditions /: hops.reverse) { case (Tuple3(payloads, msat, expiry), hop) =>
+    (startConditions /: hops.reverse) { case Tuple3(payloads, msat, expiry) ~ hop =>
       val feeMsat = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
       val perHopPayload = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
       (perHopPayload, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
@@ -101,7 +100,7 @@ object PaymentSpec {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
       // We are the final recipient of HTLC, the only viable option
 
-      bag getIncomingPaymentSpec add.paymentHash match {
+      bag.getInfoByHash(add.paymentHash).map(_.spec) match {
         case Success(spec) if add.amountMsat > spec.invoice.sum.amount * 2 =>
           // GUARD: they have sent too much funds, this is a protective measure
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
@@ -110,8 +109,8 @@ object PaymentSpec {
           // GUARD: amount is less than what we requested, this won't do
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        // We either have a valid spec or we don't
-        case Success(spec) => CMDFulfillHtlc(add.id, spec.preimage)
+        // We either have a valid *incoming* spec or this is definitely some kind of error
+        case Success(spec: IncomingPaymentSpec) => CMDFulfillHtlc(add.id, spec.preimage)
         case _ => failHtlc(sharedSecret, add, UnknownPaymentHash)
       }
 

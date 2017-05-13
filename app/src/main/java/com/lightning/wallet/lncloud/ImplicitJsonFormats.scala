@@ -113,9 +113,8 @@ object ImplicitJsonFormats { me =>
   implicit val lbCloudDataPrivateFmt = jsonFormat[List[LNCloudAct], String,
     LNCloudDataPrivate](LNCloudDataPrivate.apply, "acts", "url")
 
-  implicit val askRateFmt = jsonFormat[Double, AskRate](AskRate, "ask")
   implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
   implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
-  implicit val bitaverageFmt = jsonFormat[AskRate, AskRate, AskRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
+  implicit val bitaverageFmt = jsonFormat[LastRate, LastRate, LastRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
   implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
 }

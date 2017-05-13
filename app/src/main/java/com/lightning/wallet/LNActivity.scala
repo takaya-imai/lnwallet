@@ -9,6 +9,7 @@ import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import org.bitcoinj.core.Utils.HEX
 import android.content.DialogInterface.BUTTON_POSITIVE
+import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 
 import collection.JavaConverters.seqAsJavaListConverter
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
@@ -31,6 +32,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.helper._
 import com.lightning.wallet.ln.wire.UpdateAddHtlc
 import com.lightning.wallet.ln._
+import com.lightning.wallet.lncloud.{LNCloudDataPrivate, LNCloudPrivateSaver}
 import com.lightning.wallet.test.LNCloudSpec
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import org.bitcoinj.core.{Address, Sha256Hash, Transaction}
@@ -228,20 +230,20 @@ with ListUpdater with SearchBar { me =>
   override def onResume = wrap(super.onResume)(app.TransData.value = null)
 
   class SetBackupServer {
-//    val (view, field) = str2Tuple(LNParams.standaloneCloudKey.getPublicKeyAsHex)
-//    val dialog = mkChoiceDialog(ok = proceed, no = none, dialog_next, dialog_back)
-//    val alert = mkForm(dialog, title = getString(ln_backup_key).html, view)
+//    val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
+//    val dialog = mkChoiceDialog(ok = proceed, no = none, dialog_next, dialog_cancel)
+//    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
 //    field setTextIsSelectable true
 //
 //    def proceed: Unit = rm(alert) {
-//      val (view1, field) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
-//      val dialog = mkChoiceDialog(trySave(field.getText.toString), new SetBackupServer, dialog_ok, dialog_back)
-//      for (savedPrivCloud <- StandaloneCloud.getTry) field setText savedPrivCloud.url
+//      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
+//      val dialog = mkChoiceDialog(trySave(field1.getText.toString), new SetBackupServer, dialog_ok, dialog_cancel)
+//      for (cloudData: LNCloudDataPrivate <- LNCloudPrivateSaver.tryGetObject) field1 setText cloudData.url
 //      mkForm(dialog, getString(ln_backup), view1)
 //    }
 //
 //    def trySave(ip: String) =
-//      if (ip.isEmpty) StandaloneCloud.remove
+//      if (ip.isEmpty) LNCloudPrivateSaver.remove
 //      else if (URLUtil isValidUrl ip) this proceedSave StandaloneCloud(ip)
 //      else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
 //
@@ -251,8 +253,8 @@ with ListUpdater with SearchBar { me =>
 //          err => me runOnUiThread onError(err), println)
 //
 //    def onError(error: Throwable): Unit = error.getMessage match {
-//      case "errkey" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
-//      case "errsig" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
+//      case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
+//      case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
 //      case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
 //    }
   }

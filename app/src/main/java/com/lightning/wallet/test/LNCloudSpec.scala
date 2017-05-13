@@ -26,13 +26,12 @@ class LNCloudSpec {
   val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
 
   object TestPaymentSpecBag extends PaymentSpecBag {
-    def getPaymentStatus(paymentHash: BinaryData): Try[String] = Try(PaymentSpec.SUCCESS)
-    def updatePaymentStatus(paymentHash: BinaryData, status: String): Unit = ???
-    def addPreimage(spec: OutgoingPaymentSpec)(preimage: BinaryData): Unit = ???
-    def getIncomingPaymentSpec(hash: BinaryData): Try[IncomingPaymentSpec] = ???
-    def getOutgoingPaymentSpec(hash: BinaryData): Try[OutgoingPaymentSpec] = ???
+    def getRecentInfos: Vector[ExtendedPaymentInfo] = ???
+    def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS, 0L))
+
+    def putInfo(info: ExtendedPaymentInfo): Unit = ???
+    def updatePaymentStatus(hash: BinaryData, status: String): Unit = ???
     def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit = ???
-    def putPaymentSpec(spec: PaymentSpec, status: String): Unit = ???
   }
 
   val hops = Vector(

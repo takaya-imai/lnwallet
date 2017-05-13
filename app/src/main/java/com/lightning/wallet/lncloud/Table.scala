@@ -15,7 +15,7 @@ object StorageTable extends Table {
   def killSql = s"DELETE FROM $table WHERE $key = ?"
 
   def createSql = s"""
-    CREATE TABLE $table (
+    CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $key TEXT NOT NULL UNIQUE,
       $value TEXT NOT NULL
@@ -23,15 +23,14 @@ object StorageTable extends Table {
 }
 
 object PaymentSpecTable extends Table {
-  import com.lightning.wallet.ln.PaymentSpec._
-  val strings = ("payments", "data", "hash", "status", "stamp", "search")
-  val (table, data, hash, status, stamp, searchData) = strings
-
+  import com.lightning.wallet.ln.PaymentSpec.{SUCCESS, HIDDEN}
+  val (table, data, hash, status, stamp, searchData) = ("payments", "data", "hash", "status", "stamp", "search")
+  def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 20)"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 100"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
-  def selectRecentSql = s"""SELECT * FROM $table WHERE $status = $SUCCESS OR
-    ($status <> $WAIT_HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 100"""
 
   // Hidden -> Visible -> Failed or Success
+  // Data must be updated in case of route switches
   def updDataSql = s"UPDATE $table SET $data = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
 
@@ -39,14 +38,9 @@ object PaymentSpecTable extends Table {
   def newSql = s"INSERT OR IGNORE INTO $table ($data, $hash, $status, $stamp) VALUES (?, ?, ?, ?)"
   def newVirtualSql = s"INSERT INTO $fts$table ($searchData, $hash) VALUES (?, ?)"
 
-  // Creating data storage and search engine
-  def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING fts4($searchData, $hash)"
-  def selectVirtualSql = s"""SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table
-    WHERE $searchData MATCH ? LIMIT 20)"""
-
-  // Create
+  // Create tables
   def createSql = s"""
-    CREATE TABLE $table (
+    CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $data STRING NOT NULL,
       $hash STRING UNIQUE NOT NULL,
@@ -56,12 +50,16 @@ object PaymentSpecTable extends Table {
     CREATE INDEX idx1 ON $table ($status, $stamp);
     CREATE INDEX idx2 ON $table ($hash);
     COMMIT;"""
+
+  def createVirtualSql = s"""
+    CREATE VIRTUAL TABLE $fts$table
+    USING fts4($searchData, $hash);"""
 }
 
 trait Table { val (id, fts) = "_id" -> "fts" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata5.db", null, version)
-{
+extends SQLiteOpenHelper(context, "lndata5.db", null, version) { me =>
+
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)
   def onUpgrade(db: SQLiteDatabase, oldVer: Int, newVer: Int) = none

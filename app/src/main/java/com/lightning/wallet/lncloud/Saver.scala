@@ -60,11 +60,11 @@ object LNCloudPrivateSaver extends Saver {
 }
 
 trait Rate { def now: Double }
-trait ExchangeRateProvider { val usd, eur, cny: Rate }
-case class AskRate(ask: Double) extends Rate { def now = ask }
 case class LastRate(last: Double) extends Rate { def now = last }
 case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
-case class Bitaverage(usd: AskRate, eur: AskRate, cny: AskRate) extends ExchangeRateProvider
+
+trait ExchangeRateProvider { val usd, eur, cny: Rate }
+case class Bitaverage(usd: LastRate, eur: LastRate, cny: LastRate) extends ExchangeRateProvider
 case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends ExchangeRateProvider
 case class Rates(exchange: RatesMap, feeHistory: Seq[Double], feeLive: Coin, feeRisky: Coin, stamp: Long)
 
