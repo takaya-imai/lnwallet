@@ -166,6 +166,8 @@ with ListUpdater with SearchBar { me =>
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
+    (new LNCloudSpec).allTests
+
     //me exitTo classOf[LNOpsActivity]
 
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
@@ -231,20 +233,19 @@ with ListUpdater with SearchBar { me =>
 
   class SetBackupServer {
 //    val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
-//    val dialog = mkChoiceDialog(ok = proceed, no = none, dialog_next, dialog_cancel)
+//    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
 //    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
 //    field setTextIsSelectable true
 //
 //    def proceed: Unit = rm(alert) {
 //      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
-//      val dialog = mkChoiceDialog(trySave(field1.getText.toString), new SetBackupServer, dialog_ok, dialog_cancel)
-//      for (cloudData: LNCloudDataPrivate <- LNCloudPrivateSaver.tryGetObject) field1 setText cloudData.url
+//      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
 //      mkForm(dialog, getString(ln_backup), view1)
 //    }
 //
-//    def trySave(ip: String) =
-//      if (ip.isEmpty) LNCloudPrivateSaver.remove
-//      else if (URLUtil isValidUrl ip) this proceedSave StandaloneCloud(ip)
+//    def trySave(url: String) =
+//      if (url.isEmpty) LNCloudPrivateSaver.remove
+//      else if (URLUtil isValidUrl url) this proceedSave StandaloneCloud(ip)
 //      else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
 //
 //    def proceedSave(pc: StandaloneCloud) =

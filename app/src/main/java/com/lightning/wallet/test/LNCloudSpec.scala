@@ -62,7 +62,7 @@ class LNCloudSpec {
       new LNCloudPublic {
         val bag = TestPaymentSpecBag
         lazy val channel = chan
-        lazy val lnCloud = new LNCloud("10.0.2.2:9002")
+        lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
         state = LNCloud.OPERATIONAL
         data = savedData
 
@@ -78,7 +78,7 @@ class LNCloudSpec {
       new LNCloudPublic {
         val bag = TestPaymentSpecBag
         lazy val channel = chan
-        lazy val lnCloud = new LNCloud("10.0.2.2:9002")
+        lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
         state = LNCloud.OPERATIONAL
         data = data1
 
@@ -90,8 +90,8 @@ class LNCloudSpec {
     }
 
   def allTests = {
-
     val cloud1 = getCloud
+    println("preprocessing...")
     cloud1 process PingCloudAct("call a")
   }
 }

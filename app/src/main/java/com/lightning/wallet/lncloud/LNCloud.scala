@@ -24,14 +24,16 @@ import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 import android.webkit.URLUtil
+
+
 import scala.util.Success
 
 
 case class LNCloudDataPrivate(acts: List[LNCloudAct], url: String)
 abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Pathfinder { me =>
-  def tryIfWorks(dummy: BinaryData) = lnCloud.call("sigcheck", identity, sign(dummy):_*)
+  def tryIfWorks(dummy: BinaryData) = lnCloud.call("sigcheck", identity, signed(dummy):_*)
 
-  def sign(data: BinaryData): Seq[HttpParam] = {
+  def signed(data: BinaryData): Seq[HttpParam] = {
     // Users may want to use a key pair instead of blind tokens so this is a helper for that
     val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, LNParams.cloudPrivateKey)
     Seq("sig" -> signature.toString, "key" -> LNParams.cloudPrivateKey.publicKey.toString, body -> data.toString)

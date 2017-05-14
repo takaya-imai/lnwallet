@@ -5,12 +5,15 @@ import android.widget._
 
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
+
 import org.ndeftools.util.activity.NfcReaderActivity
+import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
+import scala.concurrent.Future
 import java.io.FileInputStream
 import android.content.Intent
 import org.ndeftools.Message
@@ -37,10 +40,11 @@ with TimerActivity with ViewSwitch { me =>
       findViewById(R.id.mainPassForm) ::
       findViewById(R.id.mainProgress) :: Nil
 
-  lazy val prepareWalletKit =
+  lazy val prepareWalletKit = Future {
+    val stream: FileInputStream = new FileInputStream(app.walletFile)
+    val proto = try WalletProtobufSerializer parseToProto stream finally stream.close
+
     app.kit = new app.WalletKit {
-      val stream = new FileInputStream(app.walletFile)
-      val proto = try WalletProtobufSerializer parseToProto stream finally stream.close
       wallet = new WalletProtobufSerializer readWallet (app.params, null, proto)
       store = new org.bitcoinj.store.SPVBlockStore(app.params, app.chainFile)
       blockChain = new BlockChain(app.params, wallet, store)
@@ -51,6 +55,7 @@ with TimerActivity with ViewSwitch { me =>
         exitTo apply classOf[LNActivity]
       }
     }
+  }
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
@@ -89,9 +94,6 @@ with TimerActivity with ViewSwitch { me =>
 
   // STARTUP LOGIC
 
-  def inform(code: Int): Unit = showForm(mkChoiceDialog(next,
-    finish, dialog_ok, dialog_cancel).setMessage(code).create)
-
   def next =
     (app.walletFile.exists, app.isAlive, LNParams.isSetUp) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
@@ -101,10 +103,12 @@ with TimerActivity with ViewSwitch { me =>
         // Launch of a previously closed app
         // Also happens if app has become inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
+        <<(prepareWalletKit, throw _)(none)
+
+        // Check password after init is done
         mainPassCheck setOnClickListener onButtonTap {
-          // Not enclosing prepare in try to explicitly
-          // display an error page instead of just hanging
-          timer.schedule(me anyToRunnable startup, 25)
+          val setSeedAfterInit = prepareWalletKit map setSeed
+          <<(setSeedAfterInit, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 
@@ -113,20 +117,19 @@ with TimerActivity with ViewSwitch { me =>
         System exit 0
     }
 
-  def startup = {
-    prepareWalletKit
-    // Lazy val won't run on next calls
-    try putSeed catch { case _: Throwable =>
-      setVis(View.GONE, View.VISIBLE, View.GONE)
-      app toast password_wrong
-    }
-  }
-
-  private def putSeed = {
+  private def setSeed(some: Any) = {
     val pass = mainPassData.getText.toString
     LNParams setup Mnemonic.decrypt(pass).getSeedBytes
-    app.kit.startAsync
   }
+
+  private def wrongPass(err: Throwable) = {
+    setVis(View.GONE, View.VISIBLE, View.GONE)
+    app toast password_wrong
+  }
+
+  private def inform(messageCode: Int): Unit =
+    showForm(mkChoiceDialog(next, finish, dialog_ok,
+      dialog_cancel).setMessage(messageCode).create)
 
   def goRestoreWallet(view: View) = me exitTo classOf[WalletRestoreActivity]
   def goCreateWallet(view: View) = me exitTo classOf[WalletCreateActivity]
