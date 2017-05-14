@@ -1,16 +1,17 @@
 package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
+import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import com.lightning.wallet.lncloud.{CipherOpenHelper, LocalBroadcaster}
 import com.lightning.wallet.Utils.app
 
 
 object LNParams {
+  lazy val broadcaster: Broadcaster = LocalBroadcaster
+  lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
   var extendedNodeKey: ExtendedPrivateKey = _
   var cloudPrivateKey: PrivateKey = _
-  var broadcaster: Broadcaster = _
   var db: CipherOpenHelper = _
 
   def isSetUp: Boolean = db != null
@@ -18,7 +19,6 @@ object LNParams {
     cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
-    broadcaster = LocalBroadcaster
   }
 
   val updateFeeMinDiffRatio = 0.25 // Must update
@@ -47,7 +47,7 @@ object LNParams {
       channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144,
       maxAcceptedHtlcs = 10, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
       delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin),
-      isFunder = true, globalFeatures = "", localFeatures = "01")
+      isFunder = true, globalFeatures = "", localFeatures = "03")
   }
 }
 

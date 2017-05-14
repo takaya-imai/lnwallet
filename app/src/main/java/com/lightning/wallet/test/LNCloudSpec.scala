@@ -62,7 +62,7 @@ class LNCloudSpec {
       new LNCloudPublic {
         val bag = TestPaymentSpecBag
         lazy val channel = chan
-        lazy val lnCloud = new LNCloud
+        lazy val lnCloud = new LNCloud("10.0.2.2:9002")
         state = LNCloud.OPERATIONAL
         data = savedData
 
@@ -78,7 +78,7 @@ class LNCloudSpec {
       new LNCloudPublic {
         val bag = TestPaymentSpecBag
         lazy val channel = chan
-        lazy val lnCloud = new LNCloud
+        lazy val lnCloud = new LNCloud("10.0.2.2:9002")
         state = LNCloud.OPERATIONAL
         data = data1
 

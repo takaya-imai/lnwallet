@@ -23,6 +23,7 @@ import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
+import android.webkit.URLUtil
 import scala.util.Success
 
 
@@ -37,13 +38,17 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
   }
 
   def doProcess(some: Any): Unit = (data, some) match {
-    case (LNCloudDataPrivate(acts, url), act: LNCloudAct) =>
+    case (LNCloudDataPrivate(acts, _), act: LNCloudAct) =>
       me stayWith data.copy(acts = act :: acts take 1000)
       me doProcess CMDStart
 
     case (LNCloudDataPrivate(act :: ax, _), CMDStart) =>
       act.runPrivate(me).doOnCompleted(me doProcess CMDStart)
         .subscribe(_ => me stayWith data.copy(acts = ax), none)
+
+    case(_, newUrl: String)
+      if URLUtil isValidUrl newUrl =>
+      me stayWith data.copy(url = newUrl)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -173,8 +178,8 @@ trait Pathfinder {
 // This is a basic interface to cloud which does not require a channel
 // failover invariant will fall back to default in case of failure
 
-class LNCloud(url: String = "10.0.2.2:9002") {
-  def http(way: String) = post(s"http://$url/v1/$way", true) connectTimeout 7500
+class LNCloud(url: String) {
+  def http(way: String) = post(s"$url/v1/$way", true) connectTimeout 6000
   def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)

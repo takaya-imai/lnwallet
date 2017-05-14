@@ -148,7 +148,7 @@ object Helpers { me =>
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- localTxs
         IncomingPaymentSpec(_, preimage, _) <- bag.getInfoByHash(info.paymentHash).map(_.spec).toOption
         success <- makeTx("htlc-success") apply Scripts.addSigs(info, localSig, remoteSig, preimage)
-        successClaim <- makeClaimDelayedOutput(txn = success, "htlc-success-claim-delayed")
+        successClaim <- makeClaimDelayedOutput(success, "htlc-success-claim-delayed")
       } yield success -> successClaim
 
       val allTimeoutTxs = for {
@@ -188,8 +188,8 @@ object Helpers { me =>
           remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
         sig = Scripts.sign(info, localPrivkey)
-        infoWithSigs = Scripts.addSigs(claimHtlcSuccessTx = info, sig, preimage)
-        claimSuccess <- makeTx("claim-htlc-success") apply infoWithSigs
+        infoWithSig: ClaimHtlcSuccessTx = Scripts.addSigs(info, sig, preimage)
+        claimSuccess <- makeTx("claim-htlc-success") apply infoWithSig
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
@@ -198,8 +198,8 @@ object Helpers { me =>
           remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
         sig = Scripts.sign(info, localPrivkey)
-        infoWithSigs = Scripts.addSigs(claimHtlcTimeoutTx = info, sig)
-        claimTimeout <- makeTx("claim-p2wpkh-output") apply infoWithSigs
+        infoWithSig: ClaimHtlcTimeoutTx = Scripts.addSigs(info, sig)
+        claimTimeout <- makeTx("claim-p2wpkh-output") apply infoWithSig
       } yield claimTimeout
 
       val mainTx = makeTx("claim-p2wpkh-output") apply {
