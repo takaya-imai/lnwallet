@@ -167,7 +167,7 @@ with ListUpdater with SearchBar { me =>
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
     //throw new Exception("test")
-    //me exitTo classOf[LNStartActivity]
+    me exitTo classOf[LNStartActivity]
 
     //me exitTo classOf[LNOpsActivity]
 

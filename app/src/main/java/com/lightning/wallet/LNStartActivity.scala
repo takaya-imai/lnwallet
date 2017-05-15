@@ -1,19 +1,16 @@
 package com.lightning.wallet
 
+import com.lightning.wallet.ln.Tools._
+import android.widget.{ListView, TextView}
 import android.os.Bundle
 import android.view.Menu
-import com.lightning.wallet.ln.Tools._
 
 
-class LNStartActivity extends ToolbarActivity
-with ViewSwitch with SearchBar { me =>
-
-  lazy val views =
-    findViewById(R.id.lnStartNodesList) ::
-      findViewById(R.id.lnStartNodeInfo) :: Nil
-
-  def notifySubTitle(subtitle: String, infoType: Int) =
-    me runOnUiThread add(subtitle, infoType).ui
+class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
+  def notifySubTitle(sub: String, infoType: Int) = me runOnUiThread add(sub, infoType).ui
+  lazy val lnStartNodesList = findViewById(R.id.lnStartNodesList).asInstanceOf[ListView]
+  lazy val lnStartNodeInfo = findViewById(R.id.lnStartNodeInfo).asInstanceOf[TextView]
+  lazy val views = lnStartNodesList :: lnStartNodeInfo :: Nil
 
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
