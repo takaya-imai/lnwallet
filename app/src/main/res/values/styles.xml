@@ -3,16 +3,13 @@
     <!-- page layouts -->
 
     <style name="StandardLinearLayout">
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_width">match_parent</item>
         <item name="android:orientation">vertical</item>
         <item name="android:gravity">center</item>
     </style>
 
-    <style name="StandardLinearLayoutFillParent" parent="StandardLinearLayout">
-        <item name="android:layout_height">match_parent</item>
-        <item name="android:layout_width">match_parent</item>
-    </style>
-
-    <style name="StandardLinearLayoutFillParentPage" parent="StandardLinearLayoutFillParent">
+    <style name="StandardLinearLayoutPage" parent="StandardLinearLayout">
         <item name="android:background">#FFEEEEEE</item>
     </style>
 

@@ -313,10 +313,11 @@ trait TimerActivity extends AppCompatActivity { me =>
     showForm(builder.setCustomTitle(title).setView(content).create)
 
   def showForm(alertDialog: AlertDialog) = {
-    if (scrWidth > 2.3) alertDialog.getWindow.setLayout(maxDialog.toInt, WRAP_CONTENT)
-    alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
     alertDialog setCanceledOnTouchOutside false
-    try alertDialog.show catch none
+    alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
+    try alertDialog.show catch none finally if (scrWidth > 2.3) alertDialog.getWindow
+      .setLayout(maxDialog.toInt, WRAP_CONTENT)
+
     alertDialog
   }
 

@@ -1,8 +1,8 @@
-<RelativeLayout style="@style/StandardLinearLayoutFillParent"
+<RelativeLayout style="@style/StandardLinearLayout"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:fab="http://schemas.android.com/apk/res-auto">
 
-    <LinearLayout style="@style/StandardLinearLayoutFillParentPage">
+    <LinearLayout style="@style/StandardLinearLayoutPage">
 
         <!-- Custom toolbar -->
         <include layout="@layout/toolbar"/>

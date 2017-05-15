@@ -1,11 +1,9 @@
 <LinearLayout
-    style="@style/StandardLinearLayoutFillParent"
+    style="@style/StandardLinearLayout"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <LinearLayout
         style="@style/StandardLinearLayout"
-        android:layout_height="wrap_content"
-        android:layout_width="wrap_content"
         android:id="@+id/createInfo">
 
         <EditText
@@ -32,8 +30,6 @@
 
     <LinearLayout
         style="@style/StandardLinearLayout"
-        android:layout_height="wrap_content"
-        android:layout_width="fill_parent"
         android:id="@+id/createProgress"
         android:visibility="gone">
 
@@ -52,8 +48,6 @@
 
     <LinearLayout
         style="@style/StandardLinearLayout"
-        android:layout_height="wrap_content"
-        android:layout_width="fill_parent"
         android:id="@+id/createDone"
         android:visibility="gone">
 
