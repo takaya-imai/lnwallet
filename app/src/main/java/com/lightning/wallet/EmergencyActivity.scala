@@ -24,8 +24,8 @@ class EmergencyActivity extends InfoActivity { me =>
   def prepareWallet =
     app.kit = new app.WalletKit {
       val stream = new FileInputStream(app.walletFile)
-      val proto = try WalletProtobufSerializer parseToProto stream finally stream.close
-      wallet = new WalletProtobufSerializer readWallet (app.params, null, proto)
+      val proto = WalletProtobufSerializer parseToProto stream
+      wallet = (new WalletProtobufSerializer).readWallet(app.params, null, proto)
 
       def startUp = none
       blockChain = null
@@ -38,7 +38,7 @@ class EmergencyActivity extends InfoActivity { me =>
   def emergeMnemonic(view: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
 
   def emergeReport(view: View) = Try(getIntent getStringExtra ERROR_REPORT) match {
-    case Success(errorReport: String) => showForm(negBld(dialog_ok).setMessage(errorReport).create)
+    case Success(report: String) => showForm(negBld(dialog_ok).setMessage(report).create)
     case _ => showForm(negBld(dialog_ok).setMessage(me getString err_general).create)
   }
 }

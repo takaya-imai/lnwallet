@@ -1,18 +1,20 @@
 <LinearLayout
-    style="@style/StandardLinearLayoutFillParent"
+    style="@style/StandardLinearLayoutFillParentPage"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Custom toolbar -->
     <include layout="@layout/toolbar"/>
 
     <ListView
-        android:id="@+id/nodesList"
+        android:layout_weight="1"
+        android:id="@+id/lnStartNodesList"
         style="@style/GrayDividerListView"/>
 
     <TextView
-        style="@style/Info"
+        style="@style/StdText"
+        android:layout_weight="1"
         android:visibility="gone"
-        android:id="@+id/nodeInfo"
+        android:id="@+id/lnStartNodeInfo"
         android:layout_width="wrap_content"/>
 
 </LinearLayout>

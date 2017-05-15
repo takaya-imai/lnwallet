@@ -28,9 +28,7 @@ trait ViewSwitch {
   }
 }
 
-class MainActivity extends NfcReaderActivity
-with TimerActivity with ViewSwitch { me =>
-
+class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
   lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
   lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
   lazy val greet = findViewById(R.id.mainGreetings).asInstanceOf[TextView]
@@ -41,11 +39,11 @@ with TimerActivity with ViewSwitch { me =>
       findViewById(R.id.mainProgress) :: Nil
 
   lazy val prepareWalletKit = Future {
-    val stream: FileInputStream = new FileInputStream(app.walletFile)
-    val proto = try WalletProtobufSerializer parseToProto stream finally stream.close
+    val stream = new FileInputStream(app.walletFile)
+    val proto = WalletProtobufSerializer parseToProto stream
 
     app.kit = new app.WalletKit {
-      wallet = new WalletProtobufSerializer readWallet (app.params, null, proto)
+      wallet = (new WalletProtobufSerializer).readWallet(app.params, null, proto)
       store = new org.bitcoinj.store.SPVBlockStore(app.params, app.chainFile)
       blockChain = new BlockChain(app.params, wallet, store)
       peerGroup = new PeerGroup(app.params, blockChain)
@@ -71,13 +69,13 @@ with TimerActivity with ViewSwitch { me =>
   override def onNoNfcIntentFound = {
     // Filter out failures and nulls, try to set value, proceed if successful and inform if not
     val attempts = Try(getIntent.getDataString) :: Try(getIntent getStringExtra Intent.EXTRA_TEXT) :: Nil
-    val valid = attempts collectFirst { case res @ Success(nonNull: String) => res map app.TransData.parseValue }
+    val valid = attempts collectFirst { case res @ Success(nonNull: String) => res map app.TransData.recordValue }
     if (valid.isEmpty) next else valid foreach { case Failure(err) => app.TransData.onFail(inform)(err) case _ => next }
   }
 
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
-    app.TransData parseValue asText
+    app.TransData recordValue asText
     app toast nfc_got
 
   } catch { case _: Throwable =>
@@ -94,7 +92,7 @@ with TimerActivity with ViewSwitch { me =>
 
   // STARTUP LOGIC
 
-  def next =
+  private def next =
     (app.walletFile.exists, app.isAlive, LNParams.isSetUp) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
       case (true, true, true) => exitTo apply classOf[LNActivity]

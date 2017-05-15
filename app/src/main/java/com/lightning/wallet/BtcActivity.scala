@@ -253,7 +253,7 @@ with ListUpdater { me =>
   // NFC
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
-    app.TransData parseValue asText
+    app.TransData recordValue asText
     checkTransData
 
   } catch { case _: Throwable =>

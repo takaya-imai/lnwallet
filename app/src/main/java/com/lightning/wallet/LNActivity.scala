@@ -166,7 +166,8 @@ with ListUpdater with SearchBar { me =>
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
-    (new LNCloudSpec).allTests
+    throw new Exception("test")
+    me exitTo classOf[LNStartActivity]
 
     //me exitTo classOf[LNOpsActivity]
 

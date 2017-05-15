@@ -81,7 +81,7 @@ class WalletApp extends Application { me =>
       case _: Throwable => err(err_general)
     }
 
-    def parseValue(rawText: String) = value = rawText match {
+    def recordValue(rawText: String) = value = rawText match {
       case s if s startsWith "bitcoin" => new BitcoinURI(params, s)
       case s if s matches lnPaymentRequestRegex => Invoice parse s
       case s => getTo(s)
