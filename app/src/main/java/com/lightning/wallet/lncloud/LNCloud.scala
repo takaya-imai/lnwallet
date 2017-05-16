@@ -24,8 +24,6 @@ import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 import android.webkit.URLUtil
-
-
 import scala.util.Success
 
 
@@ -189,14 +187,13 @@ class LNCloud(url: String) {
       case err => throw new ProtocolException
     }
 
-  def getRawData(key: String) = call("data/get", _.head, "key" -> key)
-  def findNodes(query: String): Obs[NodeAnnouncements] = call("router/nodes",
-    _.flatMap(json2BitVec).map(nodeAnnouncementCodec.decode(_).require.value),
+  def findNodes(query: String) = call(command = "router/nodes",
+    vec => for (json <- vec) yield json.convertTo[AnnounceChansNum],
     "query" -> query)
 
-  // A vector of vectors of hops
+  def getRawData(key: String) = call("data/get", _.head, "key" -> key)
   def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes",
-    _.flatMap(json2BitVec).map(hopsCodec.decode(_).require.value),
+    vec => for (json <- vec) yield json.convertTo[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
 }
 

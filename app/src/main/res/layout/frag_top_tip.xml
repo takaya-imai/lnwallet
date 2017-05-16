@@ -1,12 +1,4 @@
-<LinearLayout
-    style="@style/StandardLinearLayout"
-    xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <TextView
-        style="@style/MarginInfo"
-        android:layout_width="wrap_content"
-        android:maxWidth="230sp" android:id="@+id/actionTip"/>
-
+<LinearLayout style="@style/StandardLinearLayout" xmlns:android="http://schemas.android.com/apk/res/android">
+    <TextView style="@style/MarginInfo" android:maxWidth="230sp" android:id="@+id/actionTip" android:layout_width="wrap_content"/>
     <View style="@style/GrayDivider"/>
-
 </LinearLayout>

@@ -11,7 +11,7 @@ abstract class ThrottledWork[T] {
   def process(result: T): Unit
 
   private def doWork(input: String) = work(input)
-    .doAfterTerminate(lastInput foreach onNewQuery)
+    .doAfterTerminate { lastInput foreach onNewQuery }
     .doOnTerminate { isWorking = false }
     .doOnSubscribe { isWorking = true }
     .doOnSubscribe { lastInput = None }

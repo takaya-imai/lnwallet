@@ -68,6 +68,9 @@
     <string name="tx_received">Just received %1$s</string>
     <string name="tx_sent">Just sent %1$s</string>
 
+    <string name="ln_select_peer">Select a peer</string>
+    <string name="ln_working">Working&#8230;</string>
+
     <array name="info_progress">
         <item>Sync is complete</item>
         <item>Sync: %1$d day behind</item>
@@ -152,8 +155,15 @@
     <string name="ln_notify_connecting">Connecting&#8230;</string>
     <string name="ln_notify_operational">Channel is ready</string>
 
-    <!-- activity_ln_ops -->
+    <!-- activity_ln_ops, activity_ln_start -->
     <string name="ln_ops_description">Bitcoin Lightning Network allows for fast and secure micropayments with a near zero transaction fees\n\nIn order to send and receive Lightning payments you need to open a Payment Channel with one of network nodes and fund it with a single Bitcoin transaction</string>
     <string name="ln_ops_more"><a href='https://lightning-wallet.com/#mnemonic-code'>Read more about\nLightning Network</a></string>
+    <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start">Open Payment Channel</string>
+
+    <array name="ln_ops_start_node_channels">
+        <item><![CDATA[<font color=#E31300>Has no open channels</font>]]></item>
+        <item><![CDATA[<strong>%1$s</strong> open channel]]></item>
+        <item><![CDATA[<strong>%1$s</strong> open channels]]></item>
+    </array>
 </resources>

@@ -6,12 +6,13 @@ import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket}
 import com.lightning.wallet.lncloud.LNCloud.{ClearToken, InvoiceAndMemo}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.{hopsCodec, lightningMessageCodec}
+import com.lightning.wallet.ln.wire.{LightningMessage, NodeAnnouncement}
 import com.lightning.wallet.ln.{IncomingPaymentSpec, Invoice, OutgoingPaymentSpec, PaymentSpec}
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.{hopsCodec, nodeAnnouncementCodec, lightningMessageCodec}
+
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
-import com.lightning.wallet.ln.wire.LightningMessage
 import org.bitcoinj.core.ECKey.CURVE.getCurve
 import com.lightning.wallet.ln.Tools.Bytes
 import org.spongycastle.math.ec.ECPoint
@@ -68,6 +69,11 @@ object ImplicitJsonFormats { me =>
   implicit object LightningMessageFmt extends JsonFormat[LightningMessage] {
     def read(rawJson: JsValue) = lightningMessageCodec.decode(json2BitVec(rawJson).get).require.value
     def write(message: LightningMessage) = lightningMessageCodec.encode(message).require.toHex.toJson
+  }
+
+  implicit object NodeAnnouncementFmt extends JsonFormat[NodeAnnouncement] {
+    def read(rawJson: JsValue) = nodeAnnouncementCodec.decode(json2BitVec(rawJson).get).require.value
+    def write(message: NodeAnnouncement) = lightningMessageCodec.encode(message).require.toHex.toJson
   }
 
   implicit object PaymentRouteFmt extends JsonFormat[PaymentRoute] {

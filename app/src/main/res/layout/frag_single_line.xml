@@ -1,0 +1,12 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android" android:orientation="horizontal"
+    android:paddingLeft="@dimen/app_padding" android:paddingRight="@dimen/app_padding"
+    android:layout_height="wrap_content" android:layout_width="match_parent"
+    android:paddingTop="12dp" android:paddingBottom="14dp">
+
+    <TextView
+        style="@style/BaseText"
+        android:id="@+id/textLine"
+        android:layout_width="match_parent"/>
+
+</LinearLayout>
