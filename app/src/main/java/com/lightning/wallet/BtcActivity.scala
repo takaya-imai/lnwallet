@@ -300,7 +300,11 @@ with ListUpdater { me =>
   // Reactions to menu buttons
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
-  def goLightning(top: View) = me goTo classOf[LNActivity]
+
+  def goLightning = me goTo classOf[LNActivity]
+  def doGoLightning(top: View) = wrap(fab close true) {
+    timer.schedule(me anyToRunnable goLightning, 300)
+  }
 
   def receive = me goTo classOf[RequestActivity]
   def doReceive(top: View) = wrap(fab close true) {

@@ -2,34 +2,27 @@
     style="@style/StandardLinearLayout"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <LinearLayout
-        style="@style/StandardLinearLayout"
-        android:id="@+id/lnOpsDescription">
+    <TextView
+        style="@style/Info"
+        android:layout_marginBottom="45dp"
+        android:layout_width="wrap_content"
+        android:id="@+id/lnOpsDescription"/>
 
-        <TextView
-            style="@style/Info"
-            android:layout_marginBottom="45dp"
-            android:layout_width="wrap_content"
-            android:text="@string/ln_ops_description"/>
+    <Button
+        style="@style/Info"
+        android:layout_width="wrap_content"
+        android:id="@+id/lnOpsAction"/>
 
-        <TextView
-            style="@style/Info"
-            android:id="@+id/lnOpsReadMore"
-            android:text="@string/ln_ops_more"
-            android:layout_width="wrap_content"/>
+    <TextView
+        style="@style/Info"
+        android:text="@string/or"
+        android:layout_margin="10dp"
+        android:layout_width="wrap_content"/>
 
-        <TextView
-            style="@style/Info"
-            android:text="@string/or"
-            android:layout_margin="10dp"
-            android:layout_width="wrap_content"/>
-
-        <Button
-            style="@style/Info"
-            android:onClick="goChoosePeer"
-            android:layout_width="wrap_content"
-            android:text="@string/ln_ops_start"/>
-
-    </LinearLayout>
+    <Button
+        style="@style/Info"
+        android:onClick="goBitcoin"
+        android:layout_width="wrap_content"
+        android:text="@string/ln_ops_btc"/>
 
 </LinearLayout>

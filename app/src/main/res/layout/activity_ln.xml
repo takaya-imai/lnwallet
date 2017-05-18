@@ -1,4 +1,5 @@
-<RelativeLayout style="@style/StandardLinearLayoutPage"
+<RelativeLayout
+    style="@style/StandardLinearLayoutPage"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:fab="http://schemas.android.com/apk/res-auto">
 

@@ -47,7 +47,7 @@
             fab:fab_colorPressed="@color/ln"
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
-            android:onClick="goLightning"
+            android:onClick="doGoLightning"
             style="@style/FabButton"/>
 
         <com.github.clans.fab.FloatingActionButton

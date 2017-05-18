@@ -1,22 +1,30 @@
 package com.lightning.wallet
 
+import com.lightning.wallet.R.string._
+import android.widget.{Button, TextView}
 import android.text.method.LinkMovementMethod
-import android.widget.TextView
 import android.os.Bundle
 import android.view.View
 
 
-class LNOpsActivity extends TimerActivity with ViewSwitch {
-  lazy val lnOpsReadMore = findViewById(R.id.lnOpsReadMore).asInstanceOf[TextView]
-  lazy val views = findViewById(R.id.lnOpsDescription) :: Nil
+class LNOpsActivity extends TimerActivity { me =>
+  lazy val lnOpsDescription = findViewById(R.id.lnOpsDescription).asInstanceOf[TextView]
+  lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
+  def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
-    lnOpsReadMore setMovementMethod LinkMovementMethod.getInstance
+    lnOpsDescription setMovementMethod LinkMovementMethod.getInstance
+    showInfo
   }
 
-  def goChoosePeer(view: View) = ???
+  def showInfo = {
+    def goCreateChannel = me exitTo classOf[LNStartActivity]
+    lnOpsAction setOnClickListener onButtonTap(goCreateChannel)
+    lnOpsDescription setText ln_ops_description
+    lnOpsAction setText ln_ops_start
+  }
 }

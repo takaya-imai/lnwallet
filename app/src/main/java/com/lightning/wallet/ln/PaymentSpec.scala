@@ -39,8 +39,8 @@ object PaymentSpec {
   // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
 
-  // finalExpiryBlockCount = current count + some delta
-  // First amount is larger than final amount since intermediary nodes collect fees
+  // finalAmountMsat = final amount specified by the recipient
+  // finalExpiryBlockCount = final expiry specified by the recipient
   def buildRoute(finalAmountMsat: Long, finalExpiryBlockCount: Int, hops: PaymentRoute) = {
     val startConditions = (Vector.empty[PerHopPayload], finalAmountMsat, finalExpiryBlockCount)
 

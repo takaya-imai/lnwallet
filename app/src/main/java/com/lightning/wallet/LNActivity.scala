@@ -44,6 +44,7 @@ import scala.util.{Failure, Success, Try}
 
 trait SearchBar { me =>
   import android.support.v7.widget.SearchView
+  protected[this] var searchItem: MenuItem = _
   protected[this] var search: SearchView = _
 
   private[this] val lst = new OnQueryTextListener {
@@ -53,8 +54,8 @@ trait SearchBar { me =>
   }
 
   def setupSearch(menu: Menu) = {
-    val item = menu findItem R.id.action_search
-    val view = MenuItemCompat.getActionView(item)
+    searchItem = menu findItem R.id.action_search
+    val view = MenuItemCompat getActionView searchItem
     search = view.asInstanceOf[SearchView]
     search setOnQueryTextListener lst
   }
@@ -167,9 +168,9 @@ with ListUpdater with SearchBar { me =>
     add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
     //throw new Exception("test")
-    me exitTo classOf[LNStartActivity]
+    //me exitTo classOf[LNStartActivity]
 
-    //me exitTo classOf[LNOpsActivity]
+    me exitTo classOf[LNOpsActivity]
 
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run

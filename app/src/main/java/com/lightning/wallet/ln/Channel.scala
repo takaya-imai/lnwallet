@@ -299,7 +299,7 @@ extends StateMachine[ChannelData] { me =>
 
     case _ =>
       // Let know if received an unhandled message
-      Tools.log(s"Channel: unhandled $data : $change")
+      Tools log s"Channel: unhandled $data : $change"
   }
 
   private def makeFundingLocked(cs: Commitments) = {
