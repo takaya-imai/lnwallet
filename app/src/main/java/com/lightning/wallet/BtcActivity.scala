@@ -150,9 +150,9 @@ with ListUpdater { me =>
       me runOnUiThread add(sub, infoType).ui
     }
 
-  def notifySubTitle(subtitle: String, it: Int) = {
-    me.updateTitleAndSub(sub = subtitle, infoType = it)
-    timer.schedule(me del it, 25000)
+  def notifySubTitle(subtitle: String, infoType: Int) = {
+    me.updateTitleAndSub(subtitle, infoType)
+    timer.schedule(me del infoType, 25000)
   }
 
   // Initialize this activity, method is run once
@@ -163,6 +163,7 @@ with ListUpdater { me =>
       wrap(initToolbar)(me setContentView R.layout.activity_btc)
       mnemonicInfo setMovementMethod LinkMovementMethod.getInstance
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
+      fab setAnimated false
       setDetecting(true)
 
       list setOnItemClickListener onTap { pos =>
@@ -262,8 +263,8 @@ with ListUpdater { me =>
 
   // Working with transitional data and NFC
   def checkTransData = app.TransData.value match {
-    case uri: BitcoinURI => sendBtcTx.set(Try(uri.getAmount), uri.getAddress)
-    case bitcoinAddress: Address => sendBtcTx setAddress bitcoinAddress
+    case uri: BitcoinURI => sendBtcTxPopup.set(Try(uri.getAmount), uri.getAddress)
+    case bitcoinAddress: Address => sendBtcTxPopup setAddress bitcoinAddress
     case unusable => println(s"Unknown TransData: $unusable")
   }
 
@@ -300,23 +301,23 @@ with ListUpdater { me =>
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
   def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
 
-  def goLightning = me goTo classOf[LNActivity]
-  def doGoLightning(top: View) = wrap(fab close true) {
-    timer.schedule(me anyToRunnable goLightning, 300)
+  def goQR(top: View) = {
+    me goTo classOf[ScanActivity]
+    fab close false
   }
 
-  def receive = me goTo classOf[RequestActivity]
-  def doReceive(top: View) = wrap(fab close true) {
-    timer.schedule(me anyToRunnable receive, 300)
+  def goLN(top: View) = {
+    me goTo classOf[LNActivity]
+    fab close false
+  }
+
+  def goReceiveBtcAddress(top: View) = {
     app.TransData.value = app.kit.currentAddress
+    me goTo classOf[RequestActivity]
+    fab close false
   }
 
-  def QRScan = me goTo classOf[ScanActivity]
-  def doQRScan(top: View) = wrap(fab close true) {
-    timer.schedule(me anyToRunnable QRScan, 300)
-  }
-
-  def sendBtcTx: BtcManager = {
+  def sendBtcTxPopup: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_send, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
 
@@ -325,9 +326,9 @@ with ListUpdater { me =>
     val spendManager = new BtcManager(rateManager)
 
     def attempt = rateManager.result match {
+      case Failure(_) => app toast dialog_sum_empty
       case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
       case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
-      case Failure(_) => app toast dialog_sum_empty
 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
@@ -340,7 +341,7 @@ with ListUpdater { me =>
 
           def doOnError = rm(alert) {
             // User may want to try again
-            sendBtcTx.set(ok, pay.adr)
+            sendBtcTxPopup.set(ok, pay.adr)
           }
         }
 
@@ -353,8 +354,10 @@ with ListUpdater { me =>
     spendManager
   }
 
-  def doPay(top: View) = wrap(fab close true) {
-    timer.schedule(me anyToRunnable sendBtcTx, 300)
+  def goPay(top: View): Unit = {
+    val run = anyToRunnable(sendBtcTxPopup)
+    timer.schedule(run, 50)
+    fab close false
   }
 
   // Working with transactions

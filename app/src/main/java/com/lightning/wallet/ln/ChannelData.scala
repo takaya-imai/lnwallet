@@ -18,8 +18,7 @@ case object CMDCommitSig extends Command
 case object CMDClosingFinished extends Command
 
 case class CMDOpenChannel(temporaryChannelId: BinaryData, pushMsat: Long, initialFeeratePerKw: Long,
-                          localParams: LocalParams, remoteInit: Init, funding: Transaction,
-                          outIndex: Int) extends Command
+                          localParams: LocalParams, remoteInit: Init, funding: Transaction, outIndex: Int) extends Command
 
 trait CMDAddHtlc extends Command { val spec: OutgoingPaymentSpec }
 case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
@@ -90,14 +89,6 @@ object ClosingData {
   def extractTxs(cd: ClosingData): Seq[Transaction] =
     cd.mutualClose ++ cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
       cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
-
-  def extractWatchScripts(closing: ClosingData): Seq[TxOut] = {
-    // On channel breaking we need to watch all commit outputs for preimages
-    val remoteNext = closing.nextRemoteCommit.flatMap(_.commitTx.txOut)
-    val remote = closing.remoteCommit.flatMap(_.commitTx.txOut)
-    val local = closing.localCommit.flatMap(_.commitTx.txOut)
-    remoteNext ++ remote ++ local
-  }
 }
 
 // COMMITMENTS

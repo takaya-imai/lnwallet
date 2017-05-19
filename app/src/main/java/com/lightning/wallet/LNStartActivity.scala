@@ -37,8 +37,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def react(query: String) = worker onNewQuery query
-  def notifySubTitle(sub: String, infoType: Int) =
-    me runOnUiThread add(sub, infoType).ui
+  def notifySubTitle(subtitle: String, infoType: Int) = {
+    add(subtitle, infoType).timer.schedule(me del infoType, 25000)
+    me runOnUiThread ui
+  }
 
   def mkNodeView(info: AnnounceChansNum) = {
     val (announcement: NodeAnnouncement, quantity) = info
@@ -67,7 +69,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   {
     super.onCreate(savedState)
     wrap(initToolbar)(me setContentView R.layout.activity_ln_start)
-    notifySubTitle(me getString ln_select_peer, Informer.LNSTATE)
+    add(me getString ln_select_peer, Informer.LNSTATE).ui.run
     getSupportActionBar setTitle ln_ops_start
     lnStartNodesList setAdapter adapter
     worker onNewQuery new String
@@ -79,7 +81,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(position: Int) = {
     val info @ (node: NodeAnnouncement, _) = adapter getItem position
-    notifySubTitle(me getString ln_notify_connecting, Informer.LNSTATE)
+    add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
     setVis(View.GONE, View.VISIBLE, View.VISIBLE)
     MenuItemCompat collapseActionView searchItem
     lnStartInfo setText mkNodeView(info)
