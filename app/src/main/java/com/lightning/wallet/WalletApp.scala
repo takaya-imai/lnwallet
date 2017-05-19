@@ -94,6 +94,10 @@ class WalletApp extends Application { me =>
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
 
+    def blockingSend(tx: Transaction) =
+      // Wait for at least one peer confirmation or failure
+      peerGroup.broadcastTransaction(tx, 1).broadcast.get
+
     def encryptWallet(pass: CharSequence) = {
       val randSalt = ByteString copyFrom KeyCrypterScrypt.randomSalt
       val scryptBuilder = Protos.ScryptParameters.newBuilder setSalt randSalt

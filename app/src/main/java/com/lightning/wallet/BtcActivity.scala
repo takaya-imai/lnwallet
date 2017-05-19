@@ -8,7 +8,7 @@ import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import com.lightning.wallet.ln.Tools.{none, wrap, runAnd}
+import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
 import com.lightning.wallet.Utils.{app, sumIn, sumOut}
 import android.view.{Menu, MenuItem, View, ViewGroup}
@@ -177,7 +177,6 @@ with ListUpdater { me =>
 
         val payDatas = tx.getOutputs.asScala.filter(_.isMine(app.kit.wallet) == direction).map(outputToPayData).flatMap(_.toOption)
         lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, payDatas.map(_ cute coloring).toArray)
-        lst setOnItemClickListener onTap { position => payDatas(position - 1).onTapped }
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
 
@@ -188,7 +187,7 @@ with ListUpdater { me =>
 
         val sumPretty: String = coloring format withSign(me value tx)
         val title = s"$sumPretty<br><small>${me time tx.getUpdateTime}</small>"
-        mkForm(me negBld dialog_cancel, title.html, lst)
+        mkForm(me negBld dialog_ok, title.html, lst)
         confNumber setText status(tx).html
       }
 
@@ -263,8 +262,8 @@ with ListUpdater { me =>
 
   // Working with transitional data and NFC
   def checkTransData = app.TransData.value match {
-    case uri: BitcoinURI => pay.set(Try(uri.getAmount), uri.getAddress)
-    case bitcoinAddress: Address => pay setAddress bitcoinAddress
+    case uri: BitcoinURI => sendBtcTx.set(Try(uri.getAmount), uri.getAddress)
+    case bitcoinAddress: Address => sendBtcTx setAddress bitcoinAddress
     case unusable => println(s"Unknown TransData: $unusable")
   }
 
@@ -317,8 +316,8 @@ with ListUpdater { me =>
     timer.schedule(me anyToRunnable QRScan, 300)
   }
 
-  def pay: BtcManager = {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_spend, null, false)
+  def sendBtcTx: BtcManager = {
+    val content = getLayoutInflater.inflate(R.layout.frag_input_send, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
 
     // Can input satoshis and address
@@ -330,11 +329,23 @@ with ListUpdater { me =>
       case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
       case Failure(_) => app toast dialog_sum_empty
 
-      case Success(ms) => rm(alert) {
-        val payData = AddrData(ms, spendManager.getAddress)
-        val proceed = chooseFeeAndPay(_: String, payData)
-        passPlus(payData cute sumOut)(proceed)
-      }
+      case ok @ Success(ms) =>
+        val processor = new TxProcessor {
+          val pay = AddrData(ms, spendManager.getAddress)
+
+          def processTx(password: String, fee: Coin) = {
+            <(app.kit blockingSend makeTx(password, fee), onTxFail)(none)
+            add(me getString tx_announce, Informer.BTCEVENT).ui.run
+          }
+
+          def doOnError = rm(alert) {
+            // User may want to try again
+            sendBtcTx.set(ok, pay.adr)
+          }
+        }
+
+        // Initiate the spending sequence
+        rm(alert)(processor.chooseFee)
     }
 
     val ok = alert getButton BUTTON_POSITIVE
@@ -343,7 +354,7 @@ with ListUpdater { me =>
   }
 
   def doPay(top: View) = wrap(fab close true) {
-    timer.schedule(me anyToRunnable pay, 300)
+    timer.schedule(me anyToRunnable sendBtcTx, 300)
   }
 
   // Working with transactions

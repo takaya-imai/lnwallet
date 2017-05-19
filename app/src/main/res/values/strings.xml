@@ -102,7 +102,6 @@
     <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
     <string name="txs_view_outside">View on BlockExplorer.com</string>
-    <string name="txs_nothing_to_copy">Nothing to copy here</string>
     <string name="txs_p2wsh">Payment Channel funding</string>
 
     <array name="txs_confs">

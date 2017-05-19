@@ -6,6 +6,7 @@
         android:paddingTop="20dp"
         style="@style/BigInputText"
         android:inputType="numberDecimal"
+        android:focusableInTouchMode="true"
         android:id="@+id/fiatInputAmount"/>
 
     <info.hoang8f.android.segmented.SegmentedGroup

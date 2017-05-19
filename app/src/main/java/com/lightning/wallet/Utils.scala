@@ -58,7 +58,7 @@ object Utils { me =>
   val textType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
 
   // Mapping from text to Android id integer
-  val Seq(strDollar, strEuro, strYuan) = List("dollar", "euro", "yuan")
+  val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")
   val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeCNY -> strYuan)
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYuan -> typeCNY)
 
@@ -218,59 +218,65 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
   }
 
-  // Temporairly update subtitle info
-  def notifySubTitle(subtitle: String, infoType: Int)
-  def chooseFeeAndPay(password: String, pay: PayData): Unit =
-    <(makeTx(password, pay, RatesSaver.rates.feeRisky), errorReact) { feeEstimate =>
-      // Fee is taken per 1000 bytes of data so we normalize it with respect to tx size
-      val riskyFinalFee = RatesSaver.rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
-      val liveFinalFee = RatesSaver.rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+  abstract class TxProcessor {
+    def processTx(password: String, fee: Coin)
+    def chooseFee = passPlus(pay cute sumOut) { password =>
+      <(makeTx(password, RatesSaver.rates.feeRisky), onTxFail) { feeEstimate =>
+        // Fee is taken per 1000 bytes of data so we normalize it with respect to tx size
+        val riskyFinalFee = RatesSaver.rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val liveFinalFee = RatesSaver.rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
 
-      // Mark fees as red because we are the ones who always pay them
-      val riskyFeePretty = sumOut format withSign(riskyFinalFee)
-      val liveFeePretty = sumOut format withSign(liveFinalFee)
+        // Mark fees as red because we are the ones who always pay them
+        val riskyFeePretty = sumOut format withSign(riskyFinalFee)
+        val liveFeePretty = sumOut format withSign(liveFinalFee)
 
-      // Show fees in satoshis as well as in current fiat value
-      val feeRisky = getString(fee_risky).format(humanFiat(inFiat(RatesSaver.rates.feeRisky), ""), riskyFeePretty)
-      val feeLive = getString(fee_live).format(humanFiat(inFiat(RatesSaver.rates.feeLive), ""), liveFeePretty)
+        // Show formatted fees in satoshis as well as in current fiat value
+        val feeRiskyComplete = getString(fee_risky).format(humanFiat(inFiat(RatesSaver.rates.feeRisky), ""), riskyFeePretty)
+        val feeLiveComplete = getString(fee_live).format(humanFiat(inFiat(RatesSaver.rates.feeLive), ""), liveFeePretty)
+        val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
 
-      // Create a fee selector
-      val feesOptions = Array(feeRisky.html, feeLive.html)
-      val form = getLayoutInflater.inflate(R.layout.frag_input_spend_confirm, null)
-      val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
-      val slot = android.R.layout.select_dialog_singlechoice
-      lst setAdapter new ArrayAdapter(me, slot, feesOptions)
-      lst.setItemChecked(0, true)
+        val form = getLayoutInflater.inflate(R.layout.frag_input_send_confirm, null)
+        val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
+        val slot = android.R.layout.select_dialog_singlechoice
+        lst setAdapter new ArrayAdapter(me, slot, feesOptions)
+        lst.setItemChecked(0, true)
 
-      def sendTx: Unit = rm(alert) {
-        val fee = if (lst.getCheckedItemPosition == 0) RatesSaver.rates.feeRisky else RatesSaver.rates.feeLive
-        <(app.kit.peerGroup.broadcastTransaction(makeTx(password, pay, fee), 1).broadcast.get, errorReact)(none)
-        add(me getString tx_announce, Informer.BTCEVENT).ui.run
+        def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) RatesSaver.rates.feeRisky else RatesSaver.rates.feeLive)
+        lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
+        lazy val alert: AlertDialog = mkForm(dialog, pay cute sumOut, form)
+        alert
       }
-
-      lazy val dialog = mkChoiceDialog(sendTx, none, dialog_pay, dialog_cancel)
-      lazy val alert = mkForm(dialog, pay cute sumOut, form)
-      alert
     }
 
-  def makeTx(secret: String, pay: PayData, fee: Coin) = {
-    val keyParam = app.kit.wallet.getKeyCrypter deriveKey secret
-    val request = pay.sendRequest
+    val pay: PayData
+    def makeTx(password: String, fee: Coin) = {
+      val crypter = app.kit.wallet.getKeyCrypter
+      val keyParameter = crypter deriveKey password
+      val request = pay.sendRequest
 
-    request.feePerKb = fee
-    request.aesKey = keyParam
-    app.kit.wallet completeTx request
-    request.tx
-  }
+      request.feePerKb = fee
+      request.aesKey = keyParameter
+      app.kit.wallet completeTx request
+      request.tx
+    }
 
-  def errorReact(exc: Throwable): Unit =
-    mkForm(me negBld dialog_ok, content = exc match {
+    private def errorWhenMakingTx: PartialFunction[Throwable, String] = {
       case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
       case _: InsufficientMoneyException => app getString err_not_enough_funds
       case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
       case _: KeyCrypterException => app getString err_pass
       case _: Throwable => app getString err_general
-    }, title = null)
+    }
+
+    def doOnError
+    def onTxFail(exc: Throwable): Unit = {
+      val dialog = mkChoiceDialog(doOnError, none, dialog_ok, dialog_cancel)
+      mkForm(dialog, content = errorWhenMakingTx(exc), title = null)
+    }
+  }
+
+  // Temporairly update subtitle info
+  def notifySubTitle(subtitle: String, infoType: Int)
 }
 
 trait TimerActivity extends AppCompatActivity { me =>
@@ -305,7 +311,7 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   def rm(prev: Dialog)(fun: => Unit) = {
-    timer.schedule(anyToRunnable(fun), 200)
+    timer.schedule(anyToRunnable(fun), 225)
     prev.dismiss
   }
 
@@ -321,9 +327,9 @@ trait TimerActivity extends AppCompatActivity { me =>
     alertDialog
   }
 
-  def negBld(neg: Int) = new Builder(me).setNegativeButton(neg, null)
-  def negPosBld(neg: Int, pos: Int) = negBld(neg).setPositiveButton(pos, null)
-  def mkChoiceDialog(ok: => Unit, no: => Unit, okResource: Int, noResource: Int) = {
+  def negBld(neg: Int): Builder = new Builder(me).setNegativeButton(neg, null)
+  def negPosBld(neg: Int, pos: Int): Builder = negBld(neg).setPositiveButton(pos, null)
+  def mkChoiceDialog(ok: => Unit, no: => Unit, okResource: Int, noResource: Int): Builder = {
     val cancel = new DialogInterface.OnClickListener { def onClick(x: DialogInterface, w: Int) = no }
     val again = new DialogInterface.OnClickListener { def onClick(x: DialogInterface, w: Int) = ok }
     new Builder(me).setPositiveButton(okResource, again).setNegativeButton(noResource, cancel)
@@ -417,7 +423,6 @@ class BtcManager(val man: RateManager) { me =>
 trait PayData {
   def colored(direction: String): String
   def sendRequest: SendRequest
-  def onTapped: Unit
   def cn: Coin
 
   def cute(direction: String) = {
@@ -429,7 +434,6 @@ trait PayData {
 case class AddrData(cn: Coin, adr: Address) extends PayData {
   def link = BitcoinURI.convertToBitcoinURI(adr, cn, null, null)
   def colored(direction: String) = direction format humanAddr(adr)
-  def onTapped = app setBuffer adr.toString
   def sendRequest = SendRequest.to(adr, cn)
 }
 
@@ -437,13 +441,11 @@ case class EmptyAddrData(adr: Address) extends PayData {
   def link = BitcoinURI.convertToBitcoinURI(adr, cn, null, null)
   def colored(direction: String) = direction format humanAddr(adr)
   def sendRequest = SendRequest emptyWallet adr
-  def onTapped = app setBuffer adr.toString
   def cn = app.kit.currentBalance
 }
 
 case class P2WSHData(cn: Coin, witScriptHash: Script) extends PayData {
   def colored(direction: String) = direction format app.getString(txs_p2wsh)
-  def onTapped = app toast txs_nothing_to_copy
 
   def sendRequest: SendRequest = {
     val funding = new Transaction(app.params)
