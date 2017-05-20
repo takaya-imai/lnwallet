@@ -1,6 +1,6 @@
 package com.lightning.wallet.test
 
-import com.lightning.wallet.ln.{DataTransport, StateMachine, TransportHandler}
+import com.lightning.wallet.ln.{Transport, TransportHandler}
 import com.lightning.wallet.ln.crypto.Noise
 import fr.acinq.bitcoin.BinaryData
 
@@ -19,23 +19,28 @@ class TransportHandlerSpec {
       val s = Noise.Secp256k1DHFunctions.generateKeyPair("2121212121212121212121212121212121212121212121212121212121212121")
     }
 
-    lazy val bob: TransportHandler = new TransportHandler(Initiator.s, Responder.s.pub,
-      data => println("Bob channel got: " + new String(data.toArray, "UTF-8")),
-      new DataTransport {
-        def send(data: BinaryData) = Future {
-          Thread.sleep(1000)
-          alice.process(data)
-        }
-      })
+    lazy val bobTransport = new Transport {
+      def send(data: BinaryData) = Future {
+        Thread.sleep(1000)
+        alice.process(data)
+      }
+      def onReceive(data: BinaryData) = ???
+    }
 
-    lazy val alice: TransportHandler = new TransportHandler(Responder.s, null,
-      data => println("Alice channel got: " + new String(data.toArray, "UTF-8")),
-      new DataTransport {
-        def send(data: BinaryData) = Future {
-          Thread.sleep(1000)
-          bob.process(data)
-        }
-      }) {
+    lazy val aliceTransport = new Transport {
+      def send(data: BinaryData) = Future {
+        Thread.sleep(1000)
+        bob.process(data)
+      }
+      def onReceive(data: BinaryData) = ???
+    }
+
+    lazy val bob: TransportHandler = new TransportHandler(Initiator.s, Responder.s.pub, bobTransport) {
+      def feedForward(data: BinaryData) = println("Bob channel got: " + new String(data.toArray, "UTF-8"))
+    }
+
+    lazy val alice: TransportHandler = new TransportHandler(Responder.s, null, aliceTransport) {
+      def feedForward(data: BinaryData) = println("Alice channel got: " + new String(data.toArray, "UTF-8"))
 
       override def init: Unit = {
         val reader = TransportHandler.makeReader(Responder.s)

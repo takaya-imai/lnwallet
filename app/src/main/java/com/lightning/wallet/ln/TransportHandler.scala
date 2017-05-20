@@ -7,9 +7,8 @@ import com.lightning.wallet.ln.Tools.random
 import java.nio.ByteOrder
 
 
-trait DataTransport { def send(data: BinaryData): Unit }
-class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData, consume: BinaryData => Unit,
-                       transport: DataTransport) extends StateMachine[Data] { me =>
+abstract class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData,
+                                transport: Transport) extends StateMachine[Data] { me =>
 
   def init = {
     val writer = makeWriter(keyPair, remotePubKey)
@@ -18,6 +17,7 @@ class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData, consume: Bina
     transport.send(prefix +: msg)
   }
 
+  def feedForward(data: BinaryData): Unit
   def doProcess(change: Any): Unit = (data, change, state) match {
     case (HandshakeData(reader1, buffer), bd: BinaryData, HANDSHAKE) =>
       me stayWith HandshakeData(reader1, buffer ++ bd)
@@ -83,7 +83,7 @@ class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData, consume: Bina
       val (ciphertext, remainder) = buffer.splitAt(length + 16)
       val (decoder1, plaintext) = decoder.decryptWithAd(BinaryData.empty, ciphertext)
       me stayWith CyphertextData(encoder, decoder1, length = None, remainder)
-      me consume plaintext
+      me feedForward plaintext
       doProcess(Ping)
 
     case _ =>
@@ -163,4 +163,9 @@ case class ExtendedCipherState(cs: CipherState, ck: BinaryData) extends CipherSt
 
   def cipher = cs.cipher
   val hasKey = cs.hasKey
+}
+
+trait Transport {
+  def send(data: BinaryData): Unit
+  def onReceive(data: BinaryData): Unit
 }
