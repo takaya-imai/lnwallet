@@ -79,6 +79,10 @@ object Features {
   }
 }
 
+case class ChannelKit(chan: Channel) {
+
+}
+
 // STATE MACHINE
 
 trait StateMachineListener {

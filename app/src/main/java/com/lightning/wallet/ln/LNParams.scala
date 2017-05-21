@@ -22,12 +22,16 @@ object LNParams {
   }
 
   val updateFeeMinDiffRatio = 0.25 // Must update
-  val maxChannelCapacity = MilliSatoshi(16777216000L)
-  val maxHtlcValue = MilliSatoshi(4294967295L)
   val maxReserveToFundingRatio = 0.05 // %
   val reserveToFundingRatio = 0.01 // %
   val untilExpiryBlocks = 6
   val minDepth = 2
+
+  val maxChannelCapacity = MilliSatoshi(16777216000L)
+  val maxHtlcValue = MilliSatoshi(4294967295L)
+
+  val localFeatures = "03"
+  val globalFeatures = ""
 
   def myHtlcExpiry = broadcaster.currentHeight + untilExpiryBlocks
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
@@ -44,10 +48,9 @@ object LNParams {
   def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (n <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, n)
     LocalParams(Block.TestnetGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
-      channelReserveSatoshis = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144,
+      channelReserveSat = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144,
       maxAcceptedHtlcs = 10, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
-      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin),
-      isFunder = true, globalFeatures = "", localFeatures = "03")
+      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
   }
 }
 

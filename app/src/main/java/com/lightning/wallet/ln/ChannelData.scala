@@ -17,8 +17,8 @@ case object CMDShutdown extends Command
 case object CMDCommitSig extends Command
 case object CMDClosingFinished extends Command
 
-case class CMDOpenChannel(temporaryChannelId: BinaryData, pushMsat: Long, initialFeeratePerKw: Long,
-                          localParams: LocalParams, remoteInit: Init, funding: Transaction, outIndex: Int) extends Command
+case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
+                          pushMsat: Long, remoteInit: Init, fundTx: Transaction, outIndex: Int) extends Command
 
 trait CMDAddHtlc extends Command { val spec: OutgoingPaymentSpec }
 case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
@@ -37,10 +37,8 @@ sealed trait ChannelData { val announce: NodeAnnouncement }
 sealed trait HasCommitments { val commitments: Commitments }
 
 case class InitData(announce: NodeAnnouncement) extends ChannelData
-case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel,
-                          openChannelMessage: OpenChannel) extends ChannelData
-
-case class WaitFundingSignedData(announce: NodeAnnouncement, channelId: BinaryData, localParams: LocalParams, remoteParams: RemoteParams,
+case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel, openChannelMessage: OpenChannel) extends ChannelData
+case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalParams, channelId: BinaryData, remoteParams: RemoteParams,
                                  fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
                                  fundingCreatedMessage: FundingCreated) extends ChannelData
 
@@ -94,10 +92,9 @@ object ClosingData {
 // COMMITMENTS
 
 case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
-                       channelReserveSatoshis: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
+                       channelReserveSat: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
                        fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey, delayedPaymentKey: Scalar,
-                       defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean,
-                       globalFeatures: BinaryData, localFeatures: BinaryData)
+                       defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean)
 
 case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
                         htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey,
@@ -245,7 +242,7 @@ object Commitments {
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.localParams.dustLimitSatoshis), reduced).amount else 0
       val htlcValueInFlightOverflow = reduced.htlcs.map(_.add.amountMsat).sum > c1.localParams.maxHtlcValueInFlightMsat
-      val feesOverflow = reduced.toRemoteMsat / satFactor - c1.localParams.channelReserveSatoshis - fees < 0
+      val feesOverflow = reduced.toRemoteMsat / satFactor - c1.localParams.channelReserveSat - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.localParams.maxAcceptedHtlcs
 
       // The rest of the guards

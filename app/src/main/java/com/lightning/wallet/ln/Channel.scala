@@ -15,20 +15,21 @@ class Channel(bag: PaymentSpecBag)
 extends StateMachine[ChannelData] { me =>
 
   def doProcess(change: Any): Unit = (data, change, state) match {
-    case (InitData(announce), cmd: CMDOpenChannel, WAIT_FOR_INIT) =>
+    case (InitData(announce), cmd @ CMDOpenChannel(localParams, temporaryChannelId,
+    initialFeeratePerKw, pushMsat, _, fundTx, outIndex), WAIT_FOR_INIT) =>
 
-      val lp = cmd.localParams
-      val open = OpenChannel(lp.chainHash, cmd.temporaryChannelId, cmd.funding.txOut(cmd.outIndex).amount.toLong,
-        cmd.pushMsat, lp.dustLimitSatoshis, lp.maxHtlcValueInFlightMsat, lp.channelReserveSatoshis, lp.htlcMinimumMsat,
-        cmd.initialFeeratePerKw, lp.toSelfDelay, lp.maxAcceptedHtlcs, lp.fundingPrivKey.publicKey, lp.revocationSecret.toPoint,
-        lp.paymentKey.toPoint, Generators.perCommitPoint(lp.shaSeed, 0), lp.delayedPaymentKey.toPoint)
+      val open = OpenChannel(localParams.chainHash, temporaryChannelId, fundTx.txOut(outIndex).amount.toLong,
+        pushMsat, localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat,
+        localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay, localParams.maxAcceptedHtlcs,
+        localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint, localParams.paymentKey.toPoint,
+        Generators.perCommitPoint(localParams.shaSeed, 0), localParams.delayedPaymentKey.toPoint)
 
       val data1 = WaitAcceptData(announce, cmd, open)
       become(data1, state1 = WAIT_FOR_ACCEPT)
 
     case (waitAccept @ WaitAcceptData(_, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT)
       // GUARD: remote requires local to keep way too much in local reserve which is not acceptable
-      if LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.funding.txOut(cmd.outIndex).amount.toLong) =>
+      if LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.fundTx.txOut(cmd.outIndex).amount.toLong) =>
       become(waitAccept, FINISHED)
 
     // They have accepted our proposal, now let them sign a first commit tx
@@ -38,17 +39,18 @@ extends StateMachine[ChannelData] { me =>
         accept.fundingPubkey, accept.revocationBasepoint, accept.paymentBasepoint, accept.delayedPaymentBasepoint,
         cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
 
-      val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) = Funding.makeFirstFunderCommitTxs(cmd.localParams,
-        remoteParams, cmd.funding.txOut(cmd.outIndex).amount.toLong, cmd.pushMsat, cmd.initialFeeratePerKw,
-        cmd.funding.hash, cmd.outIndex, accept.firstPerCommitmentPoint)
+      val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
+        Funding.makeFirstFunderCommitTxs(cmd.localParams, remoteParams, cmd.fundTx.txOut(cmd.outIndex).amount.toLong,
+          cmd.pushMsat, cmd.initialFeeratePerKw, cmd.fundTx.hash, cmd.outIndex, accept.firstPerCommitmentPoint)
 
+      val channelId = Tools.toLongId(cmd.fundTx.hash, cmd.outIndex)
       val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
-      val fundingCreated = FundingCreated(cmd.temporaryChannelId, cmd.funding.hash, cmd.outIndex, localSigOfRemoteTx)
+      val fundingCreated = FundingCreated(cmd.temporaryChannelId, cmd.fundTx.hash, cmd.outIndex, localSigOfRemoteTx)
       val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
 
-      become(WaitFundingSignedData(announce, Tools.toLongId(cmd.funding.hash, cmd.outIndex),
-        cmd.localParams, remoteParams, cmd.funding, localSpec, localCommitTx, firstRemoteCommit,
-        fundingCreated), state1 = WAIT_FUNDING_SIGNED)
+      become(WaitFundingSignedData(announce, cmd.localParams, channelId,
+        remoteParams, cmd.fundTx, localSpec, localCommitTx, firstRemoteCommit,
+        fundingCreated), WAIT_FUNDING_SIGNED)
 
     // They have signed our first commit tx, we can broadcast a funding tx
     case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED) =>
@@ -69,9 +71,9 @@ extends StateMachine[ChannelData] { me =>
           None, commitments), state1 = WAIT_FUNDING_DONE)
       }
 
-    // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED
-    case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
-    case (some, _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_CREATED | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+    // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED
+    case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+    case (some, _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
 
     // FUNDING TX IS BROADCASTED AT THIS POINT
 
@@ -165,23 +167,14 @@ extends StateMachine[ChannelData] { me =>
       val c1 = Commitments.receiveCommit(commitments, sig)
       val canStartNegotiations = Commitments hasNoPendingHtlcs c1
       if (canStartNegotiations) startNegotiations(announce, c1, local, remote)
-      if (!canStartNegotiations) me stayWith norm.copy(commitments = c1)
-      if (!canStartNegotiations) doProcess(CMDCommitSig)
+      else me stayWith norm.copy(commitments = c1)
+      doProcess(CMDCommitSig)
 
     // We received a commit sig from them
     case (norm: NormalData, sig: CommitSig, NORMAL) =>
       val c1 = Commitments.receiveCommit(norm.commitments, sig)
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
-
-    // GUARD: we have received a revocation from them when shutdown is fully confirmed by both parties
-    case (norm @ NormalData(announce, commitments, _, Some(local), Some(remote), _), rev: RevokeAndAck, NORMAL) =>
-
-      val c1 = Commitments.receiveRevocation(commitments, rev)
-      val canStartNegotiations = Commitments hasNoPendingHtlcs c1
-      if (canStartNegotiations) startNegotiations(announce, c1, local, remote)
-      if (!canStartNegotiations) me stayWith norm.copy(commitments = c1)
-      if (!canStartNegotiations) doProcess(CMDCommitSig)
 
     // We received a revocation because we sent a sig
     case (norm: NormalData, rev: RevokeAndAck, NORMAL) =>
@@ -206,7 +199,7 @@ extends StateMachine[ChannelData] { me =>
     case (norm @ NormalData(_, commitments, false, None, None, _), remote: AnnouncementSignatures, NORMAL) =>
       val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(shortChannelId = remote.shortChannelId,
         LNParams.extendedNodeKey.privateKey, PublicKey(norm.announce.nodeId), commitments.localParams.fundingPrivKey,
-        commitments.remoteParams.fundingPubKey, commitments.localParams.globalFeatures)
+        commitments.remoteParams.fundingPubKey, LNParams.globalFeatures)
 
       // Let the other node announce our channel availability
       val as = AnnouncementSignatures(commitments.channelId, remote.shortChannelId, localNodeSig, localBitcoinSig)
@@ -378,7 +371,6 @@ object Channel {
   // Channel states
   val WAIT_FOR_INIT = "WaitForInit"
   val WAIT_FOR_ACCEPT = "WaitForAccept"
-  val WAIT_FUNDING_CREATED = "WaitFundingCreated"
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"

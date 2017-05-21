@@ -155,6 +155,7 @@
     <string name="ln_ops_description"><a href='https://lightning-wallet.com'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='https://lightning-wallet.com'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
     <string name="ln_ops_opening">Payment Channel is open\n\nA funding Bitcoin transaction of %1$s has been sent. You will be able to <strong>send</strong> Lightning payments after it reaches %2$s. You will be able to <strong>send and receive</strong> Lightning payments shortly after it reaches %3$s.\n\nCurrent status\n%4$s</string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
+    <string name="ln_ops_start_fund_title">Current balance: %2$s\nMax capacity: %1$s</string>
     <string name="ln_ops_start">Open Payment Channel</string>
     <string name="ln_ops_btc">Go to Bitcoin wallet</string>
 

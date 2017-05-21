@@ -36,6 +36,7 @@ import com.lightning.wallet.lncloud.{LNCloudDataPrivate, LNCloudPrivateSaver}
 import com.lightning.wallet.test.LNCloudSpec
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import org.bitcoinj.core.{Address, Sha256Hash, Transaction}
+import org.bitcoinj.script.ScriptBuilder
 import rx.lang.scala.schedulers.IOScheduler
 
 import scala.concurrent.Future
@@ -170,7 +171,7 @@ with ListUpdater with SearchBar { me =>
     //throw new Exception("test")
     //me exitTo classOf[LNStartActivity]
 
-    me exitTo classOf[LNOpsActivity]
+    //me exitTo classOf[LNOpsActivity]
 
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run

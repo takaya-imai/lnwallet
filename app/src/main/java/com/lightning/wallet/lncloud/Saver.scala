@@ -49,14 +49,14 @@ trait Saver {
 object LNCloudPublicSaver extends Saver {
   def tryGetObject = tryGet map to[LNCloudData]
   def saveObject(data: LNCloudData) = save(data.toJson)
-  val KEY = "lnCloudPublic1"
+  val KEY = "lnCloudPublic"
 }
 
 object LNCloudPrivateSaver extends Saver {
   def tryGetObject = tryGet map to[LNCloudDataPrivate]
   def saveObject(data: LNCloudDataPrivate) = save(data.toJson)
   def remove = LNParams.db.change(StorageTable.killSql, KEY)
-  val KEY = "lnCloudPrivate1"
+  val KEY = "lnCloudPrivate"
 }
 
 trait Rate { def now: Double }
@@ -72,7 +72,7 @@ object RatesSaver extends Saver { me =>
   type BitpayRatesList = List[BitpayRate]
   type BitpayRatesMap = Map[String, BitpayRate]
   type RatesMap = Map[String, Double]
-  val KEY = "rates10"
+  val KEY = "rates"
 
   def toRates(src: ExchangeRateProvider): RatesMap = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
   def toRates(map: BitpayRatesMap): RatesMap = Map(strDollar -> map("USD").now, strEuro -> map("EUR").now, strYuan -> map("CNY").now)
@@ -96,8 +96,8 @@ object RatesSaver extends Saver { me =>
   private val statistics = new Statistics[Double] { def extract(item: Double) = item }
   var rates = tryGet map to[Rates] getOrElse updatedRates(Nil, Map.empty).copy(stamp = 0L)
 
-  def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
-    val fees1 = if (fees.isEmpty) defaultFee :: Nil else fees take 10
+  private def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
+    val fees1 = if (fees.isEmpty) defaultFee :: Nil else fees take 6
     val feeLive = Coin parseCoin statistics.meanWithin(fees1, stdDevs = 1)
     Rates(fiat, fees1, feeLive, feeLive div 2, System.currentTimeMillis)
   }

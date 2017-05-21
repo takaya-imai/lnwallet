@@ -10,7 +10,7 @@ import java.nio.ByteOrder
 abstract class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData,
                                 transport: Transport) extends StateMachine[Data] { me =>
 
-  def init = {
+  def init: Unit = {
     val writer = makeWriter(keyPair, remotePubKey)
     val (reader, _, msg) = writer write BinaryData.empty
     become(HandshakeData(reader, BinaryData.empty), HANDSHAKE)
