@@ -8,6 +8,7 @@ import com.lightning.wallet.Utils.app
 
 
 object LNParams {
+  lazy val bag: PaymentSpecBag = PaymentSpecWrap
   lazy val broadcaster: Broadcaster = LocalBroadcaster
   lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
   var extendedNodeKey: ExtendedPrivateKey = _
@@ -30,6 +31,7 @@ object LNParams {
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val maxHtlcValue = MilliSatoshi(4294967295L)
 
+  // Public, no initial sync
   val localFeatures = "03"
   val globalFeatures = ""
 

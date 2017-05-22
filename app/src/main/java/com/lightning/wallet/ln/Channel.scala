@@ -11,9 +11,7 @@ import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 
 
-class Channel(bag: PaymentSpecBag)
-extends StateMachine[ChannelData] { me =>
-
+class Channel extends StateMachine[ChannelData] { me =>
   def doProcess(change: Any): Unit = (data, change, state) match {
     case (InitData(announce), cmd @ CMDOpenChannel(localParams, temporaryChannelId,
     initialFeeratePerKw, pushMsat, _, fundTx, outIndex), WAIT_FOR_INIT) =>
@@ -34,10 +32,9 @@ extends StateMachine[ChannelData] { me =>
 
     // They have accepted our proposal, now let them sign a first commit tx
     case (WaitAcceptData(announce, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT) =>
-      val remoteParams = RemoteParams(accept.dustLimitSatoshis, accept.maxHtlcValueInFlightMsat,
-        accept.channelReserveSatoshis, accept.htlcMinimumMsat, accept.toSelfDelay, accept.maxAcceptedHtlcs,
-        accept.fundingPubkey, accept.revocationBasepoint, accept.paymentBasepoint, accept.delayedPaymentBasepoint,
-        cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
+      val remoteParams = RemoteParams(accept.dustLimitSatoshis, accept.maxHtlcValueInFlightMsat, accept.channelReserveSatoshis,
+        accept.htlcMinimumMsat, accept.toSelfDelay, accept.maxAcceptedHtlcs, accept.fundingPubkey, accept.revocationBasepoint,
+        accept.paymentBasepoint, accept.delayedPaymentBasepoint, cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
 
       val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
         Funding.makeFirstFunderCommitTxs(cmd.localParams, remoteParams, cmd.fundTx.txOut(cmd.outIndex).amount.toLong,
@@ -331,31 +328,31 @@ extends StateMachine[ChannelData] { me =>
   private def startLocalCurrentClose(some: ChannelData with HasCommitments) = {
     // Something went wrong and we decided to spend our current commit transaction
     val commitTx: Transaction = some.commitments.localCommit.publishableTxs.commitTx.tx
-    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, commitTx, bag) -> some match {
-      case (claim, closing: ClosingData) => become(data1 = closing.copy(localCommit = claim :: Nil), state1 = CLOSING)
-      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, localCommit = claim :: Nil), CLOSING)
+    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, commitTx, LNParams.bag) -> some match {
+      case (claim: LocalCommitPublished, closing: ClosingData) => become(closing.copy(localCommit = claim :: Nil), CLOSING)
+      case (claim, _) => become(ClosingData(some.announce, some.commitments, localCommit = claim :: Nil), CLOSING)
     }
   }
 
   private def startRemoteCurrentClose(some: ChannelData with HasCommitments, commitTx: Transaction) =
     // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take ours
-    Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, commitTx, bag) -> some match {
-      case (claim, closing: ClosingData) => become(data1 = closing.copy(remoteCommit = claim :: Nil), state1 = CLOSING)
-      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil), CLOSING)
+    Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, commitTx, LNParams.bag) -> some match {
+      case (claim: RemoteCommitPublished, closing: ClosingData) => become(data1 = closing.copy(remoteCommit = claim :: Nil), CLOSING)
+      case (claim, _) => become(ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil), CLOSING)
     }
 
   private def startRemoteNextClose(some: ChannelData with HasCommitments, commitTx: Transaction, nextRemoteCommit: RemoteCommit) =
     // Something went wrong on their side and they decided to spend their NEXT commit transaction, we still need to take ours
-    Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, commitTx, bag) -> some match {
-      case (claim, closing: ClosingData) => become(data1 = closing.copy(nextRemoteCommit = claim :: Nil), state1 = CLOSING)
-      case (claim, _) => become(data1 = ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil), CLOSING)
+    Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, commitTx, LNParams.bag) -> some match {
+      case (claim: RemoteCommitPublished, closing: ClosingData) => become(closing.copy(nextRemoteCommit = claim :: Nil), CLOSING)
+      case (claim, _) => become(ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil), CLOSING)
     }
 
   private def startRemoteOther(some: ChannelData with HasCommitments, commitTx: Transaction) =
     // This is a contract breach, they have spent a revoked transaction so we can take all the money
     Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, commitTx) -> some match {
-      case (Some(claim), closing: ClosingData) => become(data1 = closing.modify(_.revokedCommits).using(claim +: _), state1 = CLOSING)
-      case (Some(claim), _) => become(data1 = ClosingData(some.announce, some.commitments, revokedCommits = claim :: Nil), CLOSING)
+      case (Some(claim), closing: ClosingData) => become(closing.modify(_.revokedCommits).using(claim +: _), CLOSING)
+      case (Some(claim), _) => become(ClosingData(some.announce, some.commitments, revokedCommits = claim :: Nil), CLOSING)
       case (None, _) => startLocalCurrentClose(some) // Info leak, try to spend current commit
     }
 

@@ -4,11 +4,19 @@ import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Exceptions._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
+
+import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.ln.crypto.RandomGenerator
+
+import scala.concurrent.duration.DurationInt
 import language.implicitConversions
 import org.bitcoinj.core.Coin
-import wire.LightningMessage
+import TransportHandler.{HANDSHAKE, Send, WAITING_CYPHERTEXT}
+import wire._
 import java.util.Locale
+
+import com.lightning.wallet.helper.{SocketListener, SocketWrap}
+import com.lightning.wallet.ln.crypto.Noise.KeyPair
 
 
 object ~ {
@@ -79,8 +87,48 @@ object Features {
   }
 }
 
-case class ChannelKit(chan: Channel) {
+case class ChannelKit(chan: Channel) { me =>
+  private val address = chan.data.announce.addresses.head
+  lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
+    def onReceive(chunk: BinaryData): Unit = transportHandler process chunk
+  }
 
+  private val nodePrivKey = LNParams.extendedNodeKey.privateKey
+  private val keyPair = KeyPair(nodePrivKey.publicKey, nodePrivKey.toBin)
+  val transportHandler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
+    def feedForward(message: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize message)
+  }
+
+  private val socketLst = new SocketListener {
+    override def onConnect = transportHandler.init
+    override def onDisconnect = Obs.just(Tools log "Restarting socket")
+      .delay(5.seconds).doOnTerminate(socket.start).subscribe(none)
+  }
+
+  private val transportLst = new StateMachineListener {
+    override def onBecome = { case (_, _, HANDSHAKE, WAITING_CYPHERTEXT) =>
+      me send Init(LNParams.globalFeatures, LNParams.localFeatures)
+    }
+
+    override def onError = { case err =>
+      Tools log s"Uncaught failure: $err"
+      socket.shutdown
+    }
+  }
+
+  private def interceptIncomingMsg(msg: LightningMessage) = msg match {
+    case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
+    case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown
+    case _ => chan process msg
+  }
+
+  def send(msg: LightningMessage) = {
+    val encoded = LightningMessageCodecs serialize msg
+    transportHandler process Tuple2(Send, encoded)
+  }
+
+  transportHandler.listeners += transportLst
+  socket.listeners += socketLst
 }
 
 // STATE MACHINE
