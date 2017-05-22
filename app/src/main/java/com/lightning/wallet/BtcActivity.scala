@@ -333,8 +333,7 @@ with ListUpdater { me =>
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-
-          def processTx(password: String, fee: Coin) = {
+          def processTx(password: String, fee: Coin): Unit = {
             <(app.kit blockingSend makeTx(password, fee), onTxFail)(none)
             add(me getString tx_announce, Informer.BTCEVENT).ui.run
           }

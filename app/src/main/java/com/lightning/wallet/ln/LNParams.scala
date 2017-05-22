@@ -3,7 +3,7 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.Utils.app
 
 
@@ -11,6 +11,9 @@ object LNParams {
   lazy val bag: PaymentSpecBag = PaymentSpecWrap
   lazy val broadcaster: Broadcaster = LocalBroadcaster
   lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
+
+  var nodePubKey: PublicKey = _
+  var nodePrivateKey: PrivateKey = _
   var extendedNodeKey: ExtendedPrivateKey = _
   var cloudPrivateKey: PrivateKey = _
   var db: CipherOpenHelper = _
@@ -20,6 +23,8 @@ object LNParams {
     cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
+    nodePrivateKey = extendedNodeKey.privateKey
+    nodePubKey = nodePrivateKey.publicKey
   }
 
   val updateFeeMinDiffRatio = 0.25 // Must update

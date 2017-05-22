@@ -166,12 +166,12 @@ with ListUpdater with SearchBar { me =>
   {
     super.onCreate(savedState)
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
-    add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
+    add(me getString ln_notify_working, Informer.LNSTATE).ui.run
 
     //throw new Exception("test")
     //me exitTo classOf[LNStartActivity]
 
-    //me exitTo classOf[LNOpsActivity]
+    me exitTo classOf[LNOpsActivity]
 
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run

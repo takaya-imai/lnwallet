@@ -93,26 +93,34 @@ case class ChannelKit(chan: Channel) { me =>
     def onReceive(chunk: BinaryData): Unit = transportHandler process chunk
   }
 
-  private val nodePrivKey = LNParams.extendedNodeKey.privateKey
-  private val keyPair = KeyPair(nodePrivKey.publicKey, nodePrivKey.toBin)
+  private val keyPair = KeyPair(LNParams.nodePubKey, LNParams.nodePrivateKey.toBin)
   val transportHandler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
     def feedForward(message: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize message)
   }
 
-  private val socketLst = new SocketListener {
+  socket.listeners += new SocketListener {
     override def onConnect = transportHandler.init
-    override def onDisconnect = Obs.just(Tools log "Restarting socket")
-      .delay(5.seconds).doOnTerminate(socket.start).subscribe(none)
+    override def onDisconnect = Tools log "Disconnected"
   }
 
-  private val transportLst = new StateMachineListener {
+  transportHandler.listeners += new StateMachineListener {
     override def onBecome = { case (_, _, HANDSHAKE, WAITING_CYPHERTEXT) =>
-      me send Init(LNParams.globalFeatures, LNParams.localFeatures)
+      me send Init(globalFeatures = LNParams.globalFeatures, LNParams.localFeatures)
     }
 
     override def onError = { case err =>
-      Tools log s"Uncaught failure: $err"
-      socket.shutdown
+      Tools log s"Transport malfunction: $err"
+      chan process CMDShutdown
+    }
+  }
+
+  chan.listeners += new StateMachineListener {
+    override def onBecome = { case (previous, next, _, _) =>
+      Helpers.extractOutgoingMessages(previous, next) foreach send
+    }
+
+    override def onError = { case err =>
+      Tools log s"Channel malfunction: $err"
     }
   }
 
@@ -126,9 +134,6 @@ case class ChannelKit(chan: Channel) { me =>
     val encoded = LightningMessageCodecs serialize msg
     transportHandler process Tuple2(Send, encoded)
   }
-
-  transportHandler.listeners += transportLst
-  socket.listeners += socketLst
 }
 
 // STATE MACHINE

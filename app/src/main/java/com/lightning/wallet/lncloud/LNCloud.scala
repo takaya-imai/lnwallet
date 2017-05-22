@@ -52,7 +52,7 @@ abstract class LNCloudPrivate extends StateMachine[LNCloudDataPrivate] with Path
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools.log(s"LNCloudPrivate: unhandled $data : $some")
+      Tools log s"LNCloudPrivate: unhandled $data : $some"
   }
 }
 
@@ -113,7 +113,7 @@ abstract class LNCloudPublic extends StateMachine[LNCloudData] with Pathfinder w
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools.log(s"LNCloudPublic: unhandled $data : $some")
+      Tools log s"LNCloudPublic: unhandled $data : $some"
   }
 
   // ADDING NEW TOKENS
@@ -169,7 +169,7 @@ trait Pathfinder {
   val channel: StateMachine[ChannelData]
 
   def makeOutgoingSpec(invoice: Invoice) =
-    if (invoice.nodeId == LNParams.extendedNodeKey.publicKey) Obs just None
+    if (invoice.nodeId == LNParams.nodePubKey) Obs just None
     else lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
       PaymentSpec.makeOutgoingSpec(_, invoice, firstExpiry = LNParams.myHtlcExpiry)
     }

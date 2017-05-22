@@ -11,13 +11,20 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
-  def extractOutgoingMessages(data0: Any, data1: Any) = (data0, data1) match {
-    case (waitFundingConfirmed: WaitFundingConfirmedData, _) => waitFundingConfirmed.our.toVector
-    case (c0: HasCommitments, c1: HasCommitments) => c1.commitments.unackedMessages diff c0.commitments.unackedMessages
+  def extractOutgoingMessages(previousData: Any, nextData: Any) = (previousData, nextData) match {
+    case (c0: NormalData, c1: NormalData) => c1.commitments.unackedMessages diff c0.commitments.unackedMessages
 
-    // Either we start so no next, or become funding -> normal
-    case (c0: HasCommitments, _) => c0.commitments.unackedMessages
-    case (_, c1: HasCommitments) => c1.commitments.unackedMessages
+    // When in NORMAL state we launch a closed app again
+    case (c0: NormalData, _) => c0.commitments.unackedMessages
+    case (_, c1: NormalData) => c1.commitments.unackedMessages
+
+    // When initializing a new channel before a funding tx is broadcasted
+    case (_, waitAccept: WaitAcceptData) => Vector(waitAccept.openChannelMessage)
+    case (_, waitSigned: WaitFundingSignedData) => Vector(waitSigned.fundingCreatedMessage)
+
+    // When funding tx has already been broadcasted and we launch an app again
+    case (waitConfirmed: WaitFundingConfirmedData, _) => waitConfirmed.our.toVector
+    case (_, waitConfirmed: WaitFundingConfirmedData) => waitConfirmed.our.toVector
     case _ => Vector.empty
   }
 

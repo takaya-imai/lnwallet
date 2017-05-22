@@ -69,7 +69,7 @@
     <string name="tx_sent">Just sent %1$s</string>
 
     <string name="ln_select_peer">Select a peer</string>
-    <string name="ln_notify_connecting">Connecting to peer&#8230;</string>
+    <string name="ln_notify_working">Working&#8230;</string>
     <string name="ln_notify_operational">Channel is ready</string>
 
     <array name="info_progress">
@@ -156,6 +156,7 @@
     <string name="ln_ops_opening">Payment Channel is open\n\nA funding Bitcoin transaction of %1$s has been sent. You will be able to <strong>send</strong> Lightning payments after it reaches %2$s. You will be able to <strong>send and receive</strong> Lightning payments shortly after it reaches %3$s.\n\nCurrent status\n%4$s</string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start_fund_title">Current balance: %2$s\nMax capacity: %1$s</string>
+    <string name="ln_ops_start_cancel">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open Payment Channel</string>
     <string name="ln_ops_btc">Go to Bitcoin wallet</string>
 
