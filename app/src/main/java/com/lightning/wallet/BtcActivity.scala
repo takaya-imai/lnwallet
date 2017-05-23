@@ -33,8 +33,8 @@ import android.net.Uri
 
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
+import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
-import Transaction.MIN_NONDUST_OUTPUT
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -163,7 +163,6 @@ with ListUpdater { me =>
       wrap(initToolbar)(me setContentView R.layout.activity_btc)
       mnemonicInfo setMovementMethod LinkMovementMethod.getInstance
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
-      fab setAnimated false
       setDetecting(true)
 
       list setOnItemClickListener onTap { pos =>
@@ -251,6 +250,7 @@ with ListUpdater { me =>
   }
 
   // NFC
+
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
     app.TransData recordValue asText
@@ -303,18 +303,18 @@ with ListUpdater { me =>
 
   def goQR(top: View) = {
     me goTo classOf[ScanActivity]
-    fab close false
+    fab close true
   }
 
   def goLN(top: View) = {
     me goTo classOf[LNActivity]
-    fab close false
+    fab close true
   }
 
   def goReceiveBtcAddress(top: View) = {
     app.TransData.value = app.kit.currentAddress
     me goTo classOf[RequestActivity]
-    fab close false
+    fab close true
   }
 
   def sendBtcTxPopup: BtcManager = {
@@ -355,8 +355,8 @@ with ListUpdater { me =>
 
   def goPay(top: View): Unit = {
     val run = anyToRunnable(sendBtcTxPopup)
-    timer.schedule(run, 50)
-    fab close false
+    timer.schedule(run, 225)
+    fab close true
   }
 
   // Working with transactions

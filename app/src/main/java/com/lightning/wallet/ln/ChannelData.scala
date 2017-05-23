@@ -19,7 +19,7 @@ case object CMDCommitSig extends Command
 case object CMDClosingFinished extends Command
 
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
-                          pushMsat: Long, remoteInit: Init, fundTx: Transaction, outIndex: Int) extends Command
+                          pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
 trait CMDAddHtlc extends Command { val spec: OutgoingPaymentSpec }
 case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
@@ -39,6 +39,8 @@ sealed trait HasCommitments { val commitments: Commitments }
 
 case class InitData(announce: NodeAnnouncement) extends ChannelData
 case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel, openChannelMessage: OpenChannel) extends ChannelData
+case class WaitFundingData(announce: NodeAnnouncement, cmd: CMDOpenChannel, accept: AcceptChannel) extends ChannelData
+
 case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalParams, channelId: BinaryData, remoteParams: RemoteParams,
                                  fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
                                  fundingCreatedMessage: FundingCreated) extends ChannelData

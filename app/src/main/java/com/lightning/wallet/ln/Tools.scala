@@ -1,22 +1,19 @@
 package com.lightning.wallet.ln
 
+import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Exceptions._
+
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
+import TransportHandler.{HANDSHAKE, Send, WAITING_CYPHERTEXT}
+import com.lightning.wallet.helper.{SocketListener, SocketWrap}
 
-import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.ln.crypto.RandomGenerator
-
-import scala.concurrent.duration.DurationInt
+import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import language.implicitConversions
 import org.bitcoinj.core.Coin
-import TransportHandler.{HANDSHAKE, Send, WAITING_CYPHERTEXT}
-import wire._
 import java.util.Locale
-
-import com.lightning.wallet.helper.{SocketListener, SocketWrap}
-import com.lightning.wallet.ln.crypto.Noise.KeyPair
 
 
 object ~ {
@@ -100,7 +97,7 @@ case class ChannelKit(chan: Channel) { me =>
 
   socket.listeners += new SocketListener {
     override def onConnect = transportHandler.init
-    override def onDisconnect = Tools log "Disconnected"
+    override def onDisconnect = Tools log "Socket off"
   }
 
   transportHandler.listeners += new StateMachineListener {
@@ -115,12 +112,10 @@ case class ChannelKit(chan: Channel) { me =>
   }
 
   chan.listeners += new StateMachineListener {
-    override def onBecome = { case (previous, next, _, _) =>
-      Helpers.extractOutgoingMessages(previous, next) foreach send
-    }
-
-    override def onError = { case err =>
-      Tools log s"Channel malfunction: $err"
+    override def onBecome = { case (previous, next, state0, state1) =>
+      val messages = Helpers.extractOutgoingMessages(previous, next)
+      Tools log s"Sending $state0 -> $state1 messages: $messages"
+      messages foreach send
     }
   }
 

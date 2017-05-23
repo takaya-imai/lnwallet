@@ -24,10 +24,10 @@ abstract class SocketWrap(ip: InetAddress, port: Int) extends Transport {
     val socket = new Socket
     private val BUFFER_SIZE = 1024
     private val buffer = new Bytes(BUFFER_SIZE)
-    //private val where = new InetSocketAddress(ip, port)
-    private val where = new InetSocketAddress(InetAddress.getByName("10.0.2.2"), port)
 
     Future {
+      val testAddress = InetAddress.getByName("10.0.2.2")
+      val where = new InetSocketAddress(testAddress, port)
       socket.connect(where, 10000)
       events.onConnect
 

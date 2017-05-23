@@ -1,19 +1,28 @@
 package com.lightning.wallet
 
-import com.lightning.wallet.ln.Tools._
+import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
+
+import scala.util.{Failure, Success}
 import android.view.{Menu, View, ViewGroup}
+import com.lightning.wallet.Utils.{sumIn, app}
+import com.lightning.wallet.ln.Tools.{random, wrap}
+import com.lightning.wallet.ln.wire.{Init, NodeAnnouncement}
 import android.widget.{BaseAdapter, Button, ListView, TextView}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
-import com.lightning.wallet.ln._
 import com.lightning.wallet.lncloud.{FailoverLNCloud, LNCloudPrivateSaver}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
 import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
-import com.lightning.wallet.ln.wire.{Init, NodeAnnouncement}
+import concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
-import com.lightning.wallet.Utils.app
+import scala.concurrent.Future
 import android.os.Bundle
+
+import android.content.DialogInterface.BUTTON_POSITIVE
+import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
+import org.bitcoinj.script.ScriptBuilder
 
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
@@ -82,13 +91,13 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     true
   }
 
-  private def setListView: Unit = {
+  private def setListView = {
     update(me getString ln_select_peer, Informer.LNSTATE).ui.run
     setVis(View.VISIBLE, View.GONE, View.INVISIBLE)
     adapter.notifyDataSetChanged
   }
 
-  private def setPeerView(position: Int): Unit = {
+  private def setPeerView(position: Int) = {
     lnStartInfo setText mkNodeView(adapter getItem position)
     update(me getString ln_notify_working, Informer.LNSTATE).ui.run
     setVis(View.GONE, View.VISIBLE, View.VISIBLE)
@@ -111,18 +120,50 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     val initChanListener = new StateMachineListener {
-      override def onBecome = { case (prev, _, _, Channel.FINISHED) =>
-        Tools log s"Channel opening has been interrupted at data: $prev"
-        kit.socket.shutdown
-      }
+      override def onPostProcess = { case their: Init =>
+        val humanBalance = sumIn format withSign(app.kit.currentBalance)
+        val humanCap = sumIn format withSign(LNParams.maxChannelCapacity)
+        val titleTop = getString(ln_ops_start_fund_title).format(humanBalance, humanCap).html
+        val content = getLayoutInflater.inflate(R.layout.frag_input_send_noaddress, null, false)
+        val builder = negPosBld(dialog_cancel, dialog_next)
+        me runOnUiThread showForm
 
-      override def onPostProcess = { case _: Init =>
-        // This is where I should ask user for funding
+        def showForm = {
+          val alert = mkForm(builder, titleTop, content)
+          val rateManager = new RateManager(content)
+
+          def attempt = rateManager.result match {
+            case Failure(_) => app toast dialog_sum_empty
+            case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_capacity
+            case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
+
+            case Success(ms) => rm(alert) {
+              // Propose peer to open a channel
+              openChannel(ms.amount / satFactor)
+            }
+          }
+
+          val ok = alert getButton BUTTON_POSITIVE
+          ok setOnClickListener onButtonTap(attempt)
+        }
+
+        def openChannel(amountSat: Long) = Future {
+          val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
+          val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
+          val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
+          kit.chan process CMDOpenChannel(localParams, random getBytes 32, 10000L, pushMsat = 0L, their, amountSat)
+        }
       }
 
       override def onError = { case err =>
         Tools log s"Channel malfunction: $err"
         kit.chan process CMDShutdown
+      }
+
+      override def onBecome = {
+        case (prev, _, _, Channel.FINISHED) =>
+          Tools log s"Channel finished at $prev"
+          kit.socket.shutdown
       }
     }
 

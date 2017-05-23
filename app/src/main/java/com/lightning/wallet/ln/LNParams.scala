@@ -52,12 +52,12 @@ object LNParams {
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
     derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
-  def makeLocalParams(fundingSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
+  def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (n <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, n)
-    LocalParams(Block.TestnetGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
-      channelReserveSat = (reserveToFundingRatio * fundingSat).toLong, htlcMinimumMsat = 500, toSelfDelay = 144,
-      maxAcceptedHtlcs = 10, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
-      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
+    LocalParams(Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
+      channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 10, fundingPrivKey = funding,
+      revocationSecret = revocation, paymentKey = payment, delayedPaymentKey = delayed, finalScriptPubKey,
+      shaSeed = sha256(sha.toBin), isFunder = true)
   }
 }
 
