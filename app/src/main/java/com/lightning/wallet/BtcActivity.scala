@@ -176,7 +176,7 @@ with ListUpdater { me =>
         val direction = value(tx).amount > 0
 
         val payDatas = tx.getOutputs.asScala.filter(_.isMine(app.kit.wallet) == direction).map(outputToPayData).flatMap(_.toOption)
-        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, payDatas.map(_ cute coloring).toArray)
+        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, payDatas.map(_.cute(coloring).html).toArray)
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
 
@@ -333,15 +333,14 @@ with ListUpdater { me =>
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-          def processTx(password: String, fee: Coin): Unit = {
+          override def processTx(password: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(password, fee), onTxFail)(none)
             add(me getString tx_announce, Informer.BTCEVENT).ui.run
           }
 
-          def doOnError = rm(alert) {
-            // User may want to try again
-            sendBtcTxPopup.set(ok, pay.adr)
-          }
+          override def onTxFail(exception: Throwable) =
+            mkForm(mkChoiceDialog(me delayUI sendBtcTxPopup.set(ok, pay.adr), none,
+              dialog_ok, dialog_cancel), null, errorWhenMakingTx apply exception)
         }
 
         // Initiate the spending sequence
@@ -353,9 +352,8 @@ with ListUpdater { me =>
     spendManager
   }
 
-  def goPay(top: View): Unit = {
-    val run = anyToRunnable(sendBtcTxPopup)
-    timer.schedule(run, 225)
+  def goPay(top: View) = {
+    me delayUI sendBtcTxPopup
     fab close true
   }
 

@@ -8,12 +8,12 @@ import org.bitcoinj.core._
 import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import org.bitcoinj.wallet.listeners._
-
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
+
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -24,25 +24,27 @@ import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
 import info.hoang8f.android.segmented.SegmentedGroup
+
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
-import com.lightning.wallet.lncloud.RatesSaver
+import com.lightning.wallet.lncloud.{Rates, RatesSaver}
 import android.text.method.LinkMovementMethod
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import fr.acinq.bitcoin.MilliSatoshi
+
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.script.Script
+
 import scala.concurrent.Future
 import android.os.Bundle
-
 import ViewGroup.LayoutParams.WRAP_CONTENT
 import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
@@ -220,19 +222,20 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   abstract class TxProcessor {
     def processTx(password: String, fee: Coin)
-    def chooseFee = passPlus(pay cute sumOut) { password =>
-      <(makeTx(password, RatesSaver.rates.feeRisky), onTxFail) { feeEstimate =>
+    def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
+      val Rates(_, _, feeLive: Coin, feeRisky: Coin, _) = RatesSaver.rates
+      <(makeTx(password, feeRisky), onTxFail) { feeEstimate: Transaction =>
         // Fee is taken per 1000 bytes of data so we normalize it with respect to tx size
-        val riskyFinalFee = RatesSaver.rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
-        val liveFinalFee = RatesSaver.rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val riskyFinalFee = feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val liveFinalFee = feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
 
         // Mark fees as red because we are the ones who always pay them
         val riskyFeePretty = sumOut format withSign(riskyFinalFee)
         val liveFeePretty = sumOut format withSign(liveFinalFee)
 
         // Show formatted fees in satoshis as well as in current fiat value
-        val feeRiskyComplete = getString(fee_risky).format(humanFiat(inFiat(RatesSaver.rates.feeRisky), ""), riskyFeePretty)
-        val feeLiveComplete = getString(fee_live).format(humanFiat(inFiat(RatesSaver.rates.feeLive), ""), liveFeePretty)
+        val feeRiskyComplete = getString(fee_risky).format(humanFiat(inFiat(feeRisky), ""), riskyFeePretty)
+        val feeLiveComplete = getString(fee_live).format(humanFiat(inFiat(feeLive), ""), liveFeePretty)
         val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
 
         val form = getLayoutInflater.inflate(R.layout.frag_input_send_confirm, null)
@@ -241,9 +244,9 @@ trait ToolbarActivity extends TimerActivity { me =>
         lst setAdapter new ArrayAdapter(me, slot, feesOptions)
         lst.setItemChecked(0, true)
 
-        def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) RatesSaver.rates.feeRisky else RatesSaver.rates.feeLive)
-        lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
-        lazy val alert: AlertDialog = mkForm(dialog, pay cute sumOut, form)
+        def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) feeRisky else feeLive)
+        lazy val dialog: Builder = mkChoiceDialog(ok = rm(alert)(proceed), none, dialog_pay, dialog_cancel)
+        lazy val alert = mkForm(dialog, getString(title_fee).format(pay cute sumOut).html, form)
         alert
       }
     }
@@ -260,18 +263,13 @@ trait ToolbarActivity extends TimerActivity { me =>
       request.tx
     }
 
-    private def errorWhenMakingTx: PartialFunction[Throwable, String] = {
+    def onTxFail(exc: Throwable): Unit
+    def errorWhenMakingTx: PartialFunction[Throwable, String] = {
       case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
       case _: InsufficientMoneyException => app getString err_not_enough_funds
       case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
       case _: KeyCrypterException => app getString err_pass
       case _: Throwable => app getString err_general
-    }
-
-    def doOnError
-    def onTxFail(exc: Throwable): Unit = {
-      val dialog = mkChoiceDialog(doOnError, none, dialog_ok, dialog_cancel)
-      mkForm(dialog, content = errorWhenMakingTx(exc), title = null)
     }
   }
 
@@ -310,10 +308,8 @@ trait TimerActivity extends AppCompatActivity { me =>
     passAsk -> secretInputField
   }
 
-  def rm(prev: Dialog)(fun: => Unit) = {
-    timer.schedule(anyToRunnable(fun), 225)
-    prev.dismiss
-  }
+  def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 225)
+  def rm(prev: Dialog)(fun: => Unit): Unit = wrap(prev.dismiss)(me delayUI fun)
 
   def mkForm(builder: Builder, title: View, content: View) =
     showForm(builder.setCustomTitle(title).setView(content).create)
@@ -353,11 +349,10 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   // Utils
-  def hideKeys(run: => Unit) = try {
-    timer.schedule(me anyToRunnable run, 225)
+  def hideKeys(fun: => Unit) = try {
     val mgr = getSystemService(INPUT_METHOD_SERVICE).asInstanceOf[InputMethodManager]
     mgr.hideSoftInputFromWindow(getCurrentFocus.getWindowToken, HIDE_NOT_ALWAYS)
-  } catch none
+  } catch none finally me delayUI fun
 
   def onTap(run: Int => Unit) = new AdapterView.OnItemClickListener {
     def onItemClick(p: AdapterView[_], v: View, pos: Int, id: Long) = run(pos)
@@ -428,7 +423,7 @@ trait PayData {
   def cute(direction: String) = {
     val fiat = humanFiat(inFiat(cn), "<br>")
     colored(direction) + "<br><br>" + withSign(cn) + fiat
-  }.html
+  }
 }
 
 case class AddrData(cn: Coin, adr: Address) extends PayData {

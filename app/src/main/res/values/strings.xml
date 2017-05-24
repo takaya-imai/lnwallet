@@ -16,6 +16,7 @@
     <string name="password_info">Without password you are in constant danger of losing your money. Please pick one which is at least 6 characters long</string>
     <string name="fee_live"><![CDATA[<small>%2$s <font color=#999999>%1$s</font><br><small>Priority transaction fee</small></small>]]></string>
     <string name="fee_risky"><![CDATA[<small>%2$s <font color=#999999>%1$s</font><br><small>Minimal transaction fee</small></small>]]></string>
+    <string name="title_fee"><![CDATA[Select transaction fee<br><br>%1$s]]></string>
     <string name="wallet_restore">Restore Wallet From Code</string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="wallet_empty">Bitcoin wallet is empty</string>

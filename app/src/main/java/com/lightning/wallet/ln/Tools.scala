@@ -6,7 +6,6 @@ import com.lightning.wallet.ln.Exceptions._
 
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
-import TransportHandler.{HANDSHAKE, Send, WAITING_CYPHERTEXT}
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
 
 import com.lightning.wallet.ln.crypto.RandomGenerator
@@ -87,47 +86,57 @@ object Features {
 case class ChannelKit(chan: Channel) { me =>
   private val address = chan.data.announce.addresses.head
   lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
-    def onReceive(chunk: BinaryData): Unit = transportHandler process chunk
+    def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
   }
 
   private val keyPair = KeyPair(LNParams.nodePubKey, LNParams.nodePrivateKey.toBin)
-  val transportHandler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
+  val handler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
     def feedForward(message: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize message)
   }
 
   socket.listeners += new SocketListener {
-    override def onConnect = transportHandler.init
+    override def onConnect: Unit = handler.init
     override def onDisconnect = Tools log "Socket off"
   }
 
-  transportHandler.listeners += new StateMachineListener {
-    override def onBecome = { case (_, _, HANDSHAKE, WAITING_CYPHERTEXT) =>
-      me send Init(globalFeatures = LNParams.globalFeatures, LNParams.localFeatures)
+  handler.listeners += new StateMachineListener {
+    override def onBecome: PartialFunction[Transition, Unit] = {
+      case (_, _, TransportHandler.HANDSHAKE, TransportHandler.WAITING_CYPHERTEXT) =>
+        me send Init(globalFeatures = LNParams.globalFeatures, localFeatures = LNParams.localFeatures)
     }
 
-    override def onError = { case err =>
-      Tools log s"Transport malfunction: $err"
-      chan process CMDShutdown
+    override def onError = {
+      case noiseRelated: Throwable =>
+        Tools log s"Transport $noiseRelated"
+        chan process CMDShutdown
     }
   }
 
   chan.listeners += new StateMachineListener {
-    override def onBecome = { case (previous, next, state0, state1) =>
-      val messages = Helpers.extractOutgoingMessages(previous, next)
-      Tools log s"Sending $state0 -> $state1 messages: $messages"
-      messages foreach send
+    override def onBecome: PartialFunction[Transition, Unit] = {
+      case (previousData, nextData, previousState, Channel.FINISHED) =>
+        Tools log s"Channel finished from $previousData : $previousState"
+        socket.shutdown
+
+      case (previousData, nextData, previousState, nextState) =>
+        val messages = Helpers.extractOutgoingMessages(previousData, nextData)
+        Tools log s"Sending $previousState -> $nextState messages: $messages"
+        messages foreach send
     }
   }
 
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown
-    case _ => chan process msg
+    case _ =>
+
+      println(s"---- $msg")
+      chan process msg
   }
 
   def send(msg: LightningMessage) = {
     val encoded = LightningMessageCodecs serialize msg
-    transportHandler process Tuple2(Send, encoded)
+    handler process Tuple2(TransportHandler.Send, encoded)
   }
 }
 
