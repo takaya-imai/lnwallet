@@ -291,26 +291,6 @@ object Scripts { me =>
     CommitTx(commitTxInput, LexicographicalOrdering sort tx)
   }
 
-  def makeClosingTx(commitTxInput: InputInfo, localScriptPubKey: BinaryData,
-                    remoteScriptPubKey: BinaryData, localIsFunder: Boolean,
-                    dustLimit: Satoshi, closingFee: Satoshi,
-                    spec: CommitmentSpec): ClosingTx = {
-
-    require(spec.htlcs.isEmpty, "Should not be pending htlcs")
-    val toRemote: Satoshi = MilliSatoshi(spec.toRemoteMsat)
-    val toLocal: Satoshi = MilliSatoshi(spec.toLocalMsat)
-
-    val (toLocalAmount: Satoshi, toRemoteAmount: Satoshi) =
-      if (localIsFunder) (toLocal - closingFee, toRemote)
-      else (toLocal, toRemote - closingFee)
-
-    val toLocalOutput = if (toLocalAmount >= dustLimit) TxOut(toLocalAmount, localScriptPubKey) :: Nil else Nil
-    val toRemoteOutput = if (toRemoteAmount >= dustLimit) TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil else Nil
-    val in = TxIn(commitTxInput.outPoint, Array.emptyByteArray, sequence = 0xffffffffL) :: Nil
-    val tx = Transaction(version = 2, in, toLocalOutput ++ toRemoteOutput, lockTime = 0)
-    ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
-  }
-
   // General templates
 
   def findPubKeyScriptIndex(tx: Transaction, script: BinaryData): Int =
@@ -357,10 +337,8 @@ object Scripts { me =>
       val paymentHash160 = Crypto ripemd160 add.paymentHash
       val amountWithFee = MilliSatoshi(add.amountMsat) - htlcTimeoutFee
       val pubKeyScript = Script pay2wsh toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
-      val (input, tx) = makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevocationPubkey,
+      HtlcTimeoutTx tupled makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevocationPubkey,
         paymentHash160), pubKeyScript, amountWithFee, add.expiry, 0x00000000L)
-
-      HtlcTimeoutTx(input, tx)
     }
 
     def makeHtlcSuccessTx(add: UpdateAddHtlc) = {

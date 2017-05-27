@@ -89,40 +89,53 @@ object Helpers { me =>
       case _ => false
     }
 
-    def makeFirstClosingTx(commitments: Commitments, localScriptPubkey: BinaryData,
-                           remoteScriptPubkey: BinaryData, rate: Long): ClosingSigned = {
+    def makeFirstClosing(commitments: Commitments, localScriptPubkey: BinaryData,
+                         remoteScriptPubkey: BinaryData, rate: Long): ClosingSigned = {
 
       // This is just to estimate the weight, it depends on size of the pubkey scripts
-      val dummyClosingTx = Scripts.addSigs(Scripts.makeClosingTx(commitments.commitInput, localScriptPubkey,
-        remoteScriptPubkey, commitments.localParams.isFunder, Satoshi(0), Satoshi(0), commitments.localCommit.spec),
+      val dummy: ClosingTx = Scripts.addSigs(makeFunderClosingTx(commitments.commitInput, localScriptPubkey,
+        remoteScriptPubkey, dustLimit = Satoshi(0), closingFee = Satoshi(0), spec = commitments.localCommit.spec),
         commitments.localParams.fundingPrivKey.publicKey, commitments.remoteParams.fundingPubKey, "aa" * 71, "bb" * 71)
 
-      val closingWeight = Transaction.weight(dummyClosingTx.tx)
+      val closingWeight = Transaction.weight(dummy.tx)
       val closingFee = Scripts.weight2fee(feeratePerKw = rate, closingWeight)
-      val (_, cs) = makeClosingTx(commitments, localScriptPubkey, remoteScriptPubkey, closingFee)
-      cs
+      val (_, msg) = makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, closingFee)
+      msg
     }
 
-    def makeClosingTx(commitments: Commitments, localScriptPubkey: BinaryData,
-                      remoteScriptPubkey: BinaryData, closingFee: Satoshi) = {
+    def makeClosing(commitments: Commitments, localScriptPubkey: BinaryData,
+                    remoteScriptPubkey: BinaryData, closingFee: Satoshi) = {
 
       require(isValidFinalScriptPubkey(localScriptPubkey), "Invalid localScriptPubkey")
       require(isValidFinalScriptPubkey(remoteScriptPubkey), "Invalid remoteScriptPubkey")
 
-      val dustLimitSatoshis = math.max(commitments.localParams.dustLimitSatoshis, commitments.remoteParams.dustLimitSatoshis)
-      val closingTx: ClosingTx = Scripts.makeClosingTx(commitments.commitInput, localScriptPubkey, remoteScriptPubkey,
-        commitments.localParams.isFunder, Satoshi(dustLimitSatoshis), closingFee, commitments.localCommit.spec)
+      val dustLimitSat = math.max(commitments.localParams.dustLimitSatoshis, commitments.remoteParams.dustLimitSatoshis)
+      val closingTx = makeFunderClosingTx(commitments.commitInput, localScriptPubkey, remoteScriptPubkey,
+        Satoshi(dustLimitSat), closingFee, commitments.localCommit.spec)
 
       val localClosingSig = Scripts.sign(closingTx, commitments.localParams.fundingPrivKey)
       val closingSigned = ClosingSigned(commitments.channelId, closingFee.amount, localClosingSig)
       (closingTx, closingSigned)
     }
 
+    def makeFunderClosingTx(commitTxInput: InputInfo, localScriptPubKey: BinaryData, remoteScriptPubKey: BinaryData,
+                            dustLimit: Satoshi, closingFee: Satoshi, spec: CommitmentSpec): ClosingTx = {
+
+      require(spec.htlcs.isEmpty, "No HTLCs allowed")
+      val toRemoteAmount = Satoshi(spec.toRemoteMsat * satFactor)
+      val toLocalAmount = Satoshi(spec.toLocalMsat * satFactor) - closingFee
+      val toLocalOutput = if (toLocalAmount >= dustLimit) TxOut(toLocalAmount, localScriptPubKey) :: Nil else Nil
+      val toRemoteOutput = if (toRemoteAmount >= dustLimit) TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil else Nil
+      val input = TxIn(commitTxInput.outPoint, Array.emptyByteArray, sequence = 0xffffffffL) :: Nil
+      val tx = Transaction(version = 2, input, toLocalOutput ++ toRemoteOutput, lockTime = 0)
+      ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
+    }
+
     def checkClosingSignature(commitments: Commitments, localScriptPubkey: BinaryData,
                               remoteScriptPubkey: BinaryData, remoteClosingFee: Satoshi,
                               remoteClosingSig: BinaryData): (Boolean, Transaction) = {
 
-      val (closingTx, closingSigned) = makeClosingTx(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
+      val (closingTx, closingSigned) = makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
       val signedClosingTx: ClosingTx = Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
         commitments.remoteParams.fundingPubKey, closingSigned.signature, remoteClosingSig)
 

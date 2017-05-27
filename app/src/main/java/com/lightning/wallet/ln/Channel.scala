@@ -285,7 +285,7 @@ class Channel extends StateMachine[ChannelData] { me =>
 
       if (closeFeeSat != remoteFeeSat) {
         val nextCloseFee: Satoshi = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
-        val (_, nextLocalClosingSigned) = Closing.makeClosingTx(neg.commitments, localKey, remoteKey, nextCloseFee)
+        val (_, nextLocalClosingSigned) = Closing.makeClosing(neg.commitments, localKey, remoteKey, nextCloseFee)
         if (nextCloseFee != remoteFeeSat) updateNegotiations(neg, signed = nextLocalClosingSigned)
         else startMutualClose(neg, closeTx, nextLocalClosingSigned)
       } else startMutualClose(neg, closeTx, neg.localClosingSigned)
@@ -297,7 +297,7 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     case (neg: NegotiationsData, CMDFundingSpent(tx), NEGOTIATIONS) =>
-      val (closeTx, signed) = Closing.makeClosingTx(neg.commitments, neg.localShutdown.scriptPubKey,
+      val (closeTx, signed) = Closing.makeClosing(neg.commitments, neg.localShutdown.scriptPubKey,
         neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
 
       // Happens when we agreed on a closeSig, but we don't know it yet
@@ -344,7 +344,7 @@ class Channel extends StateMachine[ChannelData] { me =>
   }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
-    val firstSigned = Closing.makeFirstClosingTx(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
+    val firstSigned = Closing.makeFirstClosing(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
     become(NegotiationsData(announce, Commitments.addUnacked(cs, firstSigned), firstSigned, local, remote), state1 = NEGOTIATIONS)
   }
 
