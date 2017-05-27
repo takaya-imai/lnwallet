@@ -46,7 +46,7 @@ case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalP
                                  fundingCreatedMessage: FundingCreated) extends ChannelData
 
 case class WaitFundingConfirmedData(announce: NodeAnnouncement, our: Option[FundingLocked], their: Option[FundingLocked],
-                                    commitments: Commitments) extends ChannelData with HasCommitments
+                                    fundingTx: Transaction, commitments: Commitments) extends ChannelData with HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
                       announced: Boolean, localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],

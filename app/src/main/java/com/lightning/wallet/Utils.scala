@@ -221,7 +221,9 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   abstract class TxProcessor {
+    def onTxFail(exc: Throwable): Unit
     def processTx(password: String, fee: Coin)
+
     def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
       val Rates(_, _, feeLive: Coin, feeRisky: Coin, _) = RatesSaver.rates
       <(makeTx(password, feeRisky), onTxFail) { feeEstimate: Transaction =>
@@ -262,15 +264,15 @@ trait ToolbarActivity extends TimerActivity { me =>
       app.kit.wallet completeTx request
       request.tx
     }
+  }
 
-    def onTxFail(exc: Throwable): Unit
-    def errorWhenMakingTx: PartialFunction[Throwable, String] = {
-      case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
-      case _: InsufficientMoneyException => app getString err_not_enough_funds
-      case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
-      case _: KeyCrypterException => app getString err_pass
-      case _: Throwable => app getString err_general
-    }
+  // Taken outside the class above because needed separately
+  def errorWhenMakingTx: PartialFunction[Throwable, String] = {
+    case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
+    case _: InsufficientMoneyException => app getString err_not_enough_funds
+    case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
+    case _: KeyCrypterException => app getString err_pass
+    case _: Throwable => app getString err_general
   }
 
   // Temporairly update subtitle info

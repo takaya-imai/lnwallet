@@ -77,7 +77,7 @@ object Helpers { me =>
   object Closing {
     def makeTx(descr: String) = (attempt: TransactionWithInputInfo) => {
       val result = Try(attempt).filter(Scripts.checkSpendable(_).isSuccess)
-      for (err <- result.failed) println(s"$descr generation error: $err")
+      for (error <- result.failed) Tools log s"$descr generation error: $error"
       result.map(_.tx).toOption
     }
 
@@ -238,19 +238,20 @@ object Helpers { me =>
     }
 
     // Assuming we are always a funder
-    def makeFirstFunderCommitTxs(localParams: LocalParams, remoteParams: RemoteParams, fundingSatoshis: Long,
-                                 pushMsat: Long, initialFeeratePerKw: Long, fundingTxHash: BinaryData,
-                                 fundingTxOutputIndex: Int, remoteFirstPerCommitmentPoint: Point) = {
+    def makeFirstFunderCommitTxs(cmd: CMDOpenChannel, remoteParams: RemoteParams,
+                                 fundingTxHash: BinaryData, fundingTxOutputIndex: Int,
+                                 remoteFirstPerCommitmentPoint: Point) = {
 
-      val toLocalMsat = fundingSatoshis * satFactor - pushMsat
-      val localSpec = CommitmentSpec(feeratePerKw = initialFeeratePerKw, toLocalMsat = toLocalMsat, toRemoteMsat = pushMsat)
-      val remoteSpec = CommitmentSpec(feeratePerKw = initialFeeratePerKw, toLocalMsat = pushMsat, toRemoteMsat = toLocalMsat)
-      val commitmentInput = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex, Satoshi(fundingSatoshis),
-        localParams.fundingPrivKey.publicKey, remoteParams.fundingPubKey)
+      val toLocalMsat = cmd.fundingAmountSat * satFactor - cmd.pushMsat
+      val commitmentInput = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex,
+        Satoshi(cmd.fundingAmountSat), cmd.localParams.fundingPrivKey.publicKey,
+        remoteParams.fundingPubKey)
 
-      val localPerCommitmentPoint = Generators.perCommitPoint(localParams.shaSeed, 0)
-      val (localCommitTx, _, _) = makeLocalTxs(0, localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
-      val (remoteCommitTx, _, _) = makeRemoteTxs(0, localParams, remoteParams, commitmentInput, remoteFirstPerCommitmentPoint, remoteSpec)
+      val localPerCommitmentPoint = Generators.perCommitPoint(cmd.localParams.shaSeed, 0)
+      val localSpec = CommitmentSpec(feeratePerKw = cmd.initialFeeratePerKw, toLocalMsat = toLocalMsat, toRemoteMsat = cmd.pushMsat)
+      val remoteSpec = CommitmentSpec(feeratePerKw = cmd.initialFeeratePerKw, toLocalMsat = cmd.pushMsat, toRemoteMsat = toLocalMsat)
+      val (localCommitTx, _, _) = makeLocalTxs(0, cmd.localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
+      val (remoteCommitTx, _, _) = makeRemoteTxs(0, cmd.localParams, remoteParams, commitmentInput, remoteFirstPerCommitmentPoint, remoteSpec)
       (localSpec, localCommitTx, remoteSpec, remoteCommitTx)
     }
   }

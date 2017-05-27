@@ -11,6 +11,7 @@ class LNOpsActivity extends TimerActivity { me =>
   lazy val lnOpsDescription = findViewById(R.id.lnOpsDescription).asInstanceOf[TextView]
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
+  def goCreateChannel = me goTo classOf[LNStartActivity]
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
@@ -22,7 +23,6 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   def showInfo = {
-    def goCreateChannel = me exitTo classOf[LNStartActivity]
     lnOpsAction setOnClickListener onButtonTap(goCreateChannel)
     lnOpsDescription setText ln_ops_description
     lnOpsAction setText ln_ops_start

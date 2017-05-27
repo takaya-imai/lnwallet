@@ -197,8 +197,8 @@ object Scripts { me =>
   def decodeTxNumber(sequence: Long, locktime: Long) = (sequence & 0xffffffL).<<(24) + (locktime & 0xffffffL)
 
   // Tx siging and checking
-  def addSigs(commit: CommitTx, localFunding: PublicKey, remoteFunding: PublicKey, localSig: BinaryData, remoteSig: BinaryData): CommitTx =
-  commit.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localFunding, remoteFunding) :: Nil)
+  def addSigs(commit: CommitTx, localKey: PublicKey, remoteKey: PublicKey, localSig: BinaryData, remoteSig: BinaryData): CommitTx =
+    commit.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localKey, remoteKey) :: Nil)
 
   def addSigs(closing: ClosingTx, localFunding: PublicKey, remoteFunding: PublicKey, localSig: BinaryData, remoteSig: BinaryData): ClosingTx =
     closing.modify(_.tx).using(_ updateWitnesses witness2of2(localSig, remoteSig, localFunding, remoteFunding) :: Nil)

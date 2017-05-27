@@ -16,11 +16,12 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (InitData(announce), cmd @ CMDOpenChannel(localParams, temporaryChannelId,
     initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
+      val firstPerCommitPoint = Generators.perCommitPoint(localParams.shaSeed, 0)
       val open = OpenChannel(localParams.chainHash, temporaryChannelId, fundingAmountSat, pushMsat,
         localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat,
         localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay, localParams.maxAcceptedHtlcs,
         localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint, localParams.paymentKey.toPoint,
-        Generators.perCommitPoint(localParams.shaSeed, 0), localParams.delayedPaymentKey.toPoint)
+        localParams.delayedPaymentKey.toPoint, firstPerCommitPoint)
 
       become(WaitAcceptData(announce, cmd, open), WAIT_FOR_ACCEPT)
 
@@ -38,17 +39,16 @@ class Channel extends StateMachine[ChannelData] { me =>
         accept.paymentBasepoint, accept.delayedPaymentBasepoint, cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
 
       val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
-        Funding.makeFirstFunderCommitTxs(cmd.localParams, remoteParams, cmd.fundingAmountSat,
-          cmd.pushMsat, cmd.initialFeeratePerKw, fundTx.hash, outIndex, accept.firstPerCommitmentPoint)
+        Funding.makeFirstFunderCommitTxs(cmd, remoteParams, fundTx.hash,
+          outIndex, accept.firstPerCommitmentPoint)
 
-      val channelId = Tools.toLongId(fundTx.hash, outIndex)
       val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
       val fundingCreated = FundingCreated(cmd.temporaryChannelId, fundTx.hash, outIndex, localSigOfRemoteTx)
       val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
 
-      become(WaitFundingSignedData(announce, cmd.localParams, channelId,
-        remoteParams, fundTx, localSpec, localCommitTx, firstRemoteCommit,
-        fundingCreated), WAIT_FUNDING_SIGNED)
+      become(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex),
+        remoteParams, fundTx, localSpec, localCommitTx, firstRemoteCommit, fundingCreated),
+        WAIT_FUNDING_SIGNED)
 
 
     // They have signed our first commit tx, we can broadcast a funding tx
@@ -67,7 +67,7 @@ class Channel extends StateMachine[ChannelData] { me =>
 
         // At this point funding tx should be broadcasted
         become(WaitFundingConfirmedData(wait.announce, None,
-          None, commitments), WAIT_FUNDING_DONE)
+          None, wait.fundingTx, commitments), WAIT_FUNDING_DONE)
       }
 
 
@@ -80,20 +80,20 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We have not yet sent a FundingLocked to them but just got a FundingLocked from them so we keep it
-    case (wait @ WaitFundingConfirmedData(_, None, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, None, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
       me stayWith wait.copy(their = Some apply their)
 
     // We have got a FundingDepthOk blockchain event but have not yet got a confirmation from them
-    case (wait @ WaitFundingConfirmedData(_, _, None, commitments), CMDDepth(LNParams.minDepth), WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, _, None, _, commitments), CMDDepth(LNParams.minDepth), WAIT_FUNDING_DONE) =>
       val ourLocked = Some(me makeFundingLocked commitments)
       me stayWith wait.copy(our = ourLocked)
 
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
-    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
       becomeNormal(wait, our, their.nextPerCommitmentPoint)
 
     // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
-    case (wait @ WaitFundingConfirmedData(_, _, Some(their), commitments), CMDDepth(LNParams.minDepth), WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, _, Some(their), _, commitments), CMDDepth(LNParams.minDepth), WAIT_FUNDING_DONE) =>
       becomeNormal(wait, me makeFundingLocked commitments, their.nextPerCommitmentPoint)
 
 

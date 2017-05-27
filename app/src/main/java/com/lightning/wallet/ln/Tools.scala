@@ -7,7 +7,6 @@ import com.lightning.wallet.ln.Exceptions._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
-
 import com.lightning.wallet.ln.crypto.RandomGenerator
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import language.implicitConversions
@@ -106,32 +105,41 @@ case class ChannelKit(chan: Channel) { me =>
     }
 
     override def onError = {
-      case noiseRelated: Throwable =>
-        Tools log s"Transport $noiseRelated"
+      case transportRelated: Throwable =>
+        Tools log s"Handler error $transportRelated"
         chan process CMDShutdown
     }
   }
 
   chan.listeners += new StateMachineListener {
     override def onBecome: PartialFunction[Transition, Unit] = {
-      case (previousData, nextData, previousState, Channel.FINISHED) =>
-        Tools log s"Channel finished from $previousData : $previousState"
-        socket.shutdown
+      case (previousData, data, previousState, Channel.CLOSING | Channel.FINISHED) =>
+        Tools log s"Channel $previousState -> ENDING CHANNEL at $previousData : $data"
+        // "00" * 32 is a connection level error which will result in socket closing
+        me send Error("00" * 32, "Channel closed" getBytes "UTF-8")
 
-      case (previousData, nextData, previousState, nextState) =>
-        val messages = Helpers.extractOutgoingMessages(previousData, nextData)
-        Tools log s"Sending $previousState -> $nextState messages: $messages"
+      case (previousData, data, previousState, state) =>
+        val messages = Helpers.extractOutgoingMessages(previousData, data)
+        Tools log s"Sending $previousState -> $state messages: $messages"
         messages foreach send
+    }
+
+    override def onPostProcess = {
+      case Error(_, reason: BinaryData) =>
+        val decoded = new String(reason.toArray)
+        Tools log s"Got remote Error: $decoded"
+    }
+
+    override def onError = {
+      case channelRelated: Throwable =>
+        Tools log s"Channel error $channelRelated"
     }
   }
 
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown
-    case _ =>
-
-      println(s"---- $msg")
-      chan process msg
+    case _ => chan process msg
   }
 
   def send(msg: LightningMessage) = {
