@@ -8,12 +8,13 @@ import org.bitcoinj.core._
 import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import org.bitcoinj.wallet.listeners._
+
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
+import com.lightning.wallet.lncloud.{Rates, RatesSaver}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
-
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -24,27 +25,24 @@ import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
 import info.hoang8f.android.segmented.SegmentedGroup
-
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
-import com.lightning.wallet.lncloud.{Rates, RatesSaver}
 import android.text.method.LinkMovementMethod
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import fr.acinq.bitcoin.MilliSatoshi
-
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.script.Script
-
 import scala.concurrent.Future
 import android.os.Bundle
+
 import ViewGroup.LayoutParams.WRAP_CONTENT
 import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
@@ -294,15 +292,14 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   // Basis for dialog forms
-  def str2Tuple(res: CharSequence) = {
+  def str2Tuple(textFieldData: CharSequence): (LinearLayout, TextView) = {
     val view = getLayoutInflater.inflate(R.layout.frag_top_tip, null).asInstanceOf[LinearLayout]
-    val textField = view.findViewById(R.id.actionTip).asInstanceOf[TextView]
-    textField setMovementMethod LinkMovementMethod.getInstance
-    textField setText res
-    view -> textField
+    val titleTextField = me clickableTextField view.findViewById(R.id.actionTip)
+    titleTextField setText textFieldData
+    view -> titleTextField
   }
 
-  def generatePasswordPromptView(inpType: Int, txt: Int) = {
+  def generatePasswordPromptView(inpType: Int, txt: Int): (LinearLayout, EditText) = {
     val passAsk = getLayoutInflater.inflate(R.layout.frag_changer, null).asInstanceOf[LinearLayout]
     val secretInputField = passAsk.findViewById(R.id.secretInput).asInstanceOf[EditText]
     passAsk.findViewById(R.id.secretTip).asInstanceOf[TextView] setText txt
@@ -363,6 +360,12 @@ trait TimerActivity extends AppCompatActivity { me =>
   def onButtonTap(run: => Unit) = new OnClickListener {
     def onClick(tappedButtonView: View) = me hideKeys run
   }
+
+  def clickableTextField(view: View): TextView =
+    view.asInstanceOf[TextView] match { case textView =>
+      textView setMovementMethod LinkMovementMethod.getInstance
+      textView
+    }
 }
 
 class RateManager(val content: View) { me =>

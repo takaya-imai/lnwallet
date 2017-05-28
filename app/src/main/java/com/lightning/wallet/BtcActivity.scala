@@ -7,9 +7,9 @@ import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 
+import android.provider.Settings.{System => FontSystem}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
-import android.provider.Settings.{System => FontSystem}
 import com.lightning.wallet.Utils.{app, sumIn, sumOut}
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import scala.util.{Failure, Success, Try}
@@ -19,7 +19,6 @@ import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
-import android.text.method.LinkMovementMethod
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
@@ -77,15 +76,13 @@ trait ListUpdater { me: TimerActivity =>
   private[this] var state = SCROLL_STATE_IDLE
   val maxLinesNum = 75
 
-  def startListUpdates(adapter: BaseAdapter) = {
+  def startListUpdates(adapter: BaseAdapter) =
     list setOnScrollListener new OnScrollListener {
       def onScroll(v: AbsListView, first: Int, visible: Int, total: Int) = none
       def onScrollStateChanged(v: AbsListView, newState: Int) = state = newState
+      def maybeUpdate = if (SCROLL_STATE_IDLE == state) adapter.notifyDataSetChanged
+      timer.schedule(anyToRunnable(maybeUpdate), 10000, 10000)
     }
-
-    def go = if (SCROLL_STATE_IDLE == state) adapter.notifyDataSetChanged
-    timer.schedule(anyToRunnable(process = go), 10000, 10000)
-  }
 }
 
 abstract class TxViewHolder(v: View) {
@@ -102,7 +99,7 @@ with ListUpdater { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
   lazy val mnemonicWarn = findViewById(R.id.mnemonicWarn).asInstanceOf[LinearLayout]
-  lazy val mnemonicInfo = findViewById(R.id.mnemonicInfo).asInstanceOf[TextView]
+  lazy val mnemonicInfo = me clickableTextField findViewById(R.id.mnemonicInfo)
   lazy val txsConfs = getResources getStringArray R.array.txs_confs
   lazy val feeIncoming = getString(txs_fee_incoming)
   lazy val feeDetails = getString(txs_fee_details)
@@ -161,7 +158,6 @@ with ListUpdater { me =>
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
       wrap(initToolbar)(me setContentView R.layout.activity_btc)
-      mnemonicInfo setMovementMethod LinkMovementMethod.getInstance
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
       setDetecting(true)
 

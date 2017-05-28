@@ -2,13 +2,12 @@ package com.lightning.wallet
 
 import com.lightning.wallet.R.string._
 import android.widget.{Button, TextView}
-import android.text.method.LinkMovementMethod
 import android.os.Bundle
 import android.view.View
 
 
 class LNOpsActivity extends TimerActivity { me =>
-  lazy val lnOpsDescription = findViewById(R.id.lnOpsDescription).asInstanceOf[TextView]
+  lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
   def goCreateChannel = me goTo classOf[LNStartActivity]
@@ -18,7 +17,6 @@ class LNOpsActivity extends TimerActivity { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
-    lnOpsDescription setMovementMethod LinkMovementMethod.getInstance
     showInfo
   }
 

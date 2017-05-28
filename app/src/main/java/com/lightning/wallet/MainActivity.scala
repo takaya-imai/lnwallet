@@ -2,26 +2,21 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
-
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-import org.ndeftools.util.activity.NfcReaderActivity
 
+import org.ndeftools.util.activity.NfcReaderActivity
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
-import android.text.method.LinkMovementMethod
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
-
 import scala.concurrent.Future
 import java.io.FileInputStream
-
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.view.View
-import com.lightning.wallet.test.TransactionsSpec
 
 
 trait ViewSwitch {
@@ -31,10 +26,12 @@ trait ViewSwitch {
   }
 }
 
-class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
+class MainActivity extends NfcReaderActivity
+with TimerActivity with ViewSwitch { me =>
+
   lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
   lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
-  lazy val greet = findViewById(R.id.mainGreetings).asInstanceOf[TextView]
+  lazy val greet = me clickableTextField findViewById(R.id.mainGreetings)
 
   lazy val views =
     findViewById(R.id.mainChoice) ::
@@ -64,7 +61,6 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     app.TransData.value = null
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
-    greet setMovementMethod LinkMovementMethod.getInstance
   }
 
   // NFC and link

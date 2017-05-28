@@ -4,7 +4,7 @@ import R.string._
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import android.widget.{Button, EditText, TextView}
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
-import android.text.method.LinkMovementMethod
+
 import com.lightning.wallet.ln.Tools.wrap
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
@@ -26,10 +26,10 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
   lazy val createPass = findViewById(R.id.createPass).asInstanceOf[EditText]
 
   // After wallet is created we emphasize an importance of mnemonic
-  lazy val walletReady = findViewById(R.id.walletReady).asInstanceOf[TextView]
   lazy val mnemonicText = findViewById(R.id.mnemonicText).asInstanceOf[TextView]
+  lazy val walletReady = findViewById(R.id.walletReady).asInstanceOf[TextView]
   lazy val openWallet = findViewById(R.id.openWallet).asInstanceOf[Button]
-  lazy val info = findViewById(R.id.mnemonicInfo).asInstanceOf[TextView]
+  lazy val info = me clickableTextField findViewById(R.id.mnemonicInfo)
 
   lazy val views =
     findViewById(R.id.createInfo) ::
@@ -41,7 +41,6 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
   {
     super.onCreate(savedState)
     setContentView(R.layout.activity_create)
-    info setMovementMethod LinkMovementMethod.getInstance
     createPass addTextChangedListener new TextChangedWatcher {
       override def onTextChanged(s: CharSequence, st: Int, n: Int, af: Int) = {
         val buttonMessage = if (s.length >= 6) wallet_create else password_too_short

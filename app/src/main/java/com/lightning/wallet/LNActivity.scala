@@ -1,7 +1,6 @@
 package com.lightning.wallet
 
 import android.nfc.NfcEvent
-import android.text.method.LinkMovementMethod
 import com.lightning.wallet.R.string._
 import android.content._
 import android.text.Html

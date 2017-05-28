@@ -106,7 +106,7 @@ case class ChannelKit(chan: Channel) { me =>
 
     override def onError = {
       case transportRelated: Throwable =>
-        Tools log s"Handler error $transportRelated"
+        Tools log s"Handle error $transportRelated"
         chan process CMDShutdown
     }
   }
@@ -132,7 +132,7 @@ case class ChannelKit(chan: Channel) { me =>
 
     override def onError = {
       case channelRelated: Throwable =>
-        Tools log s"Channel error $channelRelated"
+        Tools log s"Chan error $channelRelated"
     }
   }
 
