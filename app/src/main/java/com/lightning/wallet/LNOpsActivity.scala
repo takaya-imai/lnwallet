@@ -1,7 +1,7 @@
 package com.lightning.wallet
 
 import com.lightning.wallet.R.string._
-import android.widget.{Button, TextView}
+import android.widget.Button
 import android.os.Bundle
 import android.view.View
 
@@ -22,7 +22,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
   def showInfo = {
     lnOpsAction setOnClickListener onButtonTap(goCreateChannel)
-    lnOpsDescription setText ln_ops_description
+    lnOpsDescription setText ln_ops_chan_none
     lnOpsAction setText ln_ops_start
   }
 }

@@ -139,9 +139,10 @@
     <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
 
     <!-- activity_ln, activity_ln_pass -->
+    <string name="ln_close">Close channel</string>
+    <string name="ln_forse_close">Force close channel</string>
     <string name="ln_backup">Set Backup Server</string>
     <string name="ln_search">Find payments</string>
-    <string name="ln_close">Close channel</string>
 
     <!-- setting a private backup server -->
     <string name="ln_backup_ip">Backup server address</string>
@@ -153,13 +154,21 @@
     <string name="ln_backup_success">Backup Server has been set successfully</string>
 
     <!-- activity_ln_ops, activity_ln_start -->
-    <string name="ln_ops_description"><a href='https://lightning-wallet.com'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='https://lightning-wallet.com'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
-    <string name="ln_ops_opening">Payment Channel is open\n\nA funding Bitcoin transaction of %1$s has been sent. You will be able to <strong>send</strong> Lightning payments after it reaches %2$s. You will be able to <strong>send and receive</strong> Lightning payments shortly after it reaches %3$s.\n\nCurrent status\n%4$s</string>
+    <string name="ln_ops_btc">Go to Bitcoin wallet</string>
+    <string name="ln_ops_chan_none"><a href='https://lightning-wallet.com'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='https://lightning-wallet.com'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
+    <string name="ln_ops_chan_opening">Opening a Payment Channel&#8230;\n\nA funding Bitcoin transaction of %1$s has been sent. You will be able to <strong>send</strong> Lightning payments after it reaches %2$s. You will be able to <strong>send and receive</strong> Lightning payments shortly after it reaches %3$s.\n\nCurrent status\n%4$s</string>
+    <string name="ln_ops_chan_bilateral_closing">Closing a Payment Channel&#8230;\n\nWaiting for a confirmation from peer. Your current channel balance is %1$s, it will be refunded to you via a single Bitcoin transaction once both you and peer are ready for a mutual channel closing</string>
+
+    <string name="ln_ops_chan_unilateral_closing">Closing a Payment Channel&#8230;\n\nA <a href='https://lightning-wallet.com'>forced channel closing</a> has been initiated. Your current channel balance is %1$s, it will be refunded to you via a series of delayed Bitcoin transactions</string>
+    <string name="ln_ops_chan_unilateral_warn">A forced channel closing is more costly and time consuming than a mutually agreed one. You are advised to wait for peer confirmation rather than single-handedly closing a channel right now</string>
+    <string name="ln_ops_chan_unilateral_status_wait">$1%s is waiting for parent</string>
+    <string name="ln_ops_chan_unilateral_status_done">$1%s is received already</string>
+    <string name="ln_ops_chan_unilateral_status_pending">$1%s in 4 blocks</string>
+
     <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>BTC balance: %1$s<br>Max capacity: %2$s</small>]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open Payment Channel</string>
-    <string name="ln_ops_btc">Go to Bitcoin wallet</string>
 
     <array name="ln_ops_start_node_channels">
         <item><![CDATA[<font color=#E31300>Has no open channels</font>]]></item>
