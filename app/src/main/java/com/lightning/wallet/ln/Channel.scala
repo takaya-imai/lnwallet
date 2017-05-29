@@ -370,7 +370,7 @@ class Channel extends StateMachine[ChannelData] { me =>
   }
 
   private def startRemoteCurrentClose(some: ChannelData with HasCommitments, commitTx: Transaction) =
-    // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take ours
+    // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take what's ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, commitTx, LNParams.bag) -> some match {
       case (claim: RemoteCommitPublished, closing: ClosingData) => become(data1 = closing.copy(remoteCommit = claim :: Nil), CLOSING)
       case (claim, _) => become(ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil), CLOSING)

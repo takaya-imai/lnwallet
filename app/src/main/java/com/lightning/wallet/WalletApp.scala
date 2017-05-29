@@ -30,7 +30,7 @@ import com.google.common.net.InetAddresses
 
 class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val params = org.bitcoinj.params.RegTestParams.get
+  lazy val params = org.bitcoinj.params.TestNet3Params.get
   var walletFile, chainFile: java.io.File = _
   var kit: WalletKit = _
 
@@ -106,8 +106,8 @@ class WalletApp extends Application { me =>
     }
 
     def useCheckPoints(time: Long) = {
-//      val pts = getAssets open "checkpoints-testnet.txt"
-//      CheckpointManager.checkpoint(params, pts, store, time)
+      val pts = getAssets open "checkpoints-testnet.txt"
+      CheckpointManager.checkpoint(params, pts, store, time)
     }
 
     def setupAndStartDownload = {
@@ -116,18 +116,12 @@ class WalletApp extends Application { me =>
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addTransactionConfidenceEventListener Vibr.generalTracker
       wallet.autosaveToFile(walletFile, 500, MILLISECONDS, null)
-
-      //peerGroup addPeerDiscovery new DnsDiscovery(params)
-
+      peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0
       peerGroup setPingIntervalMsec 10000
       peerGroup setMaxConnections 8
       peerGroup addWallet wallet
-
-      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
-      peerGroup.addAddress(pa1)
-
       RatesSaver.process
       startDownload
     }

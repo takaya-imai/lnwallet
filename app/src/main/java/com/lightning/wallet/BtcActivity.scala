@@ -85,12 +85,12 @@ trait ListUpdater { me: TimerActivity =>
     }
 }
 
-abstract class TxViewHolder(v: View) {
-  val transactCircle = v.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
-  val transactWhen = v.findViewById(R.id.transactWhen).asInstanceOf[TextView]
-  val transactSum = v.findViewById(R.id.transactSum).asInstanceOf[TextView]
+abstract class TxViewHolder(view: View) {
+  val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
+  val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
+  val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
   transactSum setTypeface Typeface.MONOSPACE
-  v setTag this
+  view setTag this
 }
 
 class BtcActivity extends NfcReaderActivity
@@ -366,7 +366,7 @@ with ListUpdater { me =>
 
   private def nativeTransactions =
     app.kit.wallet.getTransactionsByTime.asScala
-      .take(maxLinesNum).filterNot(_ isWatched app.kit.wallet)
+      .take(maxLinesNum).filterNot(_.getValue(app.kit.wallet).isZero)
 
   private def outputToPayData(out: TransactionOutput) = Try(out.getScriptPubKey) map {
     case publicKeyScript if publicKeyScript.isSentToP2WSH => P2WSHData(out.getValue, publicKeyScript)

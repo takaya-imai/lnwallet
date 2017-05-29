@@ -468,6 +468,7 @@ trait MyPeerDataListener extends PeerDataEventListener {
   val blocksPerDay = 144
 }
 
+// This works because watched transactions do not change a wallet balance so `isGreaterThan` is a filter
 abstract class NativeTxTracker extends WalletCoinsSentEventListener with WalletCoinsReceivedEventListener {
   def onCoinsSent(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (a isGreaterThan b) nativeCoinsSent(tx, a, b)
   def onCoinsReceived(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (b isGreaterThan a) nativeCoinsReceived(tx, a, b)

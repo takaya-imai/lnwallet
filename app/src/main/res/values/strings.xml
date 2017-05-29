@@ -161,7 +161,7 @@
     <string name="ln_ops_chan_bilateral_closing_done">Closing a Payment Channel&#8230;\n\nA closing Bitcoin transaction of %1$s has been received. Channel can be safely closed once a closing transaction reaches at least %2$s</string>
 
     <string name="ln_ops_chan_unilateral_closing">Closing a Payment Channel&#8230;\n\nA <a href='https://lightning-wallet.com'>forced channel closing</a> has been initiated. Your current channel balance of %1$s will be refunded to you via a series of delayed Bitcoin transactions</string>
-    <string name="ln_ops_chan_unilateral_warn">A forced channel closing is more costly and time consuming than a mutually agreed one. You are advised to wait for peer confirmation rather than single-handedly closing a channel right now</string>
+    <string name="ln_ops_chan_unilateral_warn">A forced channel closing is more expensive and time consuming than a mutually agreed one. You are advised to wait for peer confirmation rather than single-handedly closing a channel right now. Would you like to proceed anyway?</string>
 
     <string name="ln_ops_chan_unilateral_status_wait">$1%s is waiting for parent</string>
     <string name="ln_ops_chan_unilateral_status_done">$1%s is received already</string>

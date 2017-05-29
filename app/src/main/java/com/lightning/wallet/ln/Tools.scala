@@ -1,12 +1,15 @@
 package com.lightning.wallet.ln
 
+import scala.concurrent.duration._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Exceptions._
 
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import rx.lang.scala.{Subscription, Observable => Obs}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
+
 import com.lightning.wallet.ln.crypto.RandomGenerator
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import language.implicitConversions
@@ -60,9 +63,12 @@ object MSat {
 
   def btcBigDecimal2MilliSatoshi(btc: BigDecimal): MilliSatoshi = MilliSatoshi(amount = (btc * btcFactor).toLong)
   def satString2MilliSatoshi(sat: String): MilliSatoshi = MilliSatoshi(amount = (BigDecimal(sat) * satFactor).toLong)
-  implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat.format(BigDecimal(msat.amount) / satFactor)
+
   implicit def milliSatoshi2Coin(msat: MilliSatoshi): Coin = Coin.valueOf(msat.amount / satFactor)
   implicit def coin2MilliSatoshi(coin: Coin): MilliSatoshi = MilliSatoshi(coin.value * satFactor)
+
+  implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat format BigDecimal(msat.amount) / satFactor
+  implicit def satoshi2String(msat: Satoshi): String = baseSat format BigDecimal(msat.amount)
   implicit def coin2String(coin: Coin): String = baseSat format coin.value
   def withSign(sum: String) = s"ⓢ $sum"
 }
@@ -83,6 +89,7 @@ object Features {
 }
 
 case class ChannelKit(chan: Channel) { me =>
+  var subscriptions: Set[Subscription] = Set.empty
   private val address = chan.data.announce.addresses.head
   lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
     def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
@@ -93,9 +100,14 @@ case class ChannelKit(chan: Channel) { me =>
     def feedForward(message: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize message)
   }
 
+  val restartListener = new SocketListener {
+    override def onDisconnect = Obs.just(Tools log "Restarting socket")
+      .delay(5.seconds).doOnTerminate(socket.start).subscribe(none)
+  }
+
   socket.listeners += new SocketListener {
     override def onConnect: Unit = handler.init
-    override def onDisconnect = Tools log "Socket off"
+    override def onDisconnect = Tools log "Disconnect"
   }
 
   handler.listeners += new StateMachineListener {
@@ -116,7 +128,7 @@ case class ChannelKit(chan: Channel) { me =>
       case (previousData, data, previousState, Channel.CLOSING | Channel.FINISHED) =>
         Tools log s"Channel $previousState -> ENDING CHANNEL at $previousData : $data"
         // "00" * 32 is a connection level error which will result in socket closing
-        me send Error("00" * 32, "Channel closed" getBytes "UTF-8")
+        me send Error("00" * 32, "All Channels are closed" getBytes "UTF-8")
 
       case (previousData, data, previousState, state) =>
         val messages = Helpers.extractOutgoingMessages(previousData, data)
@@ -131,8 +143,8 @@ case class ChannelKit(chan: Channel) { me =>
     }
 
     override def onError = {
-      case channelRelated: Throwable =>
-        Tools log s"Chan error $channelRelated"
+      case chanRelated: Throwable =>
+        Tools log s"Chan error $chanRelated"
     }
   }
 
@@ -160,7 +172,7 @@ trait StateMachineListener {
 abstract class StateMachine[T] { self =>
   var listeners = Set.empty[StateMachineListener]
   def stayWith(data1: T) = become(data1, state)
-  def doProcess(change: Any)
+  def doProcess(change: Any): Unit
   var state: String = _
   var data: T = _
 
