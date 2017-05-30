@@ -120,7 +120,7 @@ class WalletApp extends Application { me =>
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0
       peerGroup setPingIntervalMsec 10000
-      peerGroup setMaxConnections 8
+      peerGroup setMaxConnections 6
       peerGroup addWallet wallet
       RatesSaver.process
       startDownload

@@ -187,21 +187,21 @@ class LNCloud(url: String) {
       case err => throw new ProtocolException
     }
 
-  def findNodes(query: String) = call(command = "router/nodes",
-    vec => for (json <- vec) yield json.convertTo[AnnounceChansNum],
-    "query" -> query)
+  def getRawData(key: String) = call("data/state", _.head, "key" -> key)
+  def getPreimage(hash: String) = call("data/preimage", _.head.convertTo[BinaryData], "hash" -> hash)
 
-  def getRawData(key: String) = call("data/get", _.head, "key" -> key)
+  def findNodes(aliasQuery: String) = call(command = "router/nodes",
+    vector => for (json <- vector) yield json.convertTo[AnnounceChansNum],
+    "query" -> aliasQuery)
+
   def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes",
-    vec => for (json <- vec) yield json.convertTo[PaymentRoute],
+    vector => for (json <- vector) yield json.convertTo[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def getRawData(key: String) = super.getRawData(key).onErrorResumeNext(_ => failover getRawData key)
-  override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
-  override def findRoutes(from: BinaryData, to: PublicKey) = super.findRoutes(from, to)
-    .onErrorResumeNext(_ => failover.findRoutes(from, to) /* failover */)
+  override def getPreimage(hash: String) = super.getPreimage(hash).onErrorResumeNext(_ => failover getPreimage hash)
 }
 
 object LNCloud {

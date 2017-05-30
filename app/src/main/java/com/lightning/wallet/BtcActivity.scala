@@ -323,14 +323,15 @@ with ListUpdater { me =>
 
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
+      case _ if spendManager.getAddress == null => app toast dialog_addr_wrong
       case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
-      case Success(_) if spendManager.getAddress == null => app toast dialog_addr_wrong
 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-          override def processTx(password: String, fee: Coin) = {
-            <(app.kit blockingSend makeTx(password, fee), onTxFail)(none)
+
+          override def processTx(pass: String, fee: Coin) = {
+            <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
             add(me getString tx_announce, Informer.BTCEVENT).ui.run
           }
 

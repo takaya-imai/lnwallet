@@ -21,12 +21,12 @@ case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], r
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
 
 trait PaymentSpecBag {
+  def newPreimage: BinaryData
   def putInfo(info: ExtendedPaymentInfo): Unit
   def getRecentInfos: Vector[ExtendedPaymentInfo]
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
   def updatePaymentStatus(hash: BinaryData, status: String): Unit
   def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
 }
 
 object PaymentSpec {

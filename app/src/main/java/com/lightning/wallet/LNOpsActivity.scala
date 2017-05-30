@@ -1,7 +1,7 @@
 package com.lightning.wallet
 
 import com.lightning.wallet.R.string._
-
+import collection.JavaConverters._
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import rx.lang.scala.{Subscription, Observable => Obs}
@@ -39,11 +39,13 @@ class LNOpsActivity extends TimerActivity { me =>
     val channelOpsListener = new StateMachineListener { self =>
       override def onBecome: PartialFunction[Transition, Unit] = {
         case (_, WaitFundingConfirmedData(_, _, _, fundingTx, commitments), _, WAIT_FUNDING_DONE) =>
-          kit.subscriptions += watchTxDepthLocal(fundingTx.txid.toString).subscribe(depth => kit.chan process depth)
-          kit.subscriptions += watchInputUsedLocal(commitments.commitInput.outPoint).subscribe(breach => kit.chan process breach)
-          kit.socket.listeners += kit.restartListener
+          def showOpeningInfoOnUi(cmd: CMDDepth) = me runOnUiThread showOpeningInfo(commitments, cmd)
 
-          // Try to broadcast every time
+          app.kit.wallet addWatchedScript commitments.commitInput.txOut.publicKeyScript
+          kit.subscriptions += watchTxDepthLocal(fundingTx.txid.toString).subscribe(kit.chan process _)
+          kit.subscriptions += watchTxDepthLocal(fundingTx.txid.toString).subscribe(showOpeningInfoOnUi _)
+          kit.subscriptions += watchInputUsedLocal(commitments.commitInput.outPoint).subscribe(kit.chan process _)
+          kit.socket.listeners += kit.restartSocketListener
           <(app.kit blockingSend fundingTx, none)(none)
       }
     }
@@ -53,7 +55,7 @@ class LNOpsActivity extends TimerActivity { me =>
     channelOpsListener onBecome start
   }
 
-  private def showOpeningInfo(c: Commitments)(cmd: CMDDepth) = {
+  private def showOpeningInfo(c: Commitments, cmd: CMDDepth) = {
     val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
     val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
     val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)

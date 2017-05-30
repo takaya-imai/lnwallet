@@ -28,8 +28,13 @@ object ImplicitJsonFormats { me =>
     BitVector fromHex json2String(json)
 
   implicit object BigIntegerFmt extends JsonFormat[BigInteger] {
-    def read(json: JsValue) = new BigInteger(me json2String json)
-    def write(internal: BigInteger) = internal.toString.toJson
+    def read(json: JsValue): BigInteger = new BigInteger(me json2String json)
+    def write(internal: BigInteger): JsValue = internal.toString.toJson
+  }
+
+  implicit object BinaryDataFmt extends JsonFormat[BinaryData] {
+    def read(json: JsValue): BinaryData = BinaryData(me json2String json)
+    def write(internal: BinaryData): JsValue = internal.toString.toJson
   }
 
   implicit object ECPointFmt extends JsonFormat[ECPoint] {
@@ -90,7 +95,6 @@ object ImplicitJsonFormats { me =>
   implicit val pointFmt = jsonFormat[ECPoint, Point](Point.apply, "value")
   implicit val publicKeyFmt = jsonFormat[Point, Boolean, PublicKey](PublicKey.apply, "value", "compressed")
   implicit val MilliSatoshiFmt = jsonFormat[Long, MilliSatoshi](MilliSatoshi.apply, "amount")
-  implicit val binaryDataFmt = jsonFormat[Seq[Byte], BinaryData](BinaryData.apply, "data")
 
   implicit val invoiceFmt = jsonFormat[Option[String], PublicKey, MilliSatoshi, BinaryData,
     Invoice](Invoice.apply, "message", "nodeId", "sum", "paymentHash")

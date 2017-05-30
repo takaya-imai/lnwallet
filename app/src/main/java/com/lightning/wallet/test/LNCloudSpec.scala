@@ -32,6 +32,7 @@ class LNCloudSpec {
     def putInfo(info: ExtendedPaymentInfo): Unit = ???
     def updatePaymentStatus(hash: BinaryData, status: String): Unit = ???
     def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit = ???
+    def newPreimage = BinaryData(random getBytes 32)
   }
 
   val hops = Vector(

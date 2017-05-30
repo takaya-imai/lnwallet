@@ -24,10 +24,11 @@ object StorageTable extends Table {
 
 object PaymentSpecTable extends Table {
   import com.lightning.wallet.ln.PaymentSpec.{SUCCESS, HIDDEN}
-  val (table, data, hash, status, stamp, searchData) = ("payments", "data", "hash", "status", "stamp", "search")
-  def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 20)"
+  val (table, data, hash, status, stamp, searchData, count) = ("payments", "data", "hash", "status", "stamp", "search", "count")
+  def selectVirtualSql: String = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 25)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 100"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
+  def selectCountSql = s"SELECT COUNT(*) AS $count FROM $table"
 
   // Hidden -> Visible -> Failed or Success
   // Data must be updated in case of route switches

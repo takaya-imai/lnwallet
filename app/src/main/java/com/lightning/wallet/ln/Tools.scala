@@ -100,7 +100,7 @@ case class ChannelKit(chan: Channel) { me =>
     def feedForward(message: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize message)
   }
 
-  val restartListener = new SocketListener {
+  val restartSocketListener = new SocketListener {
     override def onDisconnect = Obs.just(Tools log "Restarting socket")
       .delay(5.seconds).doOnTerminate(socket.start).subscribe(none)
   }
@@ -113,7 +113,8 @@ case class ChannelKit(chan: Channel) { me =>
   handler.listeners += new StateMachineListener {
     override def onBecome: PartialFunction[Transition, Unit] = {
       case (_, _, TransportHandler.HANDSHAKE, TransportHandler.WAITING_CYPHERTEXT) =>
-        me send Init(globalFeatures = LNParams.globalFeatures, localFeatures = LNParams.localFeatures)
+        Tools log s"Handle handshake phase completed, now sending Init message"
+        me send Init(LNParams.globalFeatures, LNParams.localFeatures)
     }
 
     override def onError = {

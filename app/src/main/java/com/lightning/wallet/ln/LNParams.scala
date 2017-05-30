@@ -4,6 +4,7 @@ import fr.acinq.bitcoin._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import com.lightning.wallet.ln.crypto.Digests
 import com.lightning.wallet.Utils.app
 
 
@@ -40,7 +41,6 @@ object LNParams {
   val localFeatures = "03"
   val globalFeatures = ""
 
-  def myHtlcExpiry = broadcaster.currentHeight + untilExpiryBlocks
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
@@ -49,8 +49,9 @@ object LNParams {
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
   }
 
-  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
-    derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
+  def myHtlcExpiry = broadcaster.currentHeight + untilExpiryBlocks
+  def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")
+  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (n <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, n)

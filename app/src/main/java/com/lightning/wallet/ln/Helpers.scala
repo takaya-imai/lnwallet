@@ -192,7 +192,7 @@ object Helpers { me =>
         commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint,
         remoteCommit.spec)
 
-      require(remoteCommitTx.tx.txid == tx.txid, "Txid mismatch, cannot recompute the current remote commit tx")
+      require(remoteCommitTx.tx.txid == tx.txid, "Txid mismatch, cannot recompute the current remote commit")
       val localPrivkey = Generators.derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
       val remotePubkey = Generators.derivePubKey(commitments.remoteParams.paymentBasepoint, remoteCommit.remotePerCommitmentPoint)
       val remoteRevocationPubkey = Generators.revocationPubKey(commitments.localParams.revocationSecret.toPoint,

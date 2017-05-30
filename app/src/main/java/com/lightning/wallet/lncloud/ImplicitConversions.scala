@@ -11,7 +11,7 @@ import android.text.Html
 object ImplicitConversions {
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
 
-  implicit def rawScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
+  implicit def bitcoinLibScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
     new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis)
 
   implicit def bitcoinjTx2bitcoinLibTx(bitcoinjTx: org.bitcoinj.core.Transaction): fr.acinq.bitcoin.Transaction =
