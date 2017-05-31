@@ -39,7 +39,7 @@ class LNOpsActivity extends TimerActivity { me =>
     val channelOpsListener = new StateMachineListener { self =>
       override def onBecome: PartialFunction[Transition, Unit] = {
         case (_, WaitFundingConfirmedData(_, _, _, fundingTx, commitments), _, WAIT_FUNDING_DONE) =>
-          def showOpeningInfoOnUi(cmd: CMDDepth) = me runOnUiThread showOpeningInfo(commitments, cmd)
+          def showOpeningInfoOnUi(depth: CMDDepth) = me runOnUiThread showOpeningInfo(commitments, depth)
 
           app.kit.wallet addWatchedScript commitments.commitInput.txOut.publicKeyScript
           kit.subscriptions += watchTxDepthLocal(fundingTx.txid.toString).subscribe(kit.chan process _)
@@ -55,10 +55,10 @@ class LNOpsActivity extends TimerActivity { me =>
     channelOpsListener onBecome start
   }
 
-  private def showOpeningInfo(c: Commitments, cmd: CMDDepth) = {
+  private def showOpeningInfo(c: Commitments, depth: CMDDepth) = {
     val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
     val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
-    val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)
+    val humanCurrentState = app.plurOrZero(txsConfs, depth.depth)
     val humanCanReceive = app.plurOrZero(txsConfs, 6)
 
     lnOpsAction setText ln_forse_close

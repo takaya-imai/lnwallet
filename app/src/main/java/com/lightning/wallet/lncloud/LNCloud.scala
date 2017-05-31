@@ -187,9 +187,7 @@ class LNCloud(url: String) {
       case err => throw new ProtocolException
     }
 
-  def getRawData(key: String) = call("data/state", _.head, "key" -> key)
-  def getPreimage(hash: String) = call("data/preimage", _.head.convertTo[BinaryData], "hash" -> hash)
-
+  def getRates = call("rates", _.head)
   def findNodes(aliasQuery: String) = call(command = "router/nodes",
     vector => for (json <- vector) yield json.convertTo[AnnounceChansNum],
     "query" -> aliasQuery)
@@ -200,8 +198,9 @@ class LNCloud(url: String) {
 }
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
-  override def getRawData(key: String) = super.getRawData(key).onErrorResumeNext(_ => failover getRawData key)
-  override def getPreimage(hash: String) = super.getPreimage(hash).onErrorResumeNext(_ => failover getPreimage hash)
+  override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
+  override def findNodes(aliasQuery: String) = super.findNodes(aliasQuery)
+    .onErrorResumeNext(_ => failover findNodes aliasQuery)
 }
 
 object LNCloud {

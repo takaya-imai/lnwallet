@@ -6,6 +6,7 @@ import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.ln.crypto.Digests
 import com.lightning.wallet.Utils.app
+import scala.util.Try
 
 
 object LNParams {
@@ -49,7 +50,7 @@ object LNParams {
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
   }
 
-  def myHtlcExpiry = broadcaster.currentHeight + untilExpiryBlocks
+  def myHtlcExpiry: Int = broadcaster.currentHeight + untilExpiryBlocks
   def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 

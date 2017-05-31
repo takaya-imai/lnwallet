@@ -2,6 +2,7 @@ package com.lightning.wallet.lncloud
 
 import spray.json._
 import spray.json.DefaultJsonProtocol._
+
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket}
@@ -111,8 +112,8 @@ object ImplicitJsonFormats { me =>
   implicit val incomingPaymentSpecFmt = jsonFormat[Invoice, BinaryData, String,
     IncomingPaymentSpec](IncomingPaymentSpec.apply, "invoice", "preimage", "kind")
 
-  implicit val ratesFmt = jsonFormat[RatesMap, Seq[Double], Coin, Coin, Long,
-    Rates](Rates.apply, "exchange", "feeHistory", "feeLive", "feeRisky", "stamp")
+  implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
+    Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
   implicit val pingLNCLoudAct = jsonFormat[String, String,
     PingCloudAct](PingCloudAct.apply, "data", "kind")
@@ -122,9 +123,4 @@ object ImplicitJsonFormats { me =>
 
   implicit val lbCloudDataPrivateFmt = jsonFormat[List[LNCloudAct], String,
     LNCloudDataPrivate](LNCloudDataPrivate.apply, "acts", "url")
-
-  implicit val lastRateFmt = jsonFormat[Double, LastRate](LastRate, "last")
-  implicit val bitpayRateFmt = jsonFormat[String, Double, BitpayRate](BitpayRate, "code", "rate")
-  implicit val bitaverageFmt = jsonFormat[LastRate, LastRate, LastRate, Bitaverage](Bitaverage, "USD", "EUR", "CNY")
-  implicit val blockchainFmt = jsonFormat[LastRate, LastRate, LastRate, Blockchain](Blockchain, "USD", "EUR", "CNY")
 }

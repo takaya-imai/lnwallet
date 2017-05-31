@@ -12,9 +12,9 @@ import com.lightning.wallet.Utils.{app, sumIn}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
-import com.lightning.wallet.lncloud.{FailoverLNCloud, LNCloudPrivateSaver}
 import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
+import com.lightning.wallet.lncloud.LNCloudPrivateSaver
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.Utils.humanPubkey
@@ -39,18 +39,15 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   lazy val selectPeer = getString(ln_select_peer)
   private[this] val adapter = new NodesAdapter
 
-  private[this] val privateCloudTry =
-    for (data <- LNCloudPrivateSaver.tryGetObject)
-      yield new FailoverLNCloud(LNParams.lnCloud, data.url)
+  private[this] var whenBackPressed =
+    anyToRunnable(super.onBackPressed)
 
   type AnnounceChansNumVec = Vector[AnnounceChansNum]
   private[this] val worker = new ThrottledWork[AnnounceChansNumVec] {
-    def work(searchInput: String) = privateCloudTry getOrElse LNParams.lnCloud findNodes searchInput
+    def work(radixNodeAliasOrNodeIdQuery: String) = actualCloud findNodes radixNodeAliasOrNodeIdQuery
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)
+    lazy val actualCloud = LNCloudPrivateSaver.actualCloudObject
   }
-
-  private[this] var whenBackPressed =
-    anyToRunnable(super.onBackPressed)
 
   def react(query: String) = worker onNewQuery query
   def notifySubTitle(subtitle: String, infoType: Int) = {

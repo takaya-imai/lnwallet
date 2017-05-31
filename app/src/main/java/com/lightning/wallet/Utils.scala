@@ -222,20 +222,19 @@ trait ToolbarActivity extends TimerActivity { me =>
     def onTxFail(exc: Throwable): Unit
     def processTx(password: String, fee: Coin)
 
+    import RatesSaver.rates
     def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
-      val Rates(_, _, feeLive: Coin, feeRisky: Coin, _) = RatesSaver.rates
-      <(makeTx(password, feeRisky), onTxFail) { feeEstimate: Transaction =>
-        // Fee is taken per 1000 bytes of data so we normalize it with respect to tx size
-        val riskyFinalFee = feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
-        val liveFinalFee = feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+      <(makeTx(password, rates.feeRisky), onTxFail) { feeEstimate: Transaction =>
+        val riskyFinalFee = rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val liveFinalFee = rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
 
         // Mark fees as red because we are the ones who always pay them
         val riskyFeePretty = sumOut format withSign(riskyFinalFee)
         val liveFeePretty = sumOut format withSign(liveFinalFee)
 
         // Show formatted fees in satoshis as well as in current fiat value
-        val feeRiskyComplete = getString(fee_risky).format(humanFiat(inFiat(feeRisky), ""), riskyFeePretty)
-        val feeLiveComplete = getString(fee_live).format(humanFiat(inFiat(feeLive), ""), liveFeePretty)
+        val feeRiskyComplete = getString(fee_risky).format(humanFiat(inFiat(rates.feeRisky), ""), riskyFeePretty)
+        val feeLiveComplete = getString(fee_live).format(humanFiat(inFiat(rates.feeLive), ""), liveFeePretty)
         val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
 
         val form = getLayoutInflater.inflate(R.layout.frag_input_send_confirm, null)
@@ -244,7 +243,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         lst setAdapter new ArrayAdapter(me, slot, feesOptions)
         lst.setItemChecked(0, true)
 
-        def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) feeRisky else feeLive)
+        def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) rates.feeRisky else rates.feeLive)
         lazy val dialog: Builder = mkChoiceDialog(ok = rm(alert)(proceed), none, dialog_pay, dialog_cancel)
         lazy val alert = mkForm(dialog, getString(title_fee).format(pay cute sumOut).html, form)
         alert

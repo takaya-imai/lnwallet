@@ -2,8 +2,6 @@ package com.lightning.wallet.lncloud
 
 import spray.json._
 import scala.concurrent.duration._
-import com.lightning.wallet.Utils._
-import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
@@ -12,8 +10,8 @@ import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
-import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.ln.LNParams
+import com.lightning.wallet.ln.~
 import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
@@ -47,83 +45,47 @@ trait Saver {
 }
 
 object LNCloudPublicSaver extends Saver {
-  def tryGetObject = tryGet map to[LNCloudData]
-  def saveObject(data: LNCloudData) = save(data.toJson)
+  def tryGetObject: Try[LNCloudData] = tryGet map to[LNCloudData]
+  def saveObject(data: LNCloudData): Unit = save(data.toJson)
   val KEY = "lnCloudPublic"
 }
 
 object LNCloudPrivateSaver extends Saver {
-  def tryGetObject = tryGet map to[LNCloudDataPrivate]
-  def saveObject(data: LNCloudDataPrivate) = save(data.toJson)
+  def tryGetObject: Try[LNCloudDataPrivate] = tryGet map to[LNCloudDataPrivate]
+  def saveObject(data: LNCloudDataPrivate): Unit = save(data.toJson)
   def remove = LNParams.db.change(StorageTable.killSql, KEY)
   val KEY = "lnCloudPrivate"
+
+  def actualCloudObject: LNCloud = tryGetObject.map {
+    data => new FailoverLNCloud(LNParams.lnCloud, data.url)
+  } getOrElse LNParams.lnCloud
 }
 
-trait Rate { def now: Double }
-case class LastRate(last: Double) extends Rate { def now = last }
-case class BitpayRate(code: String, rate: Double) extends Rate { def now = rate }
+case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
+  lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
+  lazy val cutOutliers = Coin parseCoin statistics.meanWithin(feeHistory, stdDevs = 1)
+  lazy val feeLive = if (feeHistory.isEmpty) Coin valueOf 50000 else cutOutliers
+  lazy val feeRisky = feeLive div 2
+}
 
-trait ExchangeRateProvider { val usd, eur, cny: Rate }
-case class Bitaverage(usd: LastRate, eur: LastRate, cny: LastRate) extends ExchangeRateProvider
-case class Blockchain(usd: LastRate, eur: LastRate, cny: LastRate) extends ExchangeRateProvider
-case class Rates(exchange: RatesMap, feeHistory: Seq[Double], feeLive: Coin, feeRisky: Coin, stamp: Long)
-
-object RatesSaver extends Saver { me =>
-  type BitpayRatesList = List[BitpayRate]
-  type BitpayRatesMap = Map[String, BitpayRate]
+object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
+  type FeerateMap = Map[String, Double]
+  type Result = (FeerateMap, RatesMap)
   val KEY = "rates"
 
-  def toRates(src: ExchangeRateProvider): RatesMap = Map(strDollar -> src.usd.now, strEuro -> src.eur.now, strYuan -> src.cny.now)
-  def toRates(map: BitpayRatesMap): RatesMap = Map(strDollar -> map("USD").now, strEuro -> map("EUR").now, strYuan -> map("CNY").now)
-  def bitpayNormalize(src: BitpayRatesList): RatesMap = toRates(src.map(bitpayRate => bitpayRate.code -> bitpayRate).toMap)
+  private val updatePeriod: FiniteDuration = 20.minutes
+  var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
 
-  private def pickExchangeRate = retry(obsOn(random nextInt 3 match {
-    case 0 => me toRates to[Blockchain](get("https://blockchain.info/ticker").body)
-    case 1 => me toRates to[Bitaverage](get("https://api.bitcoinaverage.com/ticker/global/all").body)
-    case _ => me bitpayNormalize jsonFieldAs[BitpayRatesList]("data")(get("https://bitpay.com/rates").body)
-  }, IOScheduler.apply), pickInc, 1 to 3)
+  def process = {
+    def getResult = for (raw <- LNCloudPrivateSaver.actualCloudObject.getRates) yield raw.convertTo[Result]
+    def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
+    def delayed = withDelay(periodically, rates.stamp, updatePeriod.toMillis)
 
-  private def pickFeeRate(orderNum: Int) = obsOn(orderNum match {
-    case 0 => jsonFieldAs[Double]("9")(get("https://bitlox.io/api/utils/estimatefee?nbBlocks=9").body)
-    case 1 => jsonFieldAs[Double]("9")(get("https://live.coin.space/api/utils/estimatefee?nbBlocks=9").body)
-    case 2 => jsonFieldAs[Double]("9")(get("https://blockexplorer.com/api/utils/estimatefee?nbBlocks=9").body)
-    case _ => jsonFieldAs[Double]("9")(get("https://localbitcoinschain.com/api/utils/estimatefee?nbBlocks=9").body)
-  }, IOScheduler.apply)
-
-  private val defaultFee = 0.0005D
-  private val updatePeriod = 30.minutes
-  private val statistics = new Statistics[Double] { def extract(item: Double) = item }
-  var rates = tryGet map to[Rates] getOrElse updatedRates(Nil, Map.empty).copy(stamp = 0L)
-
-  private def updatedRates(fees: Seq[Double], fiat: RatesMap) = {
-    val fees1 = if (fees.isEmpty) defaultFee :: Nil else fees take 6
-    val feeLive = Coin parseCoin statistics.meanWithin(fees1, stdDevs = 1)
-    Rates(fiat, fees1, feeLive, feeLive div 2, System.currentTimeMillis)
-  }
-
-  private def startPeriodicDataUpdate(initDelay: Long) = {
-    // Periodically update fee and fiat rates, initially delayed to limit network activity
-    def attempts = retry(pickFeeRate(random nextInt 4), pickInc, 1 to 3).zip(pickExchangeRate)
-    def periodic = withDelay(attempts.repeatWhen(_ delay updatePeriod), initDelay, updatePeriod.toMillis)
-
-    periodic foreach { case (fee1, fiat) =>
-      val updatedFees = fee1 +: rates.feeHistory
-      rates = updatedRates(updatedFees, fiat)
+    delayed foreach { case newFee ~ newFiat =>
+      val updatedFeeHistory = newFee("9") +: rates.feeHistory take 6
+      rates = Rates(updatedFeeHistory, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }
-
-  def process =
-    // If fees data is too old we reload all the fees from all the sources once, then proceed normally
-    if (System.currentTimeMillis - rates.stamp < 5.days.toMillis) startPeriodicDataUpdate(rates.stamp) else {
-      def allFees = for (ordNum <- 0 until 4) yield pickFeeRate(ordNum).map(Option.apply).onErrorReturn(_ => None)
-      def attempt = Obs.zip(Obs from allFees).map(_.flatten).zip(pickExchangeRate)
-      startPeriodicDataUpdate(System.currentTimeMillis)
-
-      attempt foreach { case (fees, fiat) =>
-        rates = updatedRates(fees, fiat)
-        save(rates.toJson)
-      }
-    }
 }
