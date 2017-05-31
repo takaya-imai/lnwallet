@@ -179,13 +179,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_noaddress, null, false)
     val builder = negPosBld(dialog_cancel, dialog_next)
 
-    def openChannel(amountSat: Long) = Future {
-      val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
-      val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
-      val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-      chan process CMDOpenChannel(localParams, random getBytes 32, 10000L, pushMsat = 0L, their, amountSat)
-    }
-
     def showFundingForm = {
       val alert = mkForm(builder, titleTop, content)
       val rateManager = new RateManager(content)
@@ -199,6 +192,13 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       val ok = alert getButton BUTTON_POSITIVE
       ok setOnClickListener onButtonTap(attempt)
+    }
+
+    def openChannel(amountSat: Long) = Future {
+      val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
+      val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
+      val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
+      chan process CMDOpenChannel(localParams, random getBytes 32, 10000L, pushMsat = 0L, their, amountSat)
     }
 
     // Pick a sum

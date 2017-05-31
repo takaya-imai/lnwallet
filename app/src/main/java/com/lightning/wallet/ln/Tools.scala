@@ -89,7 +89,7 @@ object Features {
 }
 
 case class ChannelKit(chan: Channel) { me =>
-  var subscriptions: Set[Subscription] = Set.empty
+  var subscripts: Set[Subscription] = Set.empty
   private val address = chan.data.announce.addresses.head
   lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
     def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
