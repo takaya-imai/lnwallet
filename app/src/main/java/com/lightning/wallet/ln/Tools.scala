@@ -70,7 +70,7 @@ object MSat {
   implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat format BigDecimal(msat.amount) / satFactor
   implicit def satoshi2String(msat: Satoshi): String = baseSat format BigDecimal(msat.amount)
   implicit def coin2String(coin: Coin): String = baseSat format coin.value
-  def withSign(sum: String) = s"ⓢ $sum"
+  def withSign(sum: String) = s"ⓢ\u00A0$sum"
 }
 
 object Features {
@@ -146,13 +146,16 @@ case class ChannelKit(chan: Channel) { me =>
     override def onError = {
       case chanRelated: Throwable =>
         Tools log s"Chan error $chanRelated"
+        chanRelated.printStackTrace
     }
   }
 
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown
-    case _ => chan process msg
+    case _ =>
+      println(s"---- $msg")
+      chan process msg
   }
 
   def send(msg: LightningMessage) = {

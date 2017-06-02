@@ -443,12 +443,12 @@ case class EmptyAddrData(adr: Address) extends PayData {
   def cn = app.kit.currentBalance
 }
 
-case class P2WSHData(cn: Coin, witScriptHash: Script) extends PayData {
+case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {
   def colored(direction: String) = direction format app.getString(txs_p2wsh)
 
   def sendRequest: SendRequest = {
     val funding = new Transaction(app.params)
-    funding.addOutput(cn, witScriptHash)
+    funding.addOutput(cn, pay2wsh)
     SendRequest forTx funding
   }
 }

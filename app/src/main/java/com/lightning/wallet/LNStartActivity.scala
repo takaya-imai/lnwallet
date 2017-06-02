@@ -14,8 +14,9 @@ import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
 import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
-import com.lightning.wallet.lncloud.LNCloudPrivateSaver
-import com.lightning.wallet.ln.Scripts.multiSig2of2
+import com.lightning.wallet.lncloud.{LNCloudPrivateSaver, RatesSaver}
+import com.lightning.wallet.ln.Scripts.{ScriptEltSeq, multiSig2of2}
+
 import concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
@@ -196,9 +197,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
     def openChannel(amountSat: Long) = Future {
       val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
+      val initFeeratePerKw = LNParams feerateKB2Kw RatesSaver.rates.feeLive.value
       val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
       val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-      chan process CMDOpenChannel(localParams, random getBytes 32, 10000L, pushMsat = 0L, their, amountSat)
+      chan process CMDOpenChannel(localParams, random getBytes 32, 10000, pushMsat = 0L, their, amountSat)
     }
 
     // Pick a sum
@@ -206,7 +208,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFeerate(chan: Channel, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = runOnUiThread {
-    val scriptPubKey = Script write multiSig2of2(cmd.localParams.fundingPrivKey.publicKey, accept.fundingPubkey)
+    val multisig: ScriptEltSeq = multiSig2of2(cmd.localParams.fundingPrivKey.publicKey, accept.fundingPubkey)
+    val scriptPubKey = Script.write(Script pay2wsh multisig)
 
     val processor = new TxProcessor {
       val funding = Coin valueOf cmd.fundingAmountSat

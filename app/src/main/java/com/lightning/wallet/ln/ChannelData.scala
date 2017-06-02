@@ -49,8 +49,8 @@ case class WaitFundingConfirmedData(announce: NodeAnnouncement, our: Option[Fund
                                     fundingTx: Transaction, commitments: Commitments) extends ChannelData with HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
-                      announced: Boolean, localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],
-                      afterCommit: Option[Any] = None) extends ChannelData with HasCommitments
+                      localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown],
+                      announced: Boolean) extends ChannelData with HasCommitments
 
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends ChannelData with HasCommitments

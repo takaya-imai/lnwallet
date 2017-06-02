@@ -75,13 +75,13 @@ object Helpers { me =>
   }
 
   object Closing {
-    def makeTx(descr: String) = (attempt: TransactionWithInputInfo) => {
-      val result = Try(attempt).filter(Scripts.checkSpendable(_).isSuccess)
-      for (error <- result.failed) Tools log s"$descr generation error: $error"
-      result.map(_.tx).toOption
+    def makeTx(descr: String) = (txInfo: TransactionWithInputInfo) => {
+      val result = Try(txInfo).filter(Scripts.checkSpendable(_).isSuccess).map(_.tx)
+      for (error <- result.failed) Tools log s"Generation error: $error of $descr"
+      result.toOption
     }
 
-    def isValidFinalScriptPubkey(scriptPubKey: BinaryData): Boolean = Try(Script parse scriptPubKey) match {
+    def isValidFinalScriptPubkey(scriptPubKey: BinaryData) = Try(Script parse scriptPubKey) match {
       case Success(OP_DUP :: OP_HASH160 :: OP_PUSHDATA(pkh, _) :: OP_EQUALVERIFY :: OP_CHECKSIG :: Nil) => pkh.data.size == 20
       case Success(OP_HASH160 :: OP_PUSHDATA(scriptHash, _) :: OP_EQUAL :: Nil) => scriptHash.data.size == 20
       case Success(OP_0 :: OP_PUSHDATA(pubkeyHash, _) :: Nil) if pubkeyHash.length == 20 => true
@@ -108,10 +108,11 @@ object Helpers { me =>
 
       require(isValidFinalScriptPubkey(localScriptPubkey), "Invalid localScriptPubkey")
       require(isValidFinalScriptPubkey(remoteScriptPubkey), "Invalid remoteScriptPubkey")
+      val dustLimitSat = math.max(commitments.localParams.dustLimitSatoshis,
+        commitments.remoteParams.dustLimitSatoshis)
 
-      val dustLimitSat = math.max(commitments.localParams.dustLimitSatoshis, commitments.remoteParams.dustLimitSatoshis)
-      val closingTx = makeFunderClosingTx(commitments.commitInput, localScriptPubkey, remoteScriptPubkey,
-        Satoshi(dustLimitSat), closingFee, commitments.localCommit.spec)
+      val closingTx = makeFunderClosingTx(commitments.commitInput, localScriptPubkey,
+        remoteScriptPubkey, Satoshi(dustLimitSat), closingFee, commitments.localCommit.spec)
 
       val localClosingSig = Scripts.sign(closingTx, commitments.localParams.fundingPrivKey)
       val closingSigned = ClosingSigned(commitments.channelId, closingFee.amount, localClosingSig)
@@ -122,8 +123,8 @@ object Helpers { me =>
                             dustLimit: Satoshi, closingFee: Satoshi, spec: CommitmentSpec): ClosingTx = {
 
       require(spec.htlcs.isEmpty, "No HTLCs allowed")
-      val toRemoteAmount = Satoshi(spec.toRemoteMsat * satFactor)
-      val toLocalAmount = Satoshi(spec.toLocalMsat * satFactor) - closingFee
+      val toRemoteAmount = Satoshi(spec.toRemoteMsat / satFactor)
+      val toLocalAmount = Satoshi(spec.toLocalMsat / satFactor) - closingFee
       val toLocalOutput = if (toLocalAmount >= dustLimit) TxOut(toLocalAmount, localScriptPubKey) :: Nil else Nil
       val toRemoteOutput = if (toRemoteAmount >= dustLimit) TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil else Nil
       val input = TxIn(commitTxInput.outPoint, Array.emptyByteArray, sequence = 0xffffffffL) :: Nil
@@ -131,16 +132,12 @@ object Helpers { me =>
       ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
     }
 
-    def checkClosingSignature(commitments: Commitments, localScriptPubkey: BinaryData,
-                              remoteScriptPubkey: BinaryData, remoteClosingFee: Satoshi,
-                              remoteClosingSig: BinaryData): (Boolean, Transaction) = {
+    def checkClosingSignature(commitments: Commitments, localScriptPubkey: BinaryData, remoteScriptPubkey: BinaryData,
+                              remoteClosingFee: Satoshi, remoteClosingSig: BinaryData): Option[Transaction] = {
 
       val (closingTx, closingSigned) = makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
-      val signedClosingTx: ClosingTx = Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
+      makeTx("closing-with-remote-sig") apply Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
         commitments.remoteParams.fundingPubKey, closingSigned.signature, remoteClosingSig)
-
-      val check = Scripts checkSpendable signedClosingTx
-      (check.isSuccess, signedClosingTx.tx)
     }
 
     def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi) = {
@@ -240,20 +237,20 @@ object Helpers { me =>
   }
 
   object Funding {
-    def makeFundingInputInfo(fundingTxId: BinaryData, fundingTxOutputIndex: Int,
+    def makeFundingInputInfo(fundingTxHash: BinaryData, fundingTxOutputIndex: Int,
                              fundingSatoshis: Satoshi, fundingPubkey1: PublicKey,
                              fundingPubkey2: PublicKey): InputInfo = {
 
-      val fundingScript = Scripts.multiSig2of2(fundingPubkey1, fundingPubkey2)
-      val fundingTxOut = TxOut(fundingSatoshis, Script pay2wsh fundingScript)
-      val outPoint = OutPoint(fundingTxId, index = fundingTxOutputIndex)
-      InputInfo(outPoint, fundingTxOut, Script write fundingScript)
+      val multisig = Scripts.multiSig2of2(fundingPubkey1, fundingPubkey2)
+      val fundingTxOut = TxOut(fundingSatoshis, Script pay2wsh multisig)
+      val outPoint = OutPoint(fundingTxHash, fundingTxOutputIndex)
+      InputInfo(outPoint, fundingTxOut, Script write multisig)
     }
 
     // Assuming we are always a funder
     def makeFirstFunderCommitTxs(cmd: CMDOpenChannel, remoteParams: RemoteParams,
                                  fundingTxHash: BinaryData, fundingTxOutputIndex: Int,
-                                 remoteFirstPerCommitmentPoint: Point) = {
+                                 remoteFirstPoint: Point) = {
 
       val toLocalMsat = cmd.fundingAmountSat * satFactor - cmd.pushMsat
       val commitmentInput = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex,
@@ -264,7 +261,7 @@ object Helpers { me =>
       val localSpec = CommitmentSpec(feeratePerKw = cmd.initialFeeratePerKw, toLocalMsat = toLocalMsat, toRemoteMsat = cmd.pushMsat)
       val remoteSpec = CommitmentSpec(feeratePerKw = cmd.initialFeeratePerKw, toLocalMsat = cmd.pushMsat, toRemoteMsat = toLocalMsat)
       val (localCommitTx, _, _) = makeLocalTxs(0, cmd.localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
-      val (remoteCommitTx, _, _) = makeRemoteTxs(0, cmd.localParams, remoteParams, commitmentInput, remoteFirstPerCommitmentPoint, remoteSpec)
+      val (remoteCommitTx, _, _) = makeRemoteTxs(0, cmd.localParams, remoteParams, commitmentInput, remoteFirstPoint, remoteSpec)
       (localSpec, localCommitTx, remoteSpec, remoteCommitTx)
     }
   }

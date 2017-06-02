@@ -45,6 +45,7 @@ object LNParams {
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
+  def feerateKB2Kw(feeratePerKB: Long): Long = feeratePerKB / 2
   def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio

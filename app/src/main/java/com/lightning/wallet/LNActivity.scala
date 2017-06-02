@@ -76,7 +76,6 @@ with ListUpdater with SearchBar { me =>
   lazy val lnTitle = me getString ln_title
   //lazy val adapter = new LNAdapter
   private[this] var hasNfc = true
-  private[this] val TEXT = "text"
 
   // Adapter for ln txs list
 //  class LNAdapter extends BaseAdapter {
@@ -170,7 +169,7 @@ with ListUpdater with SearchBar { me =>
     //throw new Exception("test")
     //me exitTo classOf[LNStartActivity]
 
-    me exitTo classOf[LNOpsActivity]
+    //me exitTo classOf[LNOpsActivity]
 
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
@@ -229,7 +228,7 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  def goBitcoin(top: View) = me goTo classOf[BtcActivity]
+  def goBitcoin(top: View) = me goTo classOf[LNOpsActivity]
 
   override def onResume = wrap(super.onResume)(app.TransData.value = null)
 

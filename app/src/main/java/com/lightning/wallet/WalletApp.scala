@@ -3,13 +3,11 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
-
 import org.bitcoinj.uri.{BitcoinURIParseException, OptionalFieldValidationException}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, RequiredFieldValidationException}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.{Protos, Wallet}
-
 import listeners.TransactionConfidenceEventListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import org.bitcoinj.net.discovery.DnsDiscovery
@@ -23,21 +21,22 @@ import com.google.protobuf.ByteString
 import android.app.Application
 import android.widget.Toast
 import java.io.File
-
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import Context.CLIPBOARD_SERVICE
+import com.google.common.net.InetAddresses
 
 
 class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val params = org.bitcoinj.params.TestNet3Params.get
+  lazy val params = org.bitcoinj.params.RegTestParams.get
   var walletFile, chainFile: java.io.File = _
   var kit: WalletKit = _
 
   lazy val plur = getString(lang) match {
-    case "eng" | "esp" => (opts: Array[String], num: Int) => if (num == 1) opts(1) else opts(2)
-    case "chn" | "jpn" => (phraseOptions: Array[String], num: Int) => phraseOptions(1)
-    case "rus" | "ukr" => (phraseOptions: Array[String], num: Int) =>
+    case "eng" | "esp" => (opts: Array[String], num: Long) => if (num == 1) opts(1) else opts(2)
+    case "chn" | "jpn" => (phraseOptions: Array[String], num: Long) => phraseOptions(1)
+    case "rus" | "ukr" => (phraseOptions: Array[String], num: Long) =>
 
       val reminder100 = num % 100
       val reminder10 = reminder100 % 10
@@ -50,7 +49,7 @@ class WalletApp extends Application { me =>
   // Both these methods may throw
   def getTo(base58: String) = Address.fromBase58(params, base58)
   def isAlive = if (null == kit) false else kit.state match { case STARTING | RUNNING => true case _ => false }
-  def plurOrZero(opts: Array[String], number: Int) = if (number > 0) plur(opts, number) format number else opts(0)
+  def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
   def toast(message: Int) = Toast.makeText(me, message, Toast.LENGTH_LONG).show
 
   // Working with clipboard
@@ -106,8 +105,8 @@ class WalletApp extends Application { me =>
     }
 
     def useCheckPoints(time: Long) = {
-      val pts = getAssets open "checkpoints-testnet.txt"
-      CheckpointManager.checkpoint(params, pts, store, time)
+//      val pts = getAssets open "checkpoints-testnet.txt"
+//      CheckpointManager.checkpoint(params, pts, store, time)
     }
 
     def setupAndStartDownload = {
@@ -116,7 +115,11 @@ class WalletApp extends Application { me =>
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addTransactionConfidenceEventListener Vibr.generalTracker
       wallet.autosaveToFile(walletFile, 500, MILLISECONDS, null)
-      peerGroup addPeerDiscovery new DnsDiscovery(params)
+      //peerGroup addPeerDiscovery new DnsDiscovery(params)
+
+      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
+      peerGroup.addAddress(pa1)
+
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0
       peerGroup setPingIntervalMsec 10000
