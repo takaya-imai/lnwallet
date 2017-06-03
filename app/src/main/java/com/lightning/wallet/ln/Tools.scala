@@ -95,9 +95,9 @@ case class ChannelKit(chan: Channel) { me =>
     def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
   }
 
-  private val keyPair = KeyPair(LNParams.nodePubKey, LNParams.nodePrivateKey.toBin)
+  private val keyPair = KeyPair(LNParams.nodePrivateKey.publicKey, LNParams.nodePrivateKey.toBin)
   val handler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
-    def feedForward(message: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize message)
+    def feedForward(msg: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize msg)
   }
 
   val restartSocketListener = new SocketListener {

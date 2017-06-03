@@ -60,7 +60,7 @@ class LNCloudSpec {
     PublicDataSaver.tryGetObject.map { savedData =>
       println(s"Got LNCloudData from db: $savedData")
 
-      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2:9002"), chan) {
+      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
         data = savedData
 
         override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
@@ -69,10 +69,10 @@ class LNCloudSpec {
       }
 
     } getOrElse {
-      val data1 = PublicData(info = None, tokens = Nil, acts = for (n <- (0 to 400).toList) yield CheckCloudAct(s"call $n"))
+      val data1 = PublicData(info = None, tokens = Nil, acts = for (n <- (0 to 400).toList) yield CheckCloudAct(s"call $n" getBytes "UTF-8"))
       println(s"Creating a new LNCloudData")
 
-      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2:9002"), chan) {
+      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
         data = data1
 
         override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
@@ -85,6 +85,6 @@ class LNCloudSpec {
   def allTests = {
     val cloud1 = getCloud
     println("preprocessing...")
-    cloud1 process CheckCloudAct("call a")
+    cloud1 process CheckCloudAct("call a" getBytes "UTF-8")
   }
 }

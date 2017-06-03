@@ -78,12 +78,12 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
 
     // No matter what the state is: do it if we have acts and tokens
     case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
-      val params = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature, body -> action.data.toString)
-      action.runPublic(params, me).doOnCompleted(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = ts, acts = rest),
-        onError = resolveError)
+      action.runPublic(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature,
+        body -> action.data.toString), me).doOnCompleted(me doProcess CMDStart).foreach(_ => onSuccess, onError)
 
       // 'data' may change while request is on so we always copy it
-      def resolveError(servError: Throwable) = servError.getMessage match {
+      def onSuccess = me stayWith data.copy(tokens = ts, acts = rest)
+      def onError(serverError: Throwable) = serverError.getMessage match {
         case "tokeninvalid" | "tokenused" => me stayWith data.copy(tokens = ts)
         case _ => me stayWith data
       }
@@ -111,10 +111,9 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
 
   // ADDING NEW TOKENS
 
-  def resolveSuccess(memo: BlindMemo) = {
-    val refill: List[ClearToken] => Unit = plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens)
-    getClearTokens(memo).doOnCompleted(me doProcess CMDStart).subscribe(refill, err => if (err.getMessage == "notfound") reset)
-  }
+  def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
+    .subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
+      serverError => if (serverError.getMessage == "notfound") reset)
 
   // TALKING TO SERVER
 
@@ -134,7 +133,7 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
     val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
 
     lnCloud.call("blindtokens/buy", response => Invoice parse json2String(response.head),
-      "seskey" -> memo.sesPubKeyHex, "tokens" -> json2String(memo.makeBlindTokens.toJson).hex)
+      "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.toString.hex)
       .filter(_.sum.amount < 25000000L).map(augmentInvoice(_, qty.toInt) -> memo)
   }
 
@@ -159,15 +158,15 @@ trait Pathfinder {
 // Concrete cloud acts
 
 trait LNCloudAct {
-  def runPublic(token: Seq[HttpParam], cloud: PublicPathfinder): Obs[Unit]
   def runPrivate(signature: Seq[HttpParam], cloud: PrivatePathfinder): Obs[Unit]
+  def runPublic(token: Seq[HttpParam], cloud: PublicPathfinder): Obs[Unit]
   val data: BinaryData
 }
 
 // Used for testing purposes
 case class CheckCloudAct(data: BinaryData, kind: String = "CheckCloudAct") extends LNCloudAct {
-  def runPrivate(params: Seq[HttpParam], cloud: PrivatePathfinder) = cloud.lnCloud.call("check", none, params:_*)
-  def runPublic(params: Seq[HttpParam], cloud: PublicPathfinder) = cloud.lnCloud.call("check", none, params:_*)
+  def runPrivate(params: Seq[HttpParam], cloud: PrivatePathfinder) = cloud.lnCloud.call("check", println, params:_*)
+  def runPublic(params: Seq[HttpParam], cloud: PublicPathfinder) = cloud.lnCloud.call("check", println, params:_*)
 }
 
 // This is a basic interface to cloud which does not require a channel

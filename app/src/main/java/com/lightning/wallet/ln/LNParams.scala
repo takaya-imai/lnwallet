@@ -3,31 +3,12 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import com.lightning.wallet.ln.crypto.Digests
 import com.lightning.wallet.Utils.app
 
 
 object LNParams {
-  lazy val bag: PaymentSpecBag = PaymentSpecWrap
-  lazy val broadcaster: Broadcaster = LocalBroadcaster
-  lazy val lnCloud = new LNCloud("http://10.0.2.2")
-
-  var nodePubKey: PublicKey = _
-  var nodePrivateKey: PrivateKey = _
-  var extendedNodeKey: ExtendedPrivateKey = _
-  var cloudPrivateKey: PrivateKey = _
-  var db: CipherOpenHelper = _
-
-  def isSetUp: Boolean = db != null
-  def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
-    cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
-    extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
-    db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
-    nodePrivateKey = extendedNodeKey.privateKey
-    nodePubKey = nodePrivateKey.publicKey
-  }
-
   val updateFeeMinDiffRatio = 0.25 // Must update
   val maxReserveToFundingRatio = 0.05 // %
   val reserveToFundingRatio = 0.01 // %
@@ -40,6 +21,25 @@ object LNParams {
   // Public, no initial sync
   val localFeatures = "03"
   val globalFeatures = ""
+
+  lazy val bag: PaymentSpecBag = PaymentSpecWrap
+  lazy val broadcaster: Broadcaster = LocalBroadcaster
+  lazy val lnCloud = new LNCloud("http://10.0.2.2")
+
+  var nodePrivateKey: PrivateKey = _
+  var cloudPrivateKey: PrivateKey = _
+  var extendedNodeKey: ExtendedPrivateKey = _
+  var db: CipherOpenHelper = _
+  var cloud: LNCloud = _
+
+  def isSetUp: Boolean = db != null
+  def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
+    cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
+    extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
+    db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
+    nodePrivateKey = extendedNodeKey.privateKey
+    cloud = currentLNCloud
+  }
 
   // LNCLOUD AND PATHFINDER
 

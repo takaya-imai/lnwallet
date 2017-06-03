@@ -57,13 +57,6 @@ object PrivateDataSaver extends Saver {
   val KEY = "lnCloudPrivate"
 }
 
-case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
-  lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
-  lazy val cutOutliers = Coin parseCoin statistics.meanWithin(feeHistory, stdDevs = 1)
-  lazy val feeLive = if (feeHistory.isEmpty) Coin valueOf 50000 else cutOutliers
-  lazy val feeRisky = feeLive div 2
-}
-
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
@@ -74,7 +67,7 @@ object RatesSaver extends Saver {
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
 
   def process = {
-    def getResult = for (raw <- LNParams.currentLNCloud.getRates) yield raw.convertTo[Result]
+    def getResult: Obs[Result] = for (rates <- LNParams.cloud.getRates) yield rates.convertTo[Result]
     def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
     def delayed = withDelay(periodically, rates.stamp, updatePeriod.toMillis)
 
@@ -84,4 +77,11 @@ object RatesSaver extends Saver {
       save(rates.toJson)
     }
   }
+}
+
+case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
+  lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
+  lazy val cutOutliers = Coin parseCoin statistics.meanWithin(feeHistory, stdDevs = 1)
+  lazy val feeLive = if (feeHistory.isEmpty) Coin valueOf 50000 else cutOutliers
+  lazy val feeRisky = feeLive div 2
 }
