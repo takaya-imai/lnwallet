@@ -12,17 +12,18 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
+import org.bitcoinj.core.{ECKey, PeerAddress, PeerGroup}
 
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 import com.github.kevinsawicki.http.HttpRequest.post
 import rx.lang.scala.schedulers.IOScheduler
+import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
-import org.bitcoinj.core.ECKey
 import scala.util.Success
 
 
@@ -41,7 +42,7 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
     case (PrivateData(action :: rest, _), CMDStart) =>
       val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 action.data, LNParams.cloudPrivateKey)
       val params = Seq("sig" -> signature.toString, "key" -> LNParams.cloudPrivateKey.publicKey.toString, body -> action.data.toString)
-      action.runPrivate(params, me).doOnCompleted(me doProcess CMDStart).subscribe(_ => me stayWith data.copy(acts = rest), none)
+      action.run(params, lnCloud).doOnCompleted(me doProcess CMDStart).subscribe(_ => me stayWith data.copy(acts = rest), none)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -73,16 +74,15 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
     case PublicData(None, tokens, _) ~ Tuple2(spec: OutgoingPaymentSpec, memo: BlindMemo) =>
-      me stayWith data.copy(info = Some(spec.invoice -> memo), tokens = tokens)
+      me stayWith data.copy(info = Some(spec.invoice, memo), tokens = tokens)
       channel doProcess SilentAddHtlc(spec)
 
     // No matter what the state is: do it if we have acts and tokens
     case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
-      action.runPublic(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature,
-        body -> action.data.toString), me).doOnCompleted(me doProcess CMDStart).foreach(_ => onSuccess, onError)
+      val params = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature, body -> action.data.toString)
+      action.run(params, lnCloud).doOnCompleted(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = ts, acts = rest), onError)
 
       // 'data' may change while request is on so we always copy it
-      def onSuccess = me stayWith data.copy(tokens = ts, acts = rest)
       def onError(serverError: Throwable) = serverError.getMessage match {
         case "tokeninvalid" | "tokenused" => me stayWith data.copy(tokens = ts)
         case _ => me stayWith data
@@ -142,9 +142,6 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
       "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
 }
 
-// Pathfinder needs a channel reference
-// to search for outgoing routes
-
 trait Pathfinder {
   val lnCloud: LNCloud
   val channel: Channel
@@ -157,23 +154,25 @@ trait Pathfinder {
 
 // Concrete cloud acts
 
-trait LNCloudAct {
-  def runPrivate(signature: Seq[HttpParam], cloud: PrivatePathfinder): Obs[Unit]
-  def runPublic(token: Seq[HttpParam], cloud: PublicPathfinder): Obs[Unit]
-  val data: BinaryData
+case class CheckCloudAct(data: BinaryData, kind: String = "CheckCloudAct") extends LNCloudAct {
+  def run(params: Seq[HttpParam], cloud: LNCloud): Obs[Unit] = cloud.call("check", println, params:_*)
 }
 
-// Used for testing purposes
-case class CheckCloudAct(data: BinaryData, kind: String = "CheckCloudAct") extends LNCloudAct {
-  def runPrivate(params: Seq[HttpParam], cloud: PrivatePathfinder) = cloud.lnCloud.call("check", println, params:_*)
-  def runPublic(params: Seq[HttpParam], cloud: PublicPathfinder) = cloud.lnCloud.call("check", println, params:_*)
+trait LNCloudAct {
+  // Sending data to server using either token or sig auth
+  def run(params: Seq[HttpParam], cloud: LNCloud): Obs[Unit]
+  val data: BinaryData
 }
 
 // This is a basic interface to cloud which does not require a channel
 // failover invariant will fall back to default in case of failure
 
-class LNCloud(url: String) {
-  def http(way: String) = post(s"$url:9001/v1/$way", true) connectTimeout 6000
+trait BitcoinNodeProvider {
+  def add(pr: PeerGroup): Unit = none
+}
+
+class LNCloud(url: String) extends BitcoinNodeProvider {
+  def http(way: String) = post(s"$url:9001/v1/$way", true) connectTimeout 7500
   def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
@@ -192,9 +191,9 @@ class LNCloud(url: String) {
 }
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
+  override def add(peerGroup: PeerGroup) = peerGroup addAddress new PeerAddress(app.params, InetAddresses forString url, 8333)
+  override def findNodes(aliasQuery: String) = super.findNodes(aliasQuery).onErrorResumeNext(_ => failover findNodes aliasQuery)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
-  override def findNodes(aliasQuery: String) = super.findNodes(aliasQuery)
-    .onErrorResumeNext(_ => failover findNodes aliasQuery)
 }
 
 object LNCloud {

@@ -12,11 +12,11 @@ import listeners.TransactionConfidenceEventListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
-import com.lightning.wallet.lncloud.RatesSaver
+import com.lightning.wallet.lncloud.{LNCloud, RatesSaver}
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.lightning.wallet.ln.Tools.wrap
-import com.lightning.wallet.ln.Invoice
+import com.lightning.wallet.ln.{Invoice, LNParams}
 import com.google.protobuf.ByteString
 import android.app.Application
 import android.widget.Toast
