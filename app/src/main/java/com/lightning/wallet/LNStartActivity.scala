@@ -12,12 +12,11 @@ import com.lightning.wallet.Utils.{app, sumIn}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
+import com.lightning.wallet.ln.Scripts.{ScriptEltSeq, multiSig2of2}
 import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
-import com.lightning.wallet.lncloud.{LNCloudPrivateSaver, RatesSaver}
-import com.lightning.wallet.ln.Scripts.{ScriptEltSeq, multiSig2of2}
-
 import concurrent.ExecutionContext.Implicits.global
+import com.lightning.wallet.lncloud.RatesSaver
 import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
 import org.bitcoinj.script.ScriptBuilder
@@ -45,9 +44,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   type AnnounceChansNumVec = Vector[AnnounceChansNum]
   private[this] val worker = new ThrottledWork[AnnounceChansNumVec] {
-    def work(radixNodeAliasOrNodeIdQuery: String) = actualCloud findNodes radixNodeAliasOrNodeIdQuery
+    def work(radixNodeAliasOrNodeIdQuery: String) = currentLNCloud findNodes radixNodeAliasOrNodeIdQuery
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)
-    lazy val actualCloud = LNCloudPrivateSaver.actualCloudObject
+    lazy val currentLNCloud = LNParams.currentLNCloud
   }
 
   def react(query: String) = worker onNewQuery query

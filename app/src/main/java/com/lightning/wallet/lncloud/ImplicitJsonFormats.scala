@@ -2,15 +2,13 @@ package com.lightning.wallet.lncloud
 
 import spray.json._
 import spray.json.DefaultJsonProtocol._
-
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket}
 import com.lightning.wallet.lncloud.LNCloud.{ClearToken, InvoiceAndMemo}
 import com.lightning.wallet.ln.wire.{LightningMessage, NodeAnnouncement}
 import com.lightning.wallet.ln.{IncomingPaymentSpec, Invoice, OutgoingPaymentSpec, PaymentSpec}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.{hopsCodec, nodeAnnouncementCodec, lightningMessageCodec}
-
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.{hopsCodec, lightningMessageCodec, nodeAnnouncementCodec}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
@@ -38,6 +36,11 @@ object ImplicitJsonFormats { me =>
     def write(internal: BinaryData): JsValue = internal.toString.toJson
   }
 
+  implicit object TransactionFmt extends JsonFormat[Transaction] {
+    def read(json: JsValue): Transaction = Transaction.read(me json2String json)
+    def write(internal: Transaction): JsValue = Transaction.write(internal).toString.toJson
+  }
+
   implicit object ECPointFmt extends JsonFormat[ECPoint] {
     def read(json: JsValue) = (json2String andThen HEX.decode andThen getCurve.decodePoint)(json)
     def write(internal: ECPoint): JsValue = HEX.encode(internal getEncoded true).toJson
@@ -45,12 +48,12 @@ object ImplicitJsonFormats { me =>
 
   implicit object LNCloudActFmt extends JsonFormat[LNCloudAct] {
     def read(json: JsValue) = json.asJsObject fields "kind" match {
-      case JsString("PingCloudAct") => json.convertTo[PingCloudAct]
+      case JsString("CheckCloudAct") => json.convertTo[CheckCloudAct]
       case _ => throw new RuntimeException
     }
 
     def write(internal: LNCloudAct) = internal match {
-      case pingCloudAct: PingCloudAct => pingCloudAct.toJson
+      case pingCloudAct: CheckCloudAct => pingCloudAct.toJson
     }
   }
 
@@ -79,7 +82,7 @@ object ImplicitJsonFormats { me =>
 
   implicit object NodeAnnouncementFmt extends JsonFormat[NodeAnnouncement] {
     def read(rawJson: JsValue) = nodeAnnouncementCodec.decode(json2BitVec(rawJson).get).require.value
-    def write(message: NodeAnnouncement) = lightningMessageCodec.encode(message).require.toHex.toJson
+    def write(message: NodeAnnouncement) = nodeAnnouncementCodec.encode(message).require.toHex.toJson
   }
 
   implicit object PaymentRouteFmt extends JsonFormat[PaymentRoute] {
@@ -115,12 +118,12 @@ object ImplicitJsonFormats { me =>
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
-  implicit val pingLNCLoudAct = jsonFormat[String, String,
-    PingCloudAct](PingCloudAct.apply, "data", "kind")
+  implicit val pingLNCLoudAct = jsonFormat[BinaryData, String,
+    CheckCloudAct](CheckCloudAct.apply, "data", "kind")
 
-  implicit val lnCloudDataFmt = jsonFormat[Option[InvoiceAndMemo], List[ClearToken], List[LNCloudAct],
-    LNCloudData](LNCloudData.apply, "info", "tokens", "acts")
+  implicit val publicDataFmt = jsonFormat[Option[InvoiceAndMemo], List[ClearToken], List[LNCloudAct],
+    PublicData](PublicData.apply, "info", "tokens", "acts")
 
-  implicit val lbCloudDataPrivateFmt = jsonFormat[List[LNCloudAct], String,
-    LNCloudDataPrivate](LNCloudDataPrivate.apply, "acts", "url")
+  implicit val privateDataFmt = jsonFormat[List[LNCloudAct], String,
+    PrivateData](PrivateData.apply, "acts", "url")
 }

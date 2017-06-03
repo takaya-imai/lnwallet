@@ -6,13 +6,12 @@ import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.ln.crypto.Digests
 import com.lightning.wallet.Utils.app
-import scala.util.Try
 
 
 object LNParams {
   lazy val bag: PaymentSpecBag = PaymentSpecWrap
   lazy val broadcaster: Broadcaster = LocalBroadcaster
-  lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
+  lazy val lnCloud = new LNCloud("http://10.0.2.2")
 
   var nodePubKey: PublicKey = _
   var nodePrivateKey: PrivateKey = _
@@ -42,6 +41,18 @@ object LNParams {
   val localFeatures = "03"
   val globalFeatures = ""
 
+  // LNCLOUD AND PATHFINDER
+
+  def currentLNCloud = PrivateDataSaver.tryGetObject map {
+    privateData => new FailoverLNCloud(lnCloud, privateData.url)
+  } getOrElse lnCloud
+
+  def currentPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
+    privateData => new PrivatePathfinder(new FailoverLNCloud(lnCloud, privateData.url), channel) { data = privateData }
+  } getOrElse new PublicPathfinder(bag, lnCloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
+
+  // FEE RELATED
+
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
@@ -50,6 +61,8 @@ object LNParams {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
   }
+
+  // MISC
 
   def myHtlcExpiry: Int = broadcaster.currentHeight + untilExpiryBlocks
   def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")

@@ -31,7 +31,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.helper._
 import com.lightning.wallet.ln.wire.UpdateAddHtlc
 import com.lightning.wallet.ln._
-import com.lightning.wallet.lncloud.{LNCloudDataPrivate, LNCloudPrivateSaver}
+import com.lightning.wallet.lncloud.{PrivateData, PrivateDataSaver}
 import com.lightning.wallet.test.LNCloudSpec
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import org.bitcoinj.core.{Address, Sha256Hash, Transaction}

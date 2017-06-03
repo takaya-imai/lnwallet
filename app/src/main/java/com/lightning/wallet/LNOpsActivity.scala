@@ -6,14 +6,13 @@ import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ChainWatcher._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
-import com.lightning.wallet.Utils.{app, sumIn}
-import com.lightning.wallet.ln.Tools.{none, wrap}
 import fr.acinq.bitcoin.{MilliSatoshi, Satoshi, Transaction}
-
+import com.lightning.wallet.ln.Tools.{none, wrap}
+import com.lightning.wallet.Utils.{app, sumIn}
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
+import com.lightning.wallet.lncloud.LocalBroadcaster
 
 
 class LNOpsActivity extends TimerActivity { me =>
@@ -49,10 +48,8 @@ class LNOpsActivity extends TimerActivity { me =>
           kit.subscripts += watchTxDepthLocal(fundingTx.txid.toString).subscribe(showOpeningInfoOnUi _)
           kit.subscripts += watchTxDepthLocal(fundingTx.txid.toString).subscribe(kit.chan process _)
           app.kit.wallet addWatchedScript commitments.commitInput.txOut.publicKeyScript
-
-          println(bitcoinLibTx2bitcoinjTx(fundingTx))
-          <(app.kit blockingSend fundingTx, none)(none)
           showOpeningInfoOnUi(CMDDepth apply 0)
+          LocalBroadcaster broadcast fundingTx
 
         case (_, norm: NormalData, _, NORMAL)
           // Someone has sent a closing signature so we initiaite a shutdown
@@ -129,7 +126,7 @@ class LNOpsActivity extends TimerActivity { me =>
     case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
   }
 
-  private def showNoKitPresentInfo = {
+  private def showNoKitPresentInfo: Unit = {
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText ln_ops_chan_none
     lnOpsAction setText ln_ops_start

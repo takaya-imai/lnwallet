@@ -21,15 +21,14 @@ object JsonHttpUtils {
   def obsOn[T](provider: => T, scheduler: Scheduler): Obs[T] =
     Obs.just(null).subscribeOn(scheduler).map(_ => provider)
 
+  def retry[T](obs: Obs[T], pick: (Throwable, Int) => Duration, times: Range): Obs[T] =
+    obs.retryWhen(_.zipWith(Obs from times)(pick) flatMap Obs.timer)
+
   def withDelay[T](obs: Obs[T], startMillis: Long, timeoutMillis: Long) = {
     val adjustedTimeout = startMillis + timeoutMillis - System.currentTimeMillis
     val delayLeft = if (adjustedTimeout < 0) 0L else adjustedTimeout
     obs.delay(delayLeft.millis)
   }
-
-  type IntervalPicker = (Throwable, Int) => Duration
-  def retry[T](obs: Obs[T], pick: IntervalPicker, times: Range): Obs[T] =
-    obs.retryWhen(_.zipWith(Obs from times)(pick) flatMap Obs.timer)
 
   val get = HttpRequest.get(_: String, true) connectTimeout 10000
   def pickInc(err: Throwable, next: Int): FiniteDuration = next.seconds
@@ -44,21 +43,18 @@ trait Saver {
   def save(snap: JsValue) = StorageWrap.put(snap.toString, KEY)
 }
 
-object LNCloudPublicSaver extends Saver {
-  def tryGetObject: Try[LNCloudData] = tryGet map to[LNCloudData]
-  def saveObject(data: LNCloudData): Unit = save(data.toJson)
+object PublicDataSaver extends Saver {
+  def tryGetObject: Try[PublicData] = tryGet map to[PublicData]
+  def saveObject(data: PublicData): Unit = save(data.toJson)
+  def empty = PublicData(info = None, tokens = Nil)
   val KEY = "lnCloudPublic"
 }
 
-object LNCloudPrivateSaver extends Saver {
-  def tryGetObject: Try[LNCloudDataPrivate] = tryGet map to[LNCloudDataPrivate]
-  def saveObject(data: LNCloudDataPrivate): Unit = save(data.toJson)
+object PrivateDataSaver extends Saver {
+  def tryGetObject: Try[PrivateData] = tryGet map to[PrivateData]
+  def saveObject(data: PrivateData): Unit = save(data.toJson)
   def remove = LNParams.db.change(StorageTable.killSql, KEY)
   val KEY = "lnCloudPrivate"
-
-  def actualCloudObject: LNCloud = tryGetObject.map {
-    data => new FailoverLNCloud(LNParams.lnCloud, data.url)
-  } getOrElse LNParams.lnCloud
 }
 
 case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
@@ -70,15 +66,15 @@ case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
 
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
-  type FeerateMap = Map[String, Double]
-  type Result = (FeerateMap, RatesMap)
+  type BlockNum2Fee = Map[String, Double]
+  type Result = (BlockNum2Fee, RatesMap)
   val KEY = "rates"
 
   private val updatePeriod: FiniteDuration = 20.minutes
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
 
   def process = {
-    def getResult = for (raw <- LNCloudPrivateSaver.actualCloudObject.getRates) yield raw.convertTo[Result]
+    def getResult = for (raw <- LNParams.currentLNCloud.getRates) yield raw.convertTo[Result]
     def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
     def delayed = withDelay(periodically, rates.stamp, updatePeriod.toMillis)
 

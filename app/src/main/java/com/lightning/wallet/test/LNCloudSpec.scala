@@ -41,11 +41,11 @@ class LNCloudSpec {
     Hop(c, d, channelUpdate_cd),
     Hop(d, e, channelUpdate_de))
 
-  val chan = new StateMachine[ChannelData] {
+  val chan = new Channel {
 
     data = InitData(NodeAnnouncement(null, 1, e, null, null, null, null))
 
-    def doProcess(change: Any) = change match {
+    override def doProcess(change: Any) = change match {
       case SilentAddHtlc(spec) =>
         println(s"Channel mock got a silent spec: $spec")
         process(UpdateFulfillHtlc(null, 1, preimage))
@@ -57,14 +57,10 @@ class LNCloudSpec {
   }
 
   def getCloud =
-    LNCloudPublicSaver.tryGetObject.map { savedData =>
+    PublicDataSaver.tryGetObject.map { savedData =>
       println(s"Got LNCloudData from db: $savedData")
 
-      new LNCloudPublic {
-        val bag = TestPaymentSpecBag
-        lazy val channel = chan
-        lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
-        state = LNCloud.OPERATIONAL
+      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2:9002"), chan) {
         data = savedData
 
         override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
@@ -73,14 +69,10 @@ class LNCloudSpec {
       }
 
     } getOrElse {
-      val data1 = LNCloudData(info = None, tokens = Nil, acts = for (n <- (0 to 400).toList) yield PingCloudAct(s"call $n"))
+      val data1 = PublicData(info = None, tokens = Nil, acts = for (n <- (0 to 400).toList) yield CheckCloudAct(s"call $n"))
       println(s"Creating a new LNCloudData")
 
-      new LNCloudPublic {
-        val bag = TestPaymentSpecBag
-        lazy val channel = chan
-        lazy val lnCloud = new LNCloud("http://10.0.2.2:9002")
-        state = LNCloud.OPERATIONAL
+      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2:9002"), chan) {
         data = data1
 
         override def makeOutgoingSpec(invoice: Invoice) = obsOn( {
@@ -93,6 +85,6 @@ class LNCloudSpec {
   def allTests = {
     val cloud1 = getCloud
     println("preprocessing...")
-    cloud1 process PingCloudAct("call a")
+    cloud1 process CheckCloudAct("call a")
   }
 }

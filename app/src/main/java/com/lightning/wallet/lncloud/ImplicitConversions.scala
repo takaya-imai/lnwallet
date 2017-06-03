@@ -1,11 +1,10 @@
 package com.lightning.wallet.lncloud
 
-import org.bitcoinj.core.Utils._
+import android.text.{Html, Spanned}
 import com.lightning.wallet.Utils.app
 import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
 import java.math.BigInteger
-import android.text.Html
 
 
 object ImplicitConversions {
@@ -22,8 +21,9 @@ object ImplicitConversions {
 }
 
 class StringOps(source: String) {
+  def binary = BinaryData(source getBytes "UTF-8")
   def bigInteger = new BigInteger(source)
-  def hex = HEX.encode(source getBytes "UTF-8")
   def noCommas = source.replace(",", "")
   def html = Html fromHtml source
+  def hex = binary.toString
 }

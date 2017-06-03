@@ -8,10 +8,9 @@ import fr.acinq.bitcoin.BinaryData
 sealed trait FailureMessage
 sealed trait Perm extends FailureMessage
 sealed trait Node extends FailureMessage
+case object TemporaryChannelFailure extends FailureMessage
 sealed trait Update extends FailureMessage { def update: ChannelUpdate }
 sealed trait BadOnion extends FailureMessage { def onionHash: BinaryData }
-
-case object TemporaryChannelFailure extends FailureMessage
 case object RequiredNodeFeatureMissing extends Perm with Node
 case object TemporaryNodeFailure extends Node
 

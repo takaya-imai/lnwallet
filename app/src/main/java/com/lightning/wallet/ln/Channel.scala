@@ -6,9 +6,9 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
-import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
+import fr.acinq.bitcoin.{Satoshi, Transaction}
 
 
 class Channel extends StateMachine[ChannelData] { me =>
