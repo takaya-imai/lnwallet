@@ -24,7 +24,6 @@ object LNParams {
 
   lazy val bag: PaymentSpecBag = PaymentSpecWrap
   lazy val broadcaster: Broadcaster = LocalBroadcaster
-  lazy val lnCloud = new LNCloud("http://10.0.2.2")
 
   var nodePrivateKey: PrivateKey = _
   var cloudPrivateKey: PrivateKey = _
@@ -44,12 +43,12 @@ object LNParams {
   // LNCLOUD AND PATHFINDER
 
   def currentLNCloud = PrivateDataSaver.tryGetObject map {
-    privateData => new FailoverLNCloud(lnCloud, privateData.url)
-  } getOrElse lnCloud
+    data => new FailoverLNCloud(new LNCloud("http://10.0.2.2"), data.url)
+  } getOrElse new LNCloud("http://10.0.2.2")
 
   def currentPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
-    privateData => new PrivatePathfinder(new FailoverLNCloud(lnCloud, privateData.url), channel) { data = privateData }
-  } getOrElse new PublicPathfinder(bag, lnCloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
+    privateData => new PrivatePathfinder(new FailoverLNCloud(cloud, privateData.url), channel) { data = privateData }
+  } getOrElse new PublicPathfinder(bag, cloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
 
   // FEE RELATED
 

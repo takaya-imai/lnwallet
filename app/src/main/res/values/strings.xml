@@ -146,12 +146,12 @@
 
     <!-- setting a private backup server -->
     <string name="ln_backup_ip">Backup server address</string>
+    <string name="ln_backup_success">Backup Server has been set successfully</string>
     <string name="ln_backup_key"><![CDATA[<small>Not sure what is this about?<br><a href=https://lightning-wallet.com/>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
     <string name="ln_backup_key_error">Could not set a Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server knows your backup public key and try again</string>
     <string name="ln_backup_sig_error">Could not set a Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
     <string name="ln_backup_url_error">Could not set a Backup Server because it\'s address seems to be invalid</string>
     <string name="ln_backup_net_error">Could not set a Backup Server because it is not reachable</string>
-    <string name="ln_backup_success">Backup Server has been set successfully</string>
 
     <!-- activity_ln_ops, activity_ln_start -->
     <string name="ln_ops_btc">Go to Bitcoin wallet</string>

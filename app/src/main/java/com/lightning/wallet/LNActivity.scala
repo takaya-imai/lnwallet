@@ -232,33 +232,35 @@ with ListUpdater with SearchBar { me =>
 
   override def onResume = wrap(super.onResume)(app.TransData.value = null)
 
-  class SetBackupServer {
-//    val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
-//    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-//    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
-//    field setTextIsSelectable true
-//
-//    def proceed: Unit = rm(alert) {
-//      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
-//      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
-//      mkForm(dialog, getString(ln_backup), view1)
-//    }
-//
-//    def trySave(url: String) =
-//      if (url.isEmpty) LNCloudPrivateSaver.remove
-//      else if (URLUtil isValidUrl url) this proceedSave StandaloneCloud(ip)
-//      else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
-//
-//    def proceedSave(pc: StandaloneCloud) =
-//      pc.tryIfWorks(rand getBytes 32).map(_ => StandaloneCloud save pc)
-//        .foreach(_ => me runOnUiThread toast(ln_backup_success),
-//          err => me runOnUiThread onError(err), println)
-//
-//    def onError(error: Throwable): Unit = error.getMessage match {
-//      case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
-//      case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
-//      case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
-//    }
+  class SetBackupServer { self =>
+    val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
+    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
+    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
+    field setTextIsSelectable true
+
+    def proceed: Unit = rm(alert) {
+      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
+      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
+      PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
+      mkForm(dialog, me getString ln_backup, view1)
+    }
+
+    def trySave(url: String) =
+      if (url.isEmpty) PrivateDataSaver.remove
+      else if (URLUtil isValidUrl url) self save PrivateData(Nil, url)
+      else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
+
+    def save(data: PrivateData) = {
+      PrivateDataSaver saveObject data
+      LNParams.cloud = LNParams.currentLNCloud
+      app toast ln_backup_success
+    }
+
+    def onError(error: Throwable): Unit = error.getMessage match {
+      case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
+      case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
+      case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
+    }
   }
 
   def closeChannel = passPlus(me getString ln_close) { pass =>

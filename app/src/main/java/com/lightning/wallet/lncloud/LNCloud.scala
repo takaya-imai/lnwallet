@@ -40,19 +40,23 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
       me doProcess CMDStart
 
     case (PrivateData(action :: rest, _), CMDStart) =>
-      val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 action.data, LNParams.cloudPrivateKey)
-      val params = Seq("sig" -> signature.toString, "key" -> LNParams.cloudPrivateKey.publicKey.toString, body -> action.data.toString)
-      action.run(params, lnCloud).doOnCompleted(me doProcess CMDStart).subscribe(_ => me stayWith data.copy(acts = rest), none)
+      action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
+        .subscribe(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools log s"PrivatePathfinder: unhandled $data : $some"
+      Tools log s"PrivatePathfinder: unhandled $some : $data"
+  }
+
+  def signedParams(data: BinaryData): Seq[HttpParam] = {
+    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, LNParams.cloudPrivateKey)
+    Seq("sig" -> signature.toString, "key" -> LNParams.cloudPrivateKey.publicKey.toString, body -> data.toString)
   }
 }
 
 class PublicPathfinder(val bag: PaymentSpecBag, val lnCloud: LNCloud, val channel: Channel)
 extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me =>
-  private def reset = me stayWith data.copy(info = None)
+  private def resetState = me stayWith data.copy(info = None)
 
   // LISTENING TO CHANNEL
 
@@ -93,9 +97,9 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
       bag.getInfoByHash(invoice.paymentHash).map(_.status) match {
         case Success(PaymentSpec.SUCCESS) => me resolveSuccess memo
-        case Success(PaymentSpec.FAIL) => reset
+        case Success(PaymentSpec.FAIL) => resetState
         case Success(_) => me stayWith data
-        case _ => reset
+        case _ => resetState
       }
 
     case (_, action: LNCloudAct) =>
@@ -106,14 +110,14 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools log s"LNCloudPublic: unhandled $data : $some"
+      Tools log s"LNCloudPublic: unhandled $some : $data"
   }
 
   // ADDING NEW TOKENS
 
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
-      serverError => if (serverError.getMessage == "notfound") reset)
+      serverError => if (serverError.getMessage == "notfound") resetState)
 
   // TALKING TO SERVER
 
@@ -167,11 +171,8 @@ trait LNCloudAct {
 // This is a basic interface to cloud which does not require a channel
 // failover invariant will fall back to default in case of failure
 
-trait BitcoinNodeProvider {
-  def add(pr: PeerGroup): Unit = none
-}
-
-class LNCloud(url: String) extends BitcoinNodeProvider {
+class LNCloud(url: String) {
+  def addBitcoinNode(pr: PeerGroup): Unit = none
   def http(way: String) = post(s"$url:9001/v1/$way", true) connectTimeout 7500
   def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
@@ -181,17 +182,17 @@ class LNCloud(url: String) extends BitcoinNodeProvider {
     }
 
   def getRates = call("rates", _.head)
-  def findNodes(aliasQuery: String) = call(command = "router/nodes",
-    vector => for (json <- vector) yield json.convertTo[AnnounceChansNum],
+  def findNodes(aliasQuery: String) = call("router/nodes",
+    vec => for (json <- vec) yield json.convertTo[AnnounceChansNum],
     "query" -> aliasQuery)
 
   def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes",
-    vector => for (json <- vector) yield json.convertTo[PaymentRoute],
+    vec => for (json <- vec) yield json.convertTo[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
-  override def add(peerGroup: PeerGroup) = peerGroup addAddress new PeerAddress(app.params, InetAddresses forString url, 8333)
+  override def addBitcoinNode(pr: PeerGroup) = pr addAddress new PeerAddress(app.params, InetAddresses forString url, 8333)
   override def findNodes(aliasQuery: String) = super.findNodes(aliasQuery).onErrorResumeNext(_ => failover findNodes aliasQuery)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
@@ -200,7 +201,6 @@ object LNCloud {
   type HttpParam = (String, Object)
   type ClearToken = (String, String, String)
   type InvoiceAndMemo = (Invoice, BlindMemo)
-  val fromBlacklisted = "fromblacklisted"
   val CMDStart = "CMDStart"
   val body = "body"
 }
