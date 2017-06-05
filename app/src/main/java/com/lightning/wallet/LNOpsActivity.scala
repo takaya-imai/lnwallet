@@ -6,13 +6,17 @@ import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ChainWatcher._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import fr.acinq.bitcoin.{MilliSatoshi, Satoshi, Transaction}
+
+import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.lightning.wallet.Utils.{app, sumIn}
+
+import com.lightning.wallet.lncloud.LocalBroadcaster
+import concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
-import com.lightning.wallet.lncloud.LocalBroadcaster
 
 
 class LNOpsActivity extends TimerActivity { me =>
@@ -21,7 +25,11 @@ class LNOpsActivity extends TimerActivity { me =>
   lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
-  def goStartChannel = me goTo classOf[LNStartActivity]
+  def goStartChannel = me exitTo classOf[LNStartActivity]
+
+  // May change destroy action throughout an activity lifecycle
+  private[this] var whenDestroy = anyToRunnable(super.onDestroy)
+  override def onDestroy: Unit = whenDestroy.run
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
@@ -61,44 +69,57 @@ class LNOpsActivity extends TimerActivity { me =>
 
         // Both sides have locked a funding
         case (_, _, WAIT_FUNDING_DONE, NORMAL) =>
-          kit.subscripts.foreach(_.unsubscribe)
+          // whenDestroy will be called after this
           me exitTo classOf[LNActivity]
-          kit.chan.listeners -= self
+
+        // We are no more interested in communications
+        case (_, _, _, Channel.CLOSING | Channel.FINISHED) =>
+          kit.socket.listeners -= kit.restartSocketListener
       }
+    }
+
+    whenDestroy = anyToRunnable {
+      kit.socket.listeners -= kit.restartSocketListener
+      kit.chan.listeners -= channelOpsListener
+      kit.subscripts.foreach(_.unsubscribe)
+      super.onDestroy
     }
 
     val start = (null, kit.chan.data, null, kit.chan.state)
     kit.socket.listeners += kit.restartSocketListener
     kit.chan.listeners += channelOpsListener
     channelOpsListener onBecome start
+
+    // UI which needs a channel access
+
+    def showOpeningInfo(c: Commitments, cmd: CMDDepth) = {
+      val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
+      val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
+      val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)
+      val humanCanReceive = app.plurOrZero(txsConfs, 6)
+
+      lnOpsAction setText ln_force_close
+      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+      lnOpsDescription setText getString(ln_ops_chan_opening).format(humanAmount,
+        humanCanSend, humanCanReceive, humanCurrentState).html
+    }
+
+    def showNegotiationsInfo(c: Commitments) = {
+      val humanAmount = sumIn format withSign(MilliSatoshi apply c.localCommit.spec.toLocalMsat)
+      lnOpsDescription setText getString(ln_ops_chan_bilateral_negotiations).format(humanAmount).html
+      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+      lnOpsAction setText ln_force_close
+    }
+
+    def warnAboutUnilateralClosing =
+      mkForm(mkChoiceDialog(ok = Future { kit.chan process CMDShutdown }, none,
+        ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
   }
+
+  // UI which does not need a channel access
 
   private def prettyTxAmount(tx: Transaction) =
     sumIn format withSign(tx.txOut.head.amount)
-
-  private def showOpeningInfo(c: Commitments, cmd: CMDDepth) = {
-    val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
-    val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
-    val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)
-    val humanCanReceive = app.plurOrZero(txsConfs, 6)
-
-    lnOpsAction setText ln_force_close
-    lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
-    lnOpsDescription setText getString(ln_ops_chan_opening).format(humanAmount,
-      humanCanSend, humanCanReceive, humanCurrentState).html
-  }
-
-  private def warnAboutUnilateralClosing: Unit = {
-    val warn = me getString ln_ops_chan_unilateral_warn
-    mkForm(me negBld dialog_ok, null, warn.html)
-  }
-
-  private def showNegotiationsInfo(c: Commitments): Unit = {
-    val humanAmount = sumIn format withSign(MilliSatoshi apply c.localCommit.spec.toLocalMsat)
-    lnOpsDescription setText getString(ln_ops_chan_bilateral_negotiations).format(humanAmount).html
-    lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
-    lnOpsAction setText ln_force_close
-  }
 
   private def showMutualClosingInfo(close: Transaction, cmd: CMDDepth) = {
     val humanCanFinalize: String = app.plurOrZero(txsConfs, LNParams.minDepth)
@@ -110,23 +131,21 @@ class LNOpsActivity extends TimerActivity { me =>
       .format(me prettyTxAmount close, humanCanFinalize, humanCurrentState).html
   }
 
-  private val showForcedClosingInfo: Seq[BroadcastStatus] => Unit = bss => {
-    val totalDelayedAmount = Satoshi(bss.map(_.tx.txOut.head.amount.toLong).sum)
-    val humanAmount = sumIn format withSign(totalDelayedAmount)
+  private def showForcedClosingInfo(bss: BroadcastStatus*) = {
+    def statusView(status: BroadcastStatus): String = status match {
+      case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
+      case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
+      case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
+    }
 
-    lnOpsAction setText ln_ops_start
+    val schedule = bss map statusView mkString "<br>"
+    val unilateralClosing = getString(ln_ops_chan_unilateral_closing)
+    lnOpsDescription setText unilateralClosing.format(schedule).html
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-    lnOpsDescription setText getString(ln_ops_chan_unilateral_closing)
-      .format(humanAmount, bss map statusView mkString "<br>").html
+    lnOpsAction setText ln_ops_start
   }
 
-  private def statusView(status: BroadcastStatus) = status match {
-    case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
-    case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
-    case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
-  }
-
-  private def showNoKitPresentInfo: Unit = {
+  private def showNoKitPresentInfo = {
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText ln_ops_chan_none
     lnOpsAction setText ln_ops_start

@@ -16,15 +16,14 @@ object LNParams {
   val untilExpiryBlocks = 6
   val minDepth = 2
 
-  val maxChannelCapacity = MilliSatoshi(16777216000L)
-  val maxHtlcValue = MilliSatoshi(100000000L)
-
   // Public, no initial sync
   val localFeatures = "03"
   val globalFeatures = ""
 
-  lazy val bag: PaymentSpecBag = PaymentSpecWrap
+  val maxHtlcValue = MilliSatoshi(100000000L)
+  val maxChannelCapacity = MilliSatoshi(16777216000L)
   lazy val broadcaster: Broadcaster = LocalBroadcaster
+  lazy val bag: PaymentSpecBag = PaymentSpecWrap
 
   var nodePrivateKey: PrivateKey = _
   var cloudPrivateKey: PrivateKey = _

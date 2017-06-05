@@ -4,7 +4,6 @@ import com.lightning.wallet.ln._
 import collection.JavaConverters._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.Transaction
@@ -12,7 +11,7 @@ import fr.acinq.bitcoin.Transaction
 
 object LocalBroadcaster extends Broadcaster {
   def broadcast(tx: Transaction): Unit = obsOn(app.kit blockingSend tx,
-    IOScheduler.apply).subscribe(tx => Tools log tx.txid.toString, _.printStackTrace)
+    IOScheduler.apply).subscribe(Tools log _.toString, _.printStackTrace)
 
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight

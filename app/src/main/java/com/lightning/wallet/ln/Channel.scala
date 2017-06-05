@@ -172,18 +172,6 @@ class Channel extends StateMachine[ChannelData] { me =>
       me stayWith norm.copy(commitments = c1)
 
 
-    // GUARD: we have received a commit sig from them when shutdown is fully confirmed by both parties
-    case (norm @ NormalData(announce, commitments, Some(local), Some(remote), _), sig: CommitSig, NORMAL) =>
-
-      val c1 = Commitments.receiveCommit(commitments, sig)
-      val canNegotiate = Commitments hasNoPendingHtlcs c1
-
-      // Channel closing negotiations may start because if changes left
-      if (canNegotiate) startNegotiations(announce, c1, local, remote)
-      else me stayWith norm.copy(commitments = c1)
-      doProcess(CMDCommitSig)
-
-
     // We received a commit sig from them
     case (norm: NormalData, sig: CommitSig, NORMAL) =>
       val c1 = Commitments.receiveCommit(norm.commitments, sig)

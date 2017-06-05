@@ -106,7 +106,7 @@
     <string name="txs_p2wsh">Payment Channel funding</string>
 
     <array name="txs_confs">
-        <item><![CDATA[<font color=#E31300>Not confirmed yet</font>]]></item>
+        <item><![CDATA[<font color=#E31300>Awaiting confirmation&#8230;</font>]]></item>
         <item><![CDATA[<strong>%1$s</strong> confirmation]]></item>
         <item><![CDATA[<strong>%1$s</strong> confirmations]]></item>
     </array>
@@ -159,7 +159,7 @@
     <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Your balance is %1$s<br><font color=#999999>Funding transaction is sent</font><br><br>You will be able to <strong>send</strong> Lightning payments after a funding transaction reaches %2$s<br><br>You will be able to <strong>receive</strong> Lightning payments shortly after a funding transaction reaches %3$s<br><br>Current status<br>%4$s]]></string>
     <string name="ln_ops_chan_bilateral_negotiations"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Waiting for a confirmation from peer</font><br><br>Your current balance of %1$s will be refunded to you via a closing Bitcoin transaction once both you and peer are ready to mutually close a channel]]></string>
     <string name="ln_ops_chan_bilateral_closing"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Closing transaction is sent</font><br><br>%1$s will be refunded to your Bitcoin wallet. Current channel will be finalized once a closing transaction reaches at least %2$s<br><br>Current status<br>%3$s]]></string>
-    <string name="ln_ops_chan_unilateral_closing"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Using <a href=https://lightning-wallet.com>forced channel closing</a></font><br><br>%1$s will be refunded to your Bitcoin wallet via series of delayed Bitcoin transactions<br><br>%2$s]]></string>
+    <string name="ln_ops_chan_unilateral_closing"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Using <a href=https://lightning-wallet.com>forced channel closing</a></font><br><br>Remaining channel balance will be refunded to your Bitcoin wallet via series of delayed Bitcoin transactions<br><br>%1$s]]></string>
     <string name="ln_ops_chan_unilateral_warn"><![CDATA[<a href=https://lightning-wallet.com>Forced channel closing</a> is more expensive and time consuming than a mutually agreed one]]></string>
     <string name="ln_ops_chan_unilateral_status_wait">%1$s waiting for parent</string>
     <string name="ln_ops_chan_unilateral_status_done">%1$s already sent</string>

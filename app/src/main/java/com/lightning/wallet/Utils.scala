@@ -244,7 +244,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         lst.setItemChecked(0, true)
 
         def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) rates.feeRisky else rates.feeLive)
-        lazy val dialog: Builder = mkChoiceDialog(ok = rm(alert)(proceed), none, dialog_pay, dialog_cancel)
+        lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
         lazy val alert = mkForm(dialog, getString(title_fee).format(pay cute sumOut).html, form)
         alert
       }

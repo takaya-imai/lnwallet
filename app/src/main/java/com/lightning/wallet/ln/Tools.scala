@@ -102,7 +102,7 @@ case class ChannelKit(chan: Channel) { me =>
 
   val restartSocketListener = new SocketListener {
     override def onDisconnect = Obs.just(Tools log "Restarting socket")
-      .delay(5.seconds).doOnTerminate(socket.start).subscribe(none)
+      .delay(10.seconds).subscribe(_ => socket.start, _.printStackTrace)
   }
 
   socket.listeners += new SocketListener {
@@ -127,9 +127,9 @@ case class ChannelKit(chan: Channel) { me =>
   chan.listeners += new StateMachineListener {
     override def onBecome: PartialFunction[Transition, Unit] = {
       case (previousData, data, previousState, Channel.CLOSING | Channel.FINISHED) =>
-        Tools log s"Channel $previousState -> ENDING CHANNEL at $previousData : $data"
         // "00" * 32 is a connection level error which will result in socket closing
-        me send Error("00" * 32, "All Channels are closed" getBytes "UTF-8")
+        Tools log s"Finalizing channel from $previousState at $previousData : $data"
+        me send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
 
       case (previousData, data, previousState, state) =>
         val messages = Helpers.extractOutgoingMessages(previousData, data)
@@ -153,9 +153,7 @@ case class ChannelKit(chan: Channel) { me =>
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown
-    case _ =>
-      println(s"---- $msg")
-      chan process msg
+    case _ => chan process msg
   }
 
   def send(msg: LightningMessage) = {

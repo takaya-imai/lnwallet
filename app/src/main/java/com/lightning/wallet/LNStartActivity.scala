@@ -39,14 +39,15 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   lazy val selectPeer = getString(ln_select_peer)
   private[this] val adapter = new NodesAdapter
 
-  private[this] var whenBackPressed =
-    anyToRunnable(super.onBackPressed)
-
   type AnnounceChansNumVec = Vector[AnnounceChansNum]
   private[this] val worker = new ThrottledWork[AnnounceChansNumVec] {
     def work(radixNodeAliasOrNodeIdQuery: String) = LNParams.cloud findNodes radixNodeAliasOrNodeIdQuery
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)
   }
+
+  // May change back pressed action throughout an activity lifecycle
+  private[this] var whenBackPressed = anyToRunnable(super.onBackPressed)
+  override def onBackPressed: Unit = whenBackPressed.run
 
   def react(query: String) = worker onNewQuery query
   def notifySubTitle(subtitle: String, infoType: Int) = {
@@ -87,7 +88,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     } else me exitTo classOf[MainActivity]
   }
 
-  override def onBackPressed = whenBackPressed.run
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener tracker
     app.kit.wallet removeCoinsReceivedEventListener tracker
@@ -195,7 +195,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
     def openChannel(amountSat: Long) = Future {
       val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
-      val initFeeratePerKw = LNParams feerateKB2Kw RatesSaver.rates.feeLive.value
+      val initFeeratePerKw = LNParams feerateKB2Kw RatesSaver.rates.feeLive.value // TODO: use it
       val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
       val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
       chan process CMDOpenChannel(localParams, random getBytes 32, 10000, pushMsat = 0L, their, amountSat)
