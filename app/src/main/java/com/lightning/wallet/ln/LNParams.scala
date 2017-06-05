@@ -5,6 +5,7 @@ import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import com.lightning.wallet.ln.crypto.Digests
+import com.lightning.wallet.ln.MSat.satFactor
 import com.lightning.wallet.Utils.app
 
 
@@ -16,7 +17,7 @@ object LNParams {
   val minDepth = 2
 
   val maxChannelCapacity = MilliSatoshi(16777216000L)
-  val maxHtlcValue = MilliSatoshi(4294967295L)
+  val maxHtlcValue = MilliSatoshi(100000000L)
 
   // Public, no initial sync
   val localFeatures = "03"
@@ -69,10 +70,10 @@ object LNParams {
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (n <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, n)
-    LocalParams(Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
-      channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = funding,
-      revocationSecret = revocation, paymentKey = payment, delayedPaymentKey = delayed, finalScriptPubKey,
-      shaSeed = sha256(sha.toBin), isFunder = true)
+    LocalParams(chainHash = Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = maxHtlcValue.amount / satFactor,
+      maxHtlcValueInFlightMsat = Long.MaxValue, channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144,
+      maxAcceptedHtlcs = 20, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
+      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
   }
 }
 

@@ -97,7 +97,7 @@ object PaymentSpec {
     Tuple3(payload, packet.nextPacket, packet.sharedSecret)
   } map {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
-      // We are the final recipient of HTLC, the only viable option
+      // We are the final HTLC recipient, the only viable option
 
       bag.getInfoByHash(add.paymentHash).map(_.spec) match {
         case Success(spec) if add.amountMsat > spec.invoice.sum.amount * 2 =>
@@ -108,9 +108,17 @@ object PaymentSpec {
           // GUARD: amount is less than what we requested, this won't do
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        // We either have a valid *incoming* spec or this is definitely some kind of error
-        case Success(spec: IncomingPaymentSpec) => CMDFulfillHtlc(add.id, spec.preimage)
-        case _ => failHtlc(sharedSecret, add, UnknownPaymentHash)
+        case Success(spec) if add.expiry < LNParams.myHtlcExpiry =>
+          // GUARD: we may not have enough time until expiration
+          failHtlc(sharedSecret, add, FinalExpiryTooSoon)
+
+        case Success(spec: IncomingPaymentSpec) =>
+          // We have a valid *incoming* payment spec
+          CMDFulfillHtlc(add.id, spec.preimage)
+
+        case _ =>
+          // Payment spec has not been found
+          failHtlc(sharedSecret, add, UnknownPaymentHash)
       }
 
     case (Attempt.Successful(_), _, sharedSecret) =>

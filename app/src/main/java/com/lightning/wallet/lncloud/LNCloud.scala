@@ -13,7 +13,6 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import org.bitcoinj.core.{ECKey, PeerAddress, PeerGroup}
-
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 import com.github.kevinsawicki.http.HttpRequest.post

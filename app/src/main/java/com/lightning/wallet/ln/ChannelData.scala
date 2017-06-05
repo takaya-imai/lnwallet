@@ -235,7 +235,6 @@ object Commitments {
 
   private def doReceiveAdd(c: Commitments, add: UpdateAddHtlc, blockCount: Int) =
     if (add.amountMsat < c.localParams.htlcMinimumMsat) throw ChannelException(HTLC_VALUE_TOO_SMALL)
-    else if (add.expiry < blockCount + LNParams.untilExpiryBlocks) throw ChannelException(HTLC_EXPIRY_TOO_SOON)
     else if (add.paymentHash.size != 32) throw ChannelException(HTLC_INVALID_PAYMENT_HASH)
     else if (add.id != c.remoteNextHtlcId) throw ChannelException(HTLC_UNEXPECTED_ID)
     else {
@@ -334,8 +333,7 @@ object Commitments {
     val remoteNextCommitInfo1 = Left apply WaitingForRevocation(remote1, commitSig)
 
     addUnacked(c.copy(remoteNextCommitInfo = remoteNextCommitInfo1,
-      localChanges = localChanges1, remoteChanges = remoteChanges1),
-      commitSig)
+      localChanges = localChanges1, remoteChanges = remoteChanges1), commitSig)
   }
 
   // Instead of forgetting their commit sig
@@ -357,7 +355,7 @@ object Commitments {
     val revocation = RevokeAndAck(c.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
 
     // they sent us a signature for *their* view of *our* next commit tx
-    // so in terms of rev.hashes and indexes we have:
+    // so in terms of revocation hashes and indexes we have:
     // ourCommit.index -> our current revocation hash, which is about to become our old revocation hash
     // ourCommit.index + 1 -> our next revocation hash, used by *them* to build the sig we've just received, and which
     // is about to become our current revocation hash
