@@ -77,24 +77,25 @@ object LNParams {
 }
 
 trait Broadcaster {
-  def getParentsDepth: Map[String, Int]
-  def broadcast(tx: Transaction)
+  type ParentTxidToDepth = Map[String, Int]
+  def getParentsDepth: ParentTxidToDepth
+  def broadcast(tx: Transaction): Unit
   def currentFeeRate: Long
   def currentHeight: Int
 
-  def broadcastStatus(txs: Seq[Transaction], parents: Map[String, Int], chainHeight: Int): Seq[BroadcastStatus] = {
+  def broadcastStatus(txs: Seq[Transaction], parents: ParentTxidToDepth): Seq[BroadcastStatus] = {
     val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
 
     augmented map {
       // If CSV is zero then whether parent tx is present or not is irrelevant, we look as CLTV
-      case (tx, _, 0L) if tx.lockTime - chainHeight < 1 => BroadcastStatus(None, publishable = true, tx)
-      case (tx, _, 0L) => BroadcastStatus(Some(tx.lockTime - chainHeight), publishable = false, tx)
+      case (tx, _, 0L) if tx.lockTime - currentHeight < 1 => BroadcastStatus(None, publishable = true, tx)
+      case (tx, _, 0L) => BroadcastStatus(Some(tx.lockTime - currentHeight), publishable = false, tx)
       // If CSV is not zero but parent tx is not published then we wait for parent
       case (tx, None, _) => BroadcastStatus(None, publishable = false, tx)
 
       case (tx, Some(parentConfs), csv) =>
-        // Tx may have both CLTV and CSV so we need to get the max of them
-        val blocksLeft = math.max(csv - parentConfs, tx.lockTime - chainHeight)
+        // Tx may have both CLTV and CSV so we need to get the max of them both
+        val blocksLeft = math.max(csv - parentConfs, tx.lockTime - currentHeight)
         if (blocksLeft < 1) BroadcastStatus(None, publishable = true, tx)
         else BroadcastStatus(Some(blocksLeft), publishable = false, tx)
     }

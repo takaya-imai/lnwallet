@@ -15,7 +15,9 @@ object LocalBroadcaster extends Broadcaster {
 
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
-  def getParentsDepth = app.kit.wallet.getTransactions(false).asScala.map {
-    jTrans => jTrans.getHashAsString -> jTrans.getConfidence.getDepthInBlocks
+
+  def getParentsDepth: ParentTxidToDepth = {
+    val txs = app.kit.wallet.getTransactions(false).asScala
+    txs.map(tx => tx.getHashAsString -> tx.getConfidence.getDepthInBlocks)
   }.toMap
 }

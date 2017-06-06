@@ -102,6 +102,17 @@ class LNOpsActivity extends TimerActivity { me =>
         case (_, negotiations: NegotiationsData, _, NEGOTIATIONS) =>
           me runOnUiThread showNegotiationsInfo(negotiations.commitments)
 
+        // Old closing data already contains unilateral transactions so do nothing here
+        case (ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING, CLOSING)
+          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
+          Tools log "Yet another commitment spending transaction has been caught"
+
+        // Peer has initiated a unilateral channel closing of some kind
+        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING)
+          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
+          kit.subscripts += Obs.interval(20.seconds).subscribe(_ => me manageForcedClosing close)
+          kit.socket.listeners -= kit.restartSocketListener
+
         // Mutual closing is in progress as only a mutual close tx is available
         case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil), _, CLOSING) =>
           def updateInterface(depth: CMDDepth) = me runOnUiThread showMutualClosingInfo(tx, depth)
@@ -109,16 +120,10 @@ class LNOpsActivity extends TimerActivity { me =>
           kit.socket.listeners -= kit.restartSocketListener
           updateInterface(me broadcastAndDepth tx)
 
-        // Old closing data already contains unilateral transactions so do nothing here
-        case (ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING, CLOSING)
-          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          Tools log "Yet another channel violating transaction has been caught"
-
-        // Peer has initiated a unilateral channel closing of some kind
-        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING)
-          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          kit.subscripts += Obs.interval(20.seconds).subscribe(_ => me manageForcedClosing close)
+        // Channel is closed and we have no transactions so just drop it
+        case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil), _, CLOSING) =>
           kit.socket.listeners -= kit.restartSocketListener
+          me runOnUiThread showNoKitPresentInfo
       }
     }
 
@@ -152,26 +157,26 @@ class LNOpsActivity extends TimerActivity { me =>
 
   private def manageForcedClosing(data: ClosingData) = {
     val parentDepthMap = LNParams.broadcaster.getParentsDepth
-    val chainHeight = LNParams.broadcaster.currentHeight
     val txs = ClosingData extractTxs data
 
-    val bss = LNParams.broadcaster.broadcastStatus(txs, parentDepthMap, chainHeight)
+    // Send suitable transactions and update user interface
+    val bss = LNParams.broadcaster.broadcastStatus(txs, parentDepthMap)
     for (BroadcastStatus(_, true, tx) <- bss) LNParams.broadcaster broadcast tx
-    me runOnUiThread showForcedClosingInfo(bss:_*)
-  }
+    me runOnUiThread showForcedClosingInfo
 
-  private def showForcedClosingInfo(bss: BroadcastStatus*) = {
+    def showForcedClosingInfo = {
+      val schedule = bss map statusView mkString "<br>"
+      val unilateralClosing = getString(ln_ops_chan_unilateral_closing)
+      lnOpsDescription setText unilateralClosing.format(schedule).html
+      lnOpsAction setOnClickListener onButtonTap(goStartChannel)
+      lnOpsAction setText ln_ops_start
+    }
+
     def statusView(status: BroadcastStatus): String = status match {
       case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
       case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
       case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
     }
-
-    val schedule = bss map statusView mkString "<br>"
-    val unilateralClosing = getString(ln_ops_chan_unilateral_closing)
-    lnOpsDescription setText unilateralClosing.format(schedule).html
-    lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-    lnOpsAction setText ln_ops_start
   }
 
   private def showNoKitPresentInfo = {
