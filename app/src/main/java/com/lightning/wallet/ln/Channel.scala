@@ -13,11 +13,11 @@ import fr.acinq.bitcoin.{Satoshi, Transaction}
 
 class Channel extends StateMachine[ChannelData] { me =>
   def doProcess(change: Any): Unit = (data, change, state) match {
-    case (InitData(announce), cmd @ CMDOpenChannel(localParams, temporaryChannelId,
+    case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
     initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
       val firstPerCommitPoint = Generators.perCommitPoint(localParams.shaSeed, 0)
-      val open = OpenChannel(localParams.chainHash, temporaryChannelId, fundingAmountSat, pushMsat,
+      val open = OpenChannel(localParams.chainHash, tempChannelId, fundingAmountSat, pushMsat,
         localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat,
         localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay, localParams.maxAcceptedHtlcs,
         localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint, localParams.paymentKey.toPoint,
