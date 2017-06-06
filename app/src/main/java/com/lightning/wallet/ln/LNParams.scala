@@ -77,6 +77,7 @@ object LNParams {
 }
 
 trait Broadcaster {
+  def getParentsDepth: Map[String, Int]
   def broadcast(tx: Transaction)
   def currentFeeRate: Long
   def currentHeight: Int

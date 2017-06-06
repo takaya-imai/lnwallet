@@ -126,9 +126,9 @@ case class ChannelKit(chan: Channel) { me =>
 
   chan.listeners += new StateMachineListener {
     override def onBecome: PartialFunction[Transition, Unit] = {
-      case (previousData, data, previousState, Channel.CLOSING | Channel.FINISHED) =>
+      case (previousData, data, previousState, Channel.CLOSING) =>
         // "00" * 32 is a connection level error which will result in socket closing
-        Tools log s"Finalizing channel from $previousState at $previousData : $data"
+        Tools log s"Closing channel from $previousState at $previousData : $data"
         me send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
 
       case (previousData, data, previousState, state) =>
@@ -173,6 +173,7 @@ trait StateMachineListener {
 
 abstract class StateMachine[T] { self =>
   var listeners = Set.empty[StateMachineListener]
+  def initTransition = (null, data, null, state)
   def stayWith(data1: T) = become(data1, state)
   def doProcess(change: Any): Unit
   var state: String = _

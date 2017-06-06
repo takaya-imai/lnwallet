@@ -1,17 +1,17 @@
 package com.lightning.wallet
 
 import com.lightning.wallet.ln._
+import scala.concurrent.duration._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ChainWatcher._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
-import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
-import com.lightning.wallet.ln.Tools.{none, wrap}
+import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.Utils.{app, sumIn}
-
-import com.lightning.wallet.lncloud.LocalBroadcaster
+import com.lightning.wallet.ln.Tools.{none, wrap}
+import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
 import concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import android.widget.Button
@@ -46,52 +46,14 @@ class LNOpsActivity extends TimerActivity { me =>
       }
     }
 
+  private def broadcastAndDepth(tx: Transaction) = {
+    val txOpt = Option(app.kit.wallet getTransaction tx.hash)
+    val depthOpt = txOpt.map(_.getConfidence.getDepthInBlocks)
+    LNParams.broadcaster broadcast tx
+    CMDDepth(depthOpt getOrElse 0)
+  }
+
   private def kitIsPresent(kit: ChannelKit) = {
-    val channelOpsListener = new StateMachineListener { self =>
-      override def onBecome: PartialFunction[Transition, Unit] = {
-        // null indicates this is a startup call and makes this branch idempotent
-        case (_, WaitFundingConfirmedData(_, _, _, fundingTx, commitments), null, WAIT_FUNDING_DONE) =>
-          def showOpeningInfoOnUi(depth: CMDDepth) = me runOnUiThread showOpeningInfo(commitments, depth)
-          kit.subscripts += watchInputUsedLocal(commitments.commitInput.outPoint).subscribe(kit.chan process _)
-          kit.subscripts += watchTxDepthLocal(fundingTx.txid.toString).subscribe(showOpeningInfoOnUi _)
-          kit.subscripts += watchTxDepthLocal(fundingTx.txid.toString).subscribe(kit.chan process _)
-          app.kit.wallet addWatchedScript commitments.commitInput.txOut.publicKeyScript
-          showOpeningInfoOnUi(CMDDepth apply 0)
-          LocalBroadcaster broadcast fundingTx
-
-        case (_, norm: NormalData, _, NORMAL)
-          // Someone has sent a closing signature so we initiaite a shutdown
-          if norm.localShutdown.isDefined || norm.remoteShutdown.isDefined =>
-          me runOnUiThread showNegotiationsInfo(norm.commitments)
-
-        case (_, negotiations: NegotiationsData, _, NEGOTIATIONS) =>
-          me runOnUiThread showNegotiationsInfo(negotiations.commitments)
-
-        // Both sides have locked a funding
-        case (_, _, WAIT_FUNDING_DONE, NORMAL) =>
-          // whenDestroy will be called after this
-          me exitTo classOf[LNActivity]
-
-        // We are no more interested in communications
-        case (_, _, _, Channel.CLOSING | Channel.FINISHED) =>
-          kit.socket.listeners -= kit.restartSocketListener
-      }
-    }
-
-    whenDestroy = anyToRunnable {
-      kit.socket.listeners -= kit.restartSocketListener
-      kit.chan.listeners -= channelOpsListener
-      kit.subscripts.foreach(_.unsubscribe)
-      super.onDestroy
-    }
-
-    val start = (null, kit.chan.data, null, kit.chan.state)
-    kit.socket.listeners += kit.restartSocketListener
-    kit.chan.listeners += channelOpsListener
-    channelOpsListener onBecome start
-
-    // UI which needs a channel access
-
     def showOpeningInfo(c: Commitments, cmd: CMDDepth) = {
       val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
       val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
@@ -114,6 +76,63 @@ class LNOpsActivity extends TimerActivity { me =>
     def warnAboutUnilateralClosing =
       mkForm(mkChoiceDialog(ok = Future { kit.chan process CMDShutdown }, none,
         ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
+
+    // CHANNEL LISTENER
+
+    val chanViewListener = new StateMachineListener { self =>
+      override def onBecome: PartialFunction[Transition, Unit] = {
+        // null indicates this is a startup call and makes this case idempotent
+        case (null, WaitFundingConfirmedData(_, _, _, tx, commitments), null, WAIT_FUNDING_DONE) =>
+          def updateInterface(depth: CMDDepth) = me runOnUiThread showOpeningInfo(commitments, depth)
+          kit.subscripts += watchTxDepthLocal(tx.txid.toString).subscribe(kit.chan process _)
+          kit.subscripts += watchTxDepthLocal(tx.txid.toString).subscribe(updateInterface _)
+          app.kit.wallet addWatchedScript commitments.commitInput.txOut.publicKeyScript
+          updateInterface(me broadcastAndDepth tx)
+
+        case (_, norm: NormalData, _, NORMAL)
+          // GUARD: mutual shutdown has been initiated
+          if norm.localShutdown.isDefined || norm.remoteShutdown.isDefined =>
+          me runOnUiThread showNegotiationsInfo(norm.commitments)
+
+        // Both sides have sent a funding locked
+        case (_, norm: NormalData, _, NORMAL) =>
+          me exitTo classOf[LNActivity]
+
+        // Closing tx fee negotiations are in process
+        case (_, negotiations: NegotiationsData, _, NEGOTIATIONS) =>
+          me runOnUiThread showNegotiationsInfo(negotiations.commitments)
+
+        // Mutual closing is in progress as only a mutual close tx is available
+        case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil), _, CLOSING) =>
+          def updateInterface(depth: CMDDepth) = me runOnUiThread showMutualClosingInfo(tx, depth)
+          kit.subscripts += watchTxDepthLocal(tx.txid.toString).subscribe(updateInterface _)
+          kit.socket.listeners -= kit.restartSocketListener
+          updateInterface(me broadcastAndDepth tx)
+
+        // Old closing data already contains unilateral transactions so do nothing here
+        case (ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING, CLOSING)
+          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
+          Tools log "Yet another channel violating transaction has been caught"
+
+        // Peer has initiated a unilateral channel closing of some kind
+        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING)
+          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
+          kit.subscripts += Obs.interval(20.seconds).subscribe(_ => me manageForcedClosing close)
+          kit.socket.listeners -= kit.restartSocketListener
+      }
+    }
+
+    whenDestroy = anyToRunnable {
+      for (subscript <- kit.subscripts) subscript.unsubscribe
+      kit.socket.listeners -= kit.restartSocketListener
+      kit.chan.listeners -= chanViewListener
+      super.onDestroy
+    }
+
+    registerWatchInputUsedLocal(kit)
+    kit.chan.listeners += chanViewListener
+    kit.socket.listeners += kit.restartSocketListener
+    chanViewListener onBecome kit.chan.initTransition
   }
 
   // UI which does not need a channel access
@@ -129,6 +148,16 @@ class LNOpsActivity extends TimerActivity { me =>
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText getString(ln_ops_chan_bilateral_closing)
       .format(me prettyTxAmount close, humanCanFinalize, humanCurrentState).html
+  }
+
+  private def manageForcedClosing(data: ClosingData) = {
+    val parentDepthMap = LNParams.broadcaster.getParentsDepth
+    val chainHeight = LNParams.broadcaster.currentHeight
+    val txs = ClosingData extractTxs data
+
+    val bss = LNParams.broadcaster.broadcastStatus(txs, parentDepthMap, chainHeight)
+    for (BroadcastStatus(_, true, tx) <- bss) LNParams.broadcaster broadcast tx
+    me runOnUiThread showForcedClosingInfo(bss:_*)
   }
 
   private def showForcedClosingInfo(bss: BroadcastStatus*) = {

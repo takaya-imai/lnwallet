@@ -16,7 +16,6 @@ import com.lightning.wallet.ln.MSat.satFactor
 sealed trait Command
 case object CMDShutdown extends Command
 case object CMDCommitSig extends Command
-case object CMDClosingFinished extends Command
 
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
                           pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
@@ -339,7 +338,7 @@ object Commitments {
   // Instead of forgetting their commit sig
   // we check if it's an old one before proceeding
   def receiveCommit(c: Commitments, commit: CommitSig) =
-    c.localCommit.commit.hashCode == commit.hashCode match {
+    c.localCommit.commit.hashCode == commit.hashCode match { // TODO: should be changed
       case false if remoteHasChanges(c) => doReceiveCommit(c, commit)
       case false => throw ChannelException(COMMIT_RECEIVE_ATTEMPT_NO_CHANGES)
       case true => c
@@ -353,15 +352,6 @@ object Commitments {
     val remotePaymentPubkey = Generators.derivePubKey(c.remoteParams.paymentBasepoint, localPerCommitmentPoint)
     val localPaymentKey = Generators.derivePrivKey(c.localParams.paymentKey, localPerCommitmentPoint)
     val revocation = RevokeAndAck(c.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
-
-    // they sent us a signature for *their* view of *our* next commit tx
-    // so in terms of revocation hashes and indexes we have:
-    // ourCommit.index -> our current revocation hash, which is about to become our old revocation hash
-    // ourCommit.index + 1 -> our next revocation hash, used by *them* to build the sig we've just received, and which
-    // is about to become our current revocation hash
-    // ourCommit.index + 2 -> which is about to become our next revocation hash
-    // we will reply to this sig with our old revocation hash preimage (at index) and our next revocation hash (at index + 1)
-    // and will increment our index
 
     val (localCommitTx, htlcTimeoutTxs, htlcSuccessTxs) =
       Helpers.makeLocalTxs(c.localCommit.index + 1, c.localParams,

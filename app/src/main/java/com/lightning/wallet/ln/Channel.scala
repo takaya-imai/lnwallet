@@ -29,7 +29,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     // GUARD: remote requires us to keep too much in local reserve which is not acceptable
     case (wait @ WaitAcceptData(announce, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT) =>
       val exceedsReserve: Boolean = LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.fundingAmountSat)
-      if (exceedsReserve) become(wait, FINISHED) else become(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
+      if (exceedsReserve) become(wait, CLOSING) else become(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
     // They have accepted our proposal, now let them sign a first commit tx
@@ -56,7 +56,7 @@ class Channel extends StateMachine[ChannelData] { me =>
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
-      if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) become(wait, FINISHED) else {
+      if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) become(wait, CLOSING) else {
         val localCommit = LocalCommit(0L, wait.localSpec, PublishableTxs(Nil, signedLocalCommitTx), null)
         val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit, wait.remoteCommit,
           localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty),
@@ -72,8 +72,8 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED
-    case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
-    case (some, _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, FINISHED)
+    case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, CLOSING)
+    case (some, _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, CLOSING)
 
 
     // FUNDING TX IS BROADCASTED AT THIS POINT
@@ -312,7 +312,6 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // Some other type of tx has been spent while we await for confirmations
     case (closing: ClosingData, CMDFundingSpent(tx), CLOSING) => defineClosingAction(closing, tx)
-    case (closing: ClosingData, CMDClosingFinished, CLOSING) => become(closing, state1 = FINISHED)
     case (_, cmd: CMDAddHtlc, _) => throw DetailedException(HTLC_WRONG_CHANNEL_STATE, cmd)
 
 
@@ -383,7 +382,8 @@ class Channel extends StateMachine[ChannelData] { me =>
     }
 
   private def defineClosingAction(some: ChannelData with HasCommitments, tx: Transaction) =
-    some.commitments.remoteNextCommitInfo.left.map(waiting => waiting.nextRemoteCommit) match {
+    // We are not sure what kind of closing transaction this is so we check against commitments
+    some.commitments.remoteNextCommitInfo.left.map(_.nextRemoteCommit) match {
       case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, tx, remoteCommit)
       case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some, tx)
       case _ => startRemoteOther(some, tx)
@@ -398,7 +398,6 @@ object Channel {
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
-  val FINISHED = "Finished"
   val CLOSING = "Closing"
   val NORMAL = "Normal"
 }

@@ -1,15 +1,17 @@
 package com.lightning.wallet.lncloud
 
-import android.text.{Html, Spanned}
 import com.lightning.wallet.Utils.app
+import org.bitcoinj.core.Sha256Hash
 import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
 import java.math.BigInteger
+import android.text.Html
 
 
 object ImplicitConversions {
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
 
+  implicit def binaryData2Sha256hash(data: BinaryData): Sha256Hash = Sha256Hash wrap data.toArray
   implicit def bitcoinLibScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
     new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis)
 

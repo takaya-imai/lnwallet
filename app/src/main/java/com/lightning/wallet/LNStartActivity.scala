@@ -102,12 +102,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(position: Int): Unit = hideKeys {
     val (announce: NodeAnnouncement, _) = adapter getItem position
-
-    val kit: ChannelKit =
-      ChannelKit apply new Channel {
-        data = InitData apply announce
-        state = Channel.WAIT_FOR_INIT
-      }
+    val kit = ChannelKit(new Channel)
 
     val sockOpenListener = new SocketListener {
       // They can interrupt socket connection at any time
@@ -117,15 +112,17 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val channelOpenListener = new StateMachineListener { self =>
       override def onBecome: PartialFunction[Transition, Unit] = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
-          // Peer has agreed to open a channel so now we ask user to sign a funding
+          // Peer has agreed to open a channel so now we ask user for a tx feerate
           askForFeerate(kit.chan, cmd, accept)
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
           // Peer has provided a signature for a first commit
           kit.socket.listeners -= sockOpenListener
           kit.chan.listeners -= self
+
+          // Just exit to ops
           app.TransData.value = kit
-          finish
+          me exitTo classOf[LNOpsActivity]
       }
 
       override def onPostProcess = {
@@ -135,7 +132,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       }
     }
 
-    me setPeerView position
     whenBackPressed = anyToRunnable {
       kit.chan.listeners -= channelOpenListener
       kit.socket.listeners -= sockOpenListener
@@ -143,6 +139,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       setListView
     }
 
+    me setPeerView position
+    kit.chan.state = WAIT_FOR_INIT
+    kit.chan.data = InitData(announce)
     kit.chan.listeners += channelOpenListener
     kit.socket.listeners += sockOpenListener
     kit.socket.start

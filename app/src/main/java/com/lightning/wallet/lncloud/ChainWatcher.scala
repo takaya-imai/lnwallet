@@ -8,9 +8,9 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
-import rx.lang.scala.{Subscription, Observable => Obs}
-import fr.acinq.bitcoin.{BinaryData, OutPoint}
 import org.bitcoinj.core.{Coin, Transaction}
+import fr.acinq.bitcoin.{BinaryData, OutPoint}
+import rx.lang.scala.{Subscription, Observable => Obs}
 
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
@@ -48,6 +48,12 @@ object ChainWatcher {
       app.kit.wallet removeCoinsReceivedEventListener lst
     }
   }
+
+  def registerWatchInputUsedLocal(kit: ChannelKit) = {
+    val opt = Option(kit.chan.data) collect { case data: ChannelData with HasCommitments => data.commitments }
+    for (cs <- opt) kit.subscripts += watchInputUsedLocal(cs.commitInput.outPoint).subscribe(kit.chan process _)
+    opt.getOrElse(Tools log "InputUsedLocal has not been registered since data has no commitments")
+  }
 }
 
 object StorageWrap {
@@ -65,7 +71,7 @@ object StorageWrap {
 object PaymentSpecWrap extends PaymentSpecBag { me =>
   import com.lightning.wallet.lncloud.PaymentSpecTable._
   private def byHash(hash: BinaryData) = LNParams.db.select(PaymentSpecTable.selectByHashSql, hash.toString)
-  private def byTime = LNParams.db.select(PaymentSpecTable.selectRecentSql, (System.currentTimeMillis - 7.days.toMillis).toString)
+  private def byTime = LNParams.db.select(PaymentSpecTable.selectRecentSql, (System.currentTimeMillis - 14.days.toMillis).toString)
   private def toInfo(rcu: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rcu string data), rcu string status, rcu long stamp)
   def newPreimage: BinaryData = LNParams.derivePreimage(RichCursor(LNParams.db select selectCountSql).head.long(count) + 1)
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = RichCursor(me byHash hash) headTry toInfo
