@@ -1,12 +1,12 @@
 package fr.acinq.bitcoin
 
-import java.io.ByteArrayOutputStream
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.math.BigInteger
 
 import org.spongycastle.asn1.sec.SECNamedCurves
-import org.spongycastle.asn1.{ASN1InputStream, ASN1Integer, DERSequenceGenerator, DLSequence}
+import org.spongycastle.asn1.{ASN1Integer, DERSequenceGenerator}
 import org.spongycastle.crypto.Digest
-import org.spongycastle.crypto.digests._
+import org.spongycastle.crypto.digests.{RIPEMD160Digest, SHA1Digest, SHA256Digest, SHA512Digest}
 import org.spongycastle.crypto.macs.HMac
 import org.spongycastle.crypto.params.{ECDomainParameters, ECPrivateKeyParameters, ECPublicKeyParameters, KeyParameter}
 import org.spongycastle.crypto.signers.{ECDSASigner, HMacDSAKCalculator}
@@ -20,7 +20,7 @@ object Crypto {
   val zero = BigInteger.valueOf(0)
   val one = BigInteger.valueOf(1)
 
-  private def fixSize(data: BinaryData): BinaryData = data.length match {
+  def fixSize(data: BinaryData): BinaryData = data.length match {
     case 32 => data
     case length if length < 32 => Array.fill(32 - length)(0.toByte) ++ data
   }
@@ -139,13 +139,14 @@ object Crypto {
     def toBin(compressed: Boolean): BinaryData = value.getEncoded(compressed)
 
     // because ECPoint is not serializable
-    private def writeReplace: Any = PointProxy(toBin(true))
+    private def writeReplace: Object = PointProxy(toBin(true))
 
     override def toString = toBin(true).toString
-  }
 
-  private case class PointProxy(bin: BinaryData) {
-    def readResolve: Any = Point(bin)
+   }
+
+   case class PointProxy(bin: BinaryData) {
+    def readResolve: Object = Point(bin)
   }
 
   object Point {
@@ -377,15 +378,39 @@ object Crypto {
     * @return the decoded (r, s) signature
     */
   def decodeSignature(blob: Seq[Byte]): (BigInteger, BigInteger) = {
-    val decoder = new ASN1InputStream(blob.toArray)
-    val seq = decoder.readObject.asInstanceOf[DLSequence]
-    val r = seq.getObjectAt(0).asInstanceOf[ASN1Integer]
-    val s = seq.getObjectAt(1).asInstanceOf[ASN1Integer]
-    decoder.close()
-    (r.getPositiveValue, s.getPositiveValue)
+    decodeSignatureLax(blob)
   }
 
-  def verifySignature(data: Seq[Byte], signature: (BigInteger, BigInteger), publicKey: PublicKey): Boolean = {
+  def decodeSignatureLax(input :ByteArrayInputStream) : (BigInteger, BigInteger) = {
+    require(input.read() == 0x30)
+
+    def readLength: Int = {
+      val len = input.read()
+      if ((len & 0x80) == 0) len else {
+        var n = len - 0x80
+        var len1 = 0
+        while (n > 0) {
+          len1 = (len1 << 8) + input.read()
+          n = n - 1
+        }
+        len1
+      }
+    }
+    readLength
+    require(input.read() == 0x02)
+    val lenR = readLength
+    val r = new Array[Byte](lenR)
+    input.read(r)
+    require(input.read() == 0x02)
+    val lenS = readLength
+    val s = new Array[Byte](lenS)
+    input.read(s)
+    (new BigInteger(1, r), new BigInteger(1, s))
+  }
+
+  def decodeSignatureLax(input: BinaryData) : (BigInteger, BigInteger) = decodeSignatureLax(new ByteArrayInputStream(input))
+
+    def verifySignature(data: Seq[Byte], signature: (BigInteger, BigInteger), publicKey: PublicKey): Boolean = {
     val (r, s) = signature
     require(r.compareTo(one) >= 0, "r must be >= 1")
     require(r.compareTo(curve.getN) < 0, "r must be < N")
@@ -433,4 +458,40 @@ object Crypto {
       (r, s)
     }
   }
+
+  /**
+    *
+    * @param x x coordinate
+    * @return a tuple (p1, p2) where p1 and p2 are points on the curve and p1.x = p2.x = x
+    *         p1.y is even, p2.y is odd
+    */
+  def recoverPoint(x: BigInteger) : (Point, Point) = {
+    val x1 = Crypto.curve.getCurve.fromBigInteger(x)
+    val square = x1.square().add(Crypto.curve.getCurve.getA).multiply(x1).add(Crypto.curve.getCurve.getB)
+    val y1 = square.sqrt()
+    val y2 = y1.negate()
+    val R1 = Crypto.curve.getCurve.createPoint(x1.toBigInteger, y1.toBigInteger).normalize()
+    val R2 = Crypto.curve.getCurve.createPoint(x1.toBigInteger, y2.toBigInteger).normalize()
+    if (y1.testBitZero()) (R2, R1) else (R1, R2)
+  }
+
+  /**
+    * Recover public keys from a signature and the message that was signed. This method will return 2 public keys, and the signature
+    * can be verified with both, but only one of them matches that private key that was used to generate the signature.
+    * @param t signature
+    * @param message message that was signed
+    * @return a (pub1, pub2) tuple where pub1 and pub2 are candidates public keys. If you have the recovery id  then use
+    *         pub1 if the recovery id is even and pub2 if it is odd
+    */
+  def recoverPublicKey(t: (BigInteger, BigInteger), message: BinaryData) : (PublicKey, PublicKey) = {
+    val (r, s) = t
+    val m = new BigInteger(1, message)
+
+    val (p1, p2) = recoverPoint(r)
+    val Q1 = (p1.multiply(s).subtract(Crypto.curve.getG.multiply(m))).multiply(r.modInverse(Crypto.curve.getN))
+    val Q2 = (p2.multiply(s).subtract(Crypto.curve.getG.multiply(m))).multiply(r.modInverse(Crypto.curve.getN))
+    (PublicKey(Q1), PublicKey(Q2))
+  }
+
+  def recoverPublicKey(sig: BinaryData, message: BinaryData) : (PublicKey, PublicKey) = recoverPublicKey(Crypto.decodeSignature(sig), message)
 }
