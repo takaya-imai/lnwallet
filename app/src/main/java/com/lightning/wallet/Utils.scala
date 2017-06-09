@@ -8,19 +8,17 @@ import org.bitcoinj.core._
 import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import org.bitcoinj.wallet.listeners._
-
+import com.lightning.wallet.lncloud.ImplicitConversions._
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
-import com.lightning.wallet.lncloud.{Rates, RatesSaver}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
 import java.util.{Timer, TimerTask}
 
-import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
@@ -30,6 +28,7 @@ import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
+import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
@@ -336,7 +335,6 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   override def onDestroy = wrap(super.onDestroy)(timer.cancel)
-  implicit def anyToRunnable(process: => Unit): Runnable = new Runnable { def run = process }
   implicit def uiTask(process: => Runnable): TimerTask = new TimerTask { def run = me runOnUiThread process }
   implicit def str2View(res: CharSequence): LinearLayout = str2Tuple(res) match { case (view, _) => view }
 

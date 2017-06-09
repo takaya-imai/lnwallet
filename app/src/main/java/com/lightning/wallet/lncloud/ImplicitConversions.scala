@@ -11,6 +11,7 @@ import android.text.Html
 object ImplicitConversions {
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
 
+  implicit def anyToRunnable(process: => Unit): Runnable = new Runnable { def run = process }
   implicit def binaryData2Sha256hash(data: BinaryData): Sha256Hash = Sha256Hash wrap data.toArray
   implicit def bitcoinLibScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
     new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis)

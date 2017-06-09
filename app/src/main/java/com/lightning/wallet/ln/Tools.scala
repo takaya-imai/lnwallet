@@ -5,7 +5,7 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.Exceptions._
 
-import rx.lang.scala.{Subscription, Observable => Obs}
+import rx.lang.scala.{Observable => Obs}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
@@ -14,6 +14,7 @@ import com.lightning.wallet.ln.crypto.RandomGenerator
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import language.implicitConversions
 import org.bitcoinj.core.Coin
+import scodec.bits.BitVector
 import java.util.Locale
 
 
@@ -29,7 +30,7 @@ object Tools {
   val random = new RandomGenerator
 
   def runAnd[T](result: T)(action: Any): T = result
-  def log(message: String) = android.util.Log.d("LN", message)
+  def log(message: String): Unit = android.util.Log.d("LN", message)
   def wrap(run: => Unit)(go: => Unit) = try go catch none finally run
   def none: PartialFunction[Any, Unit] = { case _ => }
 
@@ -77,19 +78,18 @@ object Features {
   val CHANNELS_PUBLIC_BIT = 0
   val INITIAL_ROUTING_SYNC_BIT = 2
 
-  private def fromArray(features: BinaryData) =
-    java.util.BitSet.valueOf(features.data.reverse.toArray)
-
-  def isSet(features: BinaryData, bitIndex: Int): Boolean = fromArray(features) get bitIndex
-  def areSupported(features: BinaryData): Boolean = fromArray(features) match { case bitset =>
-    val (accumulator: List[Int], range: Range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
-    val bits = (accumulator /: range) { case (accum, _) => bitset.nextSetBit(accum.head + 1) :: accum }
-    !bits.reverse.exists(value => value % 2 == 0 && value > INITIAL_ROUTING_SYNC_BIT)
+  def isSet(features: BinaryData, bitIndex: Int): Boolean = {
+    val unreversedBitSet: BitVector = BitVector(features.data).reverse
+    bitIndex < unreversedBitSet.size && unreversedBitSet.get(bitIndex)
   }
+
+  def areSupported(features: BinaryData): Boolean =
+    !BitVector(features.data).toIndexedSeq.reverse.zipWithIndex.exists {
+      case bit ~ idx => bit && idx % 2 == 0 && idx > INITIAL_ROUTING_SYNC_BIT
+    }
 }
 
 case class ChannelKit(chan: Channel) { me =>
-  var subscripts: Set[Subscription] = Set.empty
   private val address = chan.data.announce.addresses.head
   lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
     def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
@@ -100,14 +100,14 @@ case class ChannelKit(chan: Channel) { me =>
     def feedForward(msg: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize msg)
   }
 
-  val restartSocketListener = new SocketListener {
-    override def onDisconnect = Obs.just(Tools log "Restarting socket")
+  val reconnectSockListener = new SocketListener {
+    override def onDisconnect = Obs.just(Tools log "Reconnecting a socket")
       .delay(10.seconds).subscribe(_ => socket.start, _.printStackTrace)
   }
 
   socket.listeners += new SocketListener {
     override def onConnect: Unit = handler.init
-    override def onDisconnect = Tools log "Disconnect"
+    override def onDisconnect = Tools log "Sock off"
   }
 
   handler.listeners += new StateMachineListener {
@@ -119,7 +119,7 @@ case class ChannelKit(chan: Channel) { me =>
 
     override def onError = {
       case transportRelated: Throwable =>
-        Tools log s"Handle error $transportRelated"
+        transportRelated.printStackTrace
         chan process CMDShutdown
     }
   }
@@ -130,6 +130,7 @@ case class ChannelKit(chan: Channel) { me =>
         // "00" * 32 is a connection level error which will result in socket closing
         Tools log s"Closing channel from $previousState at $previousData : $data"
         me send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
+        socket.listeners -= reconnectSockListener
 
       case (previousData, data, previousState, state) =>
         val messages = Helpers.extractOutgoingMessages(previousData, data)
@@ -145,7 +146,6 @@ case class ChannelKit(chan: Channel) { me =>
 
     override def onError = {
       case chanRelated: Throwable =>
-        Tools log s"Chan error $chanRelated"
         chanRelated.printStackTrace
     }
   }

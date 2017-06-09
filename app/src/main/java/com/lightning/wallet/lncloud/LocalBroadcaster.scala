@@ -10,11 +10,9 @@ import fr.acinq.bitcoin.Transaction
 
 
 object LocalBroadcaster extends Broadcaster {
-  def broadcast(tx: Transaction): Unit = obsOn(app.kit blockingSend tx,
-    IOScheduler.apply).subscribe(Tools log _.toString, _.printStackTrace)
-
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
+  def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
 
   def getParentsDepth: ParentTxidToDepth = {
     val txs = app.kit.wallet.getTransactions(false).asScala

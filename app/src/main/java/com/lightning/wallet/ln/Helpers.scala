@@ -195,7 +195,7 @@ object Helpers { me =>
       val remoteRevocationPubkey = Generators.revocationPubKey(commitments.localParams.revocationSecret.toPoint,
         remoteCommit.remotePerCommitmentPoint)
 
-      // Remember we are looking at the remote commitment so incoming=true
+      // We are looking at the remote commitment so incoming=true
       // for them is really incoming=false for us and vice versa
 
       val claimSuccessTxs = for {

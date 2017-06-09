@@ -3,58 +3,63 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import com.lightning.wallet.ln._
 import scala.concurrent.duration._
-import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
-import org.bitcoinj.core.{Coin, Transaction}
+import org.bitcoinj.core.{Coin, StoredBlock, Transaction}
 import fr.acinq.bitcoin.{BinaryData, OutPoint}
-import rx.lang.scala.{Subscription, Observable => Obs}
 
 import com.lightning.wallet.helper.RichCursor
+import com.lightning.wallet.ln.Tools.wrap
 import com.lightning.wallet.Utils.app
-import org.bitcoinj.wallet.Wallet
 import scala.util.Try
 
 
+class ReplaceRunnableHolder {
+  private[this] var container = Option.empty[Runnable]
+  def release: Unit = for (runnable <- container) runnable.run
+  def add(r: Runnable) = wrap { container = Some apply r } { release }
+}
+
 object ChainWatcher {
-  def watchTxDepthLocal(watchTxId: String) = Obs[CMDDepth] { obs =>
+  def watchTxDepthLocal(react: CMDDepth => Unit, watchTxId: String) = {
     val listener = new org.bitcoinj.core.listeners.TransactionConfidenceEventListener {
       def onTransactionConfidenceChanged(wallet: org.bitcoinj.wallet.Wallet, tx: Transaction) =
-        if (tx.getHashAsString == watchTxId) obs onNext CMDDepth(tx.getConfidence.getDepthInBlocks)
+        if (tx.getHashAsString == watchTxId) react(CMDDepth apply tx.getConfidence.getDepthInBlocks)
     }
 
     app.kit.wallet addTransactionConfidenceEventListener listener
-    Subscription(app.kit.wallet removeTransactionConfidenceEventListener listener)
+    anyToRunnable(app.kit.wallet removeTransactionConfidenceEventListener listener)
   }
 
-  def watchInputUsedLocal(fundPoint: OutPoint) = Obs[CMDFundingSpent] { obs =>
-    lazy val lst = new WalletCoinsReceivedEventListener with WalletCoinsSentEventListener {
-      def onCoinsSent(w: Wallet, tx: Transaction, prev: Coin, now: Coin) = informIfSpendsInput(tx)
-      def onCoinsReceived(w: Wallet, tx: Transaction, prev: Coin, now: Coin) = informIfSpendsInput(tx)
+  def watchChainHeight(react: Int => Unit) = {
+    val listener = new org.bitcoinj.core.listeners.NewBestBlockListener {
+      def notifyNewBestBlock(bestBlock: StoredBlock) = react(bestBlock.getHeight)
     }
 
-    def informIfSpendsInput(tx: fr.acinq.bitcoin.Transaction) = {
-      val spendsInput = tx.txIn.map(_.outPoint).contains(fundPoint)
-      if (spendsInput) obs onNext CMDFundingSpent(tx)
-    }
-
-    app.kit.wallet addCoinsSentEventListener lst
-    app.kit.wallet addCoinsReceivedEventListener lst
-
-    Subscription {
-      app.kit.wallet removeCoinsSentEventListener lst
-      app.kit.wallet removeCoinsReceivedEventListener lst
-    }
+    app.kit.blockChain addNewBestBlockListener listener
+    anyToRunnable(app.kit.blockChain removeNewBestBlockListener listener)
   }
 
-  def registerWatchInputUsedLocal(kit: ChannelKit) = {
-    val opt = Option(kit.chan.data) collect { case data: ChannelData with HasCommitments => data.commitments }
-    for (cs <- opt) kit.subscripts += watchInputUsedLocal(cs.commitInput.outPoint).subscribe(kit.chan process _)
-    opt.getOrElse(Tools log "InputUsedLocal has not been registered since data has no commitments")
+  def watchInputUsedLocal(react: CMDFundingSpent => Unit, fundPoint: OutPoint) = {
+    val listener = new org.bitcoinj.wallet.listeners.WalletCoinsSentEventListener { me =>
+      def onCoinsSent(w: org.bitcoinj.wallet.Wallet, tx: Transaction, prev: Coin, now: Coin) =
+        if (tx.txIn.map(_.outPoint) contains fundPoint) react(CMDFundingSpent apply tx)
+    }
+
+    app.kit.wallet addCoinsSentEventListener listener
+    anyToRunnable(app.kit.wallet removeCoinsSentEventListener listener)
+  }
+
+  def registerInputUsedLocal(kit: ChannelKit) = {
+    val holder: ReplaceRunnableHolder = new ReplaceRunnableHolder
+    val opt = Option(kit.chan.data) collect { case data: ChannelData with HasCommitments => data }
+    for (data <- opt) holder add watchInputUsedLocal(kit.chan.process, data.commitments.commitInput.outPoint)
+    holder
   }
 }
+
 
 object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {
@@ -67,6 +72,7 @@ object StorageWrap {
     RichCursor(cursor).headTry(_ string StorageTable.value)
   }
 }
+
 
 object PaymentSpecWrap extends PaymentSpecBag { me =>
   import com.lightning.wallet.lncloud.PaymentSpecTable._

@@ -3,9 +3,14 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
+import com.lightning.wallet.lncloud.JsonHttpUtils._
+
+import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+
 import com.lightning.wallet.ln.crypto.Digests
 import com.lightning.wallet.ln.MSat.satFactor
+import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 
 
@@ -42,9 +47,10 @@ object LNParams {
 
   // LNCLOUD AND PATHFINDER
 
+  private[this] val cloudUri = "http://10.0.2.2"
   def currentLNCloud = PrivateDataSaver.tryGetObject map {
-    data => new FailoverLNCloud(new LNCloud("http://10.0.2.2"), data.url)
-  } getOrElse new LNCloud("http://10.0.2.2")
+    data => new FailoverLNCloud(new LNCloud(cloudUri), data.url)
+  } getOrElse new LNCloud(cloudUri)
 
   def currentPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
     privateData => new PrivatePathfinder(new FailoverLNCloud(cloud, privateData.url), channel) { data = privateData }
@@ -76,14 +82,13 @@ object LNParams {
   }
 }
 
-trait Broadcaster {
+trait Broadcaster { me =>
   type ParentTxidToDepth = Map[String, Int]
   def getParentsDepth: ParentTxidToDepth
-  def broadcast(tx: Transaction): Unit
   def currentFeeRate: Long
   def currentHeight: Int
 
-  def broadcastStatus(txs: Seq[Transaction], parents: ParentTxidToDepth): Seq[BroadcastStatus] = {
+  def convertToBroadcastStatus(txs: Seq[Transaction], parents: ParentTxidToDepth): Seq[BroadcastStatus] = {
     val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
 
     augmented map {
@@ -100,4 +105,24 @@ trait Broadcaster {
         else BroadcastStatus(Some(blocksLeft), publishable = false, tx)
     }
   }
+
+  def send(tx: Transaction): String
+  def sendAtOnce(txs: Transaction*) = Obs zip Obs.from(txs map safeSend)
+  def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply)
+    .onErrorReturn(_.getMessage)
+
+  private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
+    bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
+
+  private def extractTxs(bag: RevokedCommitPublished): Seq[Transaction] =
+    bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
+      bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
+
+  private def extractTxs(bag: LocalCommitPublished): Seq[Transaction] =
+    bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
+      bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
+
+  def extractTxs(cd: ClosingData): Seq[Transaction] =
+    cd.mutualClose ++ cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
+      cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
 }

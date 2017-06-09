@@ -23,11 +23,6 @@ class FeaturesSpec {
     }
 
     {
-      println("public channel:" + isSet("01", CHANNELS_PUBLIC_BIT))
-      println("initial routing sync:" + isSet("01", INITIAL_ROUTING_SYNC_BIT))
-    }
-
-    {
       println("features compatibility")
       for (i <- 0 until 16) println(areSupported(Array[Byte](i.toByte)))
       println(!areSupported("14"))

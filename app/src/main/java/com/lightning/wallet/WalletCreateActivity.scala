@@ -1,9 +1,10 @@
 package com.lightning.wallet
 
 import R.string._
-import org.bitcoinj.core.{BlockChain, PeerGroup}
-import android.widget.{Button, EditText, TextView}
+import com.lightning.wallet.lncloud.ImplicitConversions._
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
+import android.widget.{Button, EditText, TextView}
+import org.bitcoinj.core.{BlockChain, PeerGroup}
 
 import com.lightning.wallet.ln.Tools.wrap
 import org.bitcoinj.store.SPVBlockStore

@@ -8,7 +8,6 @@ import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
-
 import com.lightning.wallet.ln.Tools.LightningMessages
 import com.lightning.wallet.ln.MSat.satFactor
 
@@ -72,24 +71,6 @@ case class RemoteCommitPublished(claimMainOutputTx: Seq[Transaction], claimHtlcS
 case class RevokedCommitPublished(claimMainOutputTx: Seq[Transaction], mainPenaltyTx: Seq[Transaction],
                                   claimHtlcTimeoutTxs: Seq[Transaction], htlcTimeoutTxs: Seq[Transaction],
                                   htlcPenaltyTxs: Seq[Transaction], commitTx: Transaction)
-
-object ClosingData {
-  private def extractTxs(bag: LocalCommitPublished): Seq[Transaction] =
-    bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
-      bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
-
-  private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
-    bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
-
-  private def extractTxs(bag: RevokedCommitPublished): Seq[Transaction] =
-    bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
-      bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
-
-  // Order of txs broadcasting matters here!
-  def extractTxs(cd: ClosingData): Seq[Transaction] =
-    cd.mutualClose ++ cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
-      cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
-}
 
 // COMMITMENTS
 
