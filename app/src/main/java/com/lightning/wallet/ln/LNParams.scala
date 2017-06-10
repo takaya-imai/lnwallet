@@ -4,8 +4,6 @@ import fr.acinq.bitcoin._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
-
-import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 
 import com.lightning.wallet.ln.crypto.Digests
@@ -18,11 +16,13 @@ object LNParams {
   val updateFeeMinDiffRatio = 0.25 // Must update
   val maxReserveToFundingRatio = 0.05 // %
   val reserveToFundingRatio = 0.01 // %
-  val untilExpiryBlocks = 6
   val minDepth = 2
 
-  // Public, no initial sync
-  val localFeatures = "03"
+  // How much time do they have to pay
+  val paymentUnixTimeout = 86400 * 3
+
+  // Private, no init sync
+  val localFeatures = "00"
   val globalFeatures = ""
 
   val maxHtlcValue = MilliSatoshi(100000000L)
@@ -48,8 +48,8 @@ object LNParams {
   // LNCLOUD AND PATHFINDER
 
   private[this] val cloudUri = "http://10.0.2.2"
-  def currentLNCloud = PrivateDataSaver.tryGetObject map {
-    data => new FailoverLNCloud(new LNCloud(cloudUri), data.url)
+  def currentLNCloud: LNCloud = PrivateDataSaver.tryGetObject map {
+    privateData => new FailoverLNCloud(new LNCloud(cloudUri), privateData.url)
   } getOrElse new LNCloud(cloudUri)
 
   def currentPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
@@ -69,7 +69,7 @@ object LNParams {
 
   // MISC
 
-  def myHtlcExpiry: Int = broadcaster.currentHeight + untilExpiryBlocks
+  def myHtlcExpiry: Int = broadcaster.currentHeight + 6
   def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
@@ -82,19 +82,15 @@ object LNParams {
   }
 }
 
-trait Broadcaster { me =>
-  type ParentTxidToDepth = Map[String, Int]
-  def getParentsDepth: ParentTxidToDepth
-  def currentFeeRate: Long
-  def currentHeight: Int
-
+trait Broadcaster extends StateMachineListener { me =>
+  def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply).onErrorReturn(_.getMessage)
   def convertToBroadcastStatus(txs: Seq[Transaction], parents: ParentTxidToDepth): Seq[BroadcastStatus] = {
     val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
 
     augmented map {
       // If CSV is zero then whether parent tx is present or not is irrelevant, we look as CLTV
-      case (tx, _, 0L) if tx.lockTime - currentHeight < 1 => BroadcastStatus(None, publishable = true, tx)
-      case (tx, _, 0L) => BroadcastStatus(Some(tx.lockTime - currentHeight), publishable = false, tx)
+      case (tx, _, 0) if tx.lockTime - currentHeight < 1 => BroadcastStatus(None, publishable = true, tx)
+      case (tx, _, 0) => BroadcastStatus(Some(tx.lockTime - currentHeight), publishable = false, tx)
       // If CSV is not zero but parent tx is not published then we wait for parent
       case (tx, None, _) => BroadcastStatus(None, publishable = false, tx)
 
@@ -106,10 +102,11 @@ trait Broadcaster { me =>
     }
   }
 
+  type ParentTxidToDepth = Map[String, Int]
+  def getParentsDepth: ParentTxidToDepth
   def send(tx: Transaction): String
-  def sendAtOnce(txs: Transaction*) = Obs zip Obs.from(txs map safeSend)
-  def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply)
-    .onErrorReturn(_.getMessage)
+  def currentFeeRate: Long
+  def currentHeight: Int
 
   private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
     bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
@@ -123,6 +120,9 @@ trait Broadcaster { me =>
       bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 
   def extractTxs(cd: ClosingData): Seq[Transaction] =
-    cd.mutualClose ++ cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
+    cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
       cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
+
+  def convertToBroadcastStatus(close: ClosingData): Seq[BroadcastStatus] =
+    convertToBroadcastStatus(me extractTxs close, getParentsDepth)
 }

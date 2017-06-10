@@ -19,7 +19,7 @@ import scala.util.Try
 class ReplaceRunnableHolder {
   private[this] var container = Option.empty[Runnable]
   def release: Unit = for (runnable <- container) runnable.run
-  def add(r: Runnable) = wrap { container = Some apply r } { release }
+  def hold(run: Runnable) = wrap { container = Some apply run } { release }
 }
 
 object ChainWatcher {
@@ -33,7 +33,7 @@ object ChainWatcher {
     anyToRunnable(app.kit.wallet removeTransactionConfidenceEventListener listener)
   }
 
-  def watchChainHeight(react: Int => Unit) = {
+  def watchChainHeightLocal(react: Int => Unit) = {
     val listener = new org.bitcoinj.core.listeners.NewBestBlockListener {
       def notifyNewBestBlock(bestBlock: StoredBlock) = react(bestBlock.getHeight)
     }
@@ -52,10 +52,9 @@ object ChainWatcher {
     anyToRunnable(app.kit.wallet removeCoinsSentEventListener listener)
   }
 
-  def registerInputUsedLocal(kit: ChannelKit) = {
-    val holder: ReplaceRunnableHolder = new ReplaceRunnableHolder
-    val opt = Option(kit.chan.data) collect { case data: ChannelData with HasCommitments => data }
-    for (data <- opt) holder add watchInputUsedLocal(kit.chan.process, data.commitments.commitInput.outPoint)
+  def registerInputUsedLocal(chan: Channel) = new ReplaceRunnableHolder match { case holder =>
+    val commitmentsOpt = Option(chan.data) collect { case data: ChannelData with HasCommitments => data.commitments }
+    for (data <- commitmentsOpt) holder hold watchInputUsedLocal(chan.process, data.commitInput.outPoint)
     holder
   }
 }

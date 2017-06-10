@@ -46,14 +46,18 @@ class LNOpsActivity extends TimerActivity { me =>
       }
     }
 
-  private def rebroadcast(tx: Transaction) = {
+  private def getDepth(tx: Transaction) = {
     val txOpt = Option(app.kit.wallet getTransaction tx.hash)
     val depthOpt = txOpt.map(_.getConfidence.getDepthInBlocks)
-    LNParams.broadcaster safeSend tx foreach Tools.log
     CMDDepth(depthOpt getOrElse 0)
   }
 
   private def kitIsPresent(kit: ChannelKit) = {
+    val interfaceHolder = new ReplaceRunnableHolder
+    val inputUsedHolder = registerInputUsedLocal(kit.chan)
+
+    // UI which needs a channel access
+
     def manageOpeningInfo(c: Commitments)(cmd: CMDDepth) = {
       val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
       val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
@@ -81,17 +85,14 @@ class LNOpsActivity extends TimerActivity { me =>
       mkForm(mkChoiceDialog(ok = Future { kit.chan process CMDShutdown }, none,
         ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
-
-    val interfaceHolder = new ReplaceRunnableHolder
-    val inputUsedHolder = registerInputUsedLocal(kit)
+    // UI updating listener
 
     val chanViewListener = new StateMachineListener {
       override def onBecome: PartialFunction[Transition, Unit] = {
-        // null indicates this is a startup call and makes this case idempotent
+        // null indicates this is a startup call so this case is idempotent
         case (null, WaitFundingConfirmedData(_, _, _, tx, commitments), null, WAIT_FUNDING_DONE) =>
-          interfaceHolder add watchTxDepthLocal(manageOpeningInfo(commitments), tx.txid.toString)
-          app.kit.wallet addWatchedScript commitments.commitInput.txOut.publicKeyScript
-          manageOpeningInfo(commitments)(me rebroadcast tx)
+          interfaceHolder hold watchTxDepthLocal(manageOpeningInfo(commitments), tx.txid.toString)
+          manageOpeningInfo(commitments)(me getDepth tx)
 
         case (_, norm: NormalData, _, NORMAL)
           // GUARD: mutual shutdown has been initiated
@@ -100,7 +101,8 @@ class LNOpsActivity extends TimerActivity { me =>
 
         // Both sides have sent a funding locked
         case (_, norm: NormalData, _, NORMAL) =>
-          me exitTo classOf[LNActivity]
+          println("NORMAL STATE REACHED")
+          //me exitTo classOf[LNActivity]
 
         // Closing tx fee negotiations are in process
         case (_, negs: NegotiationsData, _, NEGOTIATIONS) =>
@@ -108,8 +110,8 @@ class LNOpsActivity extends TimerActivity { me =>
 
         // Mutual closing is in progress as only a mutual close tx is available
         case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil), _, CLOSING) =>
-          interfaceHolder add watchTxDepthLocal(showMutualClosingInfo(tx), tx.txid.toString)
-          showMutualClosingInfo(tx)(me rebroadcast tx)
+          interfaceHolder hold watchTxDepthLocal(manageMutualClosing(tx), tx.txid.toString)
+          manageMutualClosing(tx)(me getDepth tx)
 
         // Mutual closing but we have no transactions so just drop it
         case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil), _, CLOSING) =>
@@ -118,22 +120,24 @@ class LNOpsActivity extends TimerActivity { me =>
         // Someone has initiated a unilateral channel closing
         case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING)
           if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          interfaceHolder add watchChainHeight(_ => me manageForcedClosing close)
-          me startForcedClosing close
+          interfaceHolder hold watchChainHeightLocal(_ => me manageForcedClosing close)
+          me manageForcedClosing close
       }
     }
 
     whenDestroy = anyToRunnable {
       kit.socket.listeners -= kit.reconnectSockListener
+      kit.chan.listeners -= LNParams.broadcaster
       kit.chan.listeners -= chanViewListener
       interfaceHolder.release
       inputUsedHolder.release
       super.onDestroy
     }
 
-    kit.chan.listeners += chanViewListener
     kit.socket.listeners += kit.reconnectSockListener
-    chanViewListener onBecome kit.chan.initTransition
+    kit.chan.listeners += LNParams.broadcaster
+    kit.chan.listeners += chanViewListener
+    kit.chan.initBecome
   }
 
   // UI which does not need a channel access
@@ -141,7 +145,7 @@ class LNOpsActivity extends TimerActivity { me =>
   private def prettyTxAmount(tx: Transaction) =
     sumIn format withSign(tx.txOut.head.amount)
 
-  private def showMutualClosingInfo(close: Transaction)(cmd: CMDDepth) = {
+  private def manageMutualClosing(close: Transaction)(cmd: CMDDepth) = {
     val humanCanFinalize: String = app.plurOrZero(txsConfs, LNParams.minDepth)
     val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)
     me runOnUiThread updateInterface
@@ -154,24 +158,15 @@ class LNOpsActivity extends TimerActivity { me =>
     }
   }
 
-  // FORCED CLOSING VIEW AND LOGIC
-
-  private def startForcedClosing(close: ClosingData) = {
-    val txs = for (lc <- close.localCommit) yield lc.commitTx
-    // First we try to spend a local commit tx, then all the 2nd tier transactions
-    val sender = LNParams.broadcaster.sendAtOnce(txs:_*).map(_ mkString "\n\n")
-    sender.doOnTerminate(me manageForcedClosing close) foreach Tools.log
-    me manageForcedClosing close
-  }
-
   private def manageForcedClosing(data: ClosingData) = {
-    val secondTierTxs = LNParams.broadcaster extractTxs data
-    val parentDepthMap = LNParams.broadcaster.getParentsDepth
-    // Broadcast all the suitable transactions and update user interface accordingly
-    val bss = LNParams.broadcaster.convertToBroadcastStatus(secondTierTxs, parentDepthMap)
-    val txsToSend = bss collect { case castStatus if castStatus.publishable => castStatus.tx }
-    LNParams.broadcaster.sendAtOnce(txsToSend:_*).map(_ mkString "\n\n") foreach none
+    val bss = LNParams.broadcaster convertToBroadcastStatus data
     me runOnUiThread updateInterface
+
+    def castStatusView(status: BroadcastStatus): String = status match {
+      case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
+      case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
+      case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
+    }
 
     def updateInterface = {
       val schedule = bss map castStatusView mkString "<br>"
@@ -180,15 +175,9 @@ class LNOpsActivity extends TimerActivity { me =>
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start
     }
-
-    def castStatusView(status: BroadcastStatus): String = status match {
-      case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
-      case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
-      case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
-    }
   }
 
-  // OFFER TO CREATE A NEW CHANNEL
+  // Offer to create a new channel
 
   private def showNoKitPresentInfo: Unit = {
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)

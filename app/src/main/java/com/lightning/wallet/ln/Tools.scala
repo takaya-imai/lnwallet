@@ -173,9 +173,10 @@ trait StateMachineListener {
 
 abstract class StateMachine[T] { self =>
   var listeners = Set.empty[StateMachineListener]
-  def initTransition = (null, data, null, state)
-  def stayWith(data1: T) = become(data1, state)
-  def doProcess(change: Any): Unit
+  def initBecome = events onBecome Tuple4(null, data, null, state)
+  def stayWith(d1: T) = become(d1, state)
+  def doProcess(change: Any)
+
   var state: String = _
   var data: T = _
 

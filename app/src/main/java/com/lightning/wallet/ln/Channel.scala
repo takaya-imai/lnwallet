@@ -7,8 +7,8 @@ import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
-import fr.acinq.bitcoin.Crypto.{Point, PublicKey}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+import fr.acinq.bitcoin.Crypto.Point
 
 
 class Channel extends StateMachine[ChannelData] { me =>
@@ -200,18 +200,6 @@ class Channel extends StateMachine[ChannelData] { me =>
       if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, confirmationCount) =>
       startLocalCurrentClose(norm)
 
-
-    // Can only send announcement signatures when no closing is in progress and no closing sigs present
-    case (norm @ NormalData(_, commitments, None, None, false), remote: AnnouncementSignatures, NORMAL) =>
-      val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(remote.shortChannelId, LNParams.nodePrivateKey,
-        PublicKey(norm.announce.nodeId), commitments.localParams.fundingPrivKey, commitments.remoteParams.fundingPubKey,
-        LNParams.globalFeatures)
-
-      // Let the other node announce our channel availability
-      val as = AnnouncementSignatures(commitments.channelId, remote.shortChannelId, localNodeSig, localBitcoinSig)
-      me stayWith norm.copy(commitments = Commitments.addUnacked(commitments, as), announced = true)
-
-
     // When initiating or receiving a shutdown message
     // we can't proceed until all local changes are cleared
     // and we can't enter negotiations util pending HTLCs are present
@@ -359,6 +347,14 @@ class Channel extends StateMachine[ChannelData] { me =>
     }
   }
 
+  private def defineClosingAction(some: ChannelData with HasCommitments, tx: Transaction) =
+    // We are not sure what kind of closing transaction this is so we check against commitments
+    some.commitments.remoteNextCommitInfo.left.map(_.nextRemoteCommit) match {
+      case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, tx, remoteCommit)
+      case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some, tx)
+      case _ => startRemoteOther(some, tx)
+    }
+
   private def startRemoteCurrentClose(some: ChannelData with HasCommitments, commitTx: Transaction) =
     // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take what's ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, commitTx, LNParams.bag) -> some match {
@@ -379,14 +375,6 @@ class Channel extends StateMachine[ChannelData] { me =>
       case (Some(claim), closing: ClosingData) => become(closing.modify(_.revokedCommits).using(claim +: _), CLOSING)
       case (Some(claim), _) => become(ClosingData(some.announce, some.commitments, revokedCommits = claim :: Nil), CLOSING)
       case (None, _) => startLocalCurrentClose(some) // Info leak, try to spend current commit
-    }
-
-  private def defineClosingAction(some: ChannelData with HasCommitments, tx: Transaction) =
-    // We are not sure what kind of closing transaction this is so we check against commitments
-    some.commitments.remoteNextCommitInfo.left.map(_.nextRemoteCommit) match {
-      case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, tx, remoteCommit)
-      case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some, tx)
-      case _ => startRemoteOther(some, tx)
     }
 }
 
