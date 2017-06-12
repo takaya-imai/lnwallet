@@ -36,6 +36,7 @@ import com.lightning.wallet.test.LNCloudSpec
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import org.bitcoinj.core.{Address, Sha256Hash, Transaction}
 import org.bitcoinj.script.ScriptBuilder
+import org.bitcoinj.uri.BitcoinURI
 import rx.lang.scala.schedulers.IOScheduler
 
 import scala.concurrent.Future
@@ -75,7 +76,6 @@ with ListUpdater with SearchBar { me =>
   lazy val lnItemsList = findViewById(R.id.lnItemsList).asInstanceOf[ListView]
   lazy val lnTitle = me getString ln_title
   //lazy val adapter = new LNAdapter
-  private[this] var hasNfc = true
 
   // Adapter for ln txs list
 //  class LNAdapter extends BaseAdapter {
@@ -141,17 +141,6 @@ with ListUpdater with SearchBar { me =>
 ////      transactCircle setImageResource image
 //    }
 //  }
-
-  // NDEF management
-  // Do not react in any way by default
-  def onNfcFeatureNotFound = hasNfc = false
-  def onNfcStateChange(ok: Boolean) = none
-  def onNfcStateDisabled = none
-  def onNfcStateEnabled = none
-
-  def readNonNdefMessage = none
-  def readEmptyNdefMessage = none
-  def readNdefMessage(msg: Message) = none
 
   // Temporairly update title and subtitle info
   def notifySubTitle(subtitle: String, infoType: Int) = {
@@ -228,9 +217,44 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  def goBitcoin(top: View) = me goTo classOf[LNOpsActivity]
+  // Data reading
 
-  override def onResume = wrap(super.onResume)(app.TransData.value = null)
+  override def onResume: Unit =
+    wrap(super.onResume)(checkTransData)
+
+  def readNdefMessage(msg: Message) = try {
+    val asText = readFirstTextNdefMessage(msg)
+    app.TransData recordValue asText
+    checkTransData
+
+  } catch { case _: Throwable =>
+    // Could not process a message
+    app toast nfc_error
+  }
+
+  def onNfcStateEnabled = none
+  def onNfcStateDisabled = none
+  def onNfcFeatureNotFound = none
+  def onNfcStateChange(ok: Boolean) = none
+  def readNonNdefMessage = app toast nfc_error
+  def readEmptyNdefMessage = app toast nfc_error
+
+  // Working with transitional data
+  def checkTransData = app.TransData.value match {
+    case uri: BitcoinURI => me goTo classOf[BtcActivity]
+    case adr: Address => me goTo classOf[BtcActivity]
+
+    case invoice: Invoice =>
+      Tools log s"Got $invoice"
+      app.TransData.value = null
+
+    case unusable =>
+      Tools log s"Unusable $unusable"
+      app.TransData.value = null
+  }
+
+
+  def goBitcoin(top: View) = me goTo classOf[LNOpsActivity]
 
   class SetBackupServer { self =>
     val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)

@@ -2,6 +2,7 @@ package com.lightning.wallet
 
 import android.widget._
 import org.bitcoinj.core._
+
 import collection.JavaConverters._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
@@ -9,10 +10,10 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
-import com.lightning.wallet.Utils.{app, sumIn, sumOut}
+import com.lightning.wallet.Utils.{TryMSat, app, sumIn, sumOut}
 import android.view.{Menu, MenuItem, View, ViewGroup}
-import scala.util.{Failure, Success, Try}
 
+import scala.util.{Failure, Success, Try}
 import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
@@ -20,17 +21,19 @@ import com.lightning.wallet.ln.LNParams.minDepth
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
+
 import android.graphics.Typeface
+
 import scala.collection.mutable
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.net.Uri
-
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
+import com.lightning.wallet.ln.Invoice
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -232,17 +235,10 @@ with ListUpdater { me =>
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  private def localBitcoinsAndGlidera = {
-    val msg = getString(buy_info).format(app.kit.currentAddress.toString)
-    mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
-  }
+  // Data reading
 
-  override def onResume = {
+  override def onResume: Unit =
     wrap(super.onResume)(checkTransData)
-    app.TransData.value = null
-  }
-
-  // NFC
 
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
@@ -254,19 +250,36 @@ with ListUpdater { me =>
     app toast nfc_error
   }
 
-  // Working with transitional data and NFC
-  def checkTransData = app.TransData.value match {
-    case uri: BitcoinURI => sendBtcTxPopup.set(Try(uri.getAmount), uri.getAddress)
-    case bitcoinAddress: Address => sendBtcTxPopup setAddress bitcoinAddress
-    case unusable => println(s"Unknown TransData: $unusable")
-  }
-
   def onNfcStateEnabled = none
   def onNfcStateDisabled = none
   def onNfcFeatureNotFound = none
   def onNfcStateChange(ok: Boolean) = none
   def readNonNdefMessage = app toast nfc_error
   def readEmptyNdefMessage = app toast nfc_error
+
+  // Working with transitional data
+  def checkTransData = app.TransData.value match {
+    case invoice: Invoice => me goTo classOf[LNActivity]
+
+    case uri: BitcoinURI =>
+      val tryAmount: TryMSat = Try(uri.getAmount)
+      sendBtcTxPopup.set(tryAmount, uri.getAddress)
+      app.TransData.value = null
+
+    case adr: Address =>
+      sendBtcTxPopup setAddress adr
+      app.TransData.value = null
+
+    case unusable =>
+      println(s"Unusable $unusable")
+      app.TransData.value = null
+  }
+
+  // Buy bitcoins
+  private def localBitcoinsAndGlidera = {
+    val msg = getString(buy_info).format(app.kit.currentAddress.toString)
+    mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
+  }
 
   // Expand all txs
   def toggle(v: View) = {

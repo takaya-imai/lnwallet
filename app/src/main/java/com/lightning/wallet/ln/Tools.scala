@@ -9,7 +9,6 @@ import rx.lang.scala.{Observable => Obs}
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
-
 import com.lightning.wallet.ln.crypto.RandomGenerator
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import language.implicitConversions
