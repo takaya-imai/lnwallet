@@ -178,15 +178,16 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     setVis(View.GONE, View.VISIBLE)
   }
 
-  def askForFunding(chan: Channel, their: Init) = runOnUiThread {
+  def askForFunding(chan: Channel, their: Init) = {
     val humanBalance = sumIn format withSign(app.kit.currentBalance)
     val humanCap = sumIn format withSign(LNParams.maxChannelCapacity)
-    val titleTop = getString(ln_ops_start_fund_title).format(humanBalance, humanCap).html
+    val title = getString(ln_ops_start_fund_title).format(humanBalance, humanCap).html
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_noaddress, null, false)
     val builder = negPosBld(dialog_cancel, dialog_next)
+    me runOnUiThread showFundingForm
 
     def showFundingForm = {
-      val alert = mkForm(builder, titleTop, content)
+      val alert = mkForm(builder, title, content)
       val rateManager = new RateManager(content)
 
       def attempt = rateManager.result match {
@@ -207,16 +208,14 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
       chan process CMDOpenChannel(localParams, random getBytes 32, initFeeratePerKw, pushMsat = 1000000, their, amountSat)
     }
-
-    // Pick a sum
-    showFundingForm
   }
 
-  def askForFeerate(chan: Channel, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = runOnUiThread {
-    val multisig: ScriptEltSeq = multiSig2of2(cmd.localParams.fundingPrivKey.publicKey, accept.fundingPubkey)
+  def askForFeerate(chan: Channel, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = {
+    val multisig = multiSig2of2(cmd.localParams.fundingPrivKey.publicKey, accept.fundingPubkey)
     val scriptPubKey = Script.write(Script pay2wsh multisig)
+    me runOnUiThread makeProcessor.chooseFee
 
-    val processor = new TxProcessor {
+    def makeProcessor = new TxProcessor {
       val funding = Coin valueOf cmd.fundingAmountSat
       val pay = P2WSHData(funding, scriptPubKey)
 
@@ -230,8 +229,5 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         chan process Tuple2(tx, outIndex)
       }
     }
-
-    // Pick a fee
-    processor.chooseFee
   }
 }

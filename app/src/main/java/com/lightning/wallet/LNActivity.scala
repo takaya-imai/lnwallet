@@ -3,7 +3,7 @@ package com.lightning.wallet
 import android.nfc.NfcEvent
 import com.lightning.wallet.R.string._
 import android.content._
-import android.text.Html
+import android.text.{Html, Spanned}
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import org.bitcoinj.core.Utils.HEX
@@ -29,6 +29,7 @@ import android.view.View.OnClickListener
 import android.webkit.URLUtil
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.helper._
+import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln.wire.UpdateAddHtlc
 import com.lightning.wallet.ln._
 import com.lightning.wallet.lncloud.{PrivateData, PrivateDataSaver}
@@ -72,9 +73,9 @@ class LNActivity extends NfcReaderActivity
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
-  def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
+  lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
   lazy val lnItemsList = findViewById(R.id.lnItemsList).asInstanceOf[ListView]
-  lazy val lnTitle = me getString ln_title
+  lazy val lnTitle = getString(ln_title)
   //lazy val adapter = new LNAdapter
 
   // Adapter for ln txs list
@@ -254,7 +255,37 @@ with ListUpdater with SearchBar { me =>
   }
 
 
-  def goBitcoin(top: View) = me goTo classOf[LNOpsActivity]
+  // Reactions to menu
+  def goBitcoin(top: View) = {
+    me goTo classOf[BtcActivity]
+    fab close true
+  }
+
+  def goQR(top: View) = {
+    me goTo classOf[ScanActivity]
+    fab close true
+  }
+
+  def makePaymentRequest = {
+    val humanCap = sumIn format withSign(LNParams.maxHtlcValue)
+    val title = getString(ln_receive_max_amount).format(humanCap).html
+    val content = getLayoutInflater.inflate(R.layout.frag_input_send_noaddress, null, false)
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
+    val rateManager = new RateManager(content)
+
+    def attempt = rateManager.result match {
+      case Failure(_) => app toast dialog_sum_empty
+      case Success(ms) => println(ms)
+    }
+
+    val ok = alert getButton BUTTON_POSITIVE
+    ok setOnClickListener onButtonTap(attempt)
+  }
+
+  def goReceive(top: View) = {
+    me delayUI makePaymentRequest
+    fab close true
+  }
 
   class SetBackupServer { self =>
     val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)

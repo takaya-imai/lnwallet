@@ -32,20 +32,12 @@
             style="@style/FabButton"/>
 
         <com.github.clans.fab.FloatingActionButton
-            android:src="@drawable/ic_arrow_upward_white_18dp"
-            fab:fab_label="@string/action_bitcoin_send"
-            fab:fab_colorPressed="@color/ln"
-            fab:fab_colorNormal="@color/ln"
-            fab:fab_colorRipple="@color/ln"
-            style="@style/FabButton"
-            fab:fab_size="mini"/>
-
-        <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_downward_white_18dp"
-            fab:fab_label="@string/action_bitcoin_receive"
+            fab:fab_label="@string/ln_receive"
             fab:fab_colorPressed="@color/ln"
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
+            android:onClick="goReceive"
             style="@style/FabButton"
             fab:fab_size="mini"/>
 
@@ -56,6 +48,7 @@
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
             style="@style/FabButton"
+            android:onClick="goQR"
             fab:fab_size="mini"/>
 
     </com.github.clans.fab.FloatingActionMenu>

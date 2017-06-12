@@ -69,7 +69,7 @@
     <string name="tx_received">Just received %1$s</string>
     <string name="tx_sent">Just sent %1$s</string>
 
-    <string name="ln_select_peer">Select a peer</string>
+    <string name="ln_select_peer">Select peer</string>
     <string name="ln_notify_working">Working&#8230;</string>
     <string name="ln_notify_operational">Channel is ready</string>
 
@@ -137,9 +137,11 @@
     <!-- titles -->
     <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
     <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
+    <string name="ln_receive_max_amount"><![CDATA[Receive payment<br><br><small>Max amount %1$s</small>]]></string>
 
     <!-- activity_ln, activity_ln_pass -->
     <string name="ln_close">Close channel</string>
+    <string name="ln_receive">Receive payment</string>
     <string name="ln_force_close">Force close channel</string>
     <string name="ln_backup">Set Backup Server</string>
     <string name="ln_search">Find payments</string>
@@ -170,7 +172,7 @@
         <item><![CDATA[in <strong>%1$s</strong> blocks]]></item>
     </array>
 
-    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>BTC balance: %1$s<br>Max capacity: %2$s</small>]]></string>
+    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>BTC balance %1$s<br>Max capacity %2$s</small>]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>
