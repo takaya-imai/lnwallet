@@ -72,8 +72,9 @@ object RatesSaver extends Saver {
     def delayed = withDelay(periodically, rates.stamp, updatePeriod.toMillis)
 
     delayed foreach { case newFee ~ newFiat =>
-      val updatedFeeHistory = newFee("3") +: rates.feeHistory take 6
-      rates = Rates(updatedFeeHistory, newFiat, System.currentTimeMillis)
+      val feeHistory1 = newFee("6") +: rates.feeHistory take 6
+      val feeHistory2 = for (fee <- feeHistory1 if fee > 0) yield fee
+      rates = Rates(feeHistory2, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }
