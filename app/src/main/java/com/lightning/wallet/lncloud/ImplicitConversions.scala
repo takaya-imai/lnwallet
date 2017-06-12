@@ -13,7 +13,7 @@ object ImplicitConversions {
   implicit def anyToRunnable(process: => Unit): Runnable = new Runnable { def run = process }
   implicit def binaryData2Sha256hash(data: BinaryData): Sha256Hash = Sha256Hash wrap data.toArray
   implicit def bitcoinLibScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
-    new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis)
+    new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis / 1000)
 
   implicit def bitcoinjTx2bitcoinLibTx(bitcoinjTx: org.bitcoinj.core.Transaction): fr.acinq.bitcoin.Transaction =
     fr.acinq.bitcoin.Transaction.read(bitcoinjTx.unsafeBitcoinSerialize)

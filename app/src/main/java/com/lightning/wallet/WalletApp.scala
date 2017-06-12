@@ -7,8 +7,7 @@ import org.bitcoinj.uri.{BitcoinURIParseException, OptionalFieldValidationExcept
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, RequiredFieldValidationException}
 import android.content.{ClipData, ClipboardManager, Context}
-import org.bitcoinj.wallet.{Protos, Wallet}
-import listeners.TransactionConfidenceEventListener
+import org.bitcoinj.wallet.Protos
 import com.lightning.wallet.ln.LNParams.minDepth
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
@@ -110,7 +109,7 @@ class WalletApp extends Application { me =>
     }
 
     def setupAndStartDownload = {
-      wallet.allowSpendingUnconfirmedTransactions
+      wallet setAcceptRiskyTransactions true
       wallet addCoinsSentEventListener Vibr.generalTracker
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addTransactionConfidenceEventListener Vibr.generalTracker
@@ -138,11 +137,9 @@ object Vibr {
   val confirmed = Array(0L, 75, 250, 75, 250)
   val processed = Array(0L, 85, 200)
 
-  val generalTracker = new NativeTxTracker with TransactionConfidenceEventListener {
-    override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
-    override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
-    def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) =
-      if (tx.getConfidence.getDepthInBlocks == minDepth)
-        vibrate(confirmed)
+  val generalTracker = new TxTracker {
+    override def txConfirmed(tx: Transaction) = vibrate(confirmed)
+    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
+    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
   }
 }

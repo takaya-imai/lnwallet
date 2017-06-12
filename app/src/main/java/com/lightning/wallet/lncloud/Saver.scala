@@ -6,13 +6,13 @@ import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 
+import org.bitcoinj.core.{Coin, Transaction}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.ln.~
-import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
 
@@ -61,7 +61,7 @@ object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, RatesMap)
-  val KEY = "rates"
+  val KEY = "rates1"
 
   private val updatePeriod: FiniteDuration = 20.minutes
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
@@ -82,6 +82,6 @@ object RatesSaver extends Saver {
 case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
   lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
   lazy val cutOutliers = Coin parseCoin statistics.meanWithin(feeHistory, stdDevs = 1)
-  lazy val feeLive = if (feeHistory.isEmpty) Coin valueOf 50000 else cutOutliers
+  lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else cutOutliers
   lazy val feeRisky = feeLive div 2
 }

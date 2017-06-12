@@ -10,8 +10,6 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.Utils.{app, sumIn}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
-
-import com.lightning.wallet.lncloud.ReplaceRunnableHolder
 import concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import android.widget.Button
@@ -46,25 +44,18 @@ class LNOpsActivity extends TimerActivity { me =>
       }
     }
 
-  private def getDepth(tx: Transaction) = {
-    val txOpt = Option(app.kit.wallet getTransaction tx.hash)
-    val depthOpt = txOpt.map(_.getConfidence.getDepthInBlocks)
-    CMDDepth(depthOpt getOrElse 0)
+  private def getConfirmations(tx: Transaction) = {
+    val txOpt = Option(app.kit.wallet getTransaction tx.txid)
+    txOpt.map(_.getConfidence.getDepthInBlocks) getOrElse 0
   }
 
   private def kitIsPresent(kit: ChannelKit) = {
-    val interfaceHolder = new ReplaceRunnableHolder
-    val inputUsedHolder = registerInputUsedLocal(kit.chan)
-
-    // UI which needs a channel access
-
-    def manageOpeningInfo(c: Commitments)(cmd: CMDDepth) = {
+    def manageOpeningInfo(c: Commitments, confs: Int) = {
       val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
       val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
-      val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)
+      val humanCurrentState = app.plurOrZero(txsConfs, confs)
       val humanCanReceive = app.plurOrZero(txsConfs, 6)
       me runOnUiThread updateInterface
-      kit.chan process cmd
 
       def updateInterface = {
         lnOpsAction setText ln_force_close
@@ -89,10 +80,9 @@ class LNOpsActivity extends TimerActivity { me =>
 
     val chanViewListener = new StateMachineListener {
       override def onBecome: PartialFunction[Transition, Unit] = {
-        // null indicates this is a startup call so this case is idempotent
-        case (null, WaitFundingConfirmedData(_, _, _, tx, commitments), null, WAIT_FUNDING_DONE) =>
-          interfaceHolder hold watchTxDepthLocal(manageOpeningInfo(commitments), tx.txid.toString)
-          manageOpeningInfo(commitments)(me getDepth tx)
+        // A new channel has been created with funding tx broadcasted so now we wait
+        case (_, WaitFundingConfirmedData(_, _, _, tx, commitments), _, WAIT_FUNDING_DONE) =>
+          manageOpeningInfo(commitments, me getConfirmations tx)
 
         case (_, norm: NormalData, _, NORMAL)
           // GUARD: mutual shutdown has been initiated
@@ -101,8 +91,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
         // Both sides have sent a funding locked
         case (_, norm: NormalData, _, NORMAL) =>
-          println("NORMAL STATE REACHED")
-          //me exitTo classOf[LNActivity]
+          me exitTo classOf[LNActivity]
 
         // Closing tx fee negotiations are in process
         case (_, negs: NegotiationsData, _, NEGOTIATIONS) =>
@@ -110,8 +99,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
         // Mutual closing is in progress as only a mutual close tx is available
         case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil), _, CLOSING) =>
-          interfaceHolder hold watchTxDepthLocal(manageMutualClosing(tx), tx.txid.toString)
-          manageMutualClosing(tx)(me getDepth tx)
+          me manageMutualClosing tx
 
         // Mutual closing but we have no transactions so just drop it
         case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil), _, CLOSING) =>
@@ -120,24 +108,30 @@ class LNOpsActivity extends TimerActivity { me =>
         // Someone has initiated a unilateral channel closing
         case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs), _, CLOSING)
           if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          interfaceHolder hold watchChainHeightLocal(_ => me manageForcedClosing close)
           me manageForcedClosing close
       }
+
+      override def onError = {
+        case channelRelated: Throwable =>
+          Tools log s"Channel $channelRelated"
+          kit.chan process CMDShutdown
+      }
     }
+
+    // TODO: this is temporary
+    watchBlockchainLocal(kit.chan)
 
     whenDestroy = anyToRunnable {
       kit.socket.listeners -= kit.reconnectSockListener
       kit.chan.listeners -= LNParams.broadcaster
       kit.chan.listeners -= chanViewListener
-      interfaceHolder.release
-      inputUsedHolder.release
       super.onDestroy
     }
 
     kit.socket.listeners += kit.reconnectSockListener
     kit.chan.listeners += LNParams.broadcaster
     kit.chan.listeners += chanViewListener
-    kit.chan.initBecome
+    kit.chan.initEventsBecome
   }
 
   // UI which does not need a channel access
@@ -145,9 +139,9 @@ class LNOpsActivity extends TimerActivity { me =>
   private def prettyTxAmount(tx: Transaction) =
     sumIn format withSign(tx.txOut.head.amount)
 
-  private def manageMutualClosing(close: Transaction)(cmd: CMDDepth) = {
+  private def manageMutualClosing(close: Transaction) = {
     val humanCanFinalize: String = app.plurOrZero(txsConfs, LNParams.minDepth)
-    val humanCurrentState = app.plurOrZero(txsConfs, cmd.depth)
+    val humanCurrentState = app.plurOrZero(txsConfs, me getConfirmations close)
     me runOnUiThread updateInterface
 
     def updateInterface = {

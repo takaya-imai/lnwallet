@@ -13,17 +13,13 @@ import com.lightning.wallet.Utils.app
 
 
 object LNParams {
-  val updateFeeMinDiffRatio = 0.25 // Must update
-  val maxReserveToFundingRatio = 0.05 // %
-  val reserveToFundingRatio = 0.01 // %
-  val minDepth = 2
-
-  // How much time do they have to pay
   val paymentUnixTimeout = 86400 * 3
-
-  // Private, no init sync
+  val maxReserveToFundingRatio = 0.05 // %
+  val updateFeeMinDiffRatio = 0.25 // %
+  val reserveToFundingRatio = 0.01 // %
   val localFeatures = "00"
   val globalFeatures = ""
+  val minDepth = 2
 
   val maxHtlcValue = MilliSatoshi(100000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
@@ -102,11 +98,12 @@ trait Broadcaster extends StateMachineListener { me =>
     }
   }
 
-  type ParentTxidToDepth = Map[String, Int]
-  def getParentsDepth: ParentTxidToDepth
-  def send(tx: Transaction): String
-  def currentFeeRate: Long
-  def currentHeight: Int
+  def convertToBroadcastStatus(close: ClosingData): Seq[BroadcastStatus] =
+    convertToBroadcastStatus(me extractTxs close, getParentsDepth)
+
+  def extractTxs(cd: ClosingData): Seq[Transaction] =
+    cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
+      cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
 
   private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
     bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
@@ -119,10 +116,9 @@ trait Broadcaster extends StateMachineListener { me =>
     bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
       bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 
-  def extractTxs(cd: ClosingData): Seq[Transaction] =
-    cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
-      cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
-
-  def convertToBroadcastStatus(close: ClosingData): Seq[BroadcastStatus] =
-    convertToBroadcastStatus(me extractTxs close, getParentsDepth)
+  type ParentTxidToDepth = Map[String, Int]
+  def getParentsDepth: ParentTxidToDepth
+  def send(tx: Transaction): String
+  def currentFeeRate: Long
+  def currentHeight: Int
 }

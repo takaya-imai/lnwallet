@@ -16,7 +16,6 @@ import com.lightning.wallet.ln.Scripts.{ScriptEltSeq, multiSig2of2}
 import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
 import concurrent.ExecutionContext.Implicits.global
-import com.lightning.wallet.lncloud.RatesSaver
 import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
 import org.bitcoinj.script.ScriptBuilder
@@ -135,6 +134,12 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           // Connection works, ask user for a funding
           askForFunding(kit.chan, theirInitMessage)
       }
+
+      override def onError = {
+        case channelRelated: Throwable =>
+          Tools log s"Channel $channelRelated"
+          kit.chan process CMDShutdown
+      }
     }
 
     whenBackPressed = anyToRunnable {
@@ -197,10 +202,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
     def openChannel(amountSat: Long) = Future {
       val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
-      val initFeeratePerKw = LNParams feerateKB2Kw RatesSaver.rates.feeLive.value // TODO: use it
+      val initFeeratePerKw = 10000 //LNParams feerateKB2Kw RatesSaver.rates.feeLive.value // TODO: use it
       val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
       val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-      chan process CMDOpenChannel(localParams, random getBytes 32, 10000, pushMsat = 0L, their, amountSat)
+      chan process CMDOpenChannel(localParams, random getBytes 32, initFeeratePerKw, pushMsat = 1000000, their, amountSat)
     }
 
     // Pick a sum

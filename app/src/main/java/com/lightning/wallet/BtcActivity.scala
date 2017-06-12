@@ -3,7 +3,6 @@ package com.lightning.wallet
 import android.widget._
 import org.bitcoinj.core._
 import collection.JavaConverters._
-import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -21,7 +20,6 @@ import com.lightning.wallet.ln.LNParams.minDepth
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
-import org.bitcoinj.wallet.Wallet
 import android.graphics.Typeface
 import scala.collection.mutable
 import android.content.Intent
@@ -107,20 +105,20 @@ with ListUpdater { me =>
   lazy val btcTitle = getString(txs_title)
   lazy val adapter = new BtcAdapter
 
-  private[this] val txsTracker =
-    new NativeTxTracker with TransactionConfidenceEventListener {
-      override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
-      override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
-      def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) =
-        if (tx.getConfidence.getDepthInBlocks <= minDepth)
-          me runOnUiThread adapter.notifyDataSetChanged
+  private[this] val txsTracker = new TxTracker {
+    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
+    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
+    override def txConfirmed(tx: Transaction) = me runOnUiThread adapter.notifyDataSetChanged
 
-      def tell(tx: Transaction) = {
-        adapter.transactions prepend tx
-        mnemonicWarn setVisibility View.GONE
-        adapter.notifyDataSetChanged
-      }
+    def tell(tx: Transaction) = if (me isNative tx) {
+      // Only update interface if this tx changes balance
+      // and ESTIMATED_SPENDABLE takes care of correct balance
+
+      adapter.transactions prepend tx
+      mnemonicWarn setVisibility View.GONE
+      adapter.notifyDataSetChanged
     }
+  }
 
   // Adapter for btc tx list
   class BtcAdapter extends BaseAdapter {
@@ -294,7 +292,7 @@ with ListUpdater { me =>
 
   // Reactions to menu buttons
   def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
-  def viewMnemonic(top: View) = passPlus(me getString sets_mnemonic)(doViewMnemonic)
+  def viewMnemonic(top: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
 
   def goQR(top: View) = {
     me goTo classOf[ScanActivity]
@@ -354,8 +352,10 @@ with ListUpdater { me =>
   }
 
   // Working with transactions
+  private def isNative(tx: Transaction) = 0 != value(tx).amount
   private def paymentMarking(tx: Transaction) = if (value(tx).amount > 0) sumIn else sumOut
-  private def value(tx: Transaction) = coin2MilliSatoshi(tx getValue app.kit.wallet)
+  private def value(tx: Transaction) = coin2MilliSatoshi(tx getExcludeWatchedValue app.kit.wallet)
+  private def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala take maxLinesNum filter isNative
 
   private def status(trans: Transaction) = {
     val cfs = app.plurOrZero(txsConfs, trans.getConfidence.getDepthInBlocks)
@@ -363,10 +363,6 @@ with ListUpdater { me =>
       case null => feeAbsent format cfs case fee => feeDetails.format(withSign(fee), cfs)
     }
   }
-
-  private def nativeTransactions =
-    app.kit.wallet.getTransactionsByTime.asScala
-      .take(maxLinesNum).filterNot(_.getValue(app.kit.wallet).isZero)
 
   private def outputToPayData(out: TransactionOutput) = Try(out.getScriptPubKey) map {
     case publicKeyScript if publicKeyScript.isSentToP2WSH => P2WSHData(out.getValue, publicKeyScript)

@@ -4,7 +4,6 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Exceptions._
-
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
@@ -83,18 +82,16 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (wait @ WaitFundingConfirmedData(_, None, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
       me stayWith wait.copy(their = Some apply their)
 
-    // We have got a FundingDepthOk blockchain event but have not yet got a confirmation from them
-    case (wait @ WaitFundingConfirmedData(_, _, None, _, commitments), CMDDepth(LNParams.minDepth), WAIT_FUNDING_DONE) =>
-      val ourLocked = Some(me makeFundingLocked commitments)
-      me stayWith wait.copy(our = ourLocked)
-
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
     case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
       becomeNormal(wait, our, their.nextPerCommitmentPoint)
 
-    // They have already sent us a FundingLocked message so we got it saved and now we get a FundingDepthOk blockchain event
-    case (wait @ WaitFundingConfirmedData(_, _, Some(their), _, commitments), CMDDepth(LNParams.minDepth), WAIT_FUNDING_DONE) =>
-      becomeNormal(wait, me makeFundingLocked commitments, their.nextPerCommitmentPoint)
+    // We got a funding confirmation and now we need to either become normal or save our FundingLocked message
+    case (wait: WaitFundingConfirmedData, CMDSomethingConfirmed(tx), WAIT_FUNDING_DONE) if wait.fundingTx.txid == tx.txid =>
+      val nextPerCommitmentPoint: Point = Generators.perCommitPoint(wait.commitments.localParams.shaSeed, index = 1)
+      val our: FundingLocked = FundingLocked(wait.commitments.channelId, nextPerCommitmentPoint)
+      if (wait.their.isDefined) becomeNormal(wait, our, wait.their.get.nextPerCommitmentPoint)
+      else me stayWith wait.copy(our = Some apply our)
 
 
     // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
@@ -102,7 +99,6 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (wait: WaitFundingConfirmedData, CMDShutdown, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
 
     case (wait: WaitFundingConfirmedData, CMDFundingSpent(tx), WAIT_FUNDING_DONE) =>
-      // We don't yet have any revoked commits so they either spent a first commit or it's an info leak
       if (tx.txid == wait.commitments.remoteCommit.txid) startRemoteCurrentClose(wait, tx)
       else startLocalCurrentClose(wait)
 
@@ -196,8 +192,8 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // Periodic watch for timed-out outgoing HTLCs
-    case (norm: NormalData, CMDDepth(confirmationCount), NORMAL)
-      if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, confirmationCount) =>
+    case (norm: NormalData, CMDDepth(blockHeight), NORMAL)
+      if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, blockHeight) =>
       startLocalCurrentClose(norm)
 
     // When initiating or receiving a shutdown message
@@ -298,9 +294,21 @@ class Channel extends StateMachine[ChannelData] { me =>
         // Do nothing
 
 
-    // Some other type of tx has been spent while we await for confirmations
-    case (closing: ClosingData, CMDFundingSpent(tx), CLOSING) => defineClosingAction(closing, tx)
-    case (_, cmd: CMDAddHtlc, _) => throw DetailedException(HTLC_WRONG_CHANNEL_STATE, cmd)
+    case (closing: ClosingData, CMDFundingSpent(tx), CLOSING) =>
+      // Some other type of tx has been spent while we are closing
+      defineClosingAction(closing, tx)
+
+
+    case (some: HasCommitments, CMDSomethingSpent(tx), _)
+      // GUARD: check all incoming transactions if they spend our funding
+      if tx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
+      doProcess(CMDFundingSpent apply tx)
+
+
+    case (_, _: CMDDepth, _) =>
+      // IMPORTANT: active state listeners should be idempotent
+      // IMPORTANT: listeners should not send CMDDepth from onBecome
+      initEventsBecome
 
 
     case _ =>
@@ -310,11 +318,6 @@ class Channel extends StateMachine[ChannelData] { me =>
 
   private def canSendCommitSig(cs: Commitments): Boolean =
     Commitments.localHasChanges(cs) && cs.remoteNextCommitInfo.isRight
-
-  private def makeFundingLocked(cs: Commitments) = {
-    val nextPerCommitmentPoint = Generators.perCommitPoint(cs.localParams.shaSeed, index = 1)
-    FundingLocked(cs.channelId, nextPerCommitmentPoint = nextPerCommitmentPoint)
-  }
 
   // We keep sending FundingLocked on reconnects until
   private def becomeNormal(wait: WaitFundingConfirmedData, our: FundingLocked, theirNextPoint: Point) = {

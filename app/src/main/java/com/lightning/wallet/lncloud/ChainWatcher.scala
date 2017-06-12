@@ -6,59 +6,25 @@ import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import org.bitcoinj.core.{Coin, StoredBlock, Transaction}
-import fr.acinq.bitcoin.{BinaryData, OutPoint}
-
+import org.bitcoinj.core.listeners.NewBestBlockListener
 import com.lightning.wallet.helper.RichCursor
-import com.lightning.wallet.ln.Tools.wrap
+import com.lightning.wallet.TxTracker
 import com.lightning.wallet.Utils.app
+import fr.acinq.bitcoin.BinaryData
 import scala.util.Try
 
 
-class ReplaceRunnableHolder {
-  private[this] var container = Option.empty[Runnable]
-  def release: Unit = for (runnable <- container) runnable.run
-  def hold(run: Runnable) = wrap { container = Some apply run } { release }
-}
-
 object ChainWatcher {
-  def watchTxDepthLocal(react: CMDDepth => Unit, watchTxId: String) = {
-    val listener = new org.bitcoinj.core.listeners.TransactionConfidenceEventListener {
-      def onTransactionConfidenceChanged(wallet: org.bitcoinj.wallet.Wallet, tx: Transaction) =
-        if (tx.getHashAsString == watchTxId) react(CMDDepth apply tx.getConfidence.getDepthInBlocks)
-    }
-
-    app.kit.wallet addTransactionConfidenceEventListener listener
-    anyToRunnable(app.kit.wallet removeTransactionConfidenceEventListener listener)
-  }
-
-  def watchChainHeightLocal(react: Int => Unit) = {
-    val listener = new org.bitcoinj.core.listeners.NewBestBlockListener {
-      def notifyNewBestBlock(bestBlock: StoredBlock) = react(bestBlock.getHeight)
-    }
-
-    app.kit.blockChain addNewBestBlockListener listener
-    anyToRunnable(app.kit.blockChain removeNewBestBlockListener listener)
-  }
-
-  def watchInputUsedLocal(react: CMDFundingSpent => Unit, fundPoint: OutPoint) = {
-    val listener = new org.bitcoinj.wallet.listeners.WalletCoinsSentEventListener { me =>
-      def onCoinsSent(w: org.bitcoinj.wallet.Wallet, tx: Transaction, prev: Coin, now: Coin) =
-        if (tx.txIn.map(_.outPoint) contains fundPoint) react(CMDFundingSpent apply tx)
-    }
-
-    app.kit.wallet addCoinsSentEventListener listener
-    anyToRunnable(app.kit.wallet removeCoinsSentEventListener listener)
-  }
-
-  def registerInputUsedLocal(chan: Channel) = new ReplaceRunnableHolder match { case holder =>
-    val commitmentsOpt = Option(chan.data) collect { case data: ChannelData with HasCommitments => data.commitments }
-    for (data <- commitmentsOpt) holder hold watchInputUsedLocal(chan.process, data.commitInput.outPoint)
-    holder
+  def watchBlockchainLocal(chan: Channel) = new TxTracker with NewBestBlockListener { me =>
+    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) = chan process CMDSomethingSpent(tx)
+    def notifyNewBestBlock(bestBlock: StoredBlock) = chan process CMDDepth(bestBlock.getHeight)
+    override def txConfirmed(tx: Transaction) = chan process CMDSomethingConfirmed(tx)
+    app.kit.wallet addTransactionConfidenceEventListener me
+    app.kit.blockChain addNewBestBlockListener me
+    app.kit.wallet addCoinsSentEventListener me
   }
 }
-
 
 object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {

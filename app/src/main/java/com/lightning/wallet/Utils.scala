@@ -185,10 +185,18 @@ trait ToolbarActivity extends TimerActivity { me =>
   lazy val ui = anyToRunnable(getSupportActionBar setSubtitle infos.head.value)
   private[this] var infos = List.empty[Informer]
 
-  val tracker = new NativeTxTracker with TransactionConfidenceEventListener {
-    def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) = if (tx.getConfidence.getDepthInBlocks == minDepth) notifySubTitle(getString(btc_tx_confirmed), Informer.TXCONFIRMED)
-    override def nativeCoinsReceived(tx: Transaction, pb: Coin, nb: Coin) = notifySubTitle(getString(tx_received) format withSign(nb subtract pb), Informer.BTCEVENT)
-    override def nativeCoinsSent(tx: Transaction, pb: Coin, nb: Coin) = notifySubTitle(getString(tx_sent) format withSign(pb subtract nb), Informer.BTCEVENT)
+  val tracker = new TxTracker {
+    override def txConfirmed(tx: Transaction) =
+      notifySubTitle(me getString btc_tx_confirmed,
+        infoType = Informer.TXCONFIRMED)
+
+    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) =
+      notifySubTitle(me getString tx_sent format withSign(pb subtract nb),
+        infoType = Informer.BTCEVENT)
+
+    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) =
+      notifySubTitle(me getString tx_received format withSign(nb subtract pb),
+        infoType = Informer.BTCEVENT)
   }
 
   // Informer CRUD
@@ -465,10 +473,15 @@ trait MyPeerDataListener extends PeerDataEventListener {
   val blocksPerDay = 144
 }
 
-// This works because watched transactions do not change a wallet balance so `isGreaterThan` is a filter
-abstract class NativeTxTracker extends WalletCoinsSentEventListener with WalletCoinsReceivedEventListener {
-  def onCoinsSent(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (a isGreaterThan b) nativeCoinsSent(tx, a, b)
-  def onCoinsReceived(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (b isGreaterThan a) nativeCoinsReceived(tx, a, b)
-  def nativeCoinsReceived(tx: Transaction, prev: Coin, now: Coin): Unit = none
-  def nativeCoinsSent(tx: Transaction, prev: Coin, now: Coin): Unit = none
+abstract class TxTracker extends WalletCoinsSentEventListener
+  with WalletCoinsReceivedEventListener with TransactionConfidenceEventListener {
+  def onCoinsSent(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (a isGreaterThan b) coinsSent(tx, a, b)
+  def onCoinsReceived(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (b isGreaterThan a) coinsReceived(tx, a, b)
+  def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) =
+    if (tx.getConfidence.getDepthInBlocks == minDepth)
+      txConfirmed(tx)
+
+  def coinsSent(tx: Transaction, a: Coin, b: Coin): Unit = none
+  def coinsReceived(tx: Transaction, a: Coin, b: Coin): Unit = none
+  def txConfirmed(tx: Transaction): Unit = none
 }

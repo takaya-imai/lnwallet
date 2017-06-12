@@ -119,18 +119,19 @@ case class ChannelKit(chan: Channel) { me =>
 
     override def onError = {
       case transportRelated: Throwable =>
-        transportRelated.printStackTrace
+        Tools log s"Transport $transportRelated"
         chan process CMDShutdown
     }
   }
 
-  chan.listeners += new StateMachineListener {
+  chan.listeners += new StateMachineListener { self =>
     override def onBecome: PartialFunction[Transition, Unit] = {
       case (previousData, data, previousState, Channel.CLOSING) =>
         // "00" * 32 is a connection level error which will result in socket closing
         Tools log s"Closing channel from $previousState at $previousData : $data"
         me send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
         socket.listeners -= reconnectSockListener
+        chan.listeners -= self
 
       case (previousData, data, previousState, state) =>
         val messages = Helpers.extractOutgoingMessages(previousData, data)
@@ -142,11 +143,6 @@ case class ChannelKit(chan: Channel) { me =>
       case Error(_, reason: BinaryData) =>
         val decoded = new String(reason.toArray)
         Tools log s"Got remote Error: $decoded"
-    }
-
-    override def onError = {
-      case chanRelated: Throwable =>
-        chanRelated.printStackTrace
     }
   }
 
@@ -173,10 +169,6 @@ trait StateMachineListener {
 
 abstract class StateMachine[T] { self =>
   var listeners = Set.empty[StateMachineListener]
-  def initBecome = events onBecome Tuple4(null, data, null, state)
-  def stayWith(d1: T) = become(d1, state)
-  def doProcess(change: Any)
-
   var state: String = _
   var data: T = _
 
@@ -186,6 +178,15 @@ abstract class StateMachine[T] { self =>
     override def onPostProcess = { case x => for (lst <- listeners if lst.onPostProcess isDefinedAt x) lst onPostProcess x }
   }
 
+  def initEventsBecome: Unit = {
+    // null is a special case which
+    // means there is no actual transition
+    val init = (null, data, null, state)
+    events onBecome init
+  }
+
+  def doProcess(change: Any)
+  def stayWith(d1: T) = become(d1, state)
   def become(data1: T, state1: String) = {
     // Should be defined before the vars are updated
     val transition = (data, data1, state, state1)

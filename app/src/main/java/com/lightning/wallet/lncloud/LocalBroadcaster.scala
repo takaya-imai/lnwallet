@@ -21,7 +21,7 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onBecome = {
     case (_, wait: WaitFundingConfirmedData, _, Channel.WAIT_FUNDING_DONE) =>
-      // In a thin wallet in order to receive commit spends we need to add a watched script
+      // In a thin wallet we need to watch for transactions which spend external outputs
       app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
       safeSend(wait.fundingTx).foreach(Tools.log, _.printStackTrace)
 

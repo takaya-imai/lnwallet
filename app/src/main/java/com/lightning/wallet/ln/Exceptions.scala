@@ -11,7 +11,6 @@ object Exceptions {
   val HTLC_TOO_MANY_ACCEPTED = "Too many accepted HTLCs"
   val HTLC_MISSING_FEES = "Missing fees after accepting an HTLC"
   val HTLC_TOO_MUCH_VALUE_IN_FLIGHT = "In-flight htlcs hold too much value"
-  val HTLC_WRONG_CHANNEL_STATE = "Can't accept HTLC in a current channel state"
   val HTLC_INVALID_PAYMENT_HASH = "Invalid payment hash"
   val HTLC_EXPIRY_TOO_SOON = "HTLC expiry is too soon"
   val HTLC_VALUE_TOO_LARGE = "HTLC value is too large"
