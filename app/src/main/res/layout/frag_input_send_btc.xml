@@ -1,0 +1,21 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <include layout="@layout/frag_input_fiat_converter"/>
+
+    <TextView
+        android:maxWidth="230sp"
+        style="@style/MarginInfo"
+        android:visibility="gone"
+        android:id="@+id/addressData"
+        android:layout_width="wrap_content"/>
+
+    <Button
+        style="@style/MarginInfo"
+        android:id="@+id/addressPaste"
+        android:layout_width="wrap_content"
+        android:text="@string/spend_address_tip"/>
+
+    <View style="@style/GrayDivider"/>
+</LinearLayout>

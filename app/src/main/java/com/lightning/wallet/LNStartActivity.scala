@@ -182,7 +182,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val humanBalance = sumIn format withSign(app.kit.currentBalance)
     val humanCap = sumIn format withSign(LNParams.maxChannelCapacity)
     val title = getString(ln_ops_start_fund_title).format(humanBalance, humanCap).html
-    val content = getLayoutInflater.inflate(R.layout.frag_input_send_noaddress, null, false)
+    val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val builder = negPosBld(dialog_cancel, dialog_next)
     me runOnUiThread showFundingForm
 

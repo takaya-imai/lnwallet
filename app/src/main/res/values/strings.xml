@@ -14,8 +14,8 @@
     <string name="sets_rescan_ok">Application is about to be closed now and blockchain rescan will be triggered on next launch</string>
     <string name="greetings">Bitcoin + Lightning Network\nPlease read a short yet important\n<a href='https://lightning-wallet.com/'>wallet manual</a> before proceeding</string>
     <string name="password_info">Without password you are in constant danger of losing your money. Please pick one which is at least 6 characters long</string>
-    <string name="fee_live"><![CDATA[<small>%2$s <font color=#999999>%1$s</font><br><small>Priority transaction fee</small></small>]]></string>
-    <string name="fee_risky"><![CDATA[<small>%2$s <font color=#999999>%1$s</font><br><small>Minimal transaction fee</small></small>]]></string>
+    <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
+    <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Minimal transaction fee</small></small>]]></string>
     <string name="title_fee"><![CDATA[Select transaction fee<br><br>%1$s]]></string>
     <string name="wallet_restore">Restore Wallet From Code</string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
@@ -52,7 +52,7 @@
 
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
     <string name="spend_address_hint">Bitcoin address</string>
-    <string name="input_hint">amount in Satoshi</string>
+    <string name="spend_btc_hint">amount in Satoshi</string>
 
     <string name="dialog_addr_absent">No valid address found in clipboard</string>
     <string name="dialog_addr_wrong">Bitcoin address is required</string>
@@ -106,16 +106,16 @@
     <string name="txs_p2wsh">Payment Channel funding</string>
 
     <array name="txs_confs">
-        <item><![CDATA[<font color=#E31300>Awaiting confirmation&#8230;</font>]]></item>
+        <item><![CDATA[<font color=#E31300>Awaiting confirmation</font>]]></item>
         <item><![CDATA[<strong>%1$s</strong> confirmation]]></item>
         <item><![CDATA[<strong>%1$s</strong> confirmations]]></item>
     </array>
 
     <!-- errors -->
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
-    <string name="err_not_enough_funds">Failed because you don\'t currently have enough funds\n\nPlease note that unconfirmed incoming transactions are unspendable</string>
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees without violating a protocol rules. Please add some funds and try again</string>
     <string name="err_transaction_too_large">Failed because it is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
+    <string name="err_not_enough_funds">Failed because you don\'t currently have enough funds\n\nPlease note that incoming transactions need to get at least one confirmation to become spendable</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
     <string name="err_optional_field">Failed because request contains a malformed amount which could not be parsed</string>
     <string name="err_required_field">Failed because request contains a required parameter of unknown meaning</string>
@@ -134,8 +134,8 @@
 
     <!-- SPECIFIC TO LIGHTNING NETWORK -->
 
-    <!-- titles -->
     <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
+    <string name="ln_payment_title"><![CDATA[Payment request<br><small><font color=#999999>%1$s</font></small><br><br><small>Recipient node key<br><font color=#999999>%2$s</font></small><br><br>%3$s]]></string>
     <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
     <string name="ln_receive_max_amount"><![CDATA[Receive payment<br><br><small>Max amount %1$s</small>]]></string>
 
@@ -145,6 +145,10 @@
     <string name="ln_force_close">Force close channel</string>
     <string name="ln_backup">Set Backup Server</string>
     <string name="ln_search">Find payments</string>
+
+    <!-- ln dialogs -->
+    <string name="ln_description_hint">add some description</string>
+    <string name="ln_no_description">no description provided</string>
 
     <!-- setting a private backup server -->
     <string name="ln_backup_ip">Backup server address</string>

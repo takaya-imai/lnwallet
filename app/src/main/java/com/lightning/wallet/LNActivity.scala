@@ -159,8 +159,6 @@ with ListUpdater with SearchBar { me =>
     //throw new Exception("test")
     //me exitTo classOf[LNStartActivity]
 
-    //me exitTo classOf[LNOpsActivity]
-
       //wrap(initToolbar)(me setContentView R.layout.activity_ln)
 //      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 //      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LN).commit
@@ -246,14 +244,13 @@ with ListUpdater with SearchBar { me =>
     case adr: Address => me goTo classOf[BtcActivity]
 
     case invoice: Invoice =>
-      Tools log s"Got $invoice"
+      me displayInvoice invoice
       app.TransData.value = null
 
     case unusable =>
       Tools log s"Unusable $unusable"
       app.TransData.value = null
   }
-
 
   // Reactions to menu
   def goBitcoin(top: View) = {
@@ -269,7 +266,7 @@ with ListUpdater with SearchBar { me =>
   def makePaymentRequest = {
     val humanCap = sumIn format withSign(LNParams.maxHtlcValue)
     val title = getString(ln_receive_max_amount).format(humanCap).html
-    val content = getLayoutInflater.inflate(R.layout.frag_input_send_noaddress, null, false)
+    val content = getLayoutInflater.inflate(R.layout.frag_input_send_ln, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
     val rateManager = new RateManager(content)
 
@@ -285,6 +282,14 @@ with ListUpdater with SearchBar { me =>
   def goReceive(top: View) = {
     me delayUI makePaymentRequest
     fab close true
+  }
+
+  private def displayInvoice(invoice: Invoice) = {
+    val humanKey = humanPubkey(invoice.nodeId.toString)
+    val info = invoice.message getOrElse getString(ln_no_description)
+    val humanSum = humanFiat(sumOut format withSign(invoice.sum), invoice.sum)
+    val title = getString(ln_payment_title).format(info, humanKey, humanSum)
+    mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, null)
   }
 
   class SetBackupServer { self =>

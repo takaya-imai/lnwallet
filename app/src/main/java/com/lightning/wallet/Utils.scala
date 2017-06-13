@@ -68,10 +68,10 @@ object Utils { me =>
 
   def humanPubkey(key: String) = key grouped 3 mkString "\u0020"
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
-  def humanFiat(amount: Try[Double], prefix: String): String = amount match {
-    case Success(amt) if currentFiatName == strYuan => s"$prefix<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
-    case Success(amt) if currentFiatName == strEuro => s"$prefix<font color=#999999>≈ ${baseFiat format amt} EUR</font>"
-    case Success(amt) => s"$prefix<font color=#999999>≈ ${baseFiat format amt} USD</font>"
+  def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = inFiat(ms) match {
+    case Success(amt) if currentFiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
+    case Success(amt) if currentFiatName == strEuro => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} EUR</font>"
+    case Success(amt) => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} USD</font>"
     case _ => ""
   }
 
@@ -240,11 +240,11 @@ trait ToolbarActivity extends TimerActivity { me =>
         val liveFeePretty = sumOut format withSign(liveFinalFee)
 
         // Show formatted fees in satoshis as well as in current fiat value
-        val feeRiskyComplete = getString(fee_risky).format(humanFiat(inFiat(rates.feeRisky), ""), riskyFeePretty)
-        val feeLiveComplete = getString(fee_live).format(humanFiat(inFiat(rates.feeLive), ""), liveFeePretty)
+        val feeRiskyComplete = getString(fee_risky) format humanFiat(riskyFeePretty, rates.feeRisky, " ")
+        val feeLiveComplete = getString(fee_live) format humanFiat(liveFeePretty, rates.feeLive, " ")
         val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
 
-        val form = getLayoutInflater.inflate(R.layout.frag_input_send_confirm, null)
+        val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
         val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
         val slot = android.R.layout.select_dialog_singlechoice
         lst setAdapter new ArrayAdapter(me, slot, feesOptions)
@@ -426,31 +426,32 @@ class BtcManager(val man: RateManager) { me =>
 
 
 trait PayData {
-  def colored(direction: String): String
+  def destination: String
   def sendRequest: SendRequest
   def cn: Coin
 
   def cute(direction: String) = {
-    val fiat = humanFiat(inFiat(cn), "<br>")
-    colored(direction) + "<br><br>" + withSign(cn) + fiat
+    val colored = direction format destination
+    val top = colored + "<br><br>" + withSign(cn)
+    humanFiat(top, cn)
   }
 }
 
 case class AddrData(cn: Coin, adr: Address) extends PayData {
   def link = BitcoinURI.convertToBitcoinURI(adr, cn, null, null)
-  def colored(direction: String) = direction format humanAddr(adr)
   def sendRequest = SendRequest.to(adr, cn)
+  def destination = humanAddr(adr)
 }
 
 case class EmptyAddrData(adr: Address) extends PayData {
   def link = BitcoinURI.convertToBitcoinURI(adr, cn, null, null)
-  def colored(direction: String) = direction format humanAddr(adr)
   def sendRequest = SendRequest emptyWallet adr
+  def destination = humanAddr(adr)
   def cn = app.kit.currentBalance
 }
 
 case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {
-  def colored(direction: String) = direction format app.getString(txs_p2wsh)
+  def destination = app getString txs_p2wsh
 
   def sendRequest: SendRequest = {
     val funding = new Transaction(app.params)

@@ -324,7 +324,7 @@ with ListUpdater { me =>
   }
 
   def sendBtcTxPopup: BtcManager = {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_send, null, false)
+    val content = getLayoutInflater.inflate(R.layout.frag_input_send_btc, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
 
     // Can input satoshis and address
