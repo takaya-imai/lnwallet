@@ -72,7 +72,7 @@ object Utils { me =>
     case Success(amt) if currentFiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
     case Success(amt) if currentFiatName == strEuro => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} EUR</font>"
     case Success(amt) => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} USD</font>"
-    case _ => ""
+    case _ => prefix
   }
 
   // Fiat rates related functions, all transform a Try monad
@@ -82,15 +82,10 @@ object Utils { me =>
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
 }
 
-trait InfoActivity extends ToolbarActivity { me =>
-  lazy val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
-    def onPeerDisconnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
-    def onPeerConnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
-    def mkTxt = app.plurOrZero(peersInfoOpts, app.kit.peerGroup.numConnectedPeers)
-    val peersInfoOpts = getResources getStringArray R.array.info_peers
-  }
+trait ToolbarActivity extends TimerActivity { me =>
+  lazy val ui = anyToRunnable(getSupportActionBar setSubtitle infos.head.value)
+  private[this] var infos = List.empty[Informer]
 
-  // Peers listeners
   class CatchTracker extends MyPeerDataListener {
     def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = {
       app.kit.peerGroup addBlocksDownloadedEventListener new NextTracker(left)
@@ -113,9 +108,57 @@ trait InfoActivity extends ToolbarActivity { me =>
     if (initBlocksLeft > blocksPerDay * 2) add(text, Informer.SYNC)
   }
 
+  lazy val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
+    def onPeerDisconnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
+    def onPeerConnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
+    def mkTxt = app.plurOrZero(peersInfoOpts, app.kit.peerGroup.numConnectedPeers)
+    val peersInfoOpts = getResources getStringArray R.array.info_peers
+  }
+
+  val txTracker = new TxTracker {
+    override def txConfirmed(tx: Transaction) =
+      notifySubTitle(me getString btc_tx_confirmed,
+        infoType = Informer.TXCONFIRMED)
+
+    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) =
+      notifySubTitle(me getString tx_sent format withSign(pb subtract nb),
+        infoType = Informer.BTCEVENT)
+
+    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) =
+      notifySubTitle(me getString tx_received format withSign(nb subtract pb),
+        infoType = Informer.BTCEVENT)
+  }
+
   // Settings and helper functions
   def tellGenError = wrap(app toast err_general)(mkSetsForm)
   def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
+  def initToolbar = me setSupportActionBar findViewById(R.id.toolbar).asInstanceOf[Toolbar]
+
+  // Informer CRUD
+  def del(delTag: Int) = uiTask {
+    infos = infos.filterNot(_.tag == delTag)
+    ui
+  }
+
+  def add(text: String, addTag: Int) = runAnd(me) {
+    infos = new Informer(text, addTag) :: infos
+  }
+
+  def update(text: String, tag: Int) = runAnd(me) {
+    for (inf <- infos if inf.tag == tag) inf.value = text
+  }
+
+  // Password checking popup
+  def passPlus(title: CharSequence)(next: String => Unit) = {
+    val (passAsk, secret) = generatePasswordPromptView(passType, password_old)
+    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
+
+    def infoAndNext = {
+      add(app getString pass_checking, Informer.CODECHECK).ui.run
+      timer.schedule(me del Informer.CODECHECK, 2500)
+      next(secret.getText.toString)
+    }
+  }
 
   def checkPass(title: CharSequence)(next: String => Unit) = passPlus(title) { password =>
     <(app.kit.wallet checkPassword password, _ => tellGenError)(if (_) next(password) else tellWrongPass)
@@ -123,6 +166,7 @@ trait InfoActivity extends ToolbarActivity { me =>
 
   def doViewMnemonic(password: String) =
     <(Mnemonic decrypt password, _ => tellGenError) { seed =>
+      // This method is used by both button on btc activity and settings menu
       mkForm(me negBld dialog_ok, me getString sets_noscreen, Mnemonic text seed)
     }
 
@@ -178,52 +222,6 @@ trait InfoActivity extends ToolbarActivity { me =>
       rm(menu)(openForm)
     }
   }
-}
-
-trait ToolbarActivity extends TimerActivity { me =>
-  def initToolbar = me setSupportActionBar findViewById(R.id.toolbar).asInstanceOf[Toolbar]
-  lazy val ui = anyToRunnable(getSupportActionBar setSubtitle infos.head.value)
-  private[this] var infos = List.empty[Informer]
-
-  val tracker = new TxTracker {
-    override def txConfirmed(tx: Transaction) =
-      notifySubTitle(me getString btc_tx_confirmed,
-        infoType = Informer.TXCONFIRMED)
-
-    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) =
-      notifySubTitle(me getString tx_sent format withSign(pb subtract nb),
-        infoType = Informer.BTCEVENT)
-
-    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) =
-      notifySubTitle(me getString tx_received format withSign(nb subtract pb),
-        infoType = Informer.BTCEVENT)
-  }
-
-  // Informer CRUD
-  def del(delTag: Int) = uiTask {
-    infos = infos.filterNot(_.tag == delTag)
-    ui
-  }
-
-  def add(text: String, addTag: Int) = runAnd(me) {
-    infos = new Informer(text, addTag) :: infos
-  }
-
-  def update(text: String, tag: Int) = runAnd(me) {
-    for (inf <- infos if inf.tag == tag) inf.value = text
-  }
-
-  // Password checking popup
-  def passPlus(title: CharSequence)(next: String => Unit) = {
-    val (passAsk, secret) = generatePasswordPromptView(passType, password_old)
-    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
-
-    def infoAndNext = {
-      add(app getString pass_checking, Informer.CODECHECK).ui.run
-      timer.schedule(me del Informer.CODECHECK, 2500)
-      next(secret.getText.toString)
-    }
-  }
 
   abstract class TxProcessor {
     def onTxFail(exc: Throwable): Unit
@@ -268,15 +266,14 @@ trait ToolbarActivity extends TimerActivity { me =>
       app.kit.wallet completeTx request
       request.tx
     }
-  }
 
-  // Taken outside the class above because needed separately
-  def errorWhenMakingTx: PartialFunction[Throwable, String] = {
-    case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
-    case _: InsufficientMoneyException => app getString err_not_enough_funds
-    case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
-    case _: KeyCrypterException => app getString err_pass
-    case _: Throwable => app getString err_general
+    def errorWhenMakingTx: PartialFunction[Throwable, String] = {
+      case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
+      case _: InsufficientMoneyException => app getString err_not_enough_funds
+      case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
+      case _: KeyCrypterException => app getString err_pass
+      case _: Throwable => app getString err_general
+    }
   }
 
   // Temporairly update subtitle info

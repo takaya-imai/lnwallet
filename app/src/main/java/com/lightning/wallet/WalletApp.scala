@@ -70,8 +70,6 @@ class WalletApp extends Application { me =>
     var value: Any = _
     val lnPaymentRequestRegex = "[a-zA-Z0-9]+:[0-9]+:[a-zA-Z0-9]+"
     def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
-      case _: RequiredFieldValidationException => err(err_required_field)
-      case _: OptionalFieldValidationException => err(err_optional_field)
       case _: WrongNetworkException => err(err_different_net)
       case _: AddressFormatException => err(err_address)
       case _: BitcoinURIParseException => err(err_uri)

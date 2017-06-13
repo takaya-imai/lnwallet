@@ -81,16 +81,16 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       lnStartNodesList setAdapter adapter
       react(new String)
 
-      app.kit.wallet addCoinsSentEventListener tracker
-      app.kit.wallet addCoinsReceivedEventListener tracker
-      app.kit.wallet addTransactionConfidenceEventListener tracker
+      app.kit.wallet addCoinsSentEventListener txTracker
+      app.kit.wallet addCoinsReceivedEventListener txTracker
+      app.kit.wallet addTransactionConfidenceEventListener txTracker
     } else me exitTo classOf[MainActivity]
   }
 
   override def onDestroy = wrap(super.onDestroy) {
-    app.kit.wallet removeCoinsSentEventListener tracker
-    app.kit.wallet removeCoinsReceivedEventListener tracker
-    app.kit.wallet removeTransactionConfidenceEventListener tracker
+    app.kit.wallet removeCoinsSentEventListener txTracker
+    app.kit.wallet removeCoinsReceivedEventListener txTracker
+    app.kit.wallet removeTransactionConfidenceEventListener txTracker
   }
 
   override def onCreateOptionsMenu(menu: Menu) = {

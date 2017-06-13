@@ -94,7 +94,7 @@ abstract class TxViewHolder(view: View) {
 }
 
 class BtcActivity extends NfcReaderActivity
-with InfoActivity with HumanTimeDisplay
+with ToolbarActivity with HumanTimeDisplay
 with ListUpdater { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
@@ -203,9 +203,9 @@ with ListUpdater { me =>
       }
 
       // Wire up general listeners
-      app.kit.wallet addCoinsSentEventListener tracker
-      app.kit.wallet addCoinsReceivedEventListener tracker
-      app.kit.wallet addTransactionConfidenceEventListener tracker
+      app.kit.wallet addCoinsSentEventListener txTracker
+      app.kit.wallet addCoinsReceivedEventListener txTracker
+      app.kit.wallet addTransactionConfidenceEventListener txTracker
       app.kit.peerGroup addBlocksDownloadedEventListener new CatchTracker
       app.kit.peerGroup addDisconnectedEventListener constListener
       app.kit.peerGroup addConnectedEventListener constListener
@@ -217,9 +217,9 @@ with ListUpdater { me =>
     app.kit.wallet removeCoinsReceivedEventListener txsTracker
     app.kit.wallet removeCoinsSentEventListener txsTracker
 
-    app.kit.wallet removeCoinsSentEventListener tracker
-    app.kit.wallet removeCoinsReceivedEventListener tracker
-    app.kit.wallet removeTransactionConfidenceEventListener tracker
+    app.kit.wallet removeCoinsSentEventListener txTracker
+    app.kit.wallet removeCoinsReceivedEventListener txTracker
+    app.kit.wallet removeTransactionConfidenceEventListener txTracker
     app.kit.peerGroup removeDisconnectedEventListener constListener
     app.kit.peerGroup removeConnectedEventListener constListener
     stopDetecting

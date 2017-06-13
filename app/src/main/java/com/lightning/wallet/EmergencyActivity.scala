@@ -11,7 +11,7 @@ import android.os.Bundle
 import android.view.View
 
 
-class EmergencyActivity extends InfoActivity { me =>
+class EmergencyActivity extends ToolbarActivity { me =>
   override def onCreate(savedInstanceState: Bundle) =
   {
     super.onCreate(savedInstanceState)
