@@ -1,9 +1,9 @@
 package com.lightning.wallet.ln.wire
 
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import com.lightning.wallet.ln.Tools.{fromShortId, BinaryDataList}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
-import fr.acinq.bitcoin.{BinaryData, Crypto}
+import com.lightning.wallet.ln.Tools.fromShortId
+import fr.acinq.bitcoin.BinaryData
 
 
 trait LightningMessage
@@ -49,11 +49,11 @@ case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) e
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
 case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId {
 
-  val paymentHash = Crypto sha256 paymentPreimage.data
+  val paymentHash = fr.acinq.bitcoin.Crypto sha256 paymentPreimage.data
 }
 
 
-case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: BinaryDataList) extends ChannelMessage
+case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: List[BinaryData] /* save point */) extends ChannelMessage
 case class RevokeAndAck(channelId: BinaryData, perCommitmentSecret: Scalar, nextPerCommitmentPoint: Point) extends ChannelMessage
 case class UpdateFee(channelId: BinaryData, feeratePerKw: Long) extends ChannelMessage
 
@@ -71,8 +71,7 @@ case class ChannelAnnouncement(nodeSignature1: BinaryData, nodeSignature2: Binar
 case class NodeAnnouncement(signature: BinaryData, timestamp: Long, nodeId: BinaryData, rgbColor: RGB, alias: String,
                             features: BinaryData, addresses: InetSocketAddressList) extends RoutingMessage {
 
-  val nodeIdString = nodeId.toString
-  val identifier = s"$alias$nodeIdString".toLowerCase
+  val identifier = (alias + nodeId.toString).toLowerCase
 }
 
 case class ChannelUpdate(signature: BinaryData, shortChannelId: Long, timestamp: Long, flags: BinaryData,

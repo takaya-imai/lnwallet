@@ -24,7 +24,6 @@ object ~ {
 
 object Tools {
   type Bytes = Array[Byte]
-  type BinaryDataList = List[BinaryData]
   type LightningMessages = Vector[LightningMessage]
   val random = new RandomGenerator
 

@@ -25,8 +25,11 @@ object StorageTable extends Table {
 object PaymentSpecTable extends Table {
   import com.lightning.wallet.ln.PaymentSpec.{SUCCESS, HIDDEN}
   val (table, data, hash, status, stamp, searchData) = ("payments", "data", "hash", "status", "stamp", "search")
-  def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 25)"
-  def selectRecentSql = s"SELECT * FROM $table WHERE $status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 100"
+  private val fuzzySearch = s"SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 25"
+  private val recentVisible = s"$status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?)"
+
+  def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN ($fuzzySearch) AND $status <> $HIDDEN"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $recentVisible ORDER BY $id DESC LIMIT 100"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   // Hidden -> Visible -> Failed or Success
@@ -48,7 +51,7 @@ object PaymentSpecTable extends Table {
       $stamp INTEGER NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status, $stamp);
-    CREATE INDEX idx2 ON $table ($hash);
+    CREATE INDEX idx2 ON $table ($hash, $status);
     COMMIT;"""
 
   def createVirtualSql = s"""

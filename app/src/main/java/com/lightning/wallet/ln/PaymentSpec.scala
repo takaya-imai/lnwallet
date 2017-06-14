@@ -22,7 +22,6 @@ case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], r
 
 trait PaymentSpecBag {
   def putInfo(info: ExtendedPaymentInfo): Unit
-  def getRecentInfos: Vector[ExtendedPaymentInfo]
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
   def updatePaymentStatus(hash: BinaryData, status: String): Unit
   def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit
@@ -57,8 +56,8 @@ object PaymentSpec {
     makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
   }
 
-  def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, firstExpiry: Int) = rest.headOption map { route =>
-    val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(inv.sum.amount, firstExpiry, route drop 1)
+  def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, finalExpiry: Int) = rest.headOption map { route =>
+    val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(inv.sum.amount, finalExpiry, route drop 1)
     OutgoingPaymentSpec(invoice = inv, onion = buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash),
       preimage = None, routes = rest, expiry = expiryWithAllDeltas, amountWithFee = amountWithAllFees)
   }
@@ -108,7 +107,7 @@ object PaymentSpec {
           // GUARD: amount is less than what we requested, this won't do
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(spec) if add.expiry < LNParams.myHtlcExpiry =>
+        case Success(spec) if add.expiry < LNParams.finalHtlcExpiry =>
           // GUARD: we may not have enough time until expiration
           failHtlc(sharedSecret, add, FinalExpiryTooSoon)
 

@@ -37,29 +37,29 @@ import com.lightning.wallet.ln.Invoice
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
-  import R.layout.{frag_transaction_line_wide, frag_transaction_line_narrow}
+  import R.layout.{frag_transfer_line_wide, frag_transfer_line_narrow}
   lazy val time = (dt: java.util.Date) => new SimpleDateFormat(timeString) format dt
   lazy val bigFont = FontSystem.getFloat(getContentResolver, FontSystem.FONT_SCALE, 1) > 1
 
   // Should be accessed after activity is initialized
   lazy val (txLineType, timeString) = DateFormat is24HourFormat me match {
-    case false if scrWidth < 2.2 & bigFont => (frag_transaction_line_wide, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
-    case false if scrWidth < 2.2 => (frag_transaction_line_narrow, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if scrWidth < 2.2 & bigFont => (frag_transfer_line_wide, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if scrWidth < 2.2 => (frag_transfer_line_narrow, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
 
-    case false if scrWidth < 2.5 & bigFont => (frag_transaction_line_wide, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
-    case false if scrWidth < 2.5 => (frag_transaction_line_narrow, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if scrWidth < 2.5 & bigFont => (frag_transfer_line_wide, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if scrWidth < 2.5 => (frag_transfer_line_narrow, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
 
-    case false if bigFont => (frag_transaction_line_narrow, "MMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
-    case false => (frag_transaction_line_narrow, "MMMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if bigFont => (frag_transfer_line_narrow, "MMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false => (frag_transfer_line_narrow, "MMMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
 
-    case true if scrWidth < 2.2 & bigFont => (frag_transaction_line_wide, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
-    case true if scrWidth < 2.2 => (frag_transaction_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if scrWidth < 2.2 & bigFont => (frag_transfer_line_wide, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if scrWidth < 2.2 => (frag_transfer_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
 
-    case true if scrWidth < 2.4 & bigFont => (frag_transaction_line_wide, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
-    case true if scrWidth < 2.5 => (frag_transaction_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if scrWidth < 2.4 & bigFont => (frag_transfer_line_wide, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if scrWidth < 2.5 => (frag_transfer_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
 
-    case true if bigFont => (frag_transaction_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
-    case true => (frag_transaction_line_narrow, "d MMMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if bigFont => (frag_transfer_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true => (frag_transfer_line_narrow, "d MMMM yyyy' <font color=#999999>'HH:mm'</font>'")
   }
 
   // Relative or absolute date
@@ -125,10 +125,10 @@ with ListUpdater { me =>
 
   // Adapter for btc tx list
   class BtcAdapter extends BaseAdapter {
-    def getView(transactionPosition: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(me.txLineType, null) else cv
+    def getView(position: Int, cv: View, parent: ViewGroup) = {
+      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
       val hold = if (null == view.getTag) new BtcView(view) else view.getTag.asInstanceOf[BtcView]
-      hold fillView getItem(transactionPosition)
+      hold fillView getItem(position)
       view
     }
 
@@ -159,7 +159,7 @@ with ListUpdater { me =>
       super.onCreate(savedInstanceState)
       wrap(initToolbar)(me setContentView R.layout.activity_btc)
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
-      setDetecting(true)
+      me setDetecting true
 
       list setOnItemClickListener onTap { pos =>
         val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]

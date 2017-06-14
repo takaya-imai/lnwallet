@@ -3,10 +3,11 @@ package com.lightning.wallet
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.Utils._
 import android.content.DialogInterface.BUTTON_POSITIVE
-import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
+import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
+import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import android.widget._
-import android.view.{Menu, MenuItem, View}
+import android.view.{Menu, MenuItem, View, ViewGroup}
 import org.ndeftools.Message
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.os.Bundle
@@ -14,12 +15,15 @@ import Utils.app
 import android.support.v4.view.MenuItemCompat
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.webkit.URLUtil
+import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln._
-import com.lightning.wallet.lncloud.{PrivateData, PrivateDataSaver}
+import scala.concurrent.duration._
+import com.lightning.wallet.lncloud.{PaymentSpecTable, PrivateData, PrivateDataSaver}
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
 
+import scala.collection.mutable
 import scala.util.{Failure, Success}
 
 
@@ -34,17 +38,12 @@ trait SearchBar { me =>
       runAnd(true)(me react queryText)
   }
 
+  def react(query: String)
   def setupSearch(menu: Menu) = {
     searchItem = menu findItem R.id.action_search
     val view = MenuItemCompat getActionView searchItem
     search = view.asInstanceOf[SearchView]
     search setOnQueryTextListener lst
-  }
-
-  def react(query: String)
-  def mkBundle(args:(String, String)*) = new Bundle match { case bundle =>
-    for (Tuple2(key, value) <- args) bundle.putString(key, value)
-    bundle
   }
 }
 
@@ -53,13 +52,78 @@ with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
-  lazy val lnItemsList = findViewById(R.id.lnItemsList).asInstanceOf[ListView]
+  lazy val paymentProvider = new PaymentsDataProvider
   lazy val lnTitle = getString(ln_title)
+  lazy val adapter = new LNAdapter
+
+  // INTERFACE IMPLEMENTING METHODS
 
   def react(query: String) = println(query)
   def notifySubTitle(subtitle: String, infoType: Int) = {
     add(subtitle, infoType).timer.schedule(me del infoType, 25000)
     me runOnUiThread ui
+  }
+
+  // PAYMENTS DISPLAY AND SEARCH
+
+  // Payment history and search results loader
+  // Remembers last search term in case of reload
+  class PaymentsDataProvider extends ReactCallback(me) { self =>
+    val observeTablePath = LNParams.db sqlPath PaymentSpecTable.table
+    private var lastQuery: String = ""
+
+    def onCreateLoader(id: Int, b: Bundle) =
+      if (lastQuery.isEmpty) recent else search
+
+    def reload(query: String) = runAnd(lastQuery = query) {
+      getSupportLoaderManager.restartLoader(1, null, self).forceLoad
+    }
+
+    def recent = new ExtendedPaymentInfoLoader {
+      def getCursor = LNParams.bag byTime 14.days.toMillis
+    }
+
+    def search = new ExtendedPaymentInfoLoader {
+      def getCursor = LNParams.bag byQuery lastQuery
+    }
+
+    abstract class ExtendedPaymentInfoLoader extends ReactLoader[ExtendedPaymentInfo](me) {
+      val consume: Vector[ExtendedPaymentInfo] => Unit = items => println(items.size)
+      def createItem(shifted: RichCursor) = LNParams.bag toInfo shifted
+    }
+  }
+
+  class LNAdapter extends BaseAdapter {
+    def getView(position: Int, cv: View, parent: ViewGroup) = {
+      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
+      val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
+      hold fillView getItem(position)
+      view
+    }
+
+    var payments = mutable.Buffer.empty[ExtendedPaymentInfo]
+    def getItem(position: Int) = payments(position)
+    def getItemId(position: Int) = position
+    def getCount = payments.size
+  }
+
+  class LNView(view: View)
+  extends TxViewHolder(view) {
+    def fillView(info: ExtendedPaymentInfo) = {
+      val time = when(System.currentTimeMillis, info.stamp)
+      val image = if (info.status == PaymentSpec.FAIL) dead
+      else if (info.status == PaymentSpec.SUCCESS) conf1
+      else await
+
+      val paymentMarking = info.spec match {
+        case spec: OutgoingPaymentSpec => sumOut format milliSatoshi2String(spec.invoice.sum).neg
+        case spec: IncomingPaymentSpec => sumIn format milliSatoshi2String(spec.invoice.sum)
+      }
+
+      transactWhen setText time.html
+      transactSum setText paymentMarking.html
+      transactCircle setImageResource image
+    }
   }
 
   // Initialize this activity, method is run once
@@ -68,7 +132,12 @@ with ListUpdater with SearchBar { me =>
     super.onCreate(savedState)
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
     add(me getString ln_notify_working, Informer.LNSTATE).ui.run
-    setDetecting(true)
+
+    list setAdapter adapter
+    list setFooterDividersEnabled false
+    paymentProvider reload new String
+    me startListUpdates adapter
+    me setDetecting true
 
     app.kit.wallet addCoinsSentEventListener txTracker
     app.kit.wallet addCoinsReceivedEventListener txTracker
@@ -94,10 +163,10 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  // Data reading
-
   override def onResume: Unit =
     wrap(super.onResume)(checkTransData)
+
+  // DATA READING AND BUTTON ACTIONS
 
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
@@ -140,6 +209,8 @@ with ListUpdater with SearchBar { me =>
     me goTo classOf[ScanActivity]
     fab close true
   }
+
+  // UI MENUS
 
   def makePaymentRequest = {
     val humanCap = sumIn format withSign(LNParams.maxHtlcValue)

@@ -10,7 +10,7 @@
 
         <ListView
             android:layout_weight="1"
-            android:id="@+id/lnItemsList"
+            android:id="@+id/itemsList"
             style="@style/GrayDividerListView"/>
 
     </LinearLayout>

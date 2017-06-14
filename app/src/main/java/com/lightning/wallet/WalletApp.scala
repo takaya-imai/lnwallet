@@ -3,27 +3,26 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
-import org.bitcoinj.uri.{BitcoinURIParseException, OptionalFieldValidationException}
+
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
-import org.bitcoinj.uri.{BitcoinURI, RequiredFieldValidationException}
+import org.bitcoinj.uri.{BitcoinURIParseException, BitcoinURI}
 import android.content.{ClipData, ClipboardManager, Context}
-import org.bitcoinj.wallet.Protos
-import com.lightning.wallet.ln.LNParams.minDepth
-import org.bitcoinj.net.discovery.DnsDiscovery
+
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
-import com.lightning.wallet.lncloud.{LNCloud, RatesSaver}
+import com.lightning.wallet.lncloud.RatesSaver
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
+import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools.wrap
-import com.lightning.wallet.ln.{Invoice, LNParams}
+import com.lightning.wallet.ln.Invoice
 import com.google.protobuf.ByteString
+import org.bitcoinj.wallet.Protos
 import android.app.Application
 import android.widget.Toast
 import java.io.File
-import java.util.concurrent.TimeUnit.MILLISECONDS
 
+import java.util.concurrent.TimeUnit.MILLISECONDS
 import Context.CLIPBOARD_SERVICE
-import com.google.common.net.InetAddresses
 
 
 class WalletApp extends Application { me =>

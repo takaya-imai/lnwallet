@@ -151,7 +151,7 @@ trait Pathfinder {
 
   def makeOutgoingSpec(invoice: Invoice) =
     lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
-      PaymentSpec.makeOutgoingSpec(_, invoice, firstExpiry = LNParams.myHtlcExpiry)
+      PaymentSpec.makeOutgoingSpec(_, invoice, LNParams.finalHtlcExpiry)
     }
 }
 

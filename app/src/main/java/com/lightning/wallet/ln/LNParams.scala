@@ -23,8 +23,8 @@ object LNParams {
 
   val maxHtlcValue = MilliSatoshi(100000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
-  lazy val broadcaster: Broadcaster = LocalBroadcaster
-  lazy val bag: PaymentSpecBag = PaymentSpecWrap
+  lazy val broadcaster = LocalBroadcaster
+  lazy val bag = PaymentSpecWrap
 
   var nodePrivateKey: PrivateKey = _
   var cloudPrivateKey: PrivateKey = _
@@ -65,7 +65,7 @@ object LNParams {
 
   // MISC
 
-  def myHtlcExpiry: Int = broadcaster.currentHeight + 6
+  def finalHtlcExpiry: Int = broadcaster.currentHeight + 6
   def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
