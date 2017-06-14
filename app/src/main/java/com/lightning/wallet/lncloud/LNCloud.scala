@@ -180,19 +180,15 @@ class LNCloud(url: String) {
       case err => throw new ProtocolException
     }
 
-  def getRates = call("rates", _.head)
-  def findNodes(aliasQuery: String) = call("router/nodes",
-    vec => for (json <- vec) yield json.convertTo[AnnounceChansNum],
-    "query" -> aliasQuery)
-
-  def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes",
-    vec => for (json <- vec) yield json.convertTo[PaymentRoute],
+  def getRates = call("rates", identity)
+  def findNodes(query: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> query)
+  def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def addBitcoinNode(pr: PeerGroup) = pr addAddress new PeerAddress(app.params, InetAddresses forString url, 8333)
-  override def findNodes(aliasQuery: String) = super.findNodes(aliasQuery).onErrorResumeNext(_ => failover findNodes aliasQuery)
+  override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 

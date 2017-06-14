@@ -25,11 +25,11 @@ object StorageTable extends Table {
 object PaymentSpecTable extends Table {
   import com.lightning.wallet.ln.PaymentSpec.{SUCCESS, HIDDEN}
   val (table, data, hash, status, stamp, searchData) = ("payments", "data", "hash", "status", "stamp", "search")
-  private val fuzzySearch = s"SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 25"
+  private val fuzzySearch = s"SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 50"
   private val recentVisible = s"$status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?)"
 
   def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN ($fuzzySearch) AND $status <> $HIDDEN"
-  def selectRecentSql = s"SELECT * FROM $table WHERE $recentVisible ORDER BY $id DESC LIMIT 100"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $recentVisible ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   // Hidden -> Visible -> Failed or Success

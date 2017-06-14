@@ -26,15 +26,16 @@ object JsonHttpUtils {
 
   def withDelay[T](obs: Obs[T], startMillis: Long, timeoutMillis: Long) = {
     val adjustedTimeout = startMillis + timeoutMillis - System.currentTimeMillis
-    val delayLeft = if (adjustedTimeout < 0) 0L else adjustedTimeout
+    val delayLeft = if (adjustedTimeout < 0) 0 else adjustedTimeout
     obs.delay(delayLeft.millis)
   }
 
-  val get = HttpRequest.get(_: String, true) connectTimeout 10000
-  def pickInc(err: Throwable, next: Int): FiniteDuration = next.seconds
+  type JsValueVec = Vector[JsValue]
+  def toVec[T : JsonFormat](raw: JsValueVec): Vector[T] =
+    for (json <- raw) yield json.convertTo[T]
+
   def to[T : JsonFormat](raw: String): T = raw.parseJson.convertTo[T]
-  def jsonFieldAs[T : JsonFormat](field: String)(raw: String) =
-    raw.parseJson.asJsObject.fields(field).convertTo[T]
+  def pickInc(err: Throwable, next: Int) = next.seconds
 }
 
 trait Saver {
@@ -67,14 +68,11 @@ object RatesSaver extends Saver {
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
 
   def process = {
-    def getResult: Obs[Result] = for (rates <- LNParams.cloud.getRates) yield rates.convertTo[Result]
+    def getResult = LNParams.cloud.getRates map toVec[Result]
     def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
-    def delayed = withDelay(periodically, rates.stamp, updatePeriod.toMillis)
-
-    delayed foreach { case newFee ~ newFiat =>
-      val feeHistory1 = newFee("6") +: rates.feeHistory take 6
-      val feeHistory2 = for (fee <- feeHistory1 if fee > 0) yield fee
-      rates = Rates(feeHistory2, newFiat, System.currentTimeMillis)
+    withDelay(periodically, rates.stamp, updatePeriod.toMillis) foreach { case newFee ~ newFiat +: _ =>
+      val feeHistory = for (goodFee <- newFee("6") +: rates.feeHistory take 6 if goodFee > 0) yield goodFee
+      rates = Rates(feeHistory, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }

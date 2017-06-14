@@ -53,7 +53,7 @@ case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: B
 }
 
 
-case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: List[BinaryData] /* save point */) extends ChannelMessage
+case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: List[BinaryData] = Nil) extends ChannelMessage
 case class RevokeAndAck(channelId: BinaryData, perCommitmentSecret: Scalar, nextPerCommitmentPoint: Point) extends ChannelMessage
 case class UpdateFee(channelId: BinaryData, feeratePerKw: Long) extends ChannelMessage
 

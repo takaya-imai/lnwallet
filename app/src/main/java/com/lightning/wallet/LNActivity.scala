@@ -72,12 +72,12 @@ with ListUpdater with SearchBar { me =>
     val observeTablePath = LNParams.db sqlPath PaymentSpecTable.table
     private var lastQuery: String = ""
 
-    def onCreateLoader(id: Int, b: Bundle) =
-      if (lastQuery.isEmpty) recent else search
-
     def reload(query: String) = runAnd(lastQuery = query) {
       getSupportLoaderManager.restartLoader(1, null, self).forceLoad
     }
+
+    def onCreateLoader(id: Int, b: Bundle) =
+      if (lastQuery.isEmpty) recent else search
 
     def recent = new ExtendedPaymentInfoLoader {
       def getCursor = LNParams.bag byTime 14.days.toMillis
