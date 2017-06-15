@@ -12,9 +12,9 @@ import com.lightning.wallet.Utils.{app, sumIn}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
-import com.lightning.wallet.ln.Scripts.{ScriptEltSeq, multiSig2of2}
 import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
+import com.lightning.wallet.ln.Scripts.multiSig2of2
 import concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
@@ -26,6 +26,7 @@ import android.os.Bundle
 
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
+import com.lightning.wallet.lncloud.ActiveKit
 
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
@@ -101,12 +102,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(position: Int): Unit = hideKeys {
     val (announce: NodeAnnouncement, _) = adapter getItem position
-
-    val kit: ChannelKit =
-      ChannelKit apply new Channel {
-        data = InitData apply announce
-        state = WAIT_FOR_INIT
-      }
+    val chan = Channel.fresh.init(InitData(announce), WAIT_FOR_INIT)
+    val kit = ActiveKit(chan, Set.empty)
 
     val sockOpenListener = new SocketListener {
       // They can interrupt socket connection at any time
@@ -117,12 +114,12 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onBecome: PartialFunction[Transition, Unit] = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
           // Peer has agreed to open a channel so now we ask user for a tx feerate
-          askForFeerate(kit.chan, cmd, accept)
+          askForFeerate(chan, cmd, accept)
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
           // Peer has provided a signature for a first commit
           kit.socket.listeners -= sockOpenListener
-          kit.chan.listeners -= self
+          chan.listeners -= self
 
           // Just exit to ops
           app.TransData.value = kit
@@ -131,26 +128,26 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       override def onPostProcess = {
         case theirInitMessage: Init =>
-          // Connection works, ask user for a funding
-          askForFunding(kit.chan, theirInitMessage)
+          // Connection works, ask for a funding
+          askForFunding(chan, theirInitMessage)
       }
 
       override def onError = {
         case channelRelated: Throwable =>
           Tools log s"Channel $channelRelated"
-          kit.chan process CMDShutdown
+          chan process CMDShutdown
       }
     }
 
     whenBackPressed = anyToRunnable {
-      kit.chan.listeners -= channelOpenListener
+      chan.listeners -= channelOpenListener
       kit.socket.listeners -= sockOpenListener
-      Future { kit.chan process CMDShutdown }
+      Future { chan process CMDShutdown }
       setListView
     }
 
     me setPeerView position
-    kit.chan.listeners += channelOpenListener
+    chan.listeners += channelOpenListener
     kit.socket.listeners += sockOpenListener
     kit.socket.start
   }

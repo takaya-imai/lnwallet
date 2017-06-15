@@ -4,9 +4,11 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Exceptions._
+
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+import com.lightning.wallet.ln.Tools.wrap
 import fr.acinq.bitcoin.Crypto.Point
 
 
@@ -299,8 +301,8 @@ class Channel extends StateMachine[ChannelData] { me =>
       defineClosingAction(closing, tx)
 
 
-    case (some: HasCommitments, CMDSomethingSpent(tx), _)
-      // GUARD: check all incoming transactions if they spend our funding
+    case (some: ChannelData with HasCommitments, CMDSomethingSpent(tx), _)
+      // GUARD: check all incoming transactions if they spend our funding output
       if tx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
       doProcess(CMDFundingSpent apply tx)
 
@@ -308,7 +310,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (_, _: CMDDepth, _) =>
       // IMPORTANT: active state listeners should be idempotent
       // IMPORTANT: listeners should not send CMDDepth from onBecome
-      initEventsBecome
+      init(data, state)
 
 
     case _ =>
@@ -379,10 +381,19 @@ class Channel extends StateMachine[ChannelData] { me =>
       case (Some(claim), _) => become(ClosingData(some.announce, some.commitments, revokedCommits = claim :: Nil), CLOSING)
       case (None, _) => startLocalCurrentClose(some) // Info leak, try to spend current commit
     }
+
+  // First call after restore etc
+  def extract = Tuple2(data, state)
+  def init(data0: ChannelData, state0: String) = {
+    val transition = Tuple4(null, data0, null, state0)
+    wrap { data = data0 } { state = state0 }
+    events onBecome transition
+    me
+  }
 }
 
 object Channel {
-  // Channel states
+  def fresh = new Channel
   val WAIT_FOR_INIT = "WaitForInit"
   val WAIT_FOR_ACCEPT = "WaitForAccept"
   val WAIT_FOR_FUNDING = "WaitForFunding"

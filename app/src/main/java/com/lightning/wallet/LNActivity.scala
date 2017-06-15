@@ -21,7 +21,6 @@ import com.lightning.wallet.ln._
 
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.{PaymentSpecTable, PrivateData, PrivateDataSaver}
-import com.lightning.wallet.test.PaymentSpecSpec
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
 import scala.util.{Failure, Success}
@@ -131,14 +130,6 @@ with ListUpdater with SearchBar { me =>
     paymentProvider reload new String
     me startListUpdates adapter
     me setDetecting true
-
-    val ps = new PaymentSpecSpec
-    val ex1 = ExtendedPaymentInfo(ps.incoming, PaymentSpec.SUCCESS, System.currentTimeMillis - 250000)
-    val ex2 = ExtendedPaymentInfo(ps.outgoing, PaymentSpec.VISIBLE, System.currentTimeMillis - 153020)
-//    LNParams.bag.putInfo(ex1)
-//    LNParams.bag.putInfo(ex2)
-
-    println(LNParams.bag.getInfoByHash("11" * 32))
 
     app.kit.wallet addCoinsSentEventListener txTracker
     app.kit.wallet addCoinsReceivedEventListener txTracker

@@ -1,19 +1,19 @@
 package com.lightning.wallet.lncloud
 
 import spray.json._
+
 import scala.concurrent.duration._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-
 import org.bitcoinj.core.{Coin, Transaction}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
-import com.lightning.wallet.ln.LNParams
-import com.lightning.wallet.ln.~
+import com.lightning.wallet.ln.{Channel, ChannelData, LNParams, ~}
 import spray.json.JsonFormat
+
 import scala.util.Try
 
 
@@ -32,7 +32,7 @@ object JsonHttpUtils {
 
   type JsValueVec = Vector[JsValue]
   def toVec[T : JsonFormat](raw: JsValueVec): Vector[T] =
-    for (json <- raw) yield json.convertTo[T]
+    for (jsValue <- raw) yield jsValue.convertTo[T]
 
   def to[T : JsonFormat](raw: String): T = raw.parseJson.convertTo[T]
   def pickInc(err: Throwable, next: Int) = next.seconds
@@ -56,6 +56,10 @@ object PrivateDataSaver extends Saver {
   def saveObject(data: PrivateData): Unit = save(data.toJson)
   def remove = LNParams.db.change(StorageTable.killSql, KEY)
   val KEY = "lnCloudPrivate"
+}
+
+object ChannelSaver {
+  type ChannelSet = Set[Channel]
 }
 
 object RatesSaver extends Saver {

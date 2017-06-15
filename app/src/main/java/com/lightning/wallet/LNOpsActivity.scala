@@ -4,13 +4,13 @@ import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
-import com.lightning.wallet.lncloud.ChainWatcher._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
-import com.lightning.wallet.Utils.{app, sumIn}
-import com.lightning.wallet.ln.Tools.{none, wrap}
 import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
+import com.lightning.wallet.ln.Tools.{none, wrap}
+import com.lightning.wallet.Utils.{app, sumIn}
+
 import concurrent.ExecutionContext.Implicits.global
+import com.lightning.wallet.lncloud.ActiveKit
 import scala.concurrent.Future
 import android.widget.Button
 import android.os.Bundle
@@ -39,7 +39,7 @@ class LNOpsActivity extends TimerActivity { me =>
   override def onResume =
     wrap(super.onResume) {
       app.TransData.value match {
-        case kit: ChannelKit => me kitIsPresent kit
+        case kit: ActiveKit => me showActive kit
         case _ => showNoKitPresentInfo
       }
     }
@@ -49,7 +49,7 @@ class LNOpsActivity extends TimerActivity { me =>
     txOpt.map(_.getConfidence.getDepthInBlocks) getOrElse 0
   }
 
-  private def kitIsPresent(kit: ChannelKit) = {
+  private def showActive(kit: ActiveKit) = {
     def manageOpeningInfo(c: Commitments, confs: Int) = {
       val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
       val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
@@ -73,7 +73,7 @@ class LNOpsActivity extends TimerActivity { me =>
     }
 
     def warnAboutUnilateralClosing =
-      mkForm(mkChoiceDialog(ok = Future { kit.chan process CMDShutdown }, none,
+      mkForm(mkChoiceDialog(ok = Future { kit.active process CMDShutdown }, none,
         ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
     // UI updating listener
@@ -112,26 +112,21 @@ class LNOpsActivity extends TimerActivity { me =>
       }
 
       override def onError = {
-        case channelRelated: Throwable =>
-          Tools log s"Channel $channelRelated"
-          kit.chan process CMDShutdown
+        case channelError: Throwable =>
+          Tools log s"Channel $channelError"
+          kit.active process CMDShutdown
       }
     }
 
-    // TODO: this is temporary
-    watchBlockchainLocal(kit.chan)
-
     whenDestroy = anyToRunnable {
       kit.socket.listeners -= kit.reconnectSockListener
-      kit.chan.listeners -= LNParams.broadcaster
-      kit.chan.listeners -= chanViewListener
+      kit.active.listeners -= chanViewListener
       super.onDestroy
     }
 
+    kit.active.listeners += chanViewListener
     kit.socket.listeners += kit.reconnectSockListener
-    kit.chan.listeners += LNParams.broadcaster
-    kit.chan.listeners += chanViewListener
-    kit.chan.initEventsBecome
+    kit.active.init(kit.active.data, kit.active.state)
   }
 
   // UI which does not need a channel access
