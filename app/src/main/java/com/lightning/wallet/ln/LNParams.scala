@@ -65,7 +65,7 @@ object LNParams {
 
   // MISC
 
-  def finalHtlcExpiry: Int = broadcaster.currentHeight + 6
+  def finalHtlcExpiry: Int = broadcaster.currentHeight + 10
   def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 

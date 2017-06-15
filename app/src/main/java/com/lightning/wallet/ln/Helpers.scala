@@ -11,26 +11,18 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
-  def extractOutgoingMessages(previousData: Any, nextData: Any) = (previousData, nextData) match {
+  def extractOutgoingMessages(prev: Any, next: Any) = (prev, next) match {
     case (c0: NormalData, c1: NormalData) => c1.commitments.unackedMessages diff c0.commitments.unackedMessages
-
-    // When in NORMAL state we launch a closed app again
-    case (c0: NormalData, _) => c0.commitments.unackedMessages
-    case (_, c1: NormalData) => c1.commitments.unackedMessages
-
-    // When initializing a new channel before a funding tx is broadcasted
-    case (_, waitAccept: WaitAcceptData) => Vector(waitAccept.openChannelMessage)
-    case (_, waitSigned: WaitFundingSignedData) => Vector(waitSigned.fundingCreatedMessage)
-
-    // When funding tx has already been broadcasted and we launch an app again
-    case (waitConfirmed: WaitFundingConfirmedData, _) => waitConfirmed.our.toVector
+    case (_, waitSignedData: WaitFundingSignedData) => Vector(waitSignedData.fundingCreatedMessage)
+    case (_, waitAcceptData: WaitAcceptData) => Vector(waitAcceptData.openChannelMessage)
     case (_, waitConfirmed: WaitFundingConfirmedData) => waitConfirmed.our.toVector
+    case (_, c1: NormalData) => c1.commitments.unackedMessages
     case _ => Vector.empty
   }
 
   def extractPreimages(tx: Transaction): Seq[BinaryData] = tx.txIn.map(_.witness.stack) flatMap {
     case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData) // htlc-timeout
-    case Seq(_, BinaryData.empty, script) => Some(script.slice(109, 69 + 20): BinaryData) // claim-htlc-timeout
+    case Seq(_, BinaryData.empty, script) => Some(script.slice(69, 69 + 20): BinaryData) // claim-htlc-timeout
     case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg) // htlc-success
     case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg) // claim-htlc-success
     case _ => None
