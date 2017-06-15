@@ -18,12 +18,12 @@ import android.webkit.URLUtil
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln._
+
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.{PaymentSpecTable, PrivateData, PrivateDataSaver}
+import com.lightning.wallet.test.PaymentSpecSpec
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
-
-import scala.collection.mutable
 import scala.util.{Failure, Success}
 
 
@@ -58,8 +58,8 @@ with ListUpdater with SearchBar { me =>
 
   // INTERFACE IMPLEMENTING METHODS
 
-  def react(query: String) = println(query)
-  def notifySubTitle(subtitle: String, infoType: Int) = {
+  def react(query: String) = paymentProvider reload query
+  def notifySubTitle(subtitle: String, infoType: Int): Unit = {
     add(subtitle, infoType).timer.schedule(me del infoType, 25000)
     me runOnUiThread ui
   }
@@ -69,26 +69,16 @@ with ListUpdater with SearchBar { me =>
   // Payment history and search results loader
   // Remembers last search term in case of reload
   class PaymentsDataProvider extends ReactCallback(me) { self =>
+    def reload(txt: String) = runAnd(lastQuery = txt)(getSupportLoaderManager.restartLoader(1, null, self).forceLoad)
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byTime 14.days.toMillis }
+    def search = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byQuery lastQuery }
+    def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
     val observeTablePath = LNParams.db sqlPath PaymentSpecTable.table
     private var lastQuery: String = ""
 
-    def reload(query: String) = runAnd(lastQuery = query) {
-      getSupportLoaderManager.restartLoader(1, null, self).forceLoad
-    }
-
-    def onCreateLoader(id: Int, b: Bundle) =
-      if (lastQuery.isEmpty) recent else search
-
-    def recent = new ExtendedPaymentInfoLoader {
-      def getCursor = LNParams.bag byTime 14.days.toMillis
-    }
-
-    def search = new ExtendedPaymentInfoLoader {
-      def getCursor = LNParams.bag byQuery lastQuery
-    }
-
+    type InfoVec = Vector[ExtendedPaymentInfo]
     abstract class ExtendedPaymentInfoLoader extends ReactLoader[ExtendedPaymentInfo](me) {
-      val consume: Vector[ExtendedPaymentInfo] => Unit = items => println(items.size)
+      val consume = (items: InfoVec) => wrap(adapter.notifyDataSetChanged)(adapter.payments = items)
       def createItem(shifted: RichCursor) = LNParams.bag toInfo shifted
     }
   }
@@ -101,7 +91,7 @@ with ListUpdater with SearchBar { me =>
       view
     }
 
-    var payments = mutable.Buffer.empty[ExtendedPaymentInfo]
+    var payments = Vector.empty[ExtendedPaymentInfo]
     def getItem(position: Int) = payments(position)
     def getItemId(position: Int) = position
     def getCount = payments.size
@@ -116,14 +106,17 @@ with ListUpdater with SearchBar { me =>
       else await
 
       val paymentMarking = info.spec match {
-        case spec: OutgoingPaymentSpec => sumOut format milliSatoshi2String(spec.invoice.sum).neg
-        case spec: IncomingPaymentSpec => sumIn format milliSatoshi2String(spec.invoice.sum)
+        case spec: OutgoingPaymentSpec => spec2ShortView(sumOut.format(baseSat format -spec.amountWithFee), spec)
+        case spec: IncomingPaymentSpec => spec2ShortView(sumIn.format(spec.invoice.sum: String), spec)
       }
 
       transactWhen setText time.html
       transactSum setText paymentMarking.html
       transactCircle setImageResource image
     }
+
+    private def spec2ShortView(sum: String, spec: PaymentSpec) =
+      sum + "\u00A0" + spec.invoice.message.getOrElse("")
   }
 
   // Initialize this activity, method is run once
@@ -138,6 +131,14 @@ with ListUpdater with SearchBar { me =>
     paymentProvider reload new String
     me startListUpdates adapter
     me setDetecting true
+
+    val ps = new PaymentSpecSpec
+    val ex1 = ExtendedPaymentInfo(ps.incoming, PaymentSpec.SUCCESS, System.currentTimeMillis - 250000)
+    val ex2 = ExtendedPaymentInfo(ps.outgoing, PaymentSpec.VISIBLE, System.currentTimeMillis - 153020)
+//    LNParams.bag.putInfo(ex1)
+//    LNParams.bag.putInfo(ex2)
+
+    println(LNParams.bag.getInfoByHash("11" * 32))
 
     app.kit.wallet addCoinsSentEventListener txTracker
     app.kit.wallet addCoinsReceivedEventListener txTracker

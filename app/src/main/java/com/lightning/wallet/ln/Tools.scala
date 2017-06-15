@@ -60,16 +60,15 @@ object MSat {
   baseFiat setDecimalFormatSymbols symbols
   baseSat setDecimalFormatSymbols symbols
 
+  def withSign(sum: String) = s"ⓢ\u00A0$sum"
   def btcBigDecimal2MilliSatoshi(btc: BigDecimal): MilliSatoshi = MilliSatoshi(amount = (btc * btcFactor).toLong)
   def satString2MilliSatoshi(sat: String): MilliSatoshi = MilliSatoshi(amount = (BigDecimal(sat) * satFactor).toLong)
+  implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat format BigDecimal(msat.amount) / satFactor
+  implicit def satoshi2String(msat: Satoshi): String = baseSat format msat.amount
+  implicit def coin2String(coin: Coin): String = baseSat format coin.value
 
   implicit def milliSatoshi2Coin(msat: MilliSatoshi): Coin = Coin.valueOf(msat.amount / satFactor)
   implicit def coin2MilliSatoshi(coin: Coin): MilliSatoshi = MilliSatoshi(coin.value * satFactor)
-
-  implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat format BigDecimal(msat.amount) / satFactor
-  implicit def satoshi2String(msat: Satoshi): String = baseSat format BigDecimal(msat.amount)
-  implicit def coin2String(coin: Coin): String = baseSat format coin.value
-  def withSign(sum: String) = s"ⓢ\u00A0$sum"
 }
 
 object Features {

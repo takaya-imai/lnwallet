@@ -30,5 +30,4 @@ class StringOps(source: String) {
   def noCommas = source.replace(",", "")
   def html = Html fromHtml source
   def hex = binary.toString
-  def neg = s"-$source"
 }

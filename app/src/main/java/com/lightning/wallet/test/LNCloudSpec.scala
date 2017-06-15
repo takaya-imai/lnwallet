@@ -30,7 +30,7 @@ class LNCloudSpec {
     def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS, 0L))
 
     def putInfo(info: ExtendedPaymentInfo): Unit = ???
-    def updatePaymentStatus(hash: BinaryData, status: String): Unit = ???
+    def updatePaymentStatus(hash: BinaryData, status: Long): Unit = ???
     def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit = ???
   }
 

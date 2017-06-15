@@ -44,11 +44,11 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
   def byQuery(query: String): Cursor = LNParams.db.select(selectVirtualSql, s"$query*")
   def byHash(hash: BinaryData): Cursor = LNParams.db.select(selectByHashSql, hash.toString)
   def byTime(millis: Long): Cursor = LNParams.db.select(selectRecentSql, (System.currentTimeMillis - millis).toString)
-  def toInfo(rcu: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rcu string data), rcu string status, rcu long stamp)
+  def toInfo(rcu: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rcu string data), rcu long status, rcu long stamp)
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = RichCursor(me byHash hash) headTry toInfo
 
-  def updatePaymentStatus(hash: BinaryData, status: String): Unit = {
-    LNParams.db.change(sql = updStatusSql, params = status, hash.toString)
+  def updatePaymentStatus(hash: BinaryData, status: Long): Unit = {
+    LNParams.db.change(sql = updStatusSql, status.toString, hash.toString)
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 
@@ -57,7 +57,7 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
       spec.invoice.paymentHash.toString)
 
   def putInfo(info: ExtendedPaymentInfo) = info.spec.invoice.paymentHash.toString match { case hashStr =>
-    LNParams.db.change(newSql, info.spec.toJson.toString, hashStr, info.status, info.stamp.toString)
+    LNParams.db.change(newSql, info.spec.toJson.toString, hashStr, info.status.toString, info.stamp.toString)
     LNParams.db.change(newVirtualSql, s"${info.spec.invoice.message.orNull} $hashStr", hashStr)
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }

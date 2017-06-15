@@ -15,7 +15,7 @@ import scodec.Attempt
 
 
 trait PaymentSpec { val invoice: Invoice }
-case class ExtendedPaymentInfo(spec: PaymentSpec, status: String, stamp: Long)
+case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long, stamp: Long)
 case class IncomingPaymentSpec(invoice: Invoice, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
 case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
@@ -23,17 +23,17 @@ case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], r
 trait PaymentSpecBag {
   def putInfo(info: ExtendedPaymentInfo): Unit
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
-  def updatePaymentStatus(hash: BinaryData, status: String): Unit
   def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit
+  def updatePaymentStatus(hash: BinaryData, status: Long): Unit
   def newPreimage = BinaryData(random getBytes 32)
 }
 
 object PaymentSpec {
   // PaymentSpec states
-  final val HIDDEN = "WaitHidden"
-  final val VISIBLE = "WaitVisible"
-  final val SUCCESS = "Success"
-  final val FAIL = "Fail"
+  final val HIDDEN = 1L
+  final val VISIBLE = 2L
+  final val SUCCESS = 3L
+  final val FAIL = 4L
 
   // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000

@@ -25,11 +25,8 @@ object StorageTable extends Table {
 object PaymentSpecTable extends Table {
   import com.lightning.wallet.ln.PaymentSpec.{SUCCESS, HIDDEN}
   val (table, data, hash, status, stamp, searchData) = ("payments", "data", "hash", "status", "stamp", "search")
-  private val fuzzySearch = s"SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 50"
-  private val recentVisible = s"$status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?)"
-
-  def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN ($fuzzySearch) AND $status <> $HIDDEN"
-  def selectRecentSql = s"SELECT * FROM $table WHERE $recentVisible ORDER BY $id DESC LIMIT 50"
+  def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 50)"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   // Hidden -> Visible -> Failed or Success
@@ -47,7 +44,7 @@ object PaymentSpecTable extends Table {
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $data STRING NOT NULL,
       $hash STRING UNIQUE NOT NULL,
-      $status STRING NOT NULL,
+      $status INTEGER NOT NULL,
       $stamp INTEGER NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status, $stamp);
@@ -61,7 +58,7 @@ object PaymentSpecTable extends Table {
 
 trait Table { val (id, fts) = "_id" -> "fts" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata5.db", null, version) { me =>
+extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
 
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)
