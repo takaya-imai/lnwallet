@@ -15,7 +15,7 @@ import fr.acinq.bitcoin.Crypto.Point
 class Channel extends StateMachine[ChannelData] { me =>
   def doProcess(change: Any): Unit = (data, change, state) match {
     case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
-    initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
+      initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
       val firstPerCommitPoint = Generators.perCommitPoint(localParams.shaSeed, 0)
       val open = OpenChannel(localParams.chainHash, tempChannelId, fundingAmountSat, pushMsat,
@@ -95,7 +95,6 @@ class Channel extends StateMachine[ChannelData] { me =>
       if (wait.their.isDefined) becomeNormal(wait, our, wait.their.get.nextPerCommitmentPoint)
       else me stayWith wait.copy(our = Some apply our)
 
-
     // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
     case (wait: WaitFundingConfirmedData, _: Error, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
     case (wait: WaitFundingConfirmedData, CMDShutdown, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
@@ -108,16 +107,8 @@ class Channel extends StateMachine[ChannelData] { me =>
     // NORMAL MODE
 
 
-    case (norm: NormalData, cmd: CMDAddHtlc, NORMAL)
-      // Throw an exception so we can do something about it
-      // GUARD: can't add new outgoing HTLCs when closing is in progress
-      if norm.localShutdown.isDefined | norm.remoteShutdown.isDefined =>
-      throw DetailedException(CHANNEL_SHUTDOWN_IN_PROGRESS, cmd)
-
-
-    case (norm: NormalData, cmd: CMDAddHtlc, NORMAL) =>
-      val chainHeight: Int = LNParams.broadcaster.currentHeight
-      val c1 = Commitments.sendAdd(norm.commitments, cmd, chainHeight)
+    case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL) =>
+      val c1 = Commitments.sendAdd(commitments, cmd, LNParams.broadcaster.currentHeight)
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
 
@@ -227,13 +218,13 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We have not yet send or received a shutdown so send it and retry
-    case (norm @ NormalData(_, _, None, None, _), remote: Shutdown, NORMAL) =>
+    case (norm @ NormalData(_, _, None, None), remote: Shutdown, NORMAL) =>
       initiateShutdown(norm)
       doProcess(remote)
 
 
     // We have already sent a shutdown (initially or in response to their shutdown)
-    case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL) =>
+    case (norm @ NormalData(announce, commitments, Some(local), None), remote: Shutdown, NORMAL) =>
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
@@ -324,7 +315,7 @@ class Channel extends StateMachine[ChannelData] { me =>
   // We keep sending FundingLocked on reconnects until
   private def becomeNormal(wait: WaitFundingConfirmedData, our: FundingLocked, theirNextPoint: Point) = {
     val c1 = wait.commitments.copy(unackedMessages = Vector(our), remoteNextCommitInfo = Right apply theirNextPoint)
-    become(NormalData(wait.announce, c1, None, None, announced = false), state1 = NORMAL)
+    become(NormalData(wait.announce, c1, None, None), state1 = NORMAL)
   }
 
   private def initiateShutdown(norm: NormalData) = {
