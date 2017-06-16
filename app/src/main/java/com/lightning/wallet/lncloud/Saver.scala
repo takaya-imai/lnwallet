@@ -72,7 +72,7 @@ object RatesSaver extends Saver {
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
 
   def process = {
-    def getResult = LNParams.cloud.getRates map toVec[Result]
+    def getResult = LNParams.getCloud.getRates map toVec[Result]
     def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
     withDelay(periodically, rates.stamp, updatePeriod.toMillis) foreach { case newFee ~ newFiat +: _ =>
       val feeHistory = for (goodFee <- newFee("6") +: rates.feeHistory take 6 if goodFee > 0) yield goodFee

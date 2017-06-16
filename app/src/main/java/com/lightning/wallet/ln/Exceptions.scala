@@ -23,8 +23,6 @@ object Exceptions {
 
   val COMMIT_RECEIVE_INVALID_SIGNATURE = "Signature in a received commit is invalid"
   val COMMIT_RECEIVE_ATTEMPT_NO_CHANGES = "Cannot receive a commit when there are no changes"
-  val COMMIT_ATTEMPT_NO_REVOCATION = "Cannot sign until next revocation hash is received"
-  val COMMIT_SEND_ATTEMPT_NO_CHANGES = "Cannot send a commit when there are no changes"
   val COMMIT_SIG_COUNT_MISMATCH = "HTLC sig count mismatch when receiving a commit"
 
   val REVOCATION_INVALID_PREIMAGE = "Invalid preimage in RevokeAndAck"
@@ -40,11 +38,7 @@ object Exceptions {
   val DESERIALIZATION_ERROR = "Deserialization error"
 
   val SPHINX_ERR_PACKET_WRONG_LENGTH = "Error packet is of incorrect length"
-
   val CHANNEL_CLOSE_PENDING_CHANGES = "Cannot close when there are pending changes"
-  val CHANNEL_SHUTDOWN_IN_PROGRESS = "Cannot proceed because channel shutdown is in progress"
   val CHANNEL_CLOSE_SIG_FAIL = "Cannot verify their close signature"
-  val CHANNEL_TIMEDOUT_HTLC = "One or more htlcs has timed out"
-  val CHANNEL_INFO_LEACK = "Channel info leak happened"
 }
 

@@ -17,12 +17,14 @@ import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.webkit.URLUtil
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
+import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
 
 import scala.concurrent.duration._
-import com.lightning.wallet.lncloud.{PaymentSpecTable, PrivateData, PrivateDataSaver}
+import com.lightning.wallet.lncloud._
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
+
 import scala.util.{Failure, Success}
 
 
@@ -55,29 +57,23 @@ with ListUpdater with SearchBar { me =>
   lazy val lnTitle = getString(ln_title)
   lazy val adapter = new LNAdapter
 
-  // INTERFACE IMPLEMENTING METHODS
-
-  def react(query: String) = paymentProvider reload query
-  def notifySubTitle(subtitle: String, infoType: Int): Unit = {
-    add(subtitle, infoType).timer.schedule(me del infoType, 25000)
-    me runOnUiThread ui
-  }
-
-  // PAYMENTS DISPLAY AND SEARCH
+  private[this] var activeKit: ActiveKit = _
+  private[this] var pathfinder: Pathfinder = _
 
   // Payment history and search results loader
   // Remembers last search term in case of reload
   class PaymentsDataProvider extends ReactCallback(me) { self =>
+    def updatePaymentList(payments: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = payments)
     def reload(txt: String) = runAnd(lastQuery = txt)(getSupportLoaderManager.restartLoader(1, null, self).forceLoad)
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byTime 14.days.toMillis }
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byTime 1.day.toMillis }
     def search = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byQuery lastQuery }
     def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
     val observeTablePath = LNParams.db sqlPath PaymentSpecTable.table
-    private var lastQuery: String = ""
+    private var lastQuery = new String
 
     type InfoVec = Vector[ExtendedPaymentInfo]
     abstract class ExtendedPaymentInfoLoader extends ReactLoader[ExtendedPaymentInfo](me) {
-      val consume = (items: InfoVec) => wrap(adapter.notifyDataSetChanged)(adapter.payments = items)
+      val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
       def createItem(shifted: RichCursor) = LNParams.bag toInfo shifted
     }
   }
@@ -116,6 +112,14 @@ with ListUpdater with SearchBar { me =>
 
     private def spec2ShortView(sum: String, spec: PaymentSpec) =
       sum + "\u00A0" + spec.invoice.message.getOrElse("")
+  }
+
+  // INTERFACE IMPLEMENTING METHODS
+
+  def react(query: String) = paymentProvider reload query
+  def notifySubTitle(subtitle: String, infoType: Int): Unit = {
+    add(subtitle, infoType).timer.schedule(me del infoType, 25000)
+    me runOnUiThread ui
   }
 
   // Initialize this activity, method is run once
@@ -183,17 +187,22 @@ with ListUpdater with SearchBar { me =>
     case adr: Address => me goTo classOf[BtcActivity]
 
     case invoice: Invoice =>
-      me displayInvoice invoice
       app.TransData.value = null
+      me displayInvoice invoice
+
+    case kit: ActiveKit =>
+      app.TransData.value = null
+      pathfinder = getPathfinder(kit.active)
+      activeKit = kit
 
     case unusable =>
-      Tools log s"Unusable $unusable"
       app.TransData.value = null
+      Tools log s"Unusable $unusable"
   }
 
   // Reactions to menu
   def goBitcoin(top: View) = {
-    me goTo classOf[BtcActivity]
+    me goTo classOf[LNOpsActivity]
     fab close true
   }
 
@@ -230,8 +239,10 @@ with ListUpdater with SearchBar { me =>
     val info = invoice.message getOrElse getString(ln_no_description)
     val humanSum = humanFiat(sumOut format withSign(invoice.sum), invoice.sum)
     val title = getString(ln_payment_title).format(info, humanKey, humanSum)
-    mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, null)
+    mkForm(mkChoiceDialog(pathfinder.makeOutgoingSpec(invoice).subscribe(x => activeKit.active process PlainAddHtlc(x.get), _.printStackTrace), none, dialog_pay, dialog_cancel), title.html, null)
   }
+
+  // USER CAN SET THEIR OWN PATHFINDER
 
   class SetBackupServer { self =>
     val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
@@ -251,9 +262,9 @@ with ListUpdater with SearchBar { me =>
       else if (URLUtil isValidUrl url) self save PrivateData(Nil, url)
       else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
 
-    def save(data: PrivateData) = {
-      PrivateDataSaver saveObject data
-      LNParams.cloud = LNParams.currentLNCloud
+    def save(privateData: PrivateData) = {
+      PrivateDataSaver saveObject privateData
+      pathfinder = getPathfinder(activeKit.active)
       app toast ln_backup_success
     }
 

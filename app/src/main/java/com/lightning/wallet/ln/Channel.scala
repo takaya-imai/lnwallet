@@ -163,7 +163,9 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // We received a commit sig from them
     case (norm: NormalData, sig: CommitSig, NORMAL) =>
+      println("COMMIT SIG RECEIVED 1")
       val c1 = Commitments.receiveCommit(norm.commitments, sig)
+      println("COMMIT SIG RECEIVED 2")
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
 
@@ -171,6 +173,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     // We received a revocation because we sent a sig
     case (norm: NormalData, rev: RevokeAndAck, NORMAL) =>
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
+      println("REVOCATION RECEIVED")
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
 

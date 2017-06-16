@@ -112,8 +112,7 @@ class LNOpsActivity extends TimerActivity { me =>
       }
 
       override def onError = {
-        case channelError: Throwable =>
-          Tools log s"Channel $channelError"
+        case chanRelated: Throwable =>
           kit.active process CMDShutdown
       }
     }

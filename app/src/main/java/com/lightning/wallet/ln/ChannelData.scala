@@ -321,12 +321,17 @@ object Commitments {
 
   // Instead of forgetting their commit sig
   // we check if it's an old one before proceeding
-  def receiveCommit(c: Commitments, commit: CommitSig) =
-    c.localCommit.commit.hashCode == commit.hashCode match { // TODO: should be changed
+  def receiveCommit(c: Commitments, commit: CommitSig) = {
+    // TODO: change string sig check to something more elegant
+    val oldTx = Transaction.write(c.localCommit.publishableTxs.commitTx.tx)
+    val oldCommit = oldTx.toString.contains(commit.signature.toString)
+
+    oldCommit match {
       case false if remoteHasChanges(c) => doReceiveCommit(c, commit)
       case false => throw ChannelException(COMMIT_RECEIVE_ATTEMPT_NO_CHANGES)
       case true => c
     }
+  }
 
   private def doReceiveCommit(c: Commitments, commit: CommitSig) = {
     val spec = CommitmentSpec.reduce(c.localCommit.spec, c.localChanges.acked, c.remoteChanges.proposed)

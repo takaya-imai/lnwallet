@@ -14,22 +14,20 @@ import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import org.bitcoinj.core.{ECKey, PeerAddress, PeerGroup}
 import collection.JavaConverters.mapAsJavaMapConverter
-import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 import com.github.kevinsawicki.http.HttpRequest.post
 import rx.lang.scala.schedulers.IOScheduler
 import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PublicKey
+import com.lightning.wallet.ln.wire.Hop
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
 import scala.util.Success
 
 
+// User can set this one instead of public one
 case class PrivateData(acts: List[LNCloudAct], url: String)
-case class PublicData(info: Option[InvoiceAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
-// By default a public pathfinder is used but user may provide their own private pathfinder anytime
-
 class PrivatePathfinder(val lnCloud: LNCloud, val channel: Channel)
 extends StateMachine[PrivateData] with Pathfinder { me =>
 
@@ -53,18 +51,10 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
   }
 }
 
+// By default a public pathfinder is used but user may provide their own private pathfinder anytime
+case class PublicData(info: Option[InvoiceAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
 class PublicPathfinder(val bag: PaymentSpecBag, val lnCloud: LNCloud, val channel: Channel)
-extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me =>
-  private def resetState = me stayWith data.copy(info = None)
-
-  // LISTENING TO CHANNEL
-
-  channel.listeners += me
-  override def onPostProcess = {
-    case fulfill: UpdateFulfillHtlc =>
-      // This may be our HTLC, check it
-      me doProcess CMDStart
-  }
+extends StateMachine[PublicData] with Pathfinder { me =>
 
   // STATE MACHINE
 
@@ -114,6 +104,7 @@ extends StateMachine[PublicData] with Pathfinder with StateMachineListener { me 
 
   // ADDING NEW TOKENS
 
+  def resetState = me stayWith data.copy(info = None)
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
       serverError => if (serverError.getMessage == "notfound") resetState)
@@ -150,8 +141,9 @@ trait Pathfinder {
   val channel: Channel
 
   def makeOutgoingSpec(invoice: Invoice) =
-    lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
-      PaymentSpec.makeOutgoingSpec(_, invoice, LNParams.finalHtlcExpiry)
+    lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map { routes =>
+      val routes1 = for (route <- routes) yield Hop(null, PublicKey(channel.data.announce.nodeId), null) +: route
+      PaymentSpec.makeOutgoingSpec(routes1, invoice, LNParams.finalHtlcExpiry)
     }
 }
 

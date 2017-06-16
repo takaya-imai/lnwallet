@@ -339,7 +339,6 @@ with ListUpdater { me =>
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
             add(me getString tx_announce, Informer.BTCEVENT).ui.run

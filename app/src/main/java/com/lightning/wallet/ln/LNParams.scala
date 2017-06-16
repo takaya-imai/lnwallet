@@ -23,6 +23,7 @@ object LNParams {
 
   val maxHtlcValue = MilliSatoshi(100000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
+  lazy val publicCloud = new LNCloud("http://10.0.2.2")
   lazy val broadcaster = LocalBroadcaster
   lazy val bag = PaymentSpecWrap
 
@@ -30,7 +31,6 @@ object LNParams {
   var cloudPrivateKey: PrivateKey = _
   var extendedNodeKey: ExtendedPrivateKey = _
   var db: CipherOpenHelper = _
-  var cloud: LNCloud = _
 
   def isSetUp: Boolean = db != null
   def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
@@ -38,19 +38,17 @@ object LNParams {
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
     nodePrivateKey = extendedNodeKey.privateKey
-    cloud = currentLNCloud
   }
 
   // LNCLOUD AND PATHFINDER
 
-  private[this] val cloudUri = "http://10.0.2.2"
-  def currentLNCloud: LNCloud = PrivateDataSaver.tryGetObject map {
-    privateData => new FailoverLNCloud(new LNCloud(cloudUri), privateData.url)
-  } getOrElse new LNCloud(cloudUri)
+  def getCloud: LNCloud = PrivateDataSaver.tryGetObject map {
+    privateData => new FailoverLNCloud(publicCloud, privateData.url)
+  } getOrElse publicCloud
 
-  def currentPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
-    privateData => new PrivatePathfinder(new FailoverLNCloud(cloud, privateData.url), channel) { data = privateData }
-  } getOrElse new PublicPathfinder(bag, cloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
+  def getPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
+    privateData => new PrivatePathfinder(new FailoverLNCloud(publicCloud, privateData.url), channel) { data = privateData }
+  } getOrElse new PublicPathfinder(bag, publicCloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
 
   // FEE RELATED
 
@@ -70,11 +68,11 @@ object LNParams {
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
-    val Seq(funding, revocation, payment, delayed, sha) = for (n <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, n)
-    LocalParams(chainHash = Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = maxHtlcValue.amount / satFactor,
-      maxHtlcValueInFlightMsat = Long.MaxValue, channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144,
-      maxAcceptedHtlcs = 20, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
-      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
+    val Seq(funding, revocation, payment, delayed, sha) = for (order <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, order)
+    LocalParams(chainHash = Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
+      channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = funding,
+      revocationSecret = revocation, paymentKey = payment, delayedPaymentKey = delayed, finalScriptPubKey,
+      shaSeed = sha256(sha.toBin), isFunder = true)
   }
 }
 

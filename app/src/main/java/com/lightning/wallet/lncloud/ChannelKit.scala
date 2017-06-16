@@ -94,7 +94,9 @@ case class ActiveKit(active: Channel, closing: ChannelSet) extends ChannelKit { 
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => active process CMDShutdown
-    case _ => active process msg
+    case _ =>
+      println(s"---- $msg")
+      active process msg
   }
 
   def send(msg: LightningMessage) = {
