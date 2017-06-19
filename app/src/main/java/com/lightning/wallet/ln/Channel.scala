@@ -7,9 +7,9 @@ import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
+import fr.acinq.bitcoin.Crypto.{Point, PrivateKey}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.wrap
-import fr.acinq.bitcoin.Crypto.Point
 
 
 class Channel extends StateMachine[ChannelData] { me =>
@@ -17,7 +17,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
       initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
-      val firstPerCommitPoint = Generators.perCommitPoint(localParams.shaSeed, 0)
+      val firstPerCommitPoint = Generators.perCommitPoint(localParams.shaSeed, index = 0)
       val open = OpenChannel(localParams.chainHash, tempChannelId, fundingAmountSat, pushMsat,
         localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat,
         localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay, localParams.maxAcceptedHtlcs,
@@ -45,7 +45,7 @@ class Channel extends StateMachine[ChannelData] { me =>
 
       val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
       val fundingCreated = FundingCreated(cmd.temporaryChannelId, fundTx.hash, outIndex, localSigOfRemoteTx)
-      val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
+      val firstRemoteCommit = RemoteCommit(index = 0, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
 
       become(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex),
         remoteParams, fundTx, localSpec, localCommitTx, firstRemoteCommit, fundingCreated),
@@ -54,16 +54,16 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // They have signed our first commit tx, we can broadcast a funding tx
     case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED) =>
-      val dummy = Point("0x025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+      val point = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
       if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) become(wait, CLOSING) else {
-        val localCommit = LocalCommit(index = 0L, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
+        val localCommit = LocalCommit(index = 0, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
         val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit, wait.remoteCommit,
           localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty),
           remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty),
-          localNextHtlcId = 0L, remoteNextHtlcId = 0L, remoteNextCommitInfo = Right(dummy),
+          localNextHtlcId = 0, remoteNextHtlcId = 0, remoteNextCommitInfo = Right(point),
           unackedMessages = Vector.empty, commitInput = wait.localCommitTx.input,
           ShaHashesWithIndex(Map.empty, None), wait.channelId)
 

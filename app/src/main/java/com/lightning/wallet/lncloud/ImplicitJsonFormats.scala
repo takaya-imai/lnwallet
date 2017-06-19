@@ -100,10 +100,7 @@ object ImplicitJsonFormats { me =>
 
   implicit object CommitSigFmt extends JsonFormat[CommitSig] {
     def read(rawJson: JsValue) = commitSigCodec.decode(json2BitVec(rawJson).get).require.value
-    def write(sig: CommitSig) = {
-      println(s"COMMIT SIG: $sig")
-      commitSigCodec.encode(sig).require.toHex.toJson
-    }
+    def write(sig: CommitSig) = commitSigCodec.encode(sig).require.toHex.toJson
   }
 
   implicit object ClosingSignedFmt extends JsonFormat[ClosingSigned] {
