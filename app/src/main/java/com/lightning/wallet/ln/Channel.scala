@@ -54,15 +54,16 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // They have signed our first commit tx, we can broadcast a funding tx
     case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED) =>
+      val dummy = Point("0x025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
       if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) become(wait, CLOSING) else {
-        val localCommit = LocalCommit(0L, wait.localSpec, PublishableTxs(Nil, signedLocalCommitTx), null)
+        val localCommit = LocalCommit(index = 0L, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
         val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit, wait.remoteCommit,
           localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty),
           remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty),
-          localNextHtlcId = 0L, remoteNextHtlcId = 0L, remoteNextCommitInfo = Right(null),
+          localNextHtlcId = 0L, remoteNextHtlcId = 0L, remoteNextCommitInfo = Right(dummy),
           unackedMessages = Vector.empty, commitInput = wait.localCommitTx.input,
           ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
@@ -334,14 +335,12 @@ class Channel extends StateMachine[ChannelData] { me =>
     become(closing, state1 = CLOSING)
   }
 
-  private def startLocalCurrentClose(some: ChannelData with HasCommitments) = {
+  private def startLocalCurrentClose(some: ChannelData with HasCommitments) =
     // Something went wrong and we decided to spend our current commit transaction
-    val commitTx: Transaction = some.commitments.localCommit.publishableTxs.commitTx.tx
-    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, commitTx, LNParams.bag) -> some match {
-      case (claim: LocalCommitPublished, closing: ClosingData) => become(closing.copy(localCommit = claim :: Nil), CLOSING)
+    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, some.commitments.localCommit.commitTx.tx, LNParams.bag) -> some match {
+      case (claim: LocalCommitPublished, closing: ClosingData) => become(data1 = closing.copy(localCommit = claim :: Nil), state1 = CLOSING)
       case (claim, _) => become(ClosingData(some.announce, some.commitments, localCommit = claim :: Nil), CLOSING)
     }
-  }
 
   private def defineClosingAction(some: ChannelData with HasCommitments, tx: Transaction) =
     // We are not sure what kind of closing transaction this is so we check against commitments

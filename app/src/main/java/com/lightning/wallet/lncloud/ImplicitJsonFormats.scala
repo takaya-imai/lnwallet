@@ -100,7 +100,10 @@ object ImplicitJsonFormats { me =>
 
   implicit object CommitSigFmt extends JsonFormat[CommitSig] {
     def read(rawJson: JsValue) = commitSigCodec.decode(json2BitVec(rawJson).get).require.value
-    def write(sig: CommitSig) = commitSigCodec.encode(sig).require.toHex.toJson
+    def write(sig: CommitSig) = {
+      println(s"COMMIT SIG: $sig")
+      commitSigCodec.encode(sig).require.toHex.toJson
+    }
   }
 
   implicit object ClosingSignedFmt extends JsonFormat[ClosingSigned] {
@@ -254,11 +257,8 @@ object ImplicitJsonFormats { me =>
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,
     HtlcTxAndSigs](HtlcTxAndSigs.apply, "txinfo", "localSig", "remoteSig")
 
-  implicit val publishableTxs = jsonFormat[Seq[HtlcTxAndSigs], CommitTx,
-    PublishableTxs](PublishableTxs.apply, "htlcTxsAndSigs", "commitTx")
-
-  implicit val localCommitFmt = jsonFormat[Long, CommitmentSpec, PublishableTxs, CommitSig,
-    LocalCommit](LocalCommit.apply, "index", "spec", "publishableTxs", "commit")
+  implicit val localCommitFmt = jsonFormat[Long, CommitmentSpec, Seq[HtlcTxAndSigs], CommitTx,
+    LocalCommit](LocalCommit.apply, "index", "spec", "htlcTxsAndSigs", "commitTx")
 
   implicit val remoteCommitFmt = jsonFormat[Long, CommitmentSpec, BinaryData, Point,
     RemoteCommit](RemoteCommit.apply, "index", "spec", "txid", "remotePerCommitmentPoint")

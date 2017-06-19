@@ -118,7 +118,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           askForFeerate(chan, cmd, accept)
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-          // Peer has provided a signature for a first commit
+          // NEver forget to remove local view related listeners
           kit.socket.listeners -= sockOpenListener
           chan.listeners -= self
 

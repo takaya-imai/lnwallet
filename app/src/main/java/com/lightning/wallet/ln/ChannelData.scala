@@ -136,10 +136,9 @@ case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
                         globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
-case class PublishableTxs(htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
-case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
-case class LocalCommit(index: Long, spec: CommitmentSpec, publishableTxs: PublishableTxs, commit: CommitSig)
+case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
+case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
 object Changes { def all(c: Changes): LightningMessages = c.proposed ++ c.signed ++ c.acked }
 
@@ -327,7 +326,7 @@ object Commitments {
   // we check if it's an old one before proceeding
   def receiveCommit(c: Commitments, commit: CommitSig) = {
     // TODO: change string sig check to something more elegant
-    val oldTx = Transaction.write(c.localCommit.publishableTxs.commitTx.tx)
+    val oldTx = Transaction.write(c.localCommit.commitTx.tx)
     val oldCommit = oldTx.toString.contains(commit.signature.toString)
 
     oldCommit match {
@@ -374,8 +373,8 @@ object Commitments {
     }
 
     val localChanges1 = c.localChanges.copy(acked = Vector.empty)
-    c.copy(remoteChanges = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed),
-      localCommit = LocalCommit(c.localCommit.index + 1, spec, PublishableTxs(htlcTxsAndSigs, signedCommitTx), commit),
+    val remoteChange1 = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed)
+    c.copy(remoteChanges = remoteChange1, localCommit = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx),
       unackedMessages = replaceRevoke(c.unackedMessages, revocation), localChanges = localChanges1)
   }
 
