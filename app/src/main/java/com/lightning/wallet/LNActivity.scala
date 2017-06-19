@@ -7,8 +7,11 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import android.widget._
+
+import concurrent.ExecutionContext.Implicits.global
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import org.ndeftools.Message
+import com.lightning.wallet.ln.LNParams._
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.os.Bundle
 import Utils.app
@@ -19,12 +22,15 @@ import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
 
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
+import fr.acinq.bitcoin.{MilliSatoshi, Satoshi}
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
 
+import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 
@@ -65,16 +71,16 @@ with ListUpdater with SearchBar { me =>
   class PaymentsDataProvider extends ReactCallback(me) { self =>
     def updatePaymentList(payments: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = payments)
     def reload(txt: String) = runAnd(lastQuery = txt)(getSupportLoaderManager.restartLoader(1, null, self).forceLoad)
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byTime 1.day.toMillis }
-    def search = new ExtendedPaymentInfoLoader { def getCursor = LNParams.bag byQuery lastQuery }
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag byTime 1.day.toMillis }
+    def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
     def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
-    val observeTablePath = LNParams.db sqlPath PaymentSpecTable.table
+    val observeTablePath = db sqlPath PaymentSpecTable.table
     private var lastQuery = new String
 
     type InfoVec = Vector[ExtendedPaymentInfo]
     abstract class ExtendedPaymentInfoLoader extends ReactLoader[ExtendedPaymentInfo](me) {
       val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
-      def createItem(shifted: RichCursor) = LNParams.bag toInfo shifted
+      def createItem(shifted: RichCursor) = bag toInfo shifted
     }
   }
 
@@ -101,7 +107,7 @@ with ListUpdater with SearchBar { me =>
       else await
 
       val paymentMarking = info.spec match {
-        case spec: OutgoingPaymentSpec => spec2ShortView(sumOut.format(baseSat format -spec.amountWithFee), spec)
+        case spec: OutgoingPaymentSpec => spec2ShortView(sumOut.format(negMilliSat(spec): String), spec)
         case spec: IncomingPaymentSpec => spec2ShortView(sumIn.format(spec.invoice.sum: String), spec)
       }
 
@@ -110,8 +116,9 @@ with ListUpdater with SearchBar { me =>
       transactCircle setImageResource image
     }
 
-    private def spec2ShortView(sum: String, spec: PaymentSpec) =
-      sum + "\u00A0" + spec.invoice.message.getOrElse("")
+    // Utility methods for displaying various parts of payment specs
+    private def spec2ShortView(sum: String, spec: PaymentSpec) = sum + "\u00A0" + spec.invoice.message.getOrElse("")
+    private def negMilliSat(spec: OutgoingPaymentSpec) = MilliSatoshi(-spec.amountWithFee)
   }
 
   // INTERFACE IMPLEMENTING METHODS
@@ -127,7 +134,7 @@ with ListUpdater with SearchBar { me =>
   {
     super.onCreate(savedState)
     wrap(initToolbar)(me setContentView R.layout.activity_ln)
-    add(me getString ln_notify_working, Informer.LNSTATE).ui.run
+    add(me getString ln_notify_operational, Informer.LNSTATE).ui.run
 
     list setAdapter adapter
     list setFooterDividersEnabled false
@@ -192,8 +199,34 @@ with ListUpdater with SearchBar { me =>
 
     case kit: ActiveKit =>
       app.TransData.value = null
-      pathfinder = getPathfinder(kit.active)
+      pathfinder = getPathfinder(kit.chan)
       activeKit = kit
+
+      activeKit.chan.listeners += new StateMachineListener { self =>
+
+        override def onBecome = {
+          case (_, norm: NormalData, _, _) =>
+            val toLocal: String = MilliSatoshi(norm.commitments.localCommit.spec.toLocalMsat)
+            val toRemote: String = MilliSatoshi(norm.commitments.localCommit.spec.toRemoteMsat)
+            me runOnUiThread(getSupportActionBar setTitle getString(ln_title).format(toLocal, toRemote).html)
+
+          case (_, _, _, Channel.NEGOTIATIONS | Channel.CLOSING) =>
+            activeKit.chan.listeners -= self
+            app.TransData.value = activeKit
+            me goTo classOf[LNOpsActivity]
+        }
+
+        override def onPostProcess = {
+          case fulfill: UpdateFulfillHtlc =>
+            bag.updatePaymentStatus(fulfill.paymentHash, PaymentSpec.SUCCESS)
+
+          case PlainAddHtlc(spec) =>
+            bag.putInfo(ExtendedPaymentInfo(spec, PaymentSpec.VISIBLE, System.currentTimeMillis))
+        }
+
+      }
+
+      kit.chan.init(kit.chan.data, kit.chan.state)
 
     case unusable =>
       app.TransData.value = null
@@ -214,7 +247,7 @@ with ListUpdater with SearchBar { me =>
   // UI MENUS
 
   def makePaymentRequest = {
-    val humanCap = sumIn format withSign(LNParams.maxHtlcValue)
+    val humanCap = sumIn format withSign(maxHtlcValue)
     val title = getString(ln_receive_max_amount).format(humanCap).html
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_ln, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
@@ -239,13 +272,13 @@ with ListUpdater with SearchBar { me =>
     val info = invoice.message getOrElse getString(ln_no_description)
     val humanSum = humanFiat(sumOut format withSign(invoice.sum), invoice.sum)
     val title = getString(ln_payment_title).format(info, humanKey, humanSum)
-    mkForm(mkChoiceDialog(pathfinder.makeOutgoingSpec(invoice).subscribe(x => activeKit.active process PlainAddHtlc(x.get), _.printStackTrace), none, dialog_pay, dialog_cancel), title.html, null)
+    mkForm(mkChoiceDialog(pathfinder.makeOutgoingSpecOpt(invoice).subscribe(x => activeKit.chan process PlainAddHtlc(x.get), _.printStackTrace), none, dialog_pay, dialog_cancel), title.html, null)
   }
 
   // USER CAN SET THEIR OWN PATHFINDER
 
   class SetBackupServer { self =>
-    val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
+    val (view, field) = str2Tuple(cloudPrivateKey.publicKey.toString)
     val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
     val alert = mkForm(dialog, getString(ln_backup_key).html, view)
     field setTextIsSelectable true
@@ -264,7 +297,7 @@ with ListUpdater with SearchBar { me =>
 
     def save(privateData: PrivateData) = {
       PrivateDataSaver saveObject privateData
-      pathfinder = getPathfinder(activeKit.active)
+      pathfinder = getPathfinder(activeKit.chan)
       app toast ln_backup_success
     }
 
@@ -275,7 +308,8 @@ with ListUpdater with SearchBar { me =>
     }
   }
 
-  def closeChannel = passPlus(me getString ln_close) { pass =>
-    println(pass)
+  def closeChannel = checkPass(me getString ln_close) { _ =>
+    // This will initiate a bilateral channel close immediately
+    Future { activeKit.chan process CMDShutdown }
   }
 }

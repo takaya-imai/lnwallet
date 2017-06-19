@@ -110,53 +110,5 @@ class HtlcGenerationSpec {
       println(packet_random.serialize.length == Sphinx.PacketLength)
     }
 
-    val invoice = Invoice(None, PublicKey(BinaryData("0x028f9438bfbf7feac2e108d677e3a82da596be706cc1cf342b75c7b7e22bf4e6e2")), MilliSatoshi(finalAmountMsat), paymentHash)
-
-    {
-      println("build a command including the onion")
-      val spec = makeOutgoingSpec(Vector(hops), invoice, currentBlockCount + expiryDeltaBlocks).get
-
-      println(spec.amountWithFee > finalAmountMsat)
-      println(spec.expiry == currentBlockCount + expiryDeltaBlocks + channelUpdate_de.cltvExpiryDelta + channelUpdate_cd.cltvExpiryDelta + channelUpdate_bc.cltvExpiryDelta)
-      println(spec.onion.packet.serialize.length == Sphinx.PacketLength)
-
-      // let's peel the onion
-      val ParsedPacket(bin_b, packet_c, _) = Sphinx.parsePacket(priv_b, paymentHash, spec.onion.packet.serialize)
-      val payload_b = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_b)).toOption.get.value
-      println(packet_c.serialize.length == Sphinx.PacketLength)
-      println(payload_b.amt_to_forward == amount_bc)
-      println(payload_b.outgoing_cltv_value == expiry_bc)
-
-      val ParsedPacket(bin_c, packet_d, _) = Sphinx.parsePacket(priv_c, paymentHash, packet_c.serialize)
-      val payload_c = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_c)).toOption.get.value
-      println(packet_d.serialize.length == Sphinx.PacketLength)
-      println(payload_c.amt_to_forward == amount_cd)
-      println(payload_c.outgoing_cltv_value == expiry_cd)
-
-      val ParsedPacket(bin_d, packet_e, _) = Sphinx.parsePacket(priv_d, paymentHash, packet_d.serialize)
-      val payload_d = LightningMessageCodecs.perHopPayloadCodec.decode(BitVector(bin_d)).toOption.get.value
-      println(packet_e.serialize.length == Sphinx.PacketLength)
-      println(payload_d.amt_to_forward == amount_de)
-      println(payload_d.outgoing_cltv_value == expiry_de)
-
-      val ParsedPacket(bin_e, packet_random, _) = Sphinx.parsePacket(priv_e, paymentHash, packet_e.serialize)
-      println(BinaryData(bin_e) == BinaryData("00" * Sphinx.PayloadLength))
-      println(packet_random.serialize.length == Sphinx.PacketLength)
-    }
-
-    {
-      println("build a command with no hops")
-      val spec = makeOutgoingSpec(Vector(hops take 1), invoice, currentBlockCount + expiryDeltaBlocks).get
-
-      println(spec.amountWithFee == finalAmountMsat)
-      println(spec.expiry == currentBlockCount + expiryDeltaBlocks)
-      println(spec.onion.packet.serialize.length == Sphinx.PacketLength)
-
-      // let's peel the onion
-      val ParsedPacket(bin_b, packet_random, _) = Sphinx.parsePacket(priv_b, paymentHash, spec.onion.packet.serialize)
-      println(BinaryData(bin_b) == BinaryData("00" * Sphinx.PayloadLength))
-      println(packet_random.serialize.length == Sphinx.PacketLength)
-    }
-
   }
 }

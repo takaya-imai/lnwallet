@@ -55,7 +55,7 @@ object MSat {
   baseFiat setDecimalFormatSymbols symbols
   baseSat setDecimalFormatSymbols symbols
 
-  def withSign(sum: String) = s"ⓢ\u00A0$sum"
+  def withSign(sum: String): String = s"ⓢ\u00A0$sum"
   def btcBigDecimal2MilliSatoshi(btc: BigDecimal): MilliSatoshi = MilliSatoshi(amount = (btc * btcFactor).toLong)
   def satString2MilliSatoshi(sat: String): MilliSatoshi = MilliSatoshi(amount = (BigDecimal(sat) * satFactor).toLong)
   implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat format BigDecimal(msat.amount) / satFactor

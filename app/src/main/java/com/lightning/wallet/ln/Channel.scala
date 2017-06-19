@@ -81,11 +81,11 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We have not yet sent a FundingLocked to them but just got a FundingLocked from them so we keep it
-    case (wait @ WaitFundingConfirmedData(_, None, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
       me stayWith wait.copy(their = Some apply their)
 
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
-    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
       becomeNormal(wait, our, their.nextPerCommitmentPoint)
 
     // We got a funding confirmation and now we need to either become normal or save our FundingLocked message
@@ -107,7 +107,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     // NORMAL MODE
 
 
-    case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL) =>
+    case (norm @ NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
       val c1 = Commitments.sendAdd(commitments, cmd, LNParams.broadcaster.currentHeight)
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
@@ -163,9 +163,7 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // We received a commit sig from them
     case (norm: NormalData, sig: CommitSig, NORMAL) =>
-      println("COMMIT SIG RECEIVED 1")
       val c1 = Commitments.receiveCommit(norm.commitments, sig)
-      println("COMMIT SIG RECEIVED 2")
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
 
@@ -173,7 +171,6 @@ class Channel extends StateMachine[ChannelData] { me =>
     // We received a revocation because we sent a sig
     case (norm: NormalData, rev: RevokeAndAck, NORMAL) =>
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
-      println("REVOCATION RECEIVED")
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
 
@@ -221,13 +218,13 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We have not yet send or received a shutdown so send it and retry
-    case (norm @ NormalData(_, _, None, None), remote: Shutdown, NORMAL) =>
+    case (norm @ NormalData(_, _, None, None, _), remote: Shutdown, NORMAL) =>
       initiateShutdown(norm)
       doProcess(remote)
 
 
     // We have already sent a shutdown (initially or in response to their shutdown)
-    case (norm @ NormalData(announce, commitments, Some(local), None), remote: Shutdown, NORMAL) =>
+    case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL) =>
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 

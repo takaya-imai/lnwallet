@@ -136,7 +136,7 @@ object Vibr {
 
   val generalTracker = new TxTracker {
     override def txConfirmed(tx: Transaction) = vibrate(confirmed)
-    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
-    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) = vibrate(processed)
+    override def coinsReceived(tx: Transaction) = vibrate(processed)
+    override def coinsSent(tx: Transaction) = vibrate(processed)
   }
 }

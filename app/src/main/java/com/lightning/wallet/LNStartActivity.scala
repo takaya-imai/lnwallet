@@ -166,7 +166,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     whenBackPressed = anyToRunnable(super.onBackPressed)
     update(selectPeer, Informer.LNSTATE).ui.run
     setVis(View.VISIBLE, View.GONE)
-    app toast ln_ops_abort
+    app toast ln_ops_start_abort
   }
 
   private def setPeerView(position: Int) = {
@@ -204,7 +204,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val initFeeratePerKw = 10000 //LNParams feerateKB2Kw RatesSaver.rates.feeLive.value // TODO: use it
       val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
       val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-      chan process CMDOpenChannel(localParams, random getBytes 32, initFeeratePerKw, pushMsat = 1000000, their, amountSat)
+      chan process CMDOpenChannel(localParams, random getBytes 32, initFeeratePerKw, pushMsat = 0, their, amountSat)
     }
   }
 

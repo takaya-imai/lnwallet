@@ -5,15 +5,11 @@ import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-
-import com.lightning.wallet.ln.crypto.Digests
-import com.lightning.wallet.ln.MSat.satFactor
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 
 
 object LNParams {
-  val paymentUnixTimeout = 86400 * 3
   val maxReserveToFundingRatio = 0.05 // %
   val updateFeeMinDiffRatio = 0.25 // %
   val reserveToFundingRatio = 0.01 // %
@@ -21,7 +17,7 @@ object LNParams {
   val globalFeatures = ""
   val minDepth = 2
 
-  val maxHtlcValue = MilliSatoshi(100000000L)
+  val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   lazy val publicCloud = new LNCloud("http://10.0.2.2")
   lazy val broadcaster = LocalBroadcaster
@@ -64,8 +60,8 @@ object LNParams {
   // MISC
 
   def finalHtlcExpiry: Int = broadcaster.currentHeight + 10
-  def derivePreimage(ord: Long): BinaryData = Digests.hmacSha256(nodePrivateKey.toBin, s"Preimage $ord" getBytes "UTF-8")
-  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey = derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
+  def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
+    derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (order <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, order)

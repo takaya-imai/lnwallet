@@ -202,14 +202,20 @@ object LightningMessageCodecs { me =>
     (binarydata(32) withContext "channelId" ) ::
       (point withContext "nextPerCommitmentPoint")
 
+  val fundingLockedCodec: Codec[FundingLocked] = fundingLocked.as[FundingLocked]
+
   private val shutdown =
     (binarydata(32) withContext "channelId") ::
       (varsizebinarydata withContext "scriptPubKey")
+
+  val shutdownCodec: Codec[Shutdown] = shutdown.as[Shutdown]
 
   private val closingSigned =
     (binarydata(32) withContext "channelId") ::
       (uint64 withContext "feeSatoshis") ::
       (signature withContext "signature")
+
+  val closingSignedCodec: Codec[ClosingSigned] = closingSigned.as[ClosingSigned]
 
   private val updateAddHtlc =
     (binarydata(32) withContext "channelId") ::
@@ -218,6 +224,8 @@ object LightningMessageCodecs { me =>
       (uint32 withContext "expiry") ::
       (binarydata(32) withContext "paymentHash") ::
       (binarydata(Sphinx.PacketLength) withContext "onionRoutingPacket")
+
+  val updateAddHtlcCodec: Codec[UpdateAddHtlc] = updateAddHtlc.as[UpdateAddHtlc]
 
   private val updateFulfillHtlc =
     (binarydata(32) withContext "channelId") ::
@@ -239,6 +247,8 @@ object LightningMessageCodecs { me =>
     (binarydata(32) withContext "channelId") ::
       (signature withContext "signature") ::
       (listOfN(uint16, signature) withContext "htlcSignatures")
+
+  val commitSigCodec: Codec[CommitSig] = commitSig.as[CommitSig]
 
   private val revokeAndAck =
     (binarydata(32) withContext "channelId") ::
@@ -317,13 +327,13 @@ object LightningMessageCodecs { me =>
       .typecase(cr = acceptChannel.as[AcceptChannel], tag = 33)
       .typecase(cr = fundingCreated.as[FundingCreated], tag = 34)
       .typecase(cr = fundingSigned.as[FundingSigned], tag = 35)
-      .typecase(cr = fundingLocked.as[FundingLocked], tag = 36)
-      .typecase(cr = shutdown.as[Shutdown], tag = 38)
-      .typecase(cr = closingSigned.as[ClosingSigned], tag = 39)
-      .typecase(cr = updateAddHtlc.as[UpdateAddHtlc], tag = 128)
+      .typecase(cr = fundingLockedCodec, tag = 36)
+      .typecase(cr = shutdownCodec, tag = 38)
+      .typecase(cr = closingSignedCodec, tag = 39)
+      .typecase(cr = updateAddHtlcCodec, tag = 128)
       .typecase(cr = updateFulfillHtlc.as[UpdateFulfillHtlc], tag = 130)
       .typecase(cr = updateFailHtlc.as[UpdateFailHtlc], tag = 131)
-      .typecase(cr = commitSig.as[CommitSig], tag = 132)
+      .typecase(cr = commitSigCodec, tag = 132)
       .typecase(cr = revokeAndAck.as[RevokeAndAck], tag = 133)
       .typecase(cr = updateFee.as[UpdateFee], tag = 134)
       .typecase(cr = updateFailMalformedHtlc.as[UpdateFailMalformedHtlc], tag = 135)

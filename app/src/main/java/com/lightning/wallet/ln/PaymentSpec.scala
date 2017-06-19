@@ -4,14 +4,14 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
-import scala.util.{Success, Try}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
 import com.lightning.wallet.ln.Tools.random
 import fr.acinq.bitcoin.BinaryData
 import scodec.bits.BitVector
 import scodec.Attempt
+
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import scala.util.{Success, Try}
 
 
 trait PaymentSpec { val invoice: Invoice }
@@ -56,11 +56,7 @@ object PaymentSpec {
     makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
   }
 
-  def makeOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, finalExpiry: Int) = rest.headOption map { route =>
-    val (perHopPayloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(inv.sum.amount, finalExpiry, route drop 1)
-    OutgoingPaymentSpec(invoice = inv, onion = buildOnion(route.map(_.nextNodeId), perHopPayloads, inv.paymentHash),
-      preimage = None, routes = rest, expiry = expiryWithAllDeltas, amountWithFee = amountWithAllFees)
-  }
+
 
   private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
   private def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)

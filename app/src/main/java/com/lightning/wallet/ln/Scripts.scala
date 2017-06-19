@@ -137,18 +137,18 @@ object Scripts { me =>
     */
 
   case class InputInfo(outPoint: OutPoint, txOut: TxOut, redeemScript: BinaryData)
-  case class CommitTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class HtlcSuccessTx(input: InputInfo, tx: Transaction, paymentHash: BinaryData)
+  case class CommitTx(input: InputInfo, tx: Transaction, kind: String = "CommitTx") extends TransactionWithInputInfo
+  case class HtlcSuccessTx(input: InputInfo, tx: Transaction, paymentHash: BinaryData, kind: String = "HtlcSuccessTx")
     extends TransactionWithInputInfo
 
-  case class HtlcTimeoutTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class ClaimHtlcSuccessTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class ClaimHtlcTimeoutTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class ClaimP2WPKHOutputTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class ClaimDelayedOutputTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class MainPenaltyTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class HtlcPenaltyTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class ClosingTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class HtlcTimeoutTx(input: InputInfo, tx: Transaction, kind: String = "HtlcTimeoutTx") extends TransactionWithInputInfo
+  case class ClaimHtlcSuccessTx(input: InputInfo, tx: Transaction, kind: String = "ClaimHtlcSuccessTx") extends TransactionWithInputInfo
+  case class ClaimHtlcTimeoutTx(input: InputInfo, tx: Transaction, kind: String = "ClaimHtlcTimeoutTx") extends TransactionWithInputInfo
+  case class ClaimP2WPKHOutputTx(input: InputInfo, tx: Transaction, kind: String = "ClaimP2WPKHOutputTx") extends TransactionWithInputInfo
+  case class ClaimDelayedOutputTx(input: InputInfo, tx: Transaction, kind: String = "ClaimDelayedOutputTx") extends TransactionWithInputInfo
+  case class MainPenaltyTx(input: InputInfo, tx: Transaction, kind: String = "MainPenaltyTx") extends TransactionWithInputInfo
+  case class HtlcPenaltyTx(input: InputInfo, tx: Transaction, kind: String = "HtlcPenaltyTx") extends TransactionWithInputInfo
+  case class ClosingTx(input: InputInfo, tx: Transaction, kind: String = "ClosingTx") extends TransactionWithInputInfo
 
   val commitWeight = 724
   val htlcTimeoutWeight = 663
@@ -337,8 +337,10 @@ object Scripts { me =>
       val paymentHash160 = Crypto ripemd160 add.paymentHash
       val amountWithFee = MilliSatoshi(add.amountMsat) - htlcTimeoutFee
       val pubKeyScript = Script pay2wsh toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
-      HtlcTimeoutTx tupled makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevocationPubkey,
+      val (input, tx) = makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevocationPubkey,
         paymentHash160), pubKeyScript, amountWithFee, add.expiry, 0x00000000L)
+
+      HtlcTimeoutTx(input, tx)
     }
 
     def makeHtlcSuccessTx(add: UpdateAddHtlc) = {
@@ -363,8 +365,10 @@ object Scripts { me =>
 
     val hash = Crypto ripemd160 add.paymentHash
     val redeem = htlcReceived(remotePubkey, localPubkey, remoteRevocationPubkey, hash, add.expiry)
-    ClaimHtlcTimeoutTx tupled makeClaimHtlcTx(commitTx, redeem, pubKeyScript = Script pay2wsh redeem,
-      localFinalScriptPubKey, weight2fee(feeratePerKw, claimHtlcTimeoutWeight), add.expiry, 0x00000000L)
+    val (input, tx) = makeClaimHtlcTx(commitTx, redeem, Script pay2wsh redeem, localFinalScriptPubKey,
+      weight2fee(feeratePerKw, claimHtlcTimeoutWeight), add.expiry, sequence = 0x00000000L)
+
+    ClaimHtlcTimeoutTx(input, tx)
   }
 
   def makeClaimHtlcSuccessTx(commitTx: Transaction, localPubkey: PublicKey, remotePubkey: PublicKey,
@@ -373,31 +377,39 @@ object Scripts { me =>
 
     val hash = Crypto ripemd160 add.paymentHash
     val redeem = htlcOffered(remotePubkey, localPubkey, remoteRevocationPubkey, hash)
-    ClaimHtlcSuccessTx tupled makeClaimHtlcTx(commitTx, redeem, pubKeyScript = Script pay2wsh redeem,
-      localFinalScriptPubKey, weight2fee(feeratePerKw, claimHtlcSuccessWeight), 0L, 0xffffffffL)
+    val (input, tx) = makeClaimHtlcTx(commitTx, redeem, Script pay2wsh redeem, localFinalScriptPubKey,
+      weight2fee(feeratePerKw, claimHtlcSuccessWeight), expiry = 0L, sequence = 0xffffffffL)
+
+    ClaimHtlcSuccessTx(input, tx)
   }
 
   def makeClaimP2WPKHOutputTx(delayedOutputTx: Transaction, localPubkey: PublicKey,
-                              localFinalScriptPubKey: BinaryData, feeratePerKw: Long) =
+                              localFinalScriptPubKey: BinaryData, feeratePerKw: Long) = {
 
-    ClaimP2WPKHOutputTx tupled makeClaimHtlcTx(parent = delayedOutputTx,
-      redeemScript = Script pay2pkh localPubkey, pubKeyScript = Script pay2wpkh localPubkey,
-      localFinalScriptPubKey, weight2fee(feeratePerKw, claimP2WPKHOutputWeight), 0L, 0x00000000L)
+    val (input, tx) = makeClaimHtlcTx(delayedOutputTx, Script pay2pkh localPubkey, Script pay2wpkh localPubkey,
+      localFinalScriptPubKey, weight2fee(feeratePerKw, claimP2WPKHOutputWeight), expiry = 0L, sequence = 0x00000000L)
+
+    ClaimP2WPKHOutputTx(input, tx)
+  }
 
   def makeClaimDelayedOutputTx(delayedOutputTx: Transaction, localRevocationPubkey: PublicKey, toLocalDelay: Int,
                                localDelayedPubkey: PublicKey, localFinalScriptPubKey: BinaryData,
                                feeratePerKw: Long): ClaimDelayedOutputTx = {
 
     val redeem = toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
-    ClaimDelayedOutputTx tupled makeClaimHtlcTx(delayedOutputTx, redeem, pubKeyScript = Script pay2wsh redeem,
-      localFinalScriptPubKey, weight2fee(feeratePerKw, claimHtlcDelayedWeight), 0L, sequence = toLocalDelay)
+    val (input, tx) = makeClaimHtlcTx(delayedOutputTx, redeem, Script pay2wsh redeem, localFinalScriptPubKey,
+      weight2fee(feeratePerKw, claimHtlcDelayedWeight), expiry = 0L, sequence = toLocalDelay)
+
+    ClaimDelayedOutputTx(input, tx)
   }
 
   def makeMainPenaltyTx(commitTx: Transaction, remoteRevocationPubkey: PublicKey, localFinalScriptPubKey: BinaryData,
                         toRemoteDelay: Int, remoteDelayedPubkey: PublicKey, feeratePerKw: Long): MainPenaltyTx = {
 
     val redeem = toLocalDelayed(remoteRevocationPubkey, toRemoteDelay, remoteDelayedPubkey)
-    MainPenaltyTx tupled makeClaimHtlcTx(commitTx, redeem, pubKeyScript = Script pay2wsh redeem,
-      localFinalScriptPubKey, weight2fee(feeratePerKw, mainPenaltyWeight), expiry = 0L, 0xffffffffL)
+    val (input, tx) = makeClaimHtlcTx(commitTx, redeem, Script pay2wsh redeem, localFinalScriptPubKey,
+      weight2fee(feeratePerKw, mainPenaltyWeight), expiry = 0L, sequence = 0xffffffffL)
+
+    MainPenaltyTx(input, tx)
   }
 }

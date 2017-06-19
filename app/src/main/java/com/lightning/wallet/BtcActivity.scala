@@ -109,9 +109,11 @@ with ListUpdater { me =>
   lazy val adapter = new BtcAdapter
 
   private[this] val txsTracker = new TxTracker {
-    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
-    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) = me runOnUiThread tell(tx)
-    override def txConfirmed(tx: Transaction) = me runOnUiThread adapter.notifyDataSetChanged
+    override def coinsSent(tx: Transaction) = me runOnUiThread tell(tx)
+    override def coinsReceived(tx: Transaction) = me runOnUiThread tell(tx)
+
+    override def txConfirmed(tx: Transaction) =
+      me runOnUiThread adapter.notifyDataSetChanged
 
     def tell(tx: Transaction) = if (me isNative tx) {
       // Only update interface if this tx changes balance
@@ -333,12 +335,13 @@ with ListUpdater { me =>
 
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
-      case _ if spendManager.getAddress == null => app toast dialog_addr_wrong
+      case _ if spendManager.getAddress == null => app toast dialog_address_wrong
       case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
+
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
             add(me getString tx_announce, Informer.BTCEVENT).ui.run

@@ -7,7 +7,7 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.lncloud.ChannelSaver._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
-import org.bitcoinj.core.{Coin, StoredBlock, Transaction}
+import org.bitcoinj.core.{StoredBlock, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
 import org.bitcoinj.core.listeners.NewBestBlockListener
@@ -19,9 +19,9 @@ import fr.acinq.bitcoin.BinaryData
 trait ChannelKit {
   val closing: ChannelSet
   val blockchainListener = new TxTracker with NewBestBlockListener {
-    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) = for (chan <- allChannels) chan process CMDSomethingSpent(tx)
-    override def notifyNewBestBlock(block: StoredBlock) = for (chan <- allChannels) chan process CMDDepth(block.getHeight)
+    override def coinsSent(tx: Transaction) = for (chan <- allChannels) chan process CMDSomethingSpent(tx)
     override def txConfirmed(tx: Transaction) = for (chan <- allChannels) chan process CMDSomethingConfirmed(tx)
+    override def notifyNewBestBlock(block: StoredBlock) = for (chan <- allChannels) chan process CMDDepth(block.getHeight)
   }
 
   app.kit.wallet addCoinsSentEventListener blockchainListener
@@ -32,15 +32,15 @@ trait ChannelKit {
 }
 
 case class InactiveKit(closing: ChannelSet) extends ChannelKit
-case class ActiveKit(active: Channel, closing: ChannelSet) extends ChannelKit { me =>
+case class ActiveKit(chan: Channel, closing: ChannelSet) extends ChannelKit { me =>
   val keyPair = KeyPair(LNParams.nodePrivateKey.publicKey, LNParams.nodePrivateKey.toBin)
-  val address = active.data.announce.addresses.head
+  val address = chan.data.announce.addresses.head
 
   lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
     def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
   }
 
-  val handler: TransportHandler = new TransportHandler(keyPair, active.data.announce.nodeId, socket) {
+  val handler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
     def feedForward(msg: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize msg)
   }
 
@@ -57,25 +57,25 @@ case class ActiveKit(active: Channel, closing: ChannelSet) extends ChannelKit { 
   handler.listeners += new StateMachineListener {
     override def onBecome: PartialFunction[Transition, Unit] = {
       case (_, _, TransportHandler.HANDSHAKE, TransportHandler.WAITING_CYPHERTEXT) =>
-        Tools log s"Handle handshake phase completed, now sending Init message"
+        Tools log s"Handler handshake phase completed, now sending Init message"
         me send Init(LNParams.globalFeatures, LNParams.localFeatures)
     }
 
     override def onError = {
       case transportRelated: Throwable =>
         Tools log s"Transport $transportRelated"
-        active process CMDShutdown
+        chan process CMDShutdown
     }
   }
 
-  active.listeners += new StateMachineListener { self =>
+  chan.listeners += new StateMachineListener { self =>
     override def onBecome: PartialFunction[Transition, Unit] = {
       case (previousData, data, previousState, Channel.CLOSING) =>
         // "00" * 32 is a connection level error which will result in socket closing
         Tools log s"Closing channel from $previousState at $previousData : $data"
         me send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
         socket.listeners -= reconnectSockListener
-        active.listeners -= self
+        chan.listeners -= self
 
       case (previousData, data, previousState, state) =>
         val messages = Helpers.extractOutgoingMessages(previousData, data)
@@ -90,13 +90,11 @@ case class ActiveKit(active: Channel, closing: ChannelSet) extends ChannelKit { 
     }
   }
 
-  override def allChannels: ChannelSet = closing + active
+  override def allChannels: ChannelSet = closing + chan
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
-    case Init(_, local) if !Features.areSupported(local) => active process CMDShutdown
-    case _ =>
-      println(s"---- $msg")
-      active process msg
+    case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown
+    case _ => chan process msg
   }
 
   def send(msg: LightningMessage) = {

@@ -51,24 +51,25 @@
     <string name="dialog_cancel">Cancel</string>
 
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
+    <string name="spend_address_amount_hint">amount in Satoshi</string>
     <string name="spend_address_hint">Bitcoin address</string>
-    <string name="spend_btc_hint">amount in Satoshi</string>
 
-    <string name="dialog_addr_absent">No valid address found in clipboard</string>
-    <string name="dialog_addr_wrong">Bitcoin address is required</string>
+    <string name="dialog_address_absent">No valid address found in clipboard</string>
+    <string name="dialog_address_wrong">Bitcoin address is required</string>
     <string name="dialog_capacity">Amount exceeds max capacity</string>
     <string name="dialog_sum_empty">Please provide an amount</string>
     <string name="dialog_sum_dusty">Bitcoin amount is dusty</string>
 
     <!-- notifications -->
-    <string name="info_progress_done">Blockchain is up to date</string>
-    <string name="btc_tx_confirmed">Bitcoin transaction confirmed</string>
     <string name="tx_announce">Announcing transaction&#8230;</string>
+    <string name="tx_received">Just received a Bitcoin transaction</string>
+    <string name="tx_confirmed">Bitcoin transaction confirmed</string>
+    <string name="tx_sent">Just sent a Bitcoin transaction</string>
+
+    <string name="info_progress_done">Blockchain is up to date</string>
     <string name="pass_checking">Checking password&#8230;</string>
     <string name="pass_changing">DO NOT CLOSE WALLET</string>
-    <string name="tx_received">Just received %1$s</string>
-    <string name="tx_sent">Just sent %1$s</string>
-
+    
     <array name="info_progress">
         <item>Blockchain sync is complete</item>
         <item>Sync: %1$d day behind</item>
@@ -130,24 +131,22 @@
 
     <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
     <string name="ln_payment_title"><![CDATA[Send Lightning payment<br><small><font color=#999999>%1$s</font></small><br><br><small>Recipient node key<br><font color=#999999>%2$s</font></small><br><br>%3$s]]></string>
-    <string name="ln_credits_invoice">Automatic purchase of %1$s credits. See details at www.lightning-wallet.com/credits</string>
     <string name="ln_receive_max_amount"><![CDATA[Receive Lightning payment<br><br><small>Max amount %1$s</small>]]></string>
 
     <!-- ln subtitle messages -->
     <string name="ln_select_peer">Select peer</string>
     <string name="ln_notify_working">Working&#8230;</string>
-    <string name="ln_notify_operational">Channel is ready</string>
+    <string name="ln_notify_connecting">Connecting to Lightning peer&#8230;</string>
+    <string name="ln_notify_operational">Lightning is operational</string>
 
-    <!-- activity_ln, activity_ln_pass -->
+    <!-- activity_ln -->
     <string name="ln_close">Close channel</string>
-    <string name="ln_receive">Receive Lightning payment</string>
+    <string name="ln_receive">Receive payment</string>
     <string name="ln_force_close">Force close channel</string>
-    <string name="ln_backup">Set Backup Server</string>
-    <string name="ln_search">Find payments</string>
-
-    <!-- ln dialogs -->
     <string name="ln_description_hint">add some description</string>
     <string name="ln_no_description">no description provided</string>
+    <string name="ln_backup">Set Backup Server</string>
+    <string name="ln_search">Find payments</string>
 
     <!-- setting a private backup server -->
     <string name="ln_backup_ip">Backup server address</string>
@@ -161,9 +160,9 @@
     <!-- activity_ln_ops, activity_ln_start -->
     <string name="ln_ops_btc">Go to Bitcoin wallet</string>
     <string name="ln_ops_chan_none"><a href='https://lightning-wallet.com'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='https://lightning-wallet.com'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
-    <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Your balance is %1$s<br><font color=#999999>Funding transaction is sent</font><br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br>Current status<br>%4$s]]></string>
+    <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Total capacity is %1$s<br><font color=#999999>Funding transaction is sent</font><br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br>Current status<br>%4$s]]></string>
     <string name="ln_ops_chan_bilateral_negotiations"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Waiting for a confirmation from peer</font><br><br>Your current balance of %1$s will be refunded to you via a closing Bitcoin transaction once both of you are ready to mutually close a channel]]></string>
-    <string name="ln_ops_chan_bilateral_closing"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Closing transaction is sent</font><br><br>%1$s will be refunded to your Bitcoin wallet. Please wait until closing transaction reaches %2$s before opening a new channel<br><br>Current status<br>%3$s]]></string>
+    <string name="ln_ops_chan_bilateral_closing"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Closing transaction is sent</font><br><br>Remaining channel balance will be refunded to your Bitcoin wallet. Please wait until closing transaction reaches %1$s before proceeding<br><br>Current status<br>%2$s]]></string>
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[Finalizing a Payment Channel&#8230;<br><font color=#999999>Using <a href=https://lightning-wallet.com>forced channel closing</a></font><br><br>Remaining channel balance will be refunded to your Bitcoin wallet via series of delayed Bitcoin transactions<br><br>%1$s]]></string>
     <string name="ln_ops_chan_unilateral_warn"><![CDATA[<a href=https://lightning-wallet.com>Forced channel closing</a> is much more expensive and time consuming than a mutually agreed one]]></string>
     <string name="ln_ops_chan_unilateral_status_wait">%1$s is in queue</string>
@@ -177,7 +176,7 @@
 
     <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>BTC balance %1$s<br>Max capacity %2$s</small>]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
-    <string name="ln_ops_abort">Channel opening has been cancelled</string>
+    <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>
 
     <array name="ln_ops_start_node_channels">

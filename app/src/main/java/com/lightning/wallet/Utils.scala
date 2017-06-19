@@ -116,17 +116,9 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   val txTracker = new TxTracker {
-    override def txConfirmed(tx: Transaction) =
-      notifySubTitle(me getString btc_tx_confirmed,
-        infoType = Informer.TXCONFIRMED)
-
-    override def coinsSent(tx: Transaction, pb: Coin, nb: Coin) =
-      notifySubTitle(me getString tx_sent format withSign(pb subtract nb),
-        infoType = Informer.BTCEVENT)
-
-    override def coinsReceived(tx: Transaction, pb: Coin, nb: Coin) =
-      notifySubTitle(me getString tx_received format withSign(nb subtract pb),
-        infoType = Informer.BTCEVENT)
+    override def coinsSent(tx: Transaction) = notifySubTitle(me getString tx_sent, Informer.BTCEVENT)
+    override def coinsReceived(tx: Transaction) = notifySubTitle(me getString tx_received, Informer.BTCEVENT)
+    override def txConfirmed(tx: Transaction) = notifySubTitle(me getString tx_confirmed, Informer.TXCONFIRMED)
   }
 
   // Settings and helper functions
@@ -410,7 +402,7 @@ class BtcManager(val man: RateManager) { me =>
 
   addressPaste setOnClickListener new OnClickListener {
     def onClick(button: View) = try setAddress(app getTo app.getBuffer)
-      catch { case _: Throwable => app toast dialog_addr_absent }
+      catch { case _: Throwable => app toast dialog_address_absent }
   }
 
   def setAddress(adr: Address) = {
@@ -473,13 +465,12 @@ trait MyPeerDataListener extends PeerDataEventListener {
 
 abstract class TxTracker extends WalletCoinsSentEventListener
   with WalletCoinsReceivedEventListener with TransactionConfidenceEventListener {
-  def onCoinsSent(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (a isGreaterThan b) coinsSent(tx, a, b)
-  def onCoinsReceived(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (b isGreaterThan a) coinsReceived(tx, a, b)
-  def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) =
-    if (tx.getConfidence.getDepthInBlocks == minDepth)
-      txConfirmed(tx)
+  def onCoinsSent(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (a isGreaterThan b) coinsSent(tx)
+  def onCoinsReceived(w: Wallet, tx: Transaction, a: Coin, b: Coin) = if (b isGreaterThan a) coinsReceived(tx)
+  def onTransactionConfidenceChanged(wallet: Wallet, tx: Transaction) = if (tx.getConfidence.getDepthInBlocks == minDepth)
+    txConfirmed(tx)
 
-  def coinsSent(tx: Transaction, a: Coin, b: Coin): Unit = none
-  def coinsReceived(tx: Transaction, a: Coin, b: Coin): Unit = none
+  def coinsSent(tx: Transaction): Unit = none
+  def coinsReceived(tx: Transaction): Unit = none
   def txConfirmed(tx: Transaction): Unit = none
 }

@@ -3,23 +3,21 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
-import com.softwaremill.quicklens._
 import com.lightning.wallet.lncloud.LNCloud._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
-import rx.lang.scala.{Observable => Obs}
-import fr.acinq.bitcoin.{BinaryData, Crypto}
+import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import org.bitcoinj.core.{ECKey, PeerAddress, PeerGroup}
+import rx.lang.scala.{Observable => Obs}
+
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
 import rx.lang.scala.schedulers.IOScheduler
 import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PublicKey
-import com.lightning.wallet.ln.wire.Hop
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
@@ -37,8 +35,9 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
       me doProcess CMDStart
 
     case (PrivateData(action :: rest, _), CMDStart) =>
+      // Private server should use a publick key based authorization so we add a sig to params
       action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
-        .subscribe(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
+        .foreach(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -51,7 +50,7 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
   }
 }
 
-// By default a public pathfinder is used but user may provide their own private pathfinder anytime
+// By default a public pathfinder is used but user may provide their own private pathfinder anytime they want
 case class PublicData(info: Option[InvoiceAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
 class PublicPathfinder(val bag: PaymentSpecBag, val lnCloud: LNCloud, val channel: Channel)
 extends StateMachine[PublicData] with Pathfinder { me =>
@@ -61,7 +60,7 @@ extends StateMachine[PublicData] with Pathfinder { me =>
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
       invoice ~ memo <- retry(getInfo, pickInc, times = 2 to 3)
-      Some(spec) <- retry(makeOutgoingSpec(invoice), pickInc, 2 to 3)
+      Some(spec) <- retry(makeOutgoingSpecOpt(invoice), pickInc, 2 to 3)
     } me doProcess Tuple2(spec, memo)
 
     // This payment request may arrive in some time after an initialization above,
@@ -106,16 +105,10 @@ extends StateMachine[PublicData] with Pathfinder { me =>
 
   def resetState = me stayWith data.copy(info = None)
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
-    .subscribe(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
+    .foreach(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
       serverError => if (serverError.getMessage == "notfound") resetState)
 
   // TALKING TO SERVER
-
-  def augmentInvoice(invoice: Invoice, howMuch: Int) = {
-    import com.lightning.wallet.R.string.ln_credits_invoice
-    val text = app getString ln_credits_invoice format howMuch
-    invoice.modify(_.message) setTo Some(text)
-  }
 
   def getInfo = lnCloud.call("blindtokens/info", identity) flatMap { raw =>
     val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
@@ -128,7 +121,7 @@ extends StateMachine[PublicData] with Pathfinder { me =>
 
     lnCloud.call("blindtokens/buy", response => Invoice parse json2String(response.head),
       "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.toString.hex)
-      .filter(_.sum.amount < 25000000L).map(augmentInvoice(_, qty.toInt) -> memo)
+      .filter(_.sum.amount < 25000000L).map(_ -> memo)
   }
 
   def getClearTokens(memo: BlindMemo) =
@@ -140,11 +133,16 @@ trait Pathfinder {
   val lnCloud: LNCloud
   val channel: Channel
 
-  def makeOutgoingSpec(invoice: Invoice) =
-    lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map { routes =>
-      val routes1 = for (route <- routes) yield Hop(null, PublicKey(channel.data.announce.nodeId), null) +: route
-      PaymentSpec.makeOutgoingSpec(routes1, invoice, LNParams.finalHtlcExpiry)
+  def makeOutgoingSpecOpt(invoice: Invoice) =
+    lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
+      routes => buildOutgoingSpec(routes, invoice, LNParams.finalHtlcExpiry)
     }
+
+  def buildOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, finalExpiry: Int) = rest.headOption map { route =>
+    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentSpec.buildRoute(inv.sum.amount, finalExpiry, hops = route)
+    val onion = PaymentSpec.buildOnion(PublicKey(channel.data.announce.nodeId) +: route.map(_.nextNodeId), payloads, inv.paymentHash)
+    OutgoingPaymentSpec(inv, preimage = None, rest.tail, onion, amountWithAllFees, expiryWithAllDeltas)
+  }
 }
 
 // Concrete cloud acts
@@ -173,6 +171,7 @@ class LNCloud(url: String) {
     }
 
   def getRates = call("rates", identity)
+  def getTxs(parent: String) = call("txs", toVec[Transaction], "txid" -> parent)
   def findNodes(query: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> query)
   def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
@@ -181,6 +180,7 @@ class LNCloud(url: String) {
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def addBitcoinNode(pr: PeerGroup) = pr addAddress new PeerAddress(app.params, InetAddresses forString url, 8333)
   override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
+  override def getTxs(parent: String) = super.getTxs(parent).onErrorResumeNext(_ => failover getTxs parent)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 
