@@ -273,23 +273,19 @@ class Channel extends StateMachine[ChannelData] { me =>
         neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
 
       // Happens when we agreed on a closeSig, but we don't know it yet
-      // we receive the a tx notification before their ClosingSigned arrives
+      // we receive a tx notification before their ClosingSigned arrives
       if (closeTx.tx.txid == tx.txid) startMutualClose(neg, closeTx.tx, signed)
       else defineClosingAction(neg, tx)
 
 
-    // Channel closing evenis in CLOSING phase
-    // These spends have already been taken care of
+    // Channel closing events in CLOSING phase
     case (closing: ClosingData, CMDFundingSpent(tx), CLOSING)
-      if closing.nextRemoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
-        closing.remoteCommit.map(_.commitTx.txid).contains(tx.txid) ||
-        closing.localCommit.map(_.commitTx.txid).contains(tx.txid) ||
-        closing.mutualClose.map(_.txid).contains(tx.txid) =>
-        // Do nothing
+      if !closing.nextRemoteCommit.map(_.commitTx.txid).contains(tx.txid) &
+        !closing.remoteCommit.map(_.commitTx.txid).contains(tx.txid) &
+        !closing.localCommit.map(_.commitTx.txid).contains(tx.txid) &
+        !closing.mutualClose.map(_.txid).contains(tx.txid) =>
 
-
-    case (closing: ClosingData, CMDFundingSpent(tx), CLOSING) =>
-      // Some other type of tx has been spent while we are closing
+      // Multiple spends may occur
       defineClosingAction(closing, tx)
 
 
@@ -302,7 +298,7 @@ class Channel extends StateMachine[ChannelData] { me =>
     case (_, _: CMDDepth, _) =>
       // IMPORTANT: active state listeners should be idempotent
       // IMPORTANT: listeners should not send CMDDepth from onBecome
-      init(data, state)
+      notifyListeners
 
 
     case _ =>
@@ -372,18 +368,11 @@ class Channel extends StateMachine[ChannelData] { me =>
       case (None, _) => startLocalCurrentClose(some) // Info leak, try to spend current commit
     }
 
-  // First call after restore etc
-  def extract = Tuple2(data, state)
-  def init(data0: ChannelData, state0: String) = {
-    val transition = Tuple4(null, data0, null, state0)
-    wrap { data = data0 } { state = state0 }
-    events onBecome transition
-    me
-  }
+  // null is a special case which indicates there is no transition
+  def notifyListeners = events onBecome Tuple4(null, data, null, state)
 }
 
 object Channel {
-  def fresh = new Channel
   val WAIT_FOR_INIT = "WaitForInit"
   val WAIT_FOR_ACCEPT = "WaitForAccept"
   val WAIT_FOR_FUNDING = "WaitForFunding"

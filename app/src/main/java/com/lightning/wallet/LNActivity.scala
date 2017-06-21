@@ -63,7 +63,7 @@ with ListUpdater with SearchBar { me =>
   lazy val lnTitle = getString(ln_title)
   lazy val adapter = new LNAdapter
 
-  private[this] var activeKit: ActiveKit = _
+  private[this] var kit: ChannelKit = _
   private[this] var pathfinder: Pathfinder = _
 
   // Payment history and search results loader
@@ -166,8 +166,11 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  override def onResume: Unit =
-    wrap(super.onResume)(checkTransData)
+  override def onResume = {
+    if (ChannelManager.activeKits.isEmpty) me exitTo classOf[LNOpsActivity]
+    else kit = ChannelManager.activeKits.head
+    super.onResume
+  }
 
   // DATA READING AND BUTTON ACTIONS
 
@@ -183,8 +186,8 @@ with ListUpdater with SearchBar { me =>
 
   def onNfcStateEnabled = none
   def onNfcStateDisabled = none
-  def onNfcFeatureNotFound = none
   def onNfcStateChange(ok: Boolean) = none
+  def onNfcFeatureNotFound = checkTransData
   def readNonNdefMessage = app toast nfc_error
   def readEmptyNdefMessage = app toast nfc_error
 
@@ -197,37 +200,6 @@ with ListUpdater with SearchBar { me =>
       app.TransData.value = null
       me displayInvoice invoice
 
-    case kit: ActiveKit =>
-      app.TransData.value = null
-      pathfinder = getPathfinder(kit.chan)
-      activeKit = kit
-
-      activeKit.chan.listeners += new StateMachineListener { self =>
-
-        override def onBecome = {
-          case (_, norm: NormalData, _, _) =>
-            val toLocal: String = MilliSatoshi(norm.commitments.localCommit.spec.toLocalMsat)
-            val toRemote: String = MilliSatoshi(norm.commitments.localCommit.spec.toRemoteMsat)
-            me runOnUiThread(getSupportActionBar setTitle getString(ln_title).format(toLocal, toRemote).html)
-
-          case (_, _, _, Channel.NEGOTIATIONS | Channel.CLOSING) =>
-            activeKit.chan.listeners -= self
-            app.TransData.value = activeKit
-            me goTo classOf[LNOpsActivity]
-        }
-
-        override def onPostProcess = {
-          case fulfill: UpdateFulfillHtlc =>
-            bag.updatePaymentStatus(fulfill.paymentHash, PaymentSpec.SUCCESS)
-
-          case PlainAddHtlc(spec) =>
-            bag.putInfo(ExtendedPaymentInfo(spec, PaymentSpec.VISIBLE, System.currentTimeMillis))
-        }
-
-      }
-
-      kit.chan.init(kit.chan.data, kit.chan.state)
-
     case unusable =>
       app.TransData.value = null
       Tools log s"Unusable $unusable"
@@ -235,7 +207,7 @@ with ListUpdater with SearchBar { me =>
 
   // Reactions to menu
   def goBitcoin(top: View) = {
-    me goTo classOf[LNOpsActivity]
+    me goTo classOf[BtcActivity]
     fab close true
   }
 
@@ -272,7 +244,8 @@ with ListUpdater with SearchBar { me =>
     val info = invoice.message getOrElse getString(ln_no_description)
     val humanSum = humanFiat(sumOut format withSign(invoice.sum), invoice.sum)
     val title = getString(ln_payment_title).format(info, humanKey, humanSum)
-    mkForm(mkChoiceDialog(pathfinder.makeOutgoingSpecOpt(invoice).subscribe(x => activeKit.chan process PlainAddHtlc(x.get), _.printStackTrace), none, dialog_pay, dialog_cancel), title.html, null)
+    val dialog = mkChoiceDialog(none, none, dialog_pay, dialog_cancel)
+    mkForm(dialog, title.html, null)
   }
 
   // USER CAN SET THEIR OWN PATHFINDER
@@ -297,7 +270,7 @@ with ListUpdater with SearchBar { me =>
 
     def save(privateData: PrivateData) = {
       PrivateDataSaver saveObject privateData
-      pathfinder = getPathfinder(activeKit.chan)
+      pathfinder = getPathfinder(kit.chan)
       app toast ln_backup_success
     }
 
@@ -309,7 +282,7 @@ with ListUpdater with SearchBar { me =>
   }
 
   def closeChannel = checkPass(me getString ln_close) { _ =>
-    // This will initiate a bilateral channel close immediately
-    Future { activeKit.chan process CMDShutdown }
+    // This will initiate a cooperative channel close immediately
+    Future { kit.chan process CMDShutdown }
   }
 }

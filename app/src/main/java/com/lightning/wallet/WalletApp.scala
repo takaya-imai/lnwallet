@@ -3,11 +3,9 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
-
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
-import org.bitcoinj.uri.{BitcoinURIParseException, BitcoinURI}
+import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
-
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import com.lightning.wallet.lncloud.RatesSaver
 import org.bitcoinj.wallet.Wallet.BalanceType
@@ -20,14 +18,15 @@ import org.bitcoinj.wallet.Protos
 import android.app.Application
 import android.widget.Toast
 import java.io.File
-
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import Context.CLIPBOARD_SERVICE
+import org.bitcoinj.net.discovery.DnsDiscovery
 
 
 class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val params = org.bitcoinj.params.RegTestParams.get
+  lazy val params = org.bitcoinj.params.TestNet3Params.get
   var walletFile, chainFile: java.io.File = _
   var kit: WalletKit = _
 
@@ -101,8 +100,8 @@ class WalletApp extends Application { me =>
     }
 
     def useCheckPoints(time: Long) = {
-//      val pts = getAssets open "checkpoints-testnet.txt"
-//      CheckpointManager.checkpoint(params, pts, store, time)
+      val pts = getAssets open "checkpoints-testnet.txt"
+      CheckpointManager.checkpoint(params, pts, store, time)
     }
 
     def setupAndStartDownload = {
@@ -111,10 +110,10 @@ class WalletApp extends Application { me =>
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addTransactionConfidenceEventListener Vibr.generalTracker
       wallet.autosaveToFile(walletFile, 500, MILLISECONDS, null)
-      //peerGroup addPeerDiscovery new DnsDiscovery(params)
+      peerGroup addPeerDiscovery new DnsDiscovery(params)
 
-      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
-      peerGroup.addAddress(pa1)
+//      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
+//      peerGroup.addAddress(pa1)
 
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0

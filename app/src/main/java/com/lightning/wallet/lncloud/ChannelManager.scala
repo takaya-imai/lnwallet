@@ -4,49 +4,57 @@ import com.lightning.wallet.ln._
 import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.wire._
-import com.lightning.wallet.lncloud.ChannelSaver._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.helper.{SocketListener, SocketWrap}
 import org.bitcoinj.core.{StoredBlock, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
+import com.lightning.wallet.lncloud.InactiveChannelSaver.ChannelSnapshot
 import org.bitcoinj.core.listeners.NewBestBlockListener
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import com.lightning.wallet.TxTracker
 import fr.acinq.bitcoin.BinaryData
 
 
-trait ChannelKit {
-  val closing: ChannelSet
+object ChannelManager {
+  var inactiveChannels: Set[Channel] = InactiveChannelSaver.tryGetObject.map(_ map fresh) getOrElse Set.empty
+  var activeKits: Set[ChannelKit] = ActiveChannelSaver.tryGetObject.map(_ map fresh map ChannelKit) getOrElse Set.empty
+
   val blockchainListener = new TxTracker with NewBestBlockListener {
     override def coinsSent(tx: Transaction) = for (chan <- allChannels) chan process CMDSomethingSpent(tx)
-    override def txConfirmed(tx: Transaction) = for (chan <- allChannels) chan process CMDSomethingConfirmed(tx)
-    override def notifyNewBestBlock(block: StoredBlock) = for (chan <- allChannels) chan process CMDDepth(block.getHeight)
+    override def txConfirmed(tx: Transaction) = for (kit <- activeKits) kit.chan process CMDSomethingConfirmed(tx)
+    override def notifyNewBestBlock(block: StoredBlock) = for (kit <- activeKits) kit.chan process CMDDepth(block.getHeight)
   }
 
   app.kit.wallet addCoinsSentEventListener blockchainListener
   app.kit.blockChain addNewBestBlockListener blockchainListener
   app.kit.wallet addTransactionConfidenceEventListener blockchainListener
-  for (channel <- allChannels) channel.listeners += LNParams.broadcaster
-  def allChannels: ChannelSet = closing
+  def allChannels = activeKits.map(_.chan) ++ inactiveChannels
+
+  def fresh(snapshot: ChannelSnapshot) =
+    new Channel match { case freshChannel =>
+      val recoveredData ~ recoveredState = snapshot
+      freshChannel.listeners += LNParams.broadcaster
+      freshChannel.state = recoveredState
+      freshChannel.data = recoveredData
+      freshChannel
+    }
 }
 
-case class InactiveKit(closing: ChannelSet) extends ChannelKit
-case class ActiveKit(chan: Channel, closing: ChannelSet) extends ChannelKit { me =>
-  val keyPair = KeyPair(LNParams.nodePrivateKey.publicKey, LNParams.nodePrivateKey.toBin)
+case class ChannelKit(chan: Channel) { me =>
   val address = chan.data.announce.addresses.head
-
   lazy val socket = new SocketWrap(address.getAddress, address.getPort) {
     def onReceive(dataChunk: BinaryData): Unit = handler process dataChunk
   }
 
+  val keyPair = KeyPair(LNParams.nodePrivateKey.publicKey, LNParams.nodePrivateKey.toBin)
   val handler: TransportHandler = new TransportHandler(keyPair, chan.data.announce.nodeId, socket) {
     def feedForward(msg: BinaryData): Unit = interceptIncomingMsg(LightningMessageCodecs deserialize msg)
   }
 
   val reconnectSockListener = new SocketListener {
     override def onDisconnect = Obs.just(Tools log "Reconnecting a socket")
-      .delay(10.seconds).subscribe(_ => socket.start, _.printStackTrace)
+      .delay(5.seconds).subscribe(_ => socket.start, _.printStackTrace)
   }
 
   socket.listeners += new SocketListener {
@@ -90,7 +98,6 @@ case class ActiveKit(chan: Channel, closing: ChannelSet) extends ChannelKit { me
     }
   }
 
-  override def allChannels: ChannelSet = closing + chan
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown

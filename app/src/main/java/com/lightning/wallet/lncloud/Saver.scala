@@ -1,19 +1,17 @@
 package com.lightning.wallet.lncloud
 
 import spray.json._
-
 import scala.concurrent.duration._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+
 import org.bitcoinj.core.{Coin, Transaction}
 import rx.lang.scala.{Scheduler, Observable => Obs}
+import com.lightning.wallet.ln.{ChannelData, ~, LNParams}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
-import com.github.kevinsawicki.http.HttpRequest
 import com.lightning.wallet.helper.Statistics
-import com.lightning.wallet.ln.{Channel, ChannelData, LNParams, ~}
 import spray.json.JsonFormat
-
 import scala.util.Try
 
 
@@ -58,15 +56,21 @@ object PrivateDataSaver extends Saver {
   val KEY = "lnCloudPrivate"
 }
 
-object ChannelSaver {
-  type ChannelSet = Set[Channel]
+trait ChannelSaver extends Saver {
+  type ChannelSnapshot = (ChannelData, String)
+  type ChannelSnapshotSet = Set[ChannelSnapshot]
+  def tryGetObject: Try[ChannelSnapshotSet] = tryGet map to[ChannelSnapshotSet]
+  def saveObject(data: ChannelSnapshotSet): Unit = save(data.toJson)
 }
+
+object InactiveChannelSaver extends ChannelSaver { val KEY = "inactiveChannels" }
+object ActiveChannelSaver extends ChannelSaver { val KEY = "activeChannels" }
 
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, RatesMap)
-  val KEY = "rates1"
+  val KEY = "rates"
 
   private val updatePeriod: FiniteDuration = 20.minutes
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)

@@ -10,7 +10,8 @@ import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.lightning.wallet.Utils.{app, sumIn}
 
 import concurrent.ExecutionContext.Implicits.global
-import com.lightning.wallet.lncloud.ActiveKit
+import com.lightning.wallet.lncloud.{ChannelKit, ChannelManager}
+
 import scala.concurrent.Future
 import android.widget.Button
 import android.os.Bundle
@@ -36,20 +37,18 @@ class LNOpsActivity extends TimerActivity { me =>
     setContentView(R.layout.activity_ln_ops)
   }
 
-  override def onResume =
-    wrap(super.onResume) {
-      app.TransData.value match {
-        case kit: ActiveKit => me showActive kit
-        case _ => showNoKitPresentInfo
-      }
-    }
+  override def onResume = {
+    if (ChannelManager.activeKits.isEmpty) showNoActiveKitInfo
+    else me showActive ChannelManager.activeKits.head
+    super.onResume
+  }
 
   private def getConfirmations(tx: Transaction) = {
     val txOpt = Option(app.kit.wallet getTransaction tx.txid)
     txOpt.map(_.getConfidence.getDepthInBlocks) getOrElse 0
   }
 
-  private def showActive(kit: ActiveKit) = {
+  private def showActive(kit: ChannelKit) = {
     def manageOpeningInfo(c: Commitments, confs: Int) = {
       val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
       val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
@@ -103,7 +102,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
         // Mutual closing but we have no transactions so just drop it
         case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me runOnUiThread showNoKitPresentInfo
+          me runOnUiThread showNoActiveKitInfo
 
         // Someone has initiated a unilateral channel closing
         case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _), _, CLOSING)
@@ -125,7 +124,8 @@ class LNOpsActivity extends TimerActivity { me =>
 
     kit.chan.listeners += chanViewListener
     kit.socket.listeners += kit.reconnectSockListener
-    kit.chan.init(kit.chan.data, kit.chan.state)
+    kit.chan.notifyListeners
+    kit.socket.start
   }
 
   // UI which does not need a channel access
@@ -167,7 +167,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
   // Offer to create a new channel
 
-  private def showNoKitPresentInfo: Unit = {
+  private def showNoActiveKitInfo: Unit = {
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText ln_ops_chan_none
     lnOpsAction setText ln_ops_start

@@ -9,9 +9,9 @@ import scala.concurrent.Future
 
 
 abstract class SocketWrap(ip: InetAddress, port: Int) extends Transport {
+  def inactive = worker match { case null => true case w => w.work.isCompleted }
   def send(data: BinaryData): Unit = worker.socket.getOutputStream write data
-  def shutdown: Unit = try worker.socket.close catch none
-  def start: Unit = worker = new Worker
+  def start: Unit = if (inactive) worker = new Worker
 
   var worker: Worker = _
   var listeners = Set.empty[SocketListener]

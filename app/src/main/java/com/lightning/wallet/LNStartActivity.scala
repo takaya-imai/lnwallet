@@ -11,6 +11,7 @@ import android.view.{Menu, View, ViewGroup}
 import com.lightning.wallet.Utils.{app, sumIn}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
+import com.lightning.wallet.lncloud.{ChannelKit, ChannelManager}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
 import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
@@ -26,7 +27,6 @@ import android.os.Bundle
 
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
-import com.lightning.wallet.lncloud.ActiveKit
 
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
@@ -103,8 +103,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(position: Int): Unit = hideKeys {
     val (announce: NodeAnnouncement, _) = adapter getItem position
-    val chan = Channel.fresh.init(InitData(announce), WAIT_FOR_INIT)
-    val kit = ActiveKit(chan, Set.empty)
+    val initData = Tuple2(InitData(announce), WAIT_FOR_INIT)
+    val chan = ChannelManager fresh initData
+    val kit = ChannelKit(chan)
 
     val sockOpenListener = new SocketListener {
       // They can interrupt socket connection at any time
@@ -118,12 +119,12 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           askForFeerate(chan, cmd, accept)
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-          // NEver forget to remove local view related listeners
+          // Never forget to remove local view related listeners
           kit.socket.listeners -= sockOpenListener
           chan.listeners -= self
 
           // Just exit to ops
-          app.TransData.value = kit
+          ChannelManager.activeKits = Set(kit)
           me exitTo classOf[LNOpsActivity]
       }
 
