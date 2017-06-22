@@ -8,7 +8,6 @@ import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import android.widget._
 
-import concurrent.ExecutionContext.Implicits.global
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import org.ndeftools.Message
 import com.lightning.wallet.ln.LNParams._
@@ -23,14 +22,13 @@ import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
-
+import com.lightning.wallet.lncloud.ChannelManager.allChannels
+import com.lightning.wallet.lncloud.ChannelManager.activeKits
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{MilliSatoshi, Satoshi}
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
-
-import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 
@@ -63,7 +61,6 @@ with ListUpdater with SearchBar { me =>
   lazy val lnTitle = getString(ln_title)
   lazy val adapter = new LNAdapter
 
-  private[this] var kit: ChannelKit = _
   private[this] var pathfinder: Pathfinder = _
 
   // Payment history and search results loader
@@ -166,10 +163,8 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  override def onResume = {
-    if (ChannelManager.activeKits.isEmpty) me exitTo classOf[LNOpsActivity]
-    else kit = ChannelManager.activeKits.head
-    super.onResume
+  override def onResume = wrap(super.onResume) {
+    if (activeKits.isEmpty) me exitTo classOf[LNOpsActivity]
   }
 
   // DATA READING AND BUTTON ACTIONS
@@ -207,7 +202,7 @@ with ListUpdater with SearchBar { me =>
 
   // Reactions to menu
   def goBitcoin(top: View) = {
-    me goTo classOf[BtcActivity]
+    me goTo classOf[LNOpsActivity]
     fab close true
   }
 
@@ -269,8 +264,8 @@ with ListUpdater with SearchBar { me =>
       else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
 
     def save(privateData: PrivateData) = {
-      PrivateDataSaver saveObject privateData
-      pathfinder = getPathfinder(kit.chan)
+      PrivateDataSaver.saveObject(data = privateData)
+      pathfinder = getPathfinder(activeKits.head.chan)
       app toast ln_backup_success
     }
 
@@ -282,7 +277,7 @@ with ListUpdater with SearchBar { me =>
   }
 
   def closeChannel = checkPass(me getString ln_close) { _ =>
-    // This will initiate a cooperative channel close immediately
-    Future { kit.chan process CMDShutdown }
+    // This will start a cooperative channel close immediately
+    activeKits.head tellChannel CMDShutdown
   }
 }

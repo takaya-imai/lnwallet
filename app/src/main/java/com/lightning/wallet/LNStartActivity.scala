@@ -13,18 +13,15 @@ import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.lncloud.{ChannelKit, ChannelManager}
 import com.lightning.wallet.helper.{SocketListener, ThrottledWork}
-import com.lightning.wallet.ln.wire.{AcceptChannel, Init, NodeAnnouncement}
+import com.lightning.wallet.ln.wire.{AcceptChannel, Error, Init, NodeAnnouncement}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
 import com.lightning.wallet.ln.Scripts.multiSig2of2
-import concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
 import org.bitcoinj.script.ScriptBuilder
-import scala.concurrent.Future
 import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
-
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 
@@ -103,8 +100,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(position: Int): Unit = hideKeys {
     val (announce: NodeAnnouncement, _) = adapter getItem position
-    val initData = Tuple2(InitData(announce), WAIT_FOR_INIT)
-    val chan = ChannelManager fresh initData
+    val chan = ChannelManager.fresh(InitData(announce) -> WAIT_FOR_INIT)
     val kit = ChannelKit(chan)
 
     val sockOpenListener = new SocketListener {
@@ -116,7 +112,13 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onBecome: PartialFunction[Transition, Unit] = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
           // Peer has agreed to open a channel so now we ask user for a tx feerate
-          askForFeerate(chan, cmd, accept)
+          askForFeerate(kit, cmd, accept)
+
+        case (_, _, _, CLOSING) =>
+          // "00" * 32 is a connection level error which will result in socket closing
+          kit send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
+          kit.socket.listeners -= sockOpenListener
+          chan.listeners -= self
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
           // Never forget to remove local view related listeners
@@ -124,6 +126,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           chan.listeners -= self
 
           // Just exit to ops
+          ChannelManager.allChannels += chan
           ChannelManager.activeKits = Set(kit)
           me exitTo classOf[LNOpsActivity]
       }
@@ -131,7 +134,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onPostProcess = {
         case theirInitMessage: Init =>
           // Connection works, ask for a funding
-          askForFunding(chan, theirInitMessage)
+          askForFunding(kit, theirInitMessage)
       }
 
       override def onError = {
@@ -142,9 +145,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     whenBackPressed = anyToRunnable {
-      chan.listeners -= channelOpenListener
-      kit.socket.listeners -= sockOpenListener
-      Future { chan process CMDShutdown }
+      // Will result in socket closing
+      kit tellChannel CMDShutdown
       setListView
     }
 
@@ -177,7 +179,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     setVis(View.GONE, View.VISIBLE)
   }
 
-  def askForFunding(chan: Channel, their: Init) = {
+  def askForFunding(kit: ChannelKit, their: Init) = {
     val humanBalance = sumIn format withSign(app.kit.currentBalance)
     val humanCap = sumIn format withSign(LNParams.maxChannelCapacity)
     val title = getString(ln_ops_start_fund_title).format(humanBalance, humanCap).html
@@ -200,16 +202,16 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       ok setOnClickListener onButtonTap(attempt)
     }
 
-    def openChannel(amountSat: Long) = Future {
+    def openChannel(amountSat: Long) = kit tellChannel {
       val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
       val initFeeratePerKw = 10000 //LNParams feerateKB2Kw RatesSaver.rates.feeLive.value // TODO: use it
       val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
       val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-      chan process CMDOpenChannel(localParams, random getBytes 32, initFeeratePerKw, pushMsat = 0, their, amountSat)
+      CMDOpenChannel(localParams, random getBytes 32, initFeeratePerKw, pushMsat = 0, their, amountSat)
     }
   }
 
-  def askForFeerate(chan: Channel, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = {
+  def askForFeerate(kit: ChannelKit, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = {
     val multisig = multiSig2of2(cmd.localParams.fundingPrivKey.publicKey, accept.fundingPubkey)
     val scriptPubKey = Script.write(Script pay2wsh multisig)
     me runOnUiThread makeProcessor.chooseFee
@@ -219,13 +221,13 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val pay = P2WSHData(funding, scriptPubKey)
 
       def onTxFail(exc: Throwable) =
-        mkForm(mkChoiceDialog(me delayUI askForFeerate(chan, cmd, accept),
+        mkForm(mkChoiceDialog(me delayUI askForFeerate(kit, cmd, accept),
           none, dialog_ok, dialog_cancel), null, errorWhenMakingTx apply exc)
 
-      def processTx(password: String, fee: Coin) = Future {
-        val tx: fr.acinq.bitcoin.Transaction = makeTx(password, fee)
-        val outIndex = Scripts.findPubKeyScriptIndex(tx, scriptPubKey)
-        chan process Tuple2(tx, outIndex)
+      def processTx(password: String, fee: Coin) = kit tellChannel {
+        val fundingTransaction: fr.acinq.bitcoin.Transaction = makeTx(password, fee)
+        val outIndex = Scripts.findPubKeyScriptIndex(fundingTransaction, scriptPubKey)
+        fundingTransaction -> outIndex
       }
     }
   }

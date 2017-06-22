@@ -9,16 +9,19 @@ import com.lightning.wallet.helper.{SocketListener, SocketWrap}
 import org.bitcoinj.core.{StoredBlock, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
-import com.lightning.wallet.lncloud.InactiveChannelSaver.ChannelSnapshot
+import com.lightning.wallet.lncloud.ChannelSaver.ChannelSnapshot
 import org.bitcoinj.core.listeners.NewBestBlockListener
+import concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
+import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.TxTracker
 import fr.acinq.bitcoin.BinaryData
+import scala.concurrent.Future
 
 
 object ChannelManager {
-  var inactiveChannels: Set[Channel] = InactiveChannelSaver.tryGetObject.map(_ map fresh) getOrElse Set.empty
-  var activeKits: Set[ChannelKit] = ActiveChannelSaver.tryGetObject.map(_ map fresh map ChannelKit) getOrElse Set.empty
+  var allChannels = ChannelSaver.tryGetObject getOrElse Set.empty map fresh
+  var activeKits = allChannels.filterNot(_.data == Channel.CLOSING) map ChannelKit
 
   val blockchainListener = new TxTracker with NewBestBlockListener {
     override def coinsSent(tx: Transaction) = for (chan <- allChannels) chan process CMDSomethingSpent(tx)
@@ -29,7 +32,6 @@ object ChannelManager {
   app.kit.wallet addCoinsSentEventListener blockchainListener
   app.kit.blockChain addNewBestBlockListener blockchainListener
   app.kit.wallet addTransactionConfidenceEventListener blockchainListener
-  def allChannels = activeKits.map(_.chan) ++ inactiveChannels
 
   def fresh(snapshot: ChannelSnapshot) =
     new Channel match { case freshChannel =>
@@ -78,16 +80,9 @@ case class ChannelKit(chan: Channel) { me =>
 
   chan.listeners += new StateMachineListener { self =>
     override def onBecome: PartialFunction[Transition, Unit] = {
-      case (previousData, data, previousState, Channel.CLOSING) =>
-        // "00" * 32 is a connection level error which will result in socket closing
-        Tools log s"Closing channel from $previousState at $previousData : $data"
-        me send Error("00" * 32, "Kiss all channels goodbye" getBytes "UTF-8")
-        socket.listeners -= reconnectSockListener
-        chan.listeners -= self
-
-      case (previousData, data, previousState, state) =>
-        val messages = Helpers.extractOutgoingMessages(previousData, data)
-        Tools log s"Sending $previousState -> $state messages: $messages"
+      case (previousData, followingData, previousState, followingState) =>
+        val messages = Helpers.extractOutgoingMessages(previousData, followingData)
+        Tools log s"Sending $previousState -> $followingState messages: $messages"
         messages foreach send
     }
 
@@ -98,6 +93,7 @@ case class ChannelKit(chan: Channel) { me =>
     }
   }
 
+  def tellChannel(msg: Any) = Future(chan process msg)
   private def interceptIncomingMsg(msg: LightningMessage) = msg match {
     case Ping(responseLength, _) => if (responseLength > 0) me send Pong("00" * responseLength)
     case Init(_, local) if !Features.areSupported(local) => chan process CMDShutdown

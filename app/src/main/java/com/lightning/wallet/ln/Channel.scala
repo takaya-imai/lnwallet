@@ -9,7 +9,6 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
-import com.lightning.wallet.ln.Tools.wrap
 
 
 class Channel extends StateMachine[ChannelData] { me =>
@@ -28,8 +27,10 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // GUARD: remote requires us to keep too much in local reserve which is not acceptable
-    case (wait @ WaitAcceptData(announce, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT) =>
-      val exceedsReserve: Boolean = LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.fundingAmountSat)
+    case (wait @ WaitAcceptData(announce, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT)
+      if accept.temporaryChannelId == cmd.temporaryChannelId =>
+
+      val exceedsReserve = LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.fundingAmountSat)
       if (exceedsReserve) become(wait, CLOSING) else become(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
@@ -53,7 +54,9 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // They have signed our first commit tx, we can broadcast a funding tx
-    case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED) =>
+    case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED)
+      if remote.channelId == wait.channelId =>
+
       val point = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
@@ -75,19 +78,25 @@ class Channel extends StateMachine[ChannelData] { me =>
 
     // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED
     case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, CLOSING)
-    case (some, _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, CLOSING)
+    case (wait: WaitAcceptData, err: Error, WAIT_FOR_ACCEPT) if err.channelId == wait.cmd.temporaryChannelId => become(wait, CLOSING)
+    case (wait: WaitFundingData, err: Error, WAIT_FOR_FUNDING) if err.channelId == wait.cmd.temporaryChannelId => become(wait, CLOSING)
+    case (wait: WaitFundingSignedData, err: Error, WAIT_FUNDING_SIGNED) if err.channelId == wait.channelId => become(wait, CLOSING)
 
 
     // FUNDING TX IS BROADCASTED AT THIS POINT
 
 
     // We have not yet sent a FundingLocked to them but just got a FundingLocked from them so we keep it
-    case (wait @ WaitFundingConfirmedData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
+      if their.channelId == wait.commitments.channelId =>
       me stayWith wait.copy(their = Some apply their)
 
+
     // We have already sent them a FundingLocked some time ago, now we got a FundingLocked from them
-    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE) =>
+    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
+      if their.channelId == wait.commitments.channelId =>
       becomeNormal(wait, our, their.nextPerCommitmentPoint)
+
 
     // We got a funding confirmation and now we need to either become normal or save our FundingLocked message
     case (wait: WaitFundingConfirmedData, CMDSomethingConfirmed(tx), WAIT_FUNDING_DONE) if wait.fundingTx.txid == tx.txid =>
@@ -96,9 +105,16 @@ class Channel extends StateMachine[ChannelData] { me =>
       if (wait.their.isDefined) becomeNormal(wait, our, wait.their.get.nextPerCommitmentPoint)
       else me stayWith wait.copy(our = Some apply our)
 
+
     // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
-    case (wait: WaitFundingConfirmedData, _: Error, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
-    case (wait: WaitFundingConfirmedData, CMDShutdown, WAIT_FUNDING_DONE) => startLocalCurrentClose(wait)
+    case (wait: WaitFundingConfirmedData, CMDShutdown, WAIT_FUNDING_DONE) =>
+      startLocalCurrentClose(wait)
+
+
+    case (wait: WaitFundingConfirmedData, err: Error, WAIT_FUNDING_DONE)
+      if err.channelId == wait.commitments.channelId =>
+      startLocalCurrentClose(wait)
+
 
     case (wait: WaitFundingConfirmedData, CMDFundingSpent(tx), WAIT_FUNDING_DONE) =>
       if (tx.txid == wait.commitments.remoteCommit.txid) startRemoteCurrentClose(wait, tx)
@@ -114,7 +130,9 @@ class Channel extends StateMachine[ChannelData] { me =>
       doProcess(CMDCommitSig)
 
 
-    case (norm: NormalData, add: UpdateAddHtlc, NORMAL) =>
+    case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
+      if add.channelId == norm.commitments.channelId =>
+
       val chainHeight: Int = LNParams.broadcaster.currentHeight
       val c1 = Commitments.receiveAdd(norm.commitments, add, chainHeight)
       me stayWith norm.copy(commitments = c1)
@@ -128,7 +146,9 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // Got a fulfill for an HTLC we sent earlier
-    case (norm: NormalData, fulfill: UpdateFulfillHtlc, NORMAL) =>
+    case (norm: NormalData, fulfill: UpdateFulfillHtlc, NORMAL)
+      if fulfill.channelId == norm.commitments.channelId =>
+
       val c1 = Commitments.receiveFulfill(norm.commitments, fulfill)
       me stayWith norm.copy(commitments = c1)
 
@@ -147,14 +167,16 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // Got a failure for an HTLC we sent earlier
-    case (norm: NormalData, fail: FailHtlc, NORMAL) =>
+    case (norm: NormalData, fail: FailHtlc, NORMAL)
+      if fail.channelId == norm.commitments.channelId =>
+
       val c1 = Commitments.receiveFail(norm.commitments, fail)
       me stayWith norm.copy(commitments = c1)
 
 
     // Send new commit tx signature
+    // GUARD: we only send in the correct state
     case (norm: NormalData, CMDCommitSig, NORMAL)
-      // GUARD: we only send if in the correct state
       if me canSendCommitSig norm.commitments =>
 
       val nextRemotePoint = norm.commitments.remoteNextCommitInfo.right.get
@@ -163,14 +185,18 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We received a commit sig from them
-    case (norm: NormalData, sig: CommitSig, NORMAL) =>
+    case (norm: NormalData, sig: CommitSig, NORMAL)
+      if sig.channelId == norm.commitments.channelId =>
+
       val c1 = Commitments.receiveCommit(norm.commitments, sig)
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
 
 
     // We received a revocation because we sent a sig
-    case (norm: NormalData, rev: RevokeAndAck, NORMAL) =>
+    case (norm: NormalData, rev: RevokeAndAck, NORMAL)
+      if rev.channelId == norm.commitments.channelId =>
+
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
       me stayWith norm.copy(commitments = c1)
       doProcess(CMDCommitSig)
@@ -194,9 +220,10 @@ class Channel extends StateMachine[ChannelData] { me =>
     // we can't proceed until all local changes are cleared
     // and we can't enter negotiations util pending HTLCs are present
 
+    // GUARD: postpone shutdown if we have changes
     case (norm: NormalData, CMDShutdown, NORMAL)
-      // GUARD: postpone shutdown if we have changes
       if me canSendCommitSig norm.commitments =>
+
       doProcess(CMDCommitSig)
       doProcess(CMDShutdown)
 
@@ -205,34 +232,48 @@ class Channel extends StateMachine[ChannelData] { me =>
       initiateShutdown(norm)
 
 
-    case (norm: NormalData, _: Shutdown, NORMAL)
-      // GUARD: can't accept shutdown with unacked changes
-      if norm.commitments.remoteChanges.proposed.nonEmpty =>
+    // GUARD: can't accept shutdown with unacked changes
+    case (norm: NormalData, remote: Shutdown, NORMAL)
+      if remote.channelId == norm.commitments.channelId &&
+        norm.commitments.remoteChanges.proposed.nonEmpty =>
+
       throw ChannelException(CHANNEL_CLOSE_PENDING_CHANGES)
 
 
+    // GUARD: postpone our reply if we have changes
     case (norm: NormalData, remote: Shutdown, NORMAL)
-      // GUARD: postpone our reply if we have changes
-      if me canSendCommitSig norm.commitments =>
+      if remote.channelId == norm.commitments.channelId &&
+        canSendCommitSig(norm.commitments) =>
+
       doProcess(CMDCommitSig)
       doProcess(remote)
 
 
     // We have not yet send or received a shutdown so send it and retry
-    case (norm @ NormalData(_, _, None, None, _), remote: Shutdown, NORMAL) =>
+    case (norm @ NormalData(_, _, None, None, _), remote: Shutdown, NORMAL)
+      if remote.channelId == norm.commitments.channelId =>
+
       initiateShutdown(norm)
       doProcess(remote)
 
 
     // We have already sent a shutdown (initially or in response to their shutdown)
-    case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL) =>
-      if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
+    case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL)
+      if remote.channelId == norm.commitments.channelId =>
+
+      val isOk = Commitments hasNoPendingHtlcs commitments
+      if (isOk) startNegotiations(announce, commitments, local, remote)
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
 
-    // Unilateral channel closing in NORMAL (bilateral is handled above)
-    case (norm: NormalData, _: Error, NORMAL) => startLocalCurrentClose(norm)
-    case (norm: NormalData, CMDFundingSpent(tx), NORMAL) => defineClosingAction(norm, tx)
+    // Unilateral channel closing in NORMAL
+    case (norm: NormalData, CMDFundingSpent(tx), NORMAL) =>
+      defineClosingAction(norm, tx)
+
+
+    case (norm: NormalData, err: Error, NORMAL)
+      if err.channelId == norm.commitments.channelId =>
+      startLocalCurrentClose(norm)
 
 
     // NEGOTIATIONS MODE
@@ -242,8 +283,9 @@ class Channel extends StateMachine[ChannelData] { me =>
     // - Shutdown, but it is acknowledged since we just received ClosingSigned
     // - ClosingSigned, but they are never acknowledged and spec says we only need to re-send the last one
     // this means that we can just set commitments.unackedMessages to the last sent ClosingSigned
+    case (neg: NegotiationsData, ClosingSigned(channelId, feeSatoshis, remoteSig), NEGOTIATIONS)
+      if channelId == neg.commitments.channelId =>
 
-    case (neg: NegotiationsData, ClosingSigned(_, feeSatoshis, remoteSig), NEGOTIATIONS) =>
       val Seq(closeFeeSat, remoteFeeSat) = Seq(neg.localClosingSigned.feeSatoshis, feeSatoshis) map Satoshi
       val Seq(localScript, remoteScript) = Seq(neg.localShutdown.scriptPubKey, neg.remoteShutdown.scriptPubKey)
       val closeTxOpt = Closing.checkClosingSignature(neg.commitments, localScript, remoteScript, remoteFeeSat, remoteSig)
@@ -263,9 +305,14 @@ class Channel extends StateMachine[ChannelData] { me =>
       }
 
 
-    // Channel closing in NEGOTIATIONS
-    case (neg: NegotiationsData, _: Error, NEGOTIATIONS) => startLocalCurrentClose(neg)
-    case (neg: NegotiationsData, CMDShutdown, NEGOTIATIONS) => startLocalCurrentClose(neg)
+    // Unilateral channel closing in NEGOTIATIONS
+    case (neg: NegotiationsData, CMDShutdown, NEGOTIATIONS) =>
+      startLocalCurrentClose(neg)
+
+
+    case (neg: NegotiationsData, err: Error, NEGOTIATIONS)
+      if err.channelId == neg.commitments.channelId =>
+      startLocalCurrentClose(neg)
 
 
     case (neg: NegotiationsData, CMDFundingSpent(tx), NEGOTIATIONS) =>

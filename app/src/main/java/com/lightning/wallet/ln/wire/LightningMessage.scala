@@ -12,7 +12,7 @@ trait RoutingMessage extends LightningMessage
 trait ChannelMessage extends LightningMessage
 
 trait HasHtlcId extends ChannelMessage { def id: Long }
-trait FailHtlc extends HasHtlcId
+trait FailHtlc extends HasHtlcId { def channelId: BinaryData }
 
 case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends SetupMessage

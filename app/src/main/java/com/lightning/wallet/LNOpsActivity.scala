@@ -9,10 +9,9 @@ import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.lightning.wallet.Utils.{app, sumIn}
 
-import concurrent.ExecutionContext.Implicits.global
-import com.lightning.wallet.lncloud.{ChannelKit, ChannelManager}
-
-import scala.concurrent.Future
+import com.lightning.wallet.lncloud.ChannelManager.allChannels
+import com.lightning.wallet.lncloud.ChannelManager.activeKits
+import com.lightning.wallet.lncloud.ChannelKit
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
@@ -38,8 +37,8 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   override def onResume = {
-    if (ChannelManager.activeKits.isEmpty) showNoActiveKitInfo
-    else me showActive ChannelManager.activeKits.head
+    if (activeKits.isEmpty) showNoActiveKitInfo
+    else me showActive activeKits.head
     super.onResume
   }
 
@@ -72,7 +71,7 @@ class LNOpsActivity extends TimerActivity { me =>
     }
 
     def warnAboutUnilateralClosing =
-      mkForm(mkChoiceDialog(ok = Future { kit.chan process CMDShutdown }, none,
+      mkForm(builder = mkChoiceDialog(ok = kit tellChannel CMDShutdown, none,
         ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
     // UI updating listener
@@ -124,7 +123,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
     kit.chan.listeners += chanViewListener
     kit.socket.listeners += kit.reconnectSockListener
-    kit.chan.notifyListeners
+    for (chan <- allChannels) chan.notifyListeners
     kit.socket.start
   }
 

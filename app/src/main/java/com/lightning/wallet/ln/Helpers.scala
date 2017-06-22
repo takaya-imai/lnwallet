@@ -12,6 +12,7 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 object Helpers { me =>
   def extractOutgoingMessages(prev: Any, next: Any) = (prev, next) match {
+    case (c0: HasCommitments, c1: ClosingData) => c1.commitments.unackedMessages diff c0.commitments.unackedMessages
     case (c0: NormalData, c1: NormalData) => c1.commitments.unackedMessages diff c0.commitments.unackedMessages
     case (_, waitSignedData: WaitFundingSignedData) => Vector(waitSignedData.fundingCreatedMessage)
     case (_, waitAcceptData: WaitAcceptData) => Vector(waitAcceptData.openChannelMessage)

@@ -56,15 +56,13 @@ object PrivateDataSaver extends Saver {
   val KEY = "lnCloudPrivate"
 }
 
-trait ChannelSaver extends Saver {
+object ChannelSaver extends Saver {
   type ChannelSnapshot = (ChannelData, String)
   type ChannelSnapshotSet = Set[ChannelSnapshot]
   def tryGetObject: Try[ChannelSnapshotSet] = tryGet map to[ChannelSnapshotSet]
   def saveObject(data: ChannelSnapshotSet): Unit = save(data.toJson)
+  val KEY = "channelData"
 }
-
-object InactiveChannelSaver extends ChannelSaver { val KEY = "inactiveChannels" }
-object ActiveChannelSaver extends ChannelSaver { val KEY = "activeChannels" }
 
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
