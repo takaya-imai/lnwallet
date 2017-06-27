@@ -326,13 +326,7 @@ class Channel extends StateMachine[ChannelData] { me =>
 
 
     // Channel closing events in CLOSING phase
-    case (closing: ClosingData, CMDFundingSpent(tx), CLOSING)
-      if !closing.nextRemoteCommit.map(_.commitTx.txid).contains(tx.txid) &
-        !closing.remoteCommit.map(_.commitTx.txid).contains(tx.txid) &
-        !closing.localCommit.map(_.commitTx.txid).contains(tx.txid) &
-        !closing.mutualClose.map(_.txid).contains(tx.txid) =>
-
-      // Multiple spends may occur
+    case (closing: ClosingData, CMDFundingSpent(tx), CLOSING) =>
       defineClosingAction(closing, tx)
 
 

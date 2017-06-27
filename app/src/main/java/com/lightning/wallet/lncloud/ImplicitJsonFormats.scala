@@ -5,7 +5,7 @@ import spray.json.DefaultJsonProtocol._
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
-import com.lightning.wallet.lncloud.LNCloud.{ClearToken, InvoiceAndMemo}
+import com.lightning.wallet.lncloud.LNCloud.{ClearToken, RequestAndMemo}
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
@@ -118,6 +118,11 @@ object ImplicitJsonFormats { me =>
     def write(lock: FundingLocked) = fundingLockedCodec.encode(lock).require.toHex.toJson
   }
 
+  implicit object PaymentRequestFmt extends JsonFormat[PaymentRequest] {
+    def read(rawJson: JsValue) = PaymentRequest read json2String(rawJson)
+    def write(req: PaymentRequest) = PaymentRequest.write(req).toJson
+  }
+
   implicit val blindParamFmt = jsonFormat[Bytes, BigInteger, BigInteger, BigInteger, BigInteger,
     BlindParam](BlindParam.apply, "point", "a", "b", "c", "bInv")
 
@@ -131,22 +136,19 @@ object ImplicitJsonFormats { me =>
   implicit val milliSatoshiFmt = jsonFormat[Long, MilliSatoshi](MilliSatoshi.apply, "amount")
   implicit val satoshiFmt = jsonFormat[Long, Satoshi](Satoshi.apply, "amount")
 
-  implicit val invoiceFmt = jsonFormat[Option[String], PublicKey, MilliSatoshi, BinaryData,
-    Invoice](Invoice.apply, "message", "nodeId", "sum", "paymentHash")
-
   implicit val packetFmt = jsonFormat[Bytes, Bytes, Bytes, Bytes,
     Packet](Packet.apply, "v", "publicKey", "routingInfo", "hmac")
 
   implicit val secretsAndPacketFmt = jsonFormat[Vector[BytesAndKey], Packet,
     SecretsAndPacket](SecretsAndPacket.apply, "sharedSecrets", "packet")
 
-  implicit val outgoingPaymentSpecFmt = jsonFormat[Invoice,
+  implicit val outgoingPaymentSpecFmt = jsonFormat[PaymentRequest,
     Option[BinaryData], Vector[PaymentRoute], SecretsAndPacket, Long, Long, String,
-    OutgoingPaymentSpec](OutgoingPaymentSpec.apply, "invoice", "preimage", "routes",
+    OutgoingPaymentSpec](OutgoingPaymentSpec.apply, "request", "preimage", "routes",
     "onion", "amountWithFee", "expiry", "kind")
 
-  implicit val incomingPaymentSpecFmt = jsonFormat[Invoice, BinaryData, String,
-    IncomingPaymentSpec](IncomingPaymentSpec.apply, "invoice", "preimage", "kind")
+  implicit val incomingPaymentSpecFmt = jsonFormat[PaymentRequest, BinaryData, String,
+    IncomingPaymentSpec](IncomingPaymentSpec.apply, "request", "preimage", "kind")
 
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
@@ -154,7 +156,7 @@ object ImplicitJsonFormats { me =>
   implicit val pingLNCLoudAct = jsonFormat[BinaryData, String,
     CheckCloudAct](CheckCloudAct.apply, "data", "kind")
 
-  implicit val publicDataFmt = jsonFormat[Option[InvoiceAndMemo], List[ClearToken], List[LNCloudAct],
+  implicit val publicDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[LNCloudAct],
     PublicData](PublicData.apply, "info", "tokens", "acts")
 
   implicit val privateDataFmt = jsonFormat[List[LNCloudAct], String,

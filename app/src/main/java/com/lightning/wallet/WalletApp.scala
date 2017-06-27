@@ -12,7 +12,6 @@ import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools.wrap
-import com.lightning.wallet.ln.Invoice
 import com.google.protobuf.ByteString
 import org.bitcoinj.wallet.Protos
 import android.app.Application
@@ -21,6 +20,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
 import Context.CLIPBOARD_SERVICE
+import com.lightning.wallet.ln.PaymentRequest
 import org.bitcoinj.net.discovery.DnsDiscovery
 
 
@@ -43,13 +43,11 @@ class WalletApp extends Application { me =>
       else phraseOptions(3)
   }
 
-  // Both these methods may throw
+  // Various utilities
   def getTo(base58: String) = Address.fromBase58(params, base58)
+  def toast(message: Int) = Toast.makeText(me, message, Toast.LENGTH_LONG).show
   def isAlive = if (null == kit) false else kit.state match { case STARTING | RUNNING => true case _ => false }
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
-  def toast(message: Int) = Toast.makeText(me, message, Toast.LENGTH_LONG).show
-
-  // Working with clipboard
   def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
 
@@ -66,7 +64,6 @@ class WalletApp extends Application { me =>
 
   object TransData {
     var value: Any = _
-    val lnPaymentRequestRegex = "[a-zA-Z0-9]+:[0-9]+:[a-zA-Z0-9]+"
     def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
       case _: WrongNetworkException => err(err_different_net)
       case _: AddressFormatException => err(err_address)
@@ -77,7 +74,8 @@ class WalletApp extends Application { me =>
 
     def recordValue(rawText: String) = value = rawText match {
       case s if s startsWith "bitcoin" => new BitcoinURI(params, s)
-      case s if s matches lnPaymentRequestRegex => Invoice parse s
+      case s if s startsWith "lnbc" => PaymentRequest read s
+      case s if s startsWith "lntb" => PaymentRequest read s
       case s => getTo(s)
     }
   }

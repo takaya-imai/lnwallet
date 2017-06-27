@@ -39,11 +39,11 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
 
   def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit =
     LNParams.db.change(updDataSql, spec.toJson.toString,
-      spec.invoice.paymentHash.toString)
+      spec.request.paymentHash.toString)
 
-  def putInfo(info: ExtendedPaymentInfo) = info.spec.invoice.paymentHash.toString match { case hashStr =>
+  def putInfo(info: ExtendedPaymentInfo) = info.spec.request.paymentHash.toString match { case hashStr =>
     LNParams.db.change(newSql, info.spec.toJson.toString, hashStr, info.status.toString, info.stamp.toString)
-    LNParams.db.change(newVirtualSql, s"${info.spec.invoice.message.orNull} $hashStr", hashStr)
+    LNParams.db.change(newVirtualSql, s"${info.spec.request.descriptionOpt.orNull} $hashStr", hashStr)
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 }

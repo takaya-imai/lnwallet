@@ -58,9 +58,9 @@ object PrivateDataSaver extends Saver {
 
 object ChannelSaver extends Saver {
   type ChannelSnapshot = (ChannelData, String)
-  type ChannelSnapshotSet = Set[ChannelSnapshot]
-  def tryGetObject: Try[ChannelSnapshotSet] = tryGet map to[ChannelSnapshotSet]
-  def saveObject(data: ChannelSnapshotSet): Unit = save(data.toJson)
+  type ChannelSnapshotVec = Vector[ChannelSnapshot]
+  def tryGetObject: Try[ChannelSnapshotVec] = tryGet map to[ChannelSnapshotVec]
+  def saveObject(data: ChannelSnapshotVec): Unit = save(data.toJson)
   val KEY = "channelData"
 }
 

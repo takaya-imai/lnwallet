@@ -14,10 +14,10 @@ import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import scala.util.{Success, Try}
 
 
-trait PaymentSpec { val invoice: Invoice }
+trait PaymentSpec { val request: PaymentRequest }
 case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long, stamp: Long)
-case class IncomingPaymentSpec(invoice: Invoice, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
-case class OutgoingPaymentSpec(invoice: Invoice, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
+case class IncomingPaymentSpec(request: PaymentRequest, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
+case class OutgoingPaymentSpec(request: PaymentRequest, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
 
 trait PaymentSpecBag {
@@ -56,15 +56,13 @@ object PaymentSpec {
     makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
   }
 
-
-
   private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
   private def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
   private def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
 
   def reduceRoutes(fail: UpdateFailHtlc, spec: OutgoingPaymentSpec) =
     parseErrorPacket(spec.onion.sharedSecrets, packet = fail.reason) map {
-      case ErrorPacket(nodeId, _: Perm) if spec.invoice.nodeId == nodeId =>
+      case ErrorPacket(nodeId, _: Perm) if spec.request.nodeId == nodeId =>
         // Permanent error from a final node, nothing we can do here
         Vector.empty
 
@@ -95,12 +93,12 @@ object PaymentSpec {
       // We are the final HTLC recipient, the only viable option
 
       bag.getInfoByHash(add.paymentHash).map(_.spec) match {
-        case Success(spec) if add.amountMsat > spec.invoice.sum.amount * 2 =>
-          // GUARD: they have sent too much funds, this is a protective measure
+        case Success(spec) if spec.request.amount.exists(add.amountMsat > _.amount * 2) =>
+          // GUARD: they have sent too much funds, this is a protective measure against that
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(spec) if add.amountMsat < spec.invoice.sum.amount =>
-          // GUARD: amount is less than what we requested, this won't do
+        case Success(spec) if spec.request.amount.exists(add.amountMsat < _.amount) =>
+          // GUARD: amount is less than what we requested, we won't accept such payment
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
         case Success(spec) if add.expiry < LNParams.finalHtlcExpiry =>

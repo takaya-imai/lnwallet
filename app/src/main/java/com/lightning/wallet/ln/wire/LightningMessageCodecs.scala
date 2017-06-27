@@ -53,16 +53,10 @@ object LightningMessageCodecs { me =>
   private val bv2Inet6 = (bv: ByteVector) => InetAddress.getByAddress(bv.toArray).asInstanceOf[Inet6Address]
   private val bv2Inet4 = (bv: ByteVector) => InetAddress.getByAddress(bv.toArray).asInstanceOf[Inet4Address]
 
-  // DER encoded <-> wire encoded
-  def fixSize(data: BinaryData): BinaryData = data.length match {
-    case length if length < 32 => Array.fill(32 - length)(0.toByte) ++ data
-    case 32 => data
-  }
-
   def der2wire(signature: BinaryData): BinaryData =
     Crypto decodeSignature signature match { case (r, s) =>
-      val fixedR = me fixSize r.toByteArray.dropWhile(0.==)
-      val fixedS = me fixSize s.toByteArray.dropWhile(0.==)
+      val fixedR = Crypto fixSize r.toByteArray.dropWhile(0.==)
+      val fixedS = Crypto fixSize s.toByteArray.dropWhile(0.==)
       fixedR ++ fixedS
     }
 

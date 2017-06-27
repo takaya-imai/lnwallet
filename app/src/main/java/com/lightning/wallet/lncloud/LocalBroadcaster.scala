@@ -6,8 +6,10 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import rx.lang.scala.{Observable => Obs}
+import fr.acinq.bitcoin.{BinaryData, Transaction}
+
 import com.lightning.wallet.Utils.app
-import fr.acinq.bitcoin.Transaction
+import com.lightning.wallet.ln.wire.Error
 
 
 object LocalBroadcaster extends Broadcaster { me =>
@@ -21,7 +23,7 @@ object LocalBroadcaster extends Broadcaster { me =>
   }.toMap
 
   override def onBecome = {
-    // This will only work on channel `init` calls
+    // This will only work on channel init calls
     case (null, wait: WaitFundingConfirmedData, null, WAIT_FUNDING_DONE) =>
       // In a thin wallet we need to watch for transactions which spend external outputs
       app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
@@ -36,5 +38,11 @@ object LocalBroadcaster extends Broadcaster { me =>
   override def onError = {
     case chanRelated: Throwable =>
       chanRelated.printStackTrace
+  }
+
+  override def onPostProcess = {
+    case Error(_, reason: BinaryData) =>
+      val decoded = new String(reason.toArray)
+      Tools log s"Got remote Error: $decoded"
   }
 }

@@ -35,9 +35,9 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
       me doProcess CMDStart
 
     case (PrivateData(action :: rest, _), CMDStart) =>
-      // Private server should use a publick key based authorization so we add a sig to params
-      action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
-        .foreach(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
+      // Private server should use a public key based authorization so we add a signature to params
+      val request = action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
+      request.foreach(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
 
     case _ =>
       // Let know if received an unhandled message in some state
@@ -51,7 +51,7 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
 }
 
 // By default a public pathfinder is used but user may provide their own private pathfinder anytime they want
-case class PublicData(info: Option[InvoiceAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
+case class PublicData(info: Option[RequestAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
 class PublicPathfinder(val bag: PaymentSpecBag, val lnCloud: LNCloud, val channel: Channel)
 extends StateMachine[PublicData] with Pathfinder { me =>
 
@@ -66,7 +66,7 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
     case PublicData(None, tokens, _) ~ Tuple2(spec: OutgoingPaymentSpec, memo: BlindMemo) =>
-      me stayWith data.copy(info = Some(spec.invoice, memo), tokens = tokens)
+      me stayWith data.copy(info = Some(spec.request, memo), tokens = tokens)
       channel doProcess SilentAddHtlc(spec)
 
     // No matter what the state is: do it if we have acts and tokens
@@ -104,6 +104,7 @@ extends StateMachine[PublicData] with Pathfinder { me =>
   // ADDING NEW TOKENS
 
   def resetState = me stayWith data.copy(info = None)
+  def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .foreach(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
       serverError => if (serverError.getMessage == "notfound") resetState)
@@ -119,9 +120,9 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
     val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
 
-    lnCloud.call("blindtokens/buy", response => Invoice parse json2String(response.head),
-      "seskey" -> memo.sesPubKeyHex, "tokens" -> memo.makeBlindTokens.toJson.toString.hex)
-      .filter(_.sum.amount < 25000000L).map(_ -> memo)
+    // Get a request -> memo tuple from server
+    lnCloud.call("blindtokens/buy", PaymentRequestFmt read _.head, "seskey" -> memo.sesPubKeyHex,
+      "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
   }
 
   def getClearTokens(memo: BlindMemo) =
@@ -133,15 +134,16 @@ trait Pathfinder {
   val lnCloud: LNCloud
   val channel: Channel
 
-  def makeOutgoingSpecOpt(invoice: Invoice) =
-    lnCloud.findRoutes(channel.data.announce.nodeId, invoice.nodeId) map {
-      routes => buildOutgoingSpec(routes, invoice, LNParams.finalHtlcExpiry)
+  def makeOutgoingSpecOpt(request: PaymentRequest) =
+    lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map {
+      routes => buildOutgoingSpec(routes, request, LNParams.finalHtlcExpiry)
     }
 
-  def buildOutgoingSpec(rest: Vector[PaymentRoute], inv: Invoice, finalExpiry: Int) = rest.headOption map { route =>
-    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentSpec.buildRoute(inv.sum.amount, finalExpiry, hops = route)
-    val onion = PaymentSpec.buildOnion(PublicKey(channel.data.announce.nodeId) +: route.map(_.nextNodeId), payloads, inv.paymentHash)
-    OutgoingPaymentSpec(inv, preimage = None, rest.tail, onion, amountWithAllFees, expiryWithAllDeltas)
+  // since the spec is outgoing, even if recepient did not specify an amount, PaymentRequest nees to have some amount here
+  def buildOutgoingSpec(rest: Vector[PaymentRoute], request: PaymentRequest, finalExpiry: Int) = rest.headOption map { route =>
+    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentSpec.buildRoute(request.amount.get.amount, finalExpiry, hops = route)
+    val onion = PaymentSpec.buildOnion(PublicKey(channel.data.announce.nodeId) +: route.map(_.nextNodeId), payloads, request.paymentHash)
+    OutgoingPaymentSpec(request, preimage = None, rest.tail, onion, amountWithAllFees, expiryWithAllDeltas)
   }
 }
 
@@ -187,7 +189,7 @@ class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
 object LNCloud {
   type HttpParam = (String, Object)
   type ClearToken = (String, String, String)
-  type InvoiceAndMemo = (Invoice, BlindMemo)
+  type RequestAndMemo = (PaymentRequest, BlindMemo)
   val CMDStart = "CMDStart"
   val body = "body"
 }
