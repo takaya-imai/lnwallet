@@ -112,8 +112,8 @@ object LightningMessageCodecs { me =>
     } yield decodeResult map vec2Bin map PublicKey.apply
   )
 
-  private val uint64: Codec[Long] = int64.narrow(long =>
-    if (long < 0) Attempt failure Err(s"Overflow for $long")
+  val uint64: Codec[Long] = int64.narrow(long =>
+    if (long < 0) Attempt failure Err(s"Overflow $long")
     else Attempt successful long, identity)
 
   private val ipv6address: Codec[Inet6Address] = bytes(16).xmap(bv2Inet6, inet2Bv)
@@ -157,7 +157,7 @@ object LightningMessageCodecs { me =>
       (uint64 withContext "dustLimitSatoshis") ::
       (uint64 withContext "maxHtlcValueInFlightMsat") ::
       (uint64 withContext "channelReserveSatoshis") ::
-      (uint32 withContext "htlcMinimumMsat") ::
+      (uint64 withContext "htlcMinimumMsat") ::
       (uint32 withContext "feeratePerKw") ::
       (uint16 withContext "toSelfDelay") ::
       (uint16 withContext "maxAcceptedHtlcs") ::
@@ -172,8 +172,8 @@ object LightningMessageCodecs { me =>
       (uint64 withContext "dustLimitSatoshis") ::
       (uint64 withContext "maxHtlcValueInFlightMsat") ::
       (uint64 withContext "channelReserveSatoshis") ::
+      (uint64 withContext "htlcMinimumMsat") ::
       (uint32 withContext "minimumDepth") ::
-      (uint32 withContext "htlcMinimumMsat") ::
       (uint16 withContext "toSelfDelay") ::
       (uint16 withContext "maxAcceptedHtlcs") ::
       (publicKey withContext "fundingPubkey") ::
@@ -214,7 +214,7 @@ object LightningMessageCodecs { me =>
   private val updateAddHtlc =
     (binarydata(32) withContext "channelId") ::
       (uint64 withContext "id") ::
-      (uint32 withContext "amountMsat") ::
+      (uint64 withContext "amountMsat") ::
       (uint32 withContext "expiry") ::
       (binarydata(32) withContext "paymentHash") ::
       (binarydata(Sphinx.PacketLength) withContext "onionRoutingPacket")
@@ -287,7 +287,7 @@ object LightningMessageCodecs { me =>
       (uint32 withContext "timestamp") ::
       (binarydata(2) withContext "flags") ::
       (uint16 withContext "cltvExpiryDelta") ::
-      (uint32 withContext "htlcMinimumMsat") ::
+      (uint64 withContext "htlcMinimumMsat") ::
       (uint32 withContext "feeBaseMsat") ::
       (uint32 withContext "feeProportionalMillionths")
 
@@ -304,9 +304,9 @@ object LightningMessageCodecs { me =>
   val perHopPayload =
     (constant(ByteVector fromByte 0) withContext "realm") ::
       (uint64 withContext "channel_id") ::
-      (uint32 withContext "amt_to_forward") ::
+      (uint64 withContext "amt_to_forward") ::
       (int32 withContext "outgoing_cltv_value") ::
-      (ignore(8 * 16) withContext "unused_with_v0_version_on_header")
+      (ignore(8 * 12) withContext "unused_with_v0_version_on_header")
 
   val hopsCodec: Codec[PaymentRoute] = vectorOfN(valueCodec = hop.as[Hop], countCodec = uint16)
   val perHopPayloadCodec: Codec[PerHopPayload] = perHopPayload.as[PerHopPayload]

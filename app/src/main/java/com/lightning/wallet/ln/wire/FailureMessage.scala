@@ -46,7 +46,7 @@ object FailureMessageCodecs {
     binarydata(32) withContext "sha256Codec"
 
   private val amount =
-    (uint32 withContext "amountMsat") ::
+    (uint64 withContext "amountMsat") ::
       (channelUpdateCodec withContext "channelUpdate")
 
   private val expiry =
