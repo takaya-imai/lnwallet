@@ -217,7 +217,7 @@ object PaymentRequest {
 
     val (amountOpt, unit) = Amount.decode(hrp drop 4)
     val pr = PaymentRequest(hrp take 4, amountOpt, unit, timestamp, pub, tags, signature)
-    require(Crypto.verifySignature(pr.paymentHash, r -> s, pub), "invalid signature")
+    require(Crypto.verifySignature(pr.requestHash, r -> s, pub), "invalid signature")
     pr
   }
 
