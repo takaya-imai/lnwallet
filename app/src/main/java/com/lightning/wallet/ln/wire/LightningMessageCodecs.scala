@@ -1,16 +1,16 @@
 package com.lightning.wallet.ln.wire
 
 import java.net._
-
 import scodec.codecs._
-import java.math.BigInteger
 
-import com.lightning.wallet.ln.{ExtendedException, LightningException}
-import com.lightning.wallet.ln.crypto.Sphinx
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import scodec.bits.{BitVector, ByteVector}
 import scodec.{Attempt, Codec, Err}
+
+import com.lightning.wallet.ln.ExtendedException
+import com.lightning.wallet.ln.crypto.Sphinx
+import java.math.BigInteger
 
 
 object LightningMessageCodecs { me =>
@@ -149,6 +149,11 @@ object LightningMessageCodecs { me =>
 
   private val pong =
     varsizebinarydata withContext "data"
+
+  val channelReestablish =
+    (binarydata(32) withContext "channelId") ::
+      (uint64 withContext "commitmentsReceived") ::
+      (uint64 withContext "revocationsReceived")
 
   private val openChannel =
     (binarydata(32) withContext "chainHash") ::
@@ -333,6 +338,7 @@ object LightningMessageCodecs { me =>
       .typecase(cr = revokeAndAck.as[RevokeAndAck], tag = 133)
       .typecase(cr = updateFee.as[UpdateFee], tag = 134)
       .typecase(cr = updateFailMalformedHtlc.as[UpdateFailMalformedHtlc], tag = 135)
+      .typecase(cr = channelReestablish.as[ChannelReestablish], tag = 136)
       .typecase(cr = channelAnnouncement.as[ChannelAnnouncement], tag = 256)
       .typecase(cr = nodeAnnouncementCodec, tag = 257)
       .typecase(cr = channelUpdateCodec, tag = 258)

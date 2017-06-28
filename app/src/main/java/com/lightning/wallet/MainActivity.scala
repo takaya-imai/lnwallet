@@ -2,7 +2,6 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
-
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -38,7 +37,7 @@ with TimerActivity with ViewSwitch { me =>
       findViewById(R.id.mainPassForm) ::
       findViewById(R.id.mainProgress) :: Nil
 
-  lazy val prepareWalletKit = Future {
+  lazy val prepareKit = Future {
     val stream = new FileInputStream(app.walletFile)
     val proto = WalletProtobufSerializer parseToProto stream
 
@@ -100,12 +99,11 @@ with TimerActivity with ViewSwitch { me =>
         // Launch of a previously closed app
         // Also happens if app has become inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
-        <<(prepareWalletKit, throw _)(none)
+        <<(prepareKit, throw _)(none)
 
-        // Check password after init is done
         mainPassCheck setOnClickListener onButtonTap {
-          val setSeedAfterInit = prepareWalletKit map setSeed
-          <<(setSeedAfterInit, wrongPass)(_ => app.kit.startAsync)
+          // Check password after wallet initialization is complete
+          <<(prepareKit map setSeed, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 

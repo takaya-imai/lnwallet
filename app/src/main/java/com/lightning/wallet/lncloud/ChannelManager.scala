@@ -14,7 +14,7 @@ import fr.acinq.bitcoin.BinaryData
 object ChannelManager {
   var all = ChannelSaver.tryGetObject getOrElse Vector.empty map fresh
   def fromNode(id: BinaryData) = all.filter(_.data.announce.nodeId == id)
-  def operational = all.filterNot(_.data == Channel.CLOSING)
+  def operational = all.filterNot(_.state == Channel.CLOSING)
 
   val blockchainListener = new TxTracker with NewBestBlockListener {
     override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSomethingSpent(tx)
