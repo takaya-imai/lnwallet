@@ -124,7 +124,7 @@
     <string name="nfc_settings">Enable NFC</string>
     <string name="nfc_got">Got an NFC payment request, would you like to proceed?</string>
     <string name="nfc_error">Could not process an NFC message\nbecause it is malformed or empty</string>
-    <string name="ln_qr_warning"><![CDATA[<small>Disposable LN payment request</small><br>Do not reuse this QR code]]></string>
+    <string name="ln_qr_warning"><![CDATA[<small>Disposable payment request</small><br>Do not reuse this QR code]]></string>
     <string name="nfc_payee_tip">This payment request can be sent by touching two devices back-to-back if the other device also supports NFC technology</string>
 
     <!-- SPECIFIC TO LIGHTNING NETWORK -->

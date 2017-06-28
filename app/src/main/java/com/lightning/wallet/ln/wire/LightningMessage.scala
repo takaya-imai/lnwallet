@@ -24,7 +24,7 @@ case class OpenChannel(chainHash: BinaryData, temporaryChannelId: BinaryData,
                        maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
                        feeratePerKw: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubkey: PublicKey,
                        revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
-                       firstPerCommitmentPoint: Point) extends ChannelMessage
+                       firstPerCommitmentPoint: Point, channelFlags: Byte) extends ChannelMessage
 
 case class AcceptChannel(temporaryChannelId: BinaryData,
                          dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,

@@ -166,7 +166,8 @@ object LightningMessageCodecs { me =>
       (point withContext "revocationBasepoint") ::
       (point withContext "paymentBasepoint") ::
       (point withContext "delayedPaymentBasepoint") ::
-      (point withContext "firstPerCommitmentPoint")
+      (point withContext "firstPerCommitmentPoint") ::
+      (byte withContext "channelFlags")
 
   private val acceptChannel =
     (binarydata(32) withContext "temporaryChannelId") ::

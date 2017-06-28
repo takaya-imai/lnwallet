@@ -8,10 +8,6 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.lightning.wallet.Utils.{app, sumIn}
-
-import com.lightning.wallet.lncloud.ChannelManager.allChannels
-import com.lightning.wallet.lncloud.ChannelManager.activeKits
-import com.lightning.wallet.lncloud.ChannelKit
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
@@ -36,96 +32,90 @@ class LNOpsActivity extends TimerActivity { me =>
     setContentView(R.layout.activity_ln_ops)
   }
 
-  override def onResume = {
-    if (activeKits.isEmpty) showNoActiveKitInfo
-    else me showActive activeKits.head
-    super.onResume
-  }
-
   private def getConfirmations(tx: Transaction) = {
     val txOpt = Option(app.kit.wallet getTransaction tx.txid)
     txOpt.map(_.getConfidence.getDepthInBlocks) getOrElse 0
   }
 
-  private def showActive(kit: ChannelKit) = {
-    def manageOpeningInfo(c: Commitments, confs: Int) = {
-      val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
-      val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
-      val humanCurrentState = app.plurOrZero(txsConfs, confs)
-      val humanCanReceive = app.plurOrZero(txsConfs, 6)
-      me runOnUiThread updateInterface
-
-      def updateInterface = {
-        lnOpsAction setText ln_force_close
-        lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
-        lnOpsDescription setText getString(ln_ops_chan_opening).format(humanAmount,
-          humanCanSend, humanCanReceive, humanCurrentState).html
-      }
-    }
-
-    def showNegotiationsInfo(c: Commitments) = {
-      val humanAmount = sumIn format withSign(MilliSatoshi apply c.localCommit.spec.toLocalMsat)
-      lnOpsDescription setText getString(ln_ops_chan_bilateral_negotiations).format(humanAmount).html
-      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
-      lnOpsAction setText ln_force_close
-    }
-
-    def warnAboutUnilateralClosing =
-      mkForm(builder = mkChoiceDialog(ok = kit tellChannel CMDShutdown, none,
-        ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
-
-    // UI updating listener
-
-    val chanViewListener = new StateMachineListener {
-      override def onBecome: PartialFunction[Transition, Unit] = {
-        // A new channel has been created with funding transaction broadcasted so now we wait
-        case (_, WaitFundingConfirmedData(_, _, _, tx, commitments, _), _, WAIT_FUNDING_DONE) =>
-          manageOpeningInfo(commitments, me getConfirmations tx)
-
-        case (_, norm: NormalData, _, NORMAL)
-          // GUARD: mutual shutdown has been initiated
-          if norm.localShutdown.isDefined || norm.remoteShutdown.isDefined =>
-          me runOnUiThread showNegotiationsInfo(norm.commitments)
-
-        // Both sides have sent a funding locked so we're all good
-        case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
-          me exitTo classOf[LNActivity]
-
-        // Closing tx fee negotiations are in process
-        case (_, negs: NegotiationsData, _, NEGOTIATIONS) =>
-          me runOnUiThread showNegotiationsInfo(negs.commitments)
-
-        // Mutual closing is in progress as only a mutual close tx is available
-        case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me manageMutualClosing tx
-
-        // Mutual closing but we have no transactions so just drop it
-        case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me runOnUiThread showNoActiveKitInfo
-
-        // Someone has initiated a unilateral channel closing
-        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _), _, CLOSING)
-          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          me manageForcedClosing close
-      }
-
-      override def onError = {
-        case chanRelated: Throwable =>
-          kit.chan process CMDShutdown
-      }
-    }
-
-    whenDestroy = anyToRunnable {
-      kit.socket.listeners -= kit.reconnectSockListener
-      kit.chan.listeners -= chanViewListener
-      super.onDestroy
-    }
-
-    kit.chan.listeners += chanViewListener
-    kit.socket.listeners += kit.reconnectSockListener
-    for (chan <- allChannels) chan.notifyListeners
-    kit.socket.start
-  }
+//  private def showActive(kit: ChannelKit) = {
+//    def manageOpeningInfo(c: Commitments, confs: Int) = {
+//      val humanAmount = sumIn format withSign(c.commitInput.txOut.amount)
+//      val humanCanSend = app.plurOrZero(txsConfs, LNParams.minDepth)
+//      val humanCurrentState = app.plurOrZero(txsConfs, confs)
+//      val humanCanReceive = app.plurOrZero(txsConfs, 6)
+//      me runOnUiThread updateInterface
+//
+//      def updateInterface = {
+//        lnOpsAction setText ln_force_close
+//        lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+//        lnOpsDescription setText getString(ln_ops_chan_opening).format(humanAmount,
+//          humanCanSend, humanCanReceive, humanCurrentState).html
+//      }
+//    }
+//
+//    def showNegotiationsInfo(c: Commitments) = {
+//      val humanAmount = sumIn format withSign(MilliSatoshi apply c.localCommit.spec.toLocalMsat)
+//      lnOpsDescription setText getString(ln_ops_chan_bilateral_negotiations).format(humanAmount).html
+//      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+//      lnOpsAction setText ln_force_close
+//    }
+//
+//    def warnAboutUnilateralClosing =
+//      mkForm(builder = mkChoiceDialog(ok = kit tellChannel CMDShutdown, none,
+//        ln_force_close, dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
+//
+//    // UI updating listener
+//
+//    val chanViewListener = new StateMachineListener {
+//      override def onBecome: PartialFunction[Transition, Unit] = {
+//        // A new channel has been created with funding transaction broadcasted so now we wait
+//        case (_, WaitFundingConfirmedData(_, _, _, tx, commitments, _), _, WAIT_FUNDING_DONE) =>
+//          manageOpeningInfo(commitments, me getConfirmations tx)
+//
+//        case (_, norm: NormalData, _, NORMAL)
+//          // GUARD: mutual shutdown has been initiated
+//          if norm.localShutdown.isDefined || norm.remoteShutdown.isDefined =>
+//          me runOnUiThread showNegotiationsInfo(norm.commitments)
+//
+//        // Both sides have sent a funding locked so we're all good
+//        case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
+//          me exitTo classOf[LNActivity]
+//
+//        // Closing tx fee negotiations are in process
+//        case (_, negs: NegotiationsData, _, NEGOTIATIONS) =>
+//          me runOnUiThread showNegotiationsInfo(negs.commitments)
+//
+//        // Mutual closing is in progress as only a mutual close tx is available
+//        case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
+//          me manageMutualClosing tx
+//
+//        // Mutual closing but we have no transactions so just drop it
+//        case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
+//          me runOnUiThread showNoActiveKitInfo
+//
+//        // Someone has initiated a unilateral channel closing
+//        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _), _, CLOSING)
+//          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
+//          me manageForcedClosing close
+//      }
+//
+//      override def onError = {
+//        case chanRelated: Throwable =>
+//          kit.chan process CMDShutdown
+//      }
+//    }
+//
+//    whenDestroy = anyToRunnable {
+//      kit.socket.listeners -= kit.reconnectSockListener
+//      kit.chan.listeners -= chanViewListener
+//      super.onDestroy
+//    }
+//
+//    kit.chan.listeners += chanViewListener
+//    kit.socket.listeners += kit.reconnectSockListener
+//    for (chan <- allChannels) chan.notifyListeners
+//    kit.socket.start
+//  }
 
   // UI which does not need a channel access
 

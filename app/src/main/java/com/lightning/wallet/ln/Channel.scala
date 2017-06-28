@@ -20,7 +20,7 @@ class Channel extends StateMachine[ChannelData] { me =>
         localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat,
         localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay, localParams.maxAcceptedHtlcs,
         localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint, localParams.paymentKey.toPoint,
-        localParams.delayedPaymentKey.toPoint, firstPerCommitPoint)
+        localParams.delayedPaymentKey.toPoint, firstPerCommitPoint, 0x00)
 
       become(WaitAcceptData(announce, cmd, open), WAIT_FOR_ACCEPT)
 

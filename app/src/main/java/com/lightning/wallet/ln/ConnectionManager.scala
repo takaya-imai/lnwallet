@@ -5,6 +5,7 @@ import java.net.{InetSocketAddress, Socket}
 import com.lightning.wallet.ln.Tools.{Bytes, none}
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.ln.LNParams.nodePrivateKey
+import com.lightning.wallet.ln.Features.binData2BitSet
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import fr.acinq.bitcoin.BinaryData
 import scala.collection.mutable
@@ -58,14 +59,18 @@ object ConnectionManager {
 
     def intercept(message: LightningMessage) = message match {
       case Ping(response, _) => if (response > 0) me feed Pong("00" * response)
-      case theirInit: Init if Features areSupported theirInit.localFeatures =>
-        // Need to remember Init in case if we open another channel later
+      case theirInit: Init if Features mustDisconnect theirInit.localFeatures =>
+        // Features are not supported, this is terminal
+        events onTerminalError nodeId
+
+      case theirInit: Init =>
+        // Need to remember Init for later calls
         events.onOperational(nodeId, theirInit)
         savedInit = theirInit
 
-      // Features are not supported, this is terminal
-      case _: Init => events onTerminalError nodeId
-      case _ => events onMessage message
+      case _ =>
+        // Send to channel via listeners
+        events onMessage message
     }
 
     handler.listeners += new StateMachineListener {

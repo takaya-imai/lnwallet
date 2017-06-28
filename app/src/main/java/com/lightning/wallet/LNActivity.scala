@@ -21,12 +21,9 @@ import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.wire.UpdateFulfillHtlc
-import com.lightning.wallet.lncloud.ChannelManager.allChannels
-import com.lightning.wallet.lncloud.ChannelManager.activeKits
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
-import fr.acinq.bitcoin.{MilliSatoshi, Satoshi}
+import fr.acinq.bitcoin.MilliSatoshi
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
 import scala.util.{Failure, Success}
@@ -103,18 +100,12 @@ with ListUpdater with SearchBar { me =>
       else if (info.status == PaymentSpec.SUCCESS) conf1
       else await
 
-      val paymentMarking = info.spec match {
-        case spec: OutgoingPaymentSpec => spec2ShortView(sumOut.format(negMilliSat(spec): String), spec)
-        case spec: IncomingPaymentSpec => spec2ShortView(sumIn.format(spec.invoice.sum: String), spec)
-      }
-
       transactWhen setText time.html
-      transactSum setText paymentMarking.html
+      //transactSum setText paymentMarking.html
       transactCircle setImageResource image
     }
 
     // Utility methods for displaying various parts of payment specs
-    private def spec2ShortView(sum: String, spec: PaymentSpec) = sum + "\u00A0" + spec.invoice.message.getOrElse("")
     private def negMilliSat(spec: OutgoingPaymentSpec) = MilliSatoshi(-spec.amountWithFee)
   }
 
@@ -163,10 +154,6 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  override def onResume = wrap(super.onResume) {
-    if (activeKits.isEmpty) me exitTo classOf[LNOpsActivity]
-  }
-
   // DATA READING AND BUTTON ACTIONS
 
   def readNdefMessage(msg: Message) = try {
@@ -190,10 +177,6 @@ with ListUpdater with SearchBar { me =>
   def checkTransData = app.TransData.value match {
     case uri: BitcoinURI => me goTo classOf[BtcActivity]
     case adr: Address => me goTo classOf[BtcActivity]
-
-    case invoice: Invoice =>
-      app.TransData.value = null
-      me displayInvoice invoice
 
     case unusable =>
       app.TransData.value = null
@@ -234,15 +217,6 @@ with ListUpdater with SearchBar { me =>
     fab close true
   }
 
-  private def displayInvoice(invoice: Invoice) = {
-    val humanKey = humanPubkey(invoice.nodeId.toString)
-    val info = invoice.message getOrElse getString(ln_no_description)
-    val humanSum = humanFiat(sumOut format withSign(invoice.sum), invoice.sum)
-    val title = getString(ln_payment_title).format(info, humanKey, humanSum)
-    val dialog = mkChoiceDialog(none, none, dialog_pay, dialog_cancel)
-    mkForm(dialog, title.html, null)
-  }
-
   // USER CAN SET THEIR OWN PATHFINDER
 
   class SetBackupServer { self =>
@@ -265,7 +239,7 @@ with ListUpdater with SearchBar { me =>
 
     def save(privateData: PrivateData) = {
       PrivateDataSaver.saveObject(data = privateData)
-      pathfinder = getPathfinder(activeKits.head.chan)
+      //pathfinder = getPathfinder(activeKits.head.chan)
       app toast ln_backup_success
     }
 
@@ -278,6 +252,5 @@ with ListUpdater with SearchBar { me =>
 
   def closeChannel = checkPass(me getString ln_close) { _ =>
     // This will start a cooperative channel close immediately
-    activeKits.head tellChannel CMDShutdown
   }
 }

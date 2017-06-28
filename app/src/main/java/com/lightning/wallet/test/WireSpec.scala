@@ -135,7 +135,7 @@ class WireSpec {
     {
       println("encode/decode all channel messages")
 
-      val open = OpenChannel(randomBytes(32), randomBytes(32), 3, 4, 5, 6, 7, 8, 9, 10, 11, publicKey(1), point(2), point(3), point(4), point(5))
+      val open = OpenChannel(randomBytes(32), randomBytes(32), 3, 4, 5, 6, 7, 8, 9, 10, 11, publicKey(1), point(2), point(3), point(4), point(5), 0.toByte)
       val accept = AcceptChannel(randomBytes(32), 3, 4, 5, 6, 7, 8, 9, publicKey(1), point(2), point(3), point(4), point(5))
       val funding_created = FundingCreated(randomBytes(32), bin(32, 0), 3, randomSignature)
       val funding_signed = FundingSigned(randomBytes(32), randomSignature)

@@ -161,7 +161,7 @@ object PaymentRequest {
       case Some('u') => (Some(MilliSatoshi apply input.dropRight(1).toLong * 100000L), 'u')
       case Some('n') => (Some(MilliSatoshi apply input.dropRight(1).toLong * 100L), 'n')
       case Some('p') => (Some(MilliSatoshi apply input.dropRight(1).toLong / 10L), 'p')
-      case None => (None, 'm')
+      case _ => (None, 'm')
     }
 
     def encode(amt: Option[MilliSatoshi], unit: Char) = amt match {
@@ -169,7 +169,7 @@ object PaymentRequest {
       case Some(sum) if unit == 'u' => s"${sum.amount / 100000L}$unit"
       case Some(sum) if unit == 'n' => s"${sum.amount / 100L}$unit"
       case Some(sum) if unit == 'p' => s"${sum.amount * 10L}$unit"
-      case None => ""
+      case _ => ""
     }
   }
 

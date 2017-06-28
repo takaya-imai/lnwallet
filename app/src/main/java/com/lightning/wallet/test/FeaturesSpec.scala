@@ -1,5 +1,8 @@
 package com.lightning.wallet.test
 
+import java.nio.ByteOrder
+import fr.acinq.bitcoin.{BinaryData, Protocol}
+
 
 class FeaturesSpec {
   import com.lightning.wallet.ln.Features._
@@ -8,28 +11,21 @@ class FeaturesSpec {
 
     {
       println("'channel_public' feature")
-      println(!isSet("", CHANNELS_PUBLIC_BIT))
-      println(!isSet("00", CHANNELS_PUBLIC_BIT))
-      println(isSet("01", CHANNELS_PUBLIC_BIT))
-      println(!isSet("a602", CHANNELS_PUBLIC_BIT))
+      assert(mustDisconnect(BinaryData("03")))
     }
 
     {
       println("'initial_routing_sync' feature")
-      println(!isSet("", INITIAL_ROUTING_SYNC_BIT))
-      println(!isSet("00", INITIAL_ROUTING_SYNC_BIT))
-      println(isSet("04", INITIAL_ROUTING_SYNC_BIT))
-      println(isSet("05", INITIAL_ROUTING_SYNC_BIT))
+      assert(initialRoutingSync(BinaryData("02")))
     }
 
     {
       println("features compatibility")
-      for (i <- 0 until 16) println(areSupported(Array[Byte](i.toByte)))
-      println(!areSupported("14"))
-      println(!areSupported("0141"))
-      println(areSupported("02af"))
+      assert(!areSupported(BinaryData(Protocol.writeUInt64(1L << INITIAL_ROUTING_SYNC_BIT_MANDATORY, ByteOrder.BIG_ENDIAN))))
+      assert(areSupported(BinaryData(Protocol.writeUInt64(1l << INITIAL_ROUTING_SYNC_BIT_OPTIONAL, ByteOrder.BIG_ENDIAN))))
+      assert(!areSupported(BinaryData("14")))
+      assert(!areSupported(BinaryData("0141")))
     }
 
   }
-
 }

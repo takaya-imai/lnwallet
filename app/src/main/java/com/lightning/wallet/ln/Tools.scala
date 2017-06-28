@@ -7,7 +7,6 @@ import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.ln.crypto.RandomGenerator
 import language.implicitConversions
 import org.bitcoinj.core.Coin
-import scodec.bits.BitVector
 import java.util.Locale
 
 
@@ -65,17 +64,18 @@ object MSat {
 }
 
 object Features {
-  val CHANNELS_PUBLIC_BIT = 0
-  val INITIAL_ROUTING_SYNC_BIT = 2
+  val INITIAL_ROUTING_SYNC_BIT_MANDATORY = 0
+  val INITIAL_ROUTING_SYNC_BIT_OPTIONAL = 1
 
-  def isSet(features: BinaryData, bitIndex: Int): Boolean = {
-    val unreversedBitSet: BitVector = BitVector(features.data).reverse
-    bitIndex < unreversedBitSet.size && unreversedBitSet.get(bitIndex)
-  }
+  implicit def binData2BitSet(data: BinaryData): java.util.BitSet = java.util.BitSet valueOf data.reverse.toArray
+  def initialRoutingSync(bitset: java.util.BitSet): Boolean = bitset get INITIAL_ROUTING_SYNC_BIT_OPTIONAL
+  def mustDisconnect(bitset: java.util.BitSet): Boolean = !areSupported(bitset)
 
-  def areSupported(features: BinaryData): Boolean =
-    !BitVector(features.data).toIndexedSeq.reverse.zipWithIndex.exists {
-      case bit ~ idx => bit && idx % 2 == 0 && idx > INITIAL_ROUTING_SYNC_BIT
+  def areSupported(bitset: java.util.BitSet): Boolean =
+    if (bitset get INITIAL_ROUTING_SYNC_BIT_MANDATORY) false else {
+      val (accumulator: List[Int], range: Range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
+      val bits = (accumulator /: range) { case (accum, _) => bitset.nextSetBit(accum.head + 1) :: accum }
+      !bits.reverse.exists(value => value % 2 == 0 && value > INITIAL_ROUTING_SYNC_BIT_OPTIONAL)
     }
 }
 
