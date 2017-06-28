@@ -29,7 +29,8 @@ object ConnectionManager {
   }
 
   class Worker(nodeId: BinaryData, location: InetSocketAddress) { me =>
-    val handler = new TransportHandler(KeyPair(nodePrivateKey.publicKey, nodePrivateKey.toBin), nodeId) {
+    val pair: KeyPair = KeyPair(nodePrivateKey.publicKey, nodePrivateKey.toBin)
+    val handler: TransportHandler = new TransportHandler(pair, remotePubKey = nodeId) {
       def handleDecryptedIncomingData(data: BinaryData): Unit = intercept(LightningMessageCodecs deserialize data)
       def handleEncryptedOutgoingData(data: BinaryData): Unit = try socket.getOutputStream write data catch none
     }

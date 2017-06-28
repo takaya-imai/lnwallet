@@ -62,8 +62,8 @@ class LNCloudSpec {
       new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
         data = savedData
 
-        override def makeOutgoingSpecOpt(invoice: Invoice) = obsOn( {
-          buildOutgoingSpec(Vector(hops), invoice, LNParams.finalHtlcExpiry)
+        override def makeOutgoingSpecOpt(req: PaymentRequest) = obsOn( {
+          buildOutgoingSpec(Vector(hops), req, LNParams.finalHtlcExpiry)
         }, IOScheduler.apply)
       }
 
@@ -74,8 +74,8 @@ class LNCloudSpec {
       new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
         data = data1
 
-        override def makeOutgoingSpecOpt(invoice: Invoice) = obsOn( {
-          buildOutgoingSpec(Vector(hops), invoice, LNParams.finalHtlcExpiry)
+        override def makeOutgoingSpecOpt(req: PaymentRequest) = obsOn( {
+          buildOutgoingSpec(Vector(hops), req, LNParams.finalHtlcExpiry)
         }, IOScheduler.apply)
       }
 

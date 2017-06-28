@@ -124,10 +124,10 @@ object PaymentRequest {
   }
 
   object FallbackAddressTag {
-    def apply(address: String) = {
-      // A Bitcoin fallack address MUST be present
-      val try32 = Try apply fromBech32Address(address)
-      val try58 = Try apply fromBase58Address(address)
+    def apply(string: String): FallbackAddressTag = {
+      // A Bitcoin fallack address MUST always be present
+      val try32 = Try apply fromBech32Address(address = string)
+      val try58 = Try apply fromBase58Address(address = string)
       try32.orElse(try58).get
     }
 

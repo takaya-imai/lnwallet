@@ -1,11 +1,12 @@
 package com.lightning.wallet.ln.wire
 
 import java.net._
+
 import scodec.codecs._
-import com.lightning.wallet.ln.Exceptions._
-import com.lightning.wallet.ln.crypto.Sphinx
 import java.math.BigInteger
 
+import com.lightning.wallet.ln.{ExtendedException, LightningException}
+import com.lightning.wallet.ln.crypto.Sphinx
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import scodec.bits.{BitVector, ByteVector}
@@ -24,14 +25,14 @@ object LightningMessageCodecs { me =>
   def serialize(msg: LightningMessage): BinaryData =
     serialize(lightningMessageCodec encode msg)
 
-  def serialize(attempt: BitVectorAttempt): BinaryData = attempt match {
-    case Attempt.Failure(some) => throw DetailedException(SERIALIZATION_ERROR, some)
+  def serialize(attempt: BitVectorAttempt) = attempt match {
+    case Attempt.Failure(some) => throw ExtendedException(some)
     case Attempt.Successful(bin) => BinaryData(bin.toByteArray)
   }
 
-  def deserialize(transferred: BinaryData): LightningMessage =
-    lightningMessageCodec decode BitVector(transferred.data) match {
-      case Attempt.Failure(_) => throw ChannelException(DESERIALIZATION_ERROR)
+  def deserialize(raw: BinaryData): LightningMessage =
+    lightningMessageCodec decode BitVector(raw.data) match {
+      case Attempt.Failure(some) => throw ExtendedException(some)
       case Attempt.Successful(result) => result.value
     }
 

@@ -10,19 +10,19 @@ import android.os.{Bundle, Environment}
 import android.view.View.{GONE, VISIBLE}
 import android.nfc.{NdefMessage, NfcEvent}
 import android.text.{StaticLayout, TextPaint}
+import android.widget.{ImageButton, ImageView}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.google.zxing.{BarcodeFormat, EncodeHintType}
-import android.widget.{ImageButton, ImageView, LinearLayout}
 
 import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import org.ndeftools.util.activity.NfcBeamWriterActivity
 import android.text.Layout.Alignment.ALIGN_NORMAL
 import android.graphics.Bitmap.Config.ARGB_8888
+import com.lightning.wallet.ln.PaymentRequest
 import com.google.zxing.qrcode.QRCodeWriter
 import android.graphics.Bitmap.createBitmap
 import org.ndeftools.wellknown.TextRecord
-import com.lightning.wallet.ln.Invoice
 import org.bitcoinj.core.Address
 import android.content.Intent
 import org.ndeftools.Message
@@ -63,7 +63,6 @@ object FileOps {
 
 class RequestActivity extends NfcBeamWriterActivity with TimerActivity with ViewSwitch { me =>
   lazy val views = findViewById(R.id.reqNfcEnabled) :: findViewById(R.id.reqNfcSettings) :: Nil
-  lazy val restoreInfo = findViewById(R.id.restoreInfo).asInstanceOf[LinearLayout]
   lazy val reqShare = findViewById(R.id.reqShare).asInstanceOf[ImageButton]
   lazy val copyData = findViewById(R.id.copyData).asInstanceOf[ImageButton]
   lazy val reqCode = findViewById(R.id.reqCode).asInstanceOf[ImageView]
@@ -73,6 +72,7 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   lazy val topSize = getResources getDimensionPixelSize R.dimen.bitmap_top_size
   lazy val qrSize = getResources getDimensionPixelSize R.dimen.bitmap_qr_size
   lazy val btcAddressHint = me getString spend_address_hint
+  lazy val lnWarning = me getString ln_qr_warning
 
   case class NFCData(data: String) {
     def getNfcMessage: NdefMessage = {
@@ -91,18 +91,21 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
     setDetecting(true)
 
     app.TransData.value match {
-      case inv: Invoice => showInfo(drawAll(withSign(inv.sum), getString(ln_qr_warning).html, _), Invoice serialize inv, GONE)
-      case address: Address => showInfo(drawAll(btcAddressHint, humanAddr(address), _), address.toString, VISIBLE)
-      case pay: AddrData => showInfo(drawAll(withSign(pay.cn), humanAddr(pay.adr), _), pay.link, VISIBLE)
+      case request: PaymentRequest if request.amount.isDefined =>
+        showInfo(drawAll(withSign(request.amount.get), lnWarning.html),
+          PaymentRequest write request)
+
+      case request: PaymentRequest => showInfo(drawBottom(lnWarning.html), PaymentRequest write request)
+      case address: Address => showInfo(drawAll(btcAddressHint, Utils humanAddr address), address.toString)
+      case pay: AddrData => showInfo(drawAll(withSign(pay.cn), Utils humanAddr pay.adr), pay.link)
       case _ => finish
     }
   }
 
-  def showInfo(renderBitmap: Bitmap => Bitmap, data: String, mode: Int) = {
+  def showInfo(renderBitmap: Bitmap => Bitmap, data: String) = {
     <(fun = QRGen.get(data, qrSize), fail)(renderBitmap andThen setView)
     copyData setOnClickListener onButtonTap(app setBuffer data)
     app.TransData.value = NFCData(data)
-    restoreInfo setVisibility mode
   }
 
   def setView(displayedImage: Bitmap) = {
@@ -118,7 +121,7 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   }
 
   // Low level draw utilites
-  def drawAll(top: CharSequence, bot: CharSequence, qrBitmap: Bitmap) = {
+  def drawAll(top: CharSequence, bot: CharSequence)(qrBitmap: Bitmap) = {
     val bitmap = createBitmap(qrSize, topSize + qrSize + bottomSize, ARGB_8888)
     val ypos = topSize + qrSize + bottomSize / 2
     val canvas = new Canvas(bitmap)
@@ -129,6 +132,18 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
     canvas.drawBitmap(qrBitmap, null, transRect, null)
     text(canvas, top, qrSize / 2, topSize / 2)
     text(canvas, bot, qrSize / 2, ypos)
+    bitmap
+  }
+
+  def drawBottom(bot: CharSequence)(qrBitmap: Bitmap) = {
+    val bitmap = createBitmap(qrSize, qrSize + bottomSize, ARGB_8888)
+    val canvas = new Canvas(bitmap)
+    val transRect = new Rect
+
+    canvas drawColor 0xFFEEEEEE
+    transRect.set(0, 0, qrSize, qrSize)
+    canvas.drawBitmap(qrBitmap, null, transRect, null)
+    text(canvas, bot, qrSize / 2, qrSize + bottomSize / 2)
     bitmap
   }
 

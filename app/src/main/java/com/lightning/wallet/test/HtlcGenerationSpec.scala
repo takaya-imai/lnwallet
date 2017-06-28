@@ -1,8 +1,8 @@
 package com.lightning.wallet.test
 
-import com.lightning.wallet.ln.{Invoice, LNParams, PaymentSpec}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
+import com.lightning.wallet.ln.PaymentSpec
+import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.bitcoin.{BinaryData, Crypto}
 import com.lightning.wallet.ln.Tools.random
 import com.lightning.wallet.ln.crypto.{ParsedPacket, SecretsAndPacket, Sphinx}
 import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop, LightningMessageCodecs, PerHopPayload}

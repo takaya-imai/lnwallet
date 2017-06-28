@@ -2,7 +2,6 @@ package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
-import com.lightning.wallet.ln.Exceptions._
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.ln.crypto.RandomGenerator
@@ -37,11 +36,10 @@ object Tools {
   def toShortId(blockHeight: Int, txIndex: Int, outputIndex: Int): Long =
     blockHeight.&(0xFFFFFFL).<<(40) | txIndex.&(0xFFFFFFL).<<(16) | outputIndex.&(0xFFFFL)
 
-  def toLongId(hash: BinaryData, fundingOutputIndex: Int): BinaryData = {
-    if (fundingOutputIndex >= 65536) throw ChannelException(LONG_ID_INDEX_TOO_BIG)
-    if (hash.size != 32) throw ChannelException(why = LONG_ID_HASH_WRONG_SIZE)
-    hash.take(30) :+ hash.data(30).^(fundingOutputIndex >> 8).toByte :+
-      hash.data(31).^(fundingOutputIndex).toByte
+  def toLongId(fundingHash: BinaryData, fundingOutputIndex: Int): BinaryData = {
+    if (fundingOutputIndex >= 65536 | fundingHash.size != 32) throw new LightningException
+    fundingHash.take(30) :+ fundingHash.data(30).^(fundingOutputIndex >> 8).toByte :+
+      fundingHash.data(31).^(fundingOutputIndex).toByte
   }
 }
 
@@ -80,6 +78,9 @@ object Features {
       case bit ~ idx => bit && idx % 2 == 0 && idx > INITIAL_ROUTING_SYNC_BIT
     }
 }
+
+class LightningException extends RuntimeException
+case class ExtendedException[T](details: T) extends LightningException
 
 // STATE MACHINE
 

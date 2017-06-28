@@ -33,7 +33,7 @@ import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
-import com.lightning.wallet.ln.Invoice
+import com.lightning.wallet.ln.PaymentRequest
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -259,23 +259,24 @@ with ListUpdater { me =>
   def readNonNdefMessage = app toast nfc_error
   def readEmptyNdefMessage = app toast nfc_error
 
-  // Working with transitional data
-  def checkTransData = app.TransData.value match {
-    case invoice: Invoice => me goTo classOf[LNActivity]
+  def checkTransData =
+    app.TransData.value match {
+      case invoice: PaymentRequest =>
+        me goTo classOf[LNActivity]
 
-    case uri: BitcoinURI =>
-      val tryAmount: TryMSat = Try(uri.getAmount)
-      sendBtcTxPopup.set(tryAmount, uri.getAddress)
-      app.TransData.value = null
+      case uri: BitcoinURI =>
+        val tryAmount: TryMSat = Try(uri.getAmount)
+        sendBtcTxPopup.set(tryAmount, uri.getAddress)
+        app.TransData.value = null
 
-    case adr: Address =>
-      sendBtcTxPopup setAddress adr
-      app.TransData.value = null
+      case adr: Address =>
+        sendBtcTxPopup setAddress adr
+        app.TransData.value = null
 
-    case unusable =>
-      println(s"Unusable $unusable")
-      app.TransData.value = null
-  }
+      case unusable =>
+        println(s"Unusable $unusable")
+        app.TransData.value = null
+    }
 
   // Buy bitcoins
   private def localBitcoinsAndGlidera = {

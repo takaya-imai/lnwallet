@@ -3,7 +3,6 @@ package com.lightning.wallet.ln
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
-import com.lightning.wallet.ln.Exceptions._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
@@ -232,14 +231,6 @@ class Channel extends StateMachine[ChannelData] { me =>
       initiateShutdown(norm)
 
 
-    // GUARD: can't accept shutdown with unacked changes
-    case (norm: NormalData, remote: Shutdown, NORMAL)
-      if remote.channelId == norm.commitments.channelId &&
-        norm.commitments.remoteChanges.proposed.nonEmpty =>
-
-      throw ChannelException(CHANNEL_CLOSE_PENDING_CHANGES)
-
-
     // GUARD: postpone our reply if we have changes
     case (norm: NormalData, remote: Shutdown, NORMAL)
       if remote.channelId == norm.commitments.channelId &&
@@ -295,7 +286,7 @@ class Channel extends StateMachine[ChannelData] { me =>
         localScript, remoteScript, nextCloseFee)
 
       closeTxOpt match {
-        case None => throw ChannelException(CHANNEL_CLOSE_SIG_FAIL)
+        case None => throw new LightningException
         case Some(tx) if closeFeeSat == remoteFeeSat => startMutualClose(neg, tx, neg.localClosingSigned)
         case Some(tx) if nextCloseFee == remoteFeeSat => startMutualClose(neg, tx, nextLocalClosingSigned)
         case Some(tx) =>
