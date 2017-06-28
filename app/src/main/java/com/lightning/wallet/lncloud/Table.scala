@@ -23,10 +23,10 @@ object StorageTable extends Table {
 }
 
 object PaymentSpecTable extends Table {
-  import com.lightning.wallet.ln.PaymentSpec.{SUCCESS, HIDDEN}
-  val (table, data, hash, status, stamp, searchData) = ("payments", "data", "hash", "status", "stamp", "search")
+  import com.lightning.wallet.ln.PaymentSpec.{VISIBLE, SUCCESS}
+  val (table, data, hash, status, searchData) = ("payments", "data", "hash", "status", "search")
   def selectVirtualSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $searchData MATCH ? LIMIT 50)"
-  def selectRecentSql = s"SELECT * FROM $table WHERE $status = $SUCCESS OR ($status <> $HIDDEN AND $stamp > ?) ORDER BY $id DESC LIMIT 50"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $status IN ($VISIBLE, $SUCCESS) ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   // Hidden -> Visible -> Failed or Success
@@ -35,7 +35,7 @@ object PaymentSpecTable extends Table {
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
 
   // Searching by message and payment hash
-  def newSql = s"INSERT OR IGNORE INTO $table ($data, $hash, $status, $stamp) VALUES (?, ?, ?, ?)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($data, $hash, $status) VALUES (?, ?, ?)"
   def newVirtualSql = s"INSERT INTO $fts$table ($searchData, $hash) VALUES (?, ?)"
 
   // Create tables
@@ -44,11 +44,10 @@ object PaymentSpecTable extends Table {
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $data STRING NOT NULL,
       $hash STRING UNIQUE NOT NULL,
-      $status INTEGER NOT NULL,
-      $stamp INTEGER NOT NULL
+      $status INTEGER NOT NULL
     );
-    CREATE INDEX idx1 ON $table ($status, $stamp);
-    CREATE INDEX idx2 ON $table ($hash, $status);
+    CREATE INDEX idx1 ON $table ($status);
+    CREATE INDEX idx2 ON $table ($hash);
     COMMIT;"""
 
   def createVirtualSql = s"""

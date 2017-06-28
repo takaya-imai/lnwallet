@@ -15,7 +15,7 @@ import scala.util.{Success, Try}
 
 
 trait PaymentSpec { val request: PaymentRequest }
-case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long, stamp: Long)
+case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long)
 case class IncomingPaymentSpec(request: PaymentRequest, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
 case class OutgoingPaymentSpec(request: PaymentRequest, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec

@@ -1,13 +1,12 @@
 package com.lightning.wallet.ln
 
-import java.math.BigInteger
-import java.nio.ByteOrder
-
-import com.lightning.wallet.ln.PaymentRequest._
 import fr.acinq.bitcoin._
-import fr.acinq.bitcoin.Bech32.Int5
+import com.lightning.wallet.ln.PaymentRequest._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 
+import fr.acinq.bitcoin.Bech32.Int5
+import java.math.BigInteger
+import java.nio.ByteOrder
 import scala.util.Try
 
 
@@ -16,10 +15,14 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], unit: Ch
 
   lazy val paymentHash = tags.collectFirst { case hashTag: PaymentHashTag => hashTag.hash }.get
   lazy val fallbackAddress = tags.collectFirst { case btcTag: FallbackAddressTag => btcTag.hash }.get
-  lazy val expiry = tags.collectFirst { case ex: ExpiryTag => timestamp + ex.seconds } getOrElse timestamp + 3600
   lazy val descriptionOpt = tags.collectFirst { case infoTag: DescriptionTag => infoTag.description }
   lazy val routingPaths = tags.collect { case routeTag: RoutingInfoTag => routeTag }
   lazy val data: Int5Seq = Timestamp.encode(timestamp) ++ tags.flatMap(_.toInt5s)
+
+  def isExpired: Boolean = {
+    val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }
+    timestamp + expiry.getOrElse(3600L) < System.currentTimeMillis / 1000L
+  }
 
   def requestHash: BinaryData = {
     val base = prefix + Amount.encode(amount, unit)

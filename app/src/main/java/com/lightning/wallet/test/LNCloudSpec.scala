@@ -27,7 +27,7 @@ class LNCloudSpec {
 
   object TestPaymentSpecBag extends PaymentSpecBag {
     def getRecentInfos: Vector[ExtendedPaymentInfo] = ???
-    def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS, 0L))
+    def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS))
 
     def putInfo(info: ExtendedPaymentInfo): Unit = ???
     def updatePaymentStatus(hash: BinaryData, status: Long): Unit = ???

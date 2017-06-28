@@ -65,7 +65,7 @@ with ListUpdater with SearchBar { me =>
   class PaymentsDataProvider extends ReactCallback(me) { self =>
     def updatePaymentList(payments: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = payments)
     def reload(txt: String) = runAnd(lastQuery = txt)(getSupportLoaderManager.restartLoader(1, null, self).forceLoad)
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag byTime 1.day.toMillis }
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.byStatus }
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
     def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
     val observeTablePath = db sqlPath PaymentSpecTable.table
@@ -95,10 +95,10 @@ with ListUpdater with SearchBar { me =>
   class LNView(view: View)
   extends TxViewHolder(view) {
     def fillView(info: ExtendedPaymentInfo) = {
-      val time = when(System.currentTimeMillis, info.stamp)
+      val time = when(System.currentTimeMillis, info.spec.request.timestamp)
       val image = if (info.status == PaymentSpec.FAIL) dead
-      else if (info.status == PaymentSpec.SUCCESS) conf1
-      else await
+        else if (info.status == PaymentSpec.SUCCESS) conf1
+        else await
 
       transactWhen setText time.html
       //transactSum setText paymentMarking.html

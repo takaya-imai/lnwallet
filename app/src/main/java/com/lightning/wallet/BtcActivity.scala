@@ -63,8 +63,8 @@ trait HumanTimeDisplay { me: TimerActivity =>
   }
 
   // Relative or absolute date
-  def when(now: Long, dat: java.util.Date) = dat.getTime match { case ago =>
-    if (now - ago < 129600000) getRelativeTimeSpanString(ago, now, 0).toString else time(dat)
+  def when(now: Long, date: java.util.Date) = date.getTime match { case ago =>
+    if (now - ago < 129600000) getRelativeTimeSpanString(ago, now, 0).toString else time(date)
   }
 }
 
