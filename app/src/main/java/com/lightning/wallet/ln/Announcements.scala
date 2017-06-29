@@ -10,10 +10,10 @@ import shapeless.HNil
 
 object Announcements { me =>
   private def hashTwice[T](attempt: BitVectorAttempt) = hash256(serialize(attempt).data)
-  private def channelAnnouncementWitnessEncode(shortChannelId: Long, nodeId1: BinaryData, nodeId2: BinaryData, bitcoinKey1: BinaryData, bitcoinKey2: BinaryData, features: BinaryData) =
+  private def channelAnnouncementWitnessEncode(shortChannelId: Long, nodeId1: PublicKey, nodeId2: PublicKey, bitcoinKey1: PublicKey, bitcoinKey2: PublicKey, features: BinaryData) =
     me hashTwice LightningMessageCodecs.channelAnnouncementWitness.encode(shortChannelId :: nodeId1 :: nodeId2 :: bitcoinKey1 :: bitcoinKey2 :: features :: HNil)
 
-  private def nodeAnnouncementWitnessEncode(timestamp: Long, nodeId: BinaryData, rgbColor: RGB, alias: String, features: BinaryData, addresses: InetSocketAddressList) =
+  private def nodeAnnouncementWitnessEncode(timestamp: Long, nodeId: PublicKey, rgbColor: RGB, alias: String, features: BinaryData, addresses: InetSocketAddressList) =
     me hashTwice LightningMessageCodecs.nodeAnnouncementWitness.encode(timestamp :: nodeId :: rgbColor :: alias :: features :: addresses :: HNil)
 
   private def channelUpdateWitnessEncode(shortChannelId: Long, timestamp: Long, flags: BinaryData, cltvExpiryDelta: Int, htlcMinimumMsat: Long, feeBaseMsat: Long, feeProportionalMillionths: Long) =

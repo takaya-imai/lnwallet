@@ -7,12 +7,18 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import scodec.bits.{BitVector, ByteVector, HexStringSyntax}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, Scalar}
 
 import scala.util.Random
 
 
 class WireSpec {
+  def randomKey: PrivateKey = PrivateKey({
+    val bin = Array.fill[Byte](32)(0)
+    Random.nextBytes(bin)
+    bin
+  }, compressed = true)
+
   def allTests = {
     def bin(size: Int, fill: Byte): BinaryData = Array.fill[Byte](size)(fill)
 
@@ -149,8 +155,8 @@ class WireSpec {
       val update_fail_malformed_htlc = UpdateFailMalformedHtlc(randomBytes(32), 2, randomBytes(32), 1111)
       val commit_sig = CommitSig(randomBytes(32), randomSignature, randomSignature :: randomSignature :: randomSignature :: Nil)
       val revoke_and_ack = RevokeAndAck(randomBytes(32), scalar(0), point(1))
-      val channel_announcement = ChannelAnnouncement(randomSignature, randomSignature, randomSignature, randomSignature, 1, bin(33, 5), bin(33, 6), bin(33, 7), bin(33, 8), bin(7, 9))
-      val node_announcement = NodeAnnouncement(randomSignature, 1, bin(33, 2), (100.toByte, 200.toByte, 300.toByte), "node-alias", bin(0, 0), new InetSocketAddress(InetAddress.getByAddress(Array[Byte](192.toByte, 168.toByte, 1.toByte, 42.toByte)), 42000) :: Nil)
+      val channel_announcement = ChannelAnnouncement(randomSignature, randomSignature, randomSignature, randomSignature, 1, randomKey.publicKey, randomKey.publicKey, randomKey.publicKey, randomKey.publicKey, bin(7, 9))
+      val node_announcement = NodeAnnouncement(randomSignature, 1, randomKey.publicKey, (100.toByte, 200.toByte, 300.toByte), "node-alias", bin(0, 0), new InetSocketAddress(InetAddress.getByAddress(Array[Byte](192.toByte, 168.toByte, 1.toByte, 42.toByte)), 42000) :: Nil)
       val channel_update = ChannelUpdate(randomSignature, 1, 2, bin(2, 2), 3, 4, 5, 6)
       val announcement_signatures = AnnouncementSignatures(randomBytes(32), 42, randomSignature, randomSignature)
       val ping = Ping(100, BinaryData("01" * 10))

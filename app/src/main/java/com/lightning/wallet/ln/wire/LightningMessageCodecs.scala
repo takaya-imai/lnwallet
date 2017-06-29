@@ -268,10 +268,10 @@ object LightningMessageCodecs { me =>
 
   val channelAnnouncementWitness =
     (int64 withContext "shortChannelId") ::
-      (binarydata(33) withContext "nodeId1") ::
-      (binarydata(33) withContext "nodeId2") ::
-      (binarydata(33) withContext "bitcoinKey1") ::
-      (binarydata(33) withContext "bitcoinKey2") ::
+      (publicKey withContext "nodeId1") ::
+      (publicKey withContext "nodeId2") ::
+      (publicKey withContext "bitcoinKey1") ::
+      (publicKey withContext "bitcoinKey2") ::
       (varsizebinarydata withContext "features")
 
   private val channelAnnouncement =
@@ -283,7 +283,7 @@ object LightningMessageCodecs { me =>
 
   val nodeAnnouncementWitness =
     (uint32 withContext "timestamp") ::
-      (binarydata(33) withContext "nodeId") ::
+      (publicKey withContext "nodeId") ::
       (rgb withContext "rgbColor") ::
       (zeropaddedstring withContext "alias") ::
       (varsizebinarydata withContext "features") ::
