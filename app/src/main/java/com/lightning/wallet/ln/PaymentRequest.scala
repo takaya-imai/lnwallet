@@ -15,10 +15,18 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   // These tags are required so we get them or throw an exception
   lazy val paymentHash = tags.collectFirst { case hashTag: PaymentHashTag => hashTag.hash }.get
-  lazy val fallbackAddress = tags.collectFirst { case btcTag: FallbackAddressTag => btcTag.hash }.get
   lazy val description = tags.collectFirst { case infoTag: DescriptionTag => infoTag.description }.get
   lazy val routingPaths = tags.collect { case routeTag: RoutingInfoTag => routeTag }
   lazy val data: Int5Seq = Timestamp.encode(timestamp) ++ tags.flatMap(_.toInt5s)
+
+  lazy val fallbackAddress: Option[String] = tags.collectFirst {
+    case FallbackAddressTag(17, hash) if prefix == "lntb" => Base58Check.encode(Base58.Prefix.PubkeyAddressTestnet, hash)
+    case FallbackAddressTag(18, hash) if prefix == "lntb" => Base58Check.encode(Base58.Prefix.ScriptAddressTestnet, hash)
+    case FallbackAddressTag(17, hash) if prefix == "lnbc" => Base58Check.encode(Base58.Prefix.PubkeyAddress, hash)
+    case FallbackAddressTag(18, hash) if prefix == "lnbc" => Base58Check.encode(Base58.Prefix.ScriptAddress, hash)
+    case FallbackAddressTag(version, hash) if prefix == "lnbc" => Bech32.encodeWitnessAddress("bc", version, hash)
+    case FallbackAddressTag(version, hash) if prefix == "lntb" => Bech32.encodeWitnessAddress("tb", version, hash)
+  }
 
   def isExpired: Boolean = {
     val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }
@@ -36,15 +44,6 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
     val recid = if (nodeId == pub1) 0.toByte else 1.toByte
     val signature = Signature.encode(r, s, recid)
     copy(signature = signature)
-  }
-
-  def address(tag: FallbackAddressTag): String = (prefix, tag.version) match {
-    case ("lnbc", 17) => Base58Check.encode(Base58.Prefix.PubkeyAddress, tag.hash)
-    case ("lnbc", 18) => Base58Check.encode(Base58.Prefix.ScriptAddress, tag.hash)
-    case ("lntb", 17) => Base58Check.encode(Base58.Prefix.PubkeyAddressTestnet, tag.hash)
-    case ("lntb", 18) => Base58Check.encode(Base58.Prefix.ScriptAddressTestnet, tag.hash)
-    case ("lnbc", 0) => Bech32.encodeWitnessAddress("bc", tag.version, tag.hash)
-    case ("lntb", 0) => Bech32.encodeWitnessAddress("tb", tag.version, tag.hash)
   }
 }
 
