@@ -6,11 +6,9 @@ import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
 import java.math.BigInteger
 import android.text.Html
-import java.util.Date
 
 
 object ImplicitConversions {
-  implicit def unix2Date(millis: Long): Date = new Date(millis)
   implicit def string2Ops(raw: String): StringOps = new StringOps(raw)
   implicit def anyToRunnable(process: => Unit): Runnable = new Runnable { def run = process }
   implicit def binaryData2Sha256hash(data: BinaryData): Sha256Hash = Sha256Hash wrap data.toArray

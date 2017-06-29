@@ -10,12 +10,13 @@ import java.nio.ByteOrder
 import scala.util.Try
 
 
-case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], unit: Char, timestamp: Long,
+case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: List[Tag], signature: BinaryData) {
 
+  // These tags are required so we get them or throw an exception
   lazy val paymentHash = tags.collectFirst { case hashTag: PaymentHashTag => hashTag.hash }.get
   lazy val fallbackAddress = tags.collectFirst { case btcTag: FallbackAddressTag => btcTag.hash }.get
-  lazy val descriptionOpt = tags.collectFirst { case infoTag: DescriptionTag => infoTag.description }
+  lazy val description = tags.collectFirst { case infoTag: DescriptionTag => infoTag.description }.get
   lazy val routingPaths = tags.collect { case routeTag: RoutingInfoTag => routeTag }
   lazy val data: Int5Seq = Timestamp.encode(timestamp) ++ tags.flatMap(_.toInt5s)
 
@@ -25,7 +26,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], unit: Ch
   }
 
   def requestHash: BinaryData = {
-    val base = prefix + Amount.encode(amount, unit)
+    val base = prefix + Amount.encode(amount)
     Crypto.sha256(base.getBytes("UTF-8") ++ data)
   }
 
@@ -51,16 +52,13 @@ object PaymentRequest {
   type ByteSeq = Seq[Byte]
   type Int5Seq = Seq[Int5]
 
-  def apply(prefix: String, amount: Option[MilliSatoshi], paymentHash: BinaryData, privateKey: PrivateKey, fallbackAddress: String,
-            description: Option[String] = None, expirySeconds: Option[Long] = None, unit: Char = 'm'): PaymentRequest = {
+  def apply(prefix: String, amount: Option[MilliSatoshi], paymentHash: BinaryData,
+            privateKey: PrivateKey, fallbackAddress: String, description: String,
+            expirySeconds: Long = 3600): PaymentRequest =
 
-    val requiredTags = PaymentHashTag(paymentHash) :: FallbackAddressTag(fallbackAddress) :: Nil
-    val optionalTags = List(description map DescriptionTag, expirySeconds map ExpiryTag).flatten
-
-    PaymentRequest(prefix, amount, unit, timestamp = System.currentTimeMillis / 1000,
-      nodeId = privateKey.publicKey, tags = requiredTags ::: optionalTags,
-      signature = BinaryData.empty) sign privateKey
-  }
+    PaymentRequest(prefix, amount, timestamp = System.currentTimeMillis / 1000, nodeId = privateKey.publicKey,
+      tags = PaymentHashTag(paymentHash) :: DescriptionTag(description) :: FallbackAddressTag(fallbackAddress) ::
+        ExpiryTag(expirySeconds) :: Nil, signature = BinaryData.empty) sign privateKey
 
   sealed trait Tag {
     def toInt5s: Int5Seq
@@ -159,19 +157,28 @@ object PaymentRequest {
   }
 
   object Amount {
-    def decode(input: String) = input.lastOption match {
-      case Some('m') => (Some(MilliSatoshi apply input.dropRight(1).toLong * 100000000L), 'm')
-      case Some('u') => (Some(MilliSatoshi apply input.dropRight(1).toLong * 100000L), 'u')
-      case Some('n') => (Some(MilliSatoshi apply input.dropRight(1).toLong * 100L), 'n')
-      case Some('p') => (Some(MilliSatoshi apply input.dropRight(1).toLong / 10L), 'p')
-      case _ => (None, 'm')
+    // Shortest representation possible
+    def unit(sum: MilliSatoshi): Char = sum match {
+      case MilliSatoshi(pico) if pico * 10 % 1000 > 0 => 'p'
+      case MilliSatoshi(pico) if pico * 10 % 1000000 > 0 => 'n'
+      case MilliSatoshi(pico) if pico * 10 % 1000000000 > 0 => 'u'
+      case _ => 'm'
     }
 
-    def encode(amt: Option[MilliSatoshi], unit: Char) = amt match {
-      case Some(sum) if unit == 'm' => s"${sum.amount / 100000000L}$unit"
-      case Some(sum) if unit == 'u' => s"${sum.amount / 100000L}$unit"
-      case Some(sum) if unit == 'n' => s"${sum.amount / 100L}$unit"
-      case Some(sum) if unit == 'p' => s"${sum.amount * 10L}$unit"
+    type AmountOption = Option[MilliSatoshi]
+    def decode(input: String): AmountOption = input.lastOption match {
+      case Some('m') => Some(MilliSatoshi apply input.dropRight(1).toLong * 100000000)
+      case Some('u') => Some(MilliSatoshi apply input.dropRight(1).toLong * 100000)
+      case Some('n') => Some(MilliSatoshi apply input.dropRight(1).toLong * 100)
+      case Some('p') => Some(MilliSatoshi apply input.dropRight(1).toLong / 10)
+      case _ => None
+    }
+
+    def encode(amt: AmountOption): String = amt match {
+      case Some(sum) if unit(sum) == 'p' => s"${sum.amount * 10}p"
+      case Some(sum) if unit(sum) == 'n' => s"${sum.amount / 100}n"
+      case Some(sum) if unit(sum) == 'u' => s"${sum.amount / 100000}u"
+      case Some(sum) if unit(sum) == 'm' => s"${sum.amount / 100000000}m"
       case _ => ""
     }
   }
@@ -218,14 +225,13 @@ object PaymentRequest {
     val (pub1, pub2) = Crypto.recoverPublicKey(r -> s, Crypto sha256 message)
     val pub = if (recid % 2 != 0) pub2 else pub1
 
-    val (amountOpt, unit) = Amount.decode(hrp drop 4)
-    val pr = PaymentRequest(hrp take 4, amountOpt, unit, timestamp, pub, tags, signature)
-    require(Crypto.verifySignature(pr.requestHash, r -> s, pub), "invalid signature")
+    val pr = PaymentRequest(hrp take 4, Amount.decode(hrp drop 4), timestamp, pub, tags, signature)
+    require(Crypto.verifySignature(pr.requestHash, r -> s, pub), "Invalid signature")
     pr
   }
 
   def write(pr: PaymentRequest): String = {
-    val hrp = pr.prefix + Amount.encode(pr.amount, pr.unit)
+    val hrp = pr.prefix + Amount.encode(pr.amount)
     val data1 = pr.data ++ Bech32.eight2five(pr.signature)
     val checksum: Int5Seq = Bech32.checksum(hrp, data1)
     val body = data1 ++ checksum map Bech32.pam

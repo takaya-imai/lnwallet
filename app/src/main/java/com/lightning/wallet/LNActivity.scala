@@ -1,5 +1,7 @@
 package com.lightning.wallet
 
+import java.util.Date
+
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.Utils._
 import android.content.DialogInterface.BUTTON_POSITIVE
@@ -7,7 +9,6 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import android.widget._
-
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import org.ndeftools.Message
 import com.lightning.wallet.ln.LNParams._
@@ -21,11 +22,13 @@ import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
+
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.MilliSatoshi
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
+
 import scala.util.{Failure, Success}
 
 
@@ -95,18 +98,19 @@ with ListUpdater with SearchBar { me =>
   class LNView(view: View)
   extends TxViewHolder(view) {
     def fillView(info: ExtendedPaymentInfo) = {
-      val time = when(System.currentTimeMillis, info.spec.request.timestamp)
-      val image = if (info.status == PaymentSpec.FAIL) dead
-        else if (info.status == PaymentSpec.SUCCESS) conf1
-        else await
+      val stamp = new Date(info.spec.request.timestamp * 1000)
+      val time = when(System.currentTimeMillis, stamp)
+
+      val image = info.status match {
+        case PaymentSpec.SUCCESS => conf1
+        case PaymentSpec.FAIL => dead
+        case _ => await
+      }
 
       transactWhen setText time.html
       //transactSum setText paymentMarking.html
       transactCircle setImageResource image
     }
-
-    // Utility methods for displaying various parts of payment specs
-    private def negMilliSat(spec: OutgoingPaymentSpec) = MilliSatoshi(-spec.amountWithFee)
   }
 
   // INTERFACE IMPLEMENTING METHODS

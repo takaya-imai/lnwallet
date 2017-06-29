@@ -45,7 +45,7 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
   def putInfo(info: ExtendedPaymentInfo) = {
     val hash = info.spec.request.paymentHash.toString
     LNParams.db.change(newSql, info.spec.toJson.toString, hash, info.status.toString)
-    LNParams.db.change(newVirtualSql, s"${info.spec.request.descriptionOpt.orNull} $hash", hash)
+    LNParams.db.change(newVirtualSql, s"${info.spec.request.description} $hash", hash)
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 }
