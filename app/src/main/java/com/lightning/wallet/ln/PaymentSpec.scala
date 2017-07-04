@@ -101,7 +101,7 @@ object PaymentSpec {
           // GUARD: amount is less than what we requested, we won't accept such payment
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(spec) if add.expiry < LNParams.finalHtlcExpiry =>
+        case Success(spec) if add.expiry < LNParams.outgoingExpiry =>
           // GUARD: we may not have enough time until expiration
           failHtlc(sharedSecret, add, FinalExpiryTooSoon)
 

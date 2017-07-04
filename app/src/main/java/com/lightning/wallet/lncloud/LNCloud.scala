@@ -137,7 +137,7 @@ trait Pathfinder {
 
   def makeOutgoingSpecOpt(request: PaymentRequest) =
     lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map {
-      routes => buildOutgoingSpec(routes, request, LNParams.finalHtlcExpiry)
+      routes => buildOutgoingSpec(routes, request, LNParams.outgoingExpiry)
     }
 
   // since the spec is outgoing, even if recepient did not specify an amount, PaymentRequest nees to have some amount here

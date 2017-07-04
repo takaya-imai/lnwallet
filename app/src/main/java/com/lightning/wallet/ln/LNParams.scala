@@ -59,7 +59,7 @@ object LNParams {
 
   // MISC
 
-  def finalHtlcExpiry: Int = broadcaster.currentHeight + 10
+  def outgoingExpiry: Int = broadcaster.currentHeight + 10
   def deriveParamsPrivateKey(index: Long, n: Long): PrivateKey =
     derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 

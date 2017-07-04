@@ -171,9 +171,8 @@ object Commitments {
     } yield htlcIn.add
   }
 
-  def sendAdd(c: Commitments, cmd: CMDAddHtlc, blockLimit: Int) =
-    if (cmd.spec.expiry <= blockLimit) throw ExtendedException(cmd)
-    else if (cmd.spec.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd)
+  def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
+    if (cmd.spec.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd)
     else if (cmd.spec.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd)
     else if (cmd.spec.request.paymentHash.size != 32) throw ExtendedException(cmd)
     else {
@@ -196,7 +195,7 @@ object Commitments {
       else c1 -> add
     }
 
-  private def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockLimit: Int) =
+  def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockLimit: Int) =
     if (add.amountMsat < c.localParams.htlcMinimumMsat) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
@@ -229,7 +228,7 @@ object Commitments {
     }
   }
 
-  private def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
+  def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
     getHtlcCrossSigned(c, incomingRelativeToLocal = false, fulfill.id) match {
       case Some(add) if fulfill.paymentHash == add.paymentHash =>
         addRemoteProposal(c, fulfill)
@@ -250,7 +249,7 @@ object Commitments {
     if (found.isEmpty) throw new LightningException else addLocalProposal(c, fail) -> fail
   }
 
-  private def receiveFail(c: Commitments, fail: FailHtlc) = {
+  def receiveFail(c: Commitments, fail: FailHtlc) = {
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = false, fail.id)
     if (found.isEmpty) throw new LightningException else addRemoteProposal(c, fail)
   }
