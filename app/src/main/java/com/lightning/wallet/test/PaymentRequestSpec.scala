@@ -78,7 +78,7 @@ class PaymentRequestSpec {
       assert(pr.fallbackAddress == None)
       assert(pr.tags ==
         PaymentHashTag("0001020304050607080900010203040506070809000102030405060708090102") ::
-          HashTag(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)) :: Nil)
+          DescriptionHashTag(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)) :: Nil)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
 
@@ -95,7 +95,7 @@ class PaymentRequestSpec {
       assert(pr.tags ==
         PaymentHashTag("0001020304050607080900010203040506070809000102030405060708090102") ::
           FallbackAddressTag("mk2QpYatsKicvFVuTAQLBryyccRXMUaGHP") ::
-          HashTag(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)) :: Nil)
+          DescriptionHashTag(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)) :: Nil)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
 
@@ -113,7 +113,7 @@ class PaymentRequestSpec {
         PaymentHashTag("0001020304050607080900010203040506070809000102030405060708090102") ::
           PaymentRequest.RoutingInfoTag(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), "0102030405060708", 20, 3) ::
           FallbackAddressTag("1RustyRX2oai4EYYDpQGWvEL62BBGqN9T") ::
-          HashTag(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)) :: Nil)
+          DescriptionHashTag(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)) :: Nil)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
 

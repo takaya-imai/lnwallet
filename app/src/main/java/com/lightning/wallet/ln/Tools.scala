@@ -85,7 +85,7 @@ case class ExtendedException[T](details: T) extends LightningException
 // STATE MACHINE
 
 trait StateMachineListener {
-  type Transition = (Any, Any, String, String)
+  type Transition = (Any, String, String)
   def onError: PartialFunction[Throwable, Unit] = none
   def onPostProcess: PartialFunction[Any, Unit] = none
   def onBecome: PartialFunction[Transition, Unit] = none
@@ -105,7 +105,7 @@ abstract class StateMachine[T] { grounding =>
   def stayWith(d1: T) = become(d1, state)
   def become(data1: T, state1: String) = {
     // Should be defined before the vars are updated
-    val transition = Tuple4(data, data1, state, state1)
+    val transition = Tuple3(data1, state, state1)
     wrap { data = data1 } { state = state1 }
     events onBecome transition
   }

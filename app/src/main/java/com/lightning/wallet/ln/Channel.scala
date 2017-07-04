@@ -10,25 +10,24 @@ import fr.acinq.bitcoin.Crypto.{Point, PrivateKey}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 
 
-class Channel extends StateMachine[ChannelData] { me =>
+abstract class Channel extends StateMachine[ChannelData] { me =>
   def doProcess(change: Any): Unit = (data, change, state) match {
     case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
       initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
-      val firstPerCommitPoint = Generators.perCommitPoint(localParams.shaSeed, index = 0)
-      val open = OpenChannel(localParams.chainHash, tempChannelId, fundingAmountSat, pushMsat,
+      become(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT)
+      me send OpenChannel(localParams.chainHash, tempChannelId, fundingAmountSat, pushMsat,
         localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat,
         localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay, localParams.maxAcceptedHtlcs,
         localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint, localParams.paymentKey.toPoint,
-        localParams.delayedPaymentKey.toPoint, firstPerCommitPoint, 0x00)
-
-      become(WaitAcceptData(announce, cmd, open), WAIT_FOR_ACCEPT)
+        localParams.delayedPaymentKey.toPoint, Generators.perCommitPoint(localParams.shaSeed, index = 0), 0x00)
 
 
-    // GUARD: remote requires us to keep too much in local reserve which is not acceptable
-    case (wait @ WaitAcceptData(announce, cmd, _), accept: AcceptChannel, WAIT_FOR_ACCEPT)
+    case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
       if accept.temporaryChannelId == cmd.temporaryChannelId =>
 
+      // If remote requires us to keep too much in local reserve we should close
+      // otherwise we should wait for user to create a funding transaction in wallet UI for example
       val exceedsReserve = LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.fundingAmountSat)
       if (exceedsReserve) become(wait, CLOSING) else become(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
@@ -46,28 +45,30 @@ class Channel extends StateMachine[ChannelData] { me =>
       val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
       val fundingCreated = FundingCreated(cmd.temporaryChannelId, fundTx.hash, outIndex, localSigOfRemoteTx)
       val firstRemoteCommit = RemoteCommit(index = 0, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
+      val d1 = WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex), remoteParams,
+        fundTx, localSpec, localCommitTx, firstRemoteCommit)
 
-      become(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex),
-        remoteParams, fundTx, localSpec, localCommitTx, firstRemoteCommit, fundingCreated),
-        WAIT_FUNDING_SIGNED)
+      become(d1, WAIT_FUNDING_SIGNED)
+      me send fundingCreated
 
 
     // They have signed our first commit tx, we can broadcast a funding tx
     case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED)
       if remote.channelId == wait.channelId =>
 
-      val point = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
+      val dummy = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
       if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) become(wait, CLOSING) else {
         val localCommit = LocalCommit(index = 0, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
-        val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit, wait.remoteCommit,
-          localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty),
-          remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty),
-          localNextHtlcId = 0, remoteNextHtlcId = 0, remoteNextCommitInfo = Right(point),
-          unackedMessages = Vector.empty, commitInput = wait.localCommitTx.input,
-          ShaHashesWithIndex(Map.empty, None), wait.channelId)
+        val localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty)
+        val remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty)
+
+        val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit,
+          remoteCommit = wait.remoteCommit, localChanges, remoteChanges, localNextHtlcId = 0,
+          remoteNextHtlcId = 0, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
+          remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
         // At this point funding tx should be broadcasted
         become(WaitFundingConfirmedData(wait.announce, None,
@@ -105,7 +106,8 @@ class Channel extends StateMachine[ChannelData] { me =>
       else me stayWith wait.copy(our = Some apply our)
 
 
-    // Channel closing in WAIT_FUNDING_DONE (from now on we have a funding transaction)
+    // Channel closing in WAIT_FUNDING_DONE
+    // remember that from now on we have a funding transaction!
     case (wait: WaitFundingConfirmedData, CMDShutdown, WAIT_FUNDING_DONE) =>
       startLocalCurrentClose(wait)
 
@@ -115,7 +117,8 @@ class Channel extends StateMachine[ChannelData] { me =>
       startLocalCurrentClose(wait)
 
 
-    case (wait: WaitFundingConfirmedData, CMDFundingSpent(tx), WAIT_FUNDING_DONE) =>
+    // A funding transaction has been spent!
+    case (wait: WaitFundingConfirmedData, CMDSomethingSpent(tx, true), WAIT_FUNDING_DONE) =>
       if (tx.txid == wait.commitments.remoteCommit.txid) startRemoteCurrentClose(wait, tx)
       else startLocalCurrentClose(wait)
 
@@ -401,7 +404,8 @@ class Channel extends StateMachine[ChannelData] { me =>
     }
 
   // null is a special case which indicates there is no transition
-  def notifyListeners = events onBecome Tuple4(null, data, null, state)
+  def notifyListeners = events onBecome Tuple3(data, null, state)
+  def send(message: LightningMessage): Unit
 }
 
 object Channel {

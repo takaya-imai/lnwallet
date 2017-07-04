@@ -15,9 +15,13 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   // These tags are required so we get them or throw an exception
   lazy val paymentHash = tags.collectFirst { case hashTag: PaymentHashTag => hashTag.hash }.get
-  lazy val description = tags.collectFirst { case infoTag: DescriptionTag => infoTag.description }.get
   lazy val routingPaths = tags.collect { case routeTag: RoutingInfoTag => routeTag }
   lazy val data: Int5Seq = Timestamp.encode(timestamp) ++ tags.flatMap(_.toInt5s)
+
+  lazy val description = tags.collectFirst {
+    case infoTag: DescriptionTag => infoTag.description
+    case hashTag: DescriptionHashTag => hashTag.hash.toString
+  }.get
 
   lazy val fallbackAddress: Option[String] = tags.collectFirst {
     case FallbackAddressTag(17, hash) if prefix == "lntb" => Base58Check.encode(Base58.Prefix.PubkeyAddressTestnet, hash)
@@ -82,7 +86,7 @@ object PaymentRequest {
 
         case hTag if hTag == Bech32.map('h') =>
           val hash = Bech32 five2eight input.slice(3, len + 3)
-          HashTag(hash)
+          DescriptionHashTag(hash)
 
         case fTag if fTag == Bech32.map('f') =>
           val prog = Bech32 five2eight input.slice(4, len - 1 + 4)
@@ -115,7 +119,7 @@ object PaymentRequest {
     def toInt5s: Int5Seq = encode(Bech32 eight2five description.getBytes("UTF-8"), 'd')
   }
 
-  case class HashTag(hash: BinaryData) extends Tag {
+  case class DescriptionHashTag(hash: BinaryData) extends Tag {
     override def toInt5s: Int5Seq = encode(Bech32 eight2five hash, 'h')
   }
 

@@ -7,9 +7,8 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Transaction}
-
-import com.lightning.wallet.Utils.app
 import com.lightning.wallet.ln.wire.Error
+import com.lightning.wallet.Utils.app
 
 
 object LocalBroadcaster extends Broadcaster { me =>

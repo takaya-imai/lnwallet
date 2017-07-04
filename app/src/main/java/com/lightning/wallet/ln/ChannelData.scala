@@ -26,24 +26,23 @@ case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) exte
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
+case class CMDSomethingSpent(tx: Transaction, isFunding: Boolean) extends Command
 case class CMDSomethingConfirmed(tx: Transaction) extends Command
-case class CMDSomethingSpent(tx: Transaction) extends Command
-case class CMDFundingSpent(tx: Transaction) extends Command
-
 case class CMDFeerate(rate: Long) extends Command
 case class CMDDepth(depth: Int) extends Command
 
-// STORABLE CHANNEL DATA
+// CHANNEL DATA
 
 sealed trait ChannelData { val announce: NodeAnnouncement }
 sealed trait HasCommitments { val commitments: Commitments }
 
 case class InitData(announce: NodeAnnouncement) extends ChannelData
-case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel, openChannelMessage: OpenChannel) extends ChannelData
-case class WaitFundingData(announce: NodeAnnouncement, cmd: CMDOpenChannel, acceptChannelMessage: AcceptChannel) extends ChannelData
-case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalParams, channelId: BinaryData, remoteParams: RemoteParams,
-                                 fundingTx: Transaction, localSpec: CommitmentSpec, localCommitTx: CommitTx, remoteCommit: RemoteCommit,
-                                 fundingCreatedMessage: FundingCreated) extends ChannelData
+case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel) extends ChannelData
+case class WaitFundingData(announce: NodeAnnouncement, cmd: CMDOpenChannel, accept: AcceptChannel) extends ChannelData
+
+case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalParams, channelId: BinaryData,
+                                 remoteParams: RemoteParams, fundingTx: Transaction, localSpec: CommitmentSpec,
+                                 localCommitTx: CommitTx, remoteCommit: RemoteCommit) extends ChannelData
 
 // All the data below will be stored
 
@@ -141,39 +140,22 @@ case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData,
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
 object Changes { def all(c: Changes): LightningMessages = c.proposed ++ c.signed ++ c.acked }
 
-case class Commitments(localParams: LocalParams, remoteParams: RemoteParams,
-                       localCommit: LocalCommit, remoteCommit: RemoteCommit,
-                       localChanges: Changes, remoteChanges: Changes,
-                       localNextHtlcId: Long, remoteNextHtlcId: Long,
-                       remoteNextCommitInfo: Either[WaitingForRevocation, Point],
-                       unackedMessages: LightningMessages, commitInput: InputInfo,
-                       remotePerCommitmentSecrets: ShaHashesWithIndex,
-                       channelId: BinaryData)
+case class Commitments(localParams: LocalParams, remoteParams: RemoteParams, localCommit: LocalCommit, remoteCommit: RemoteCommit,
+                       localChanges: Changes, remoteChanges: Changes, localNextHtlcId: Long, remoteNextHtlcId: Long,
+                       remoteNextCommitInfo: Either[WaitingForRevocation, Point], commitInput: InputInfo,
+                       remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
 
 object Commitments {
-  def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
-    case Right(_) => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
-    case Left(wait) => c.localCommit.spec.htlcs.isEmpty && wait.nextRemoteCommit.spec.htlcs.isEmpty
-  }
-
   def hasTimedoutOutgoingHtlcs(c: Commitments, blockHeight: Long): Boolean =
     c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && blockHeight >= htlc.add.expiry) ||
       c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && blockHeight >= htlc.add.expiry)
 
-  def addRemoteProposal(c: Commitments, proposal: LightningMessage) =
-    c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
-
-  def addLocalProposal(c: Commitments, proposal: LightningMessage): Commitments =
-    c.modifyAll(_.localChanges.proposed, _.unackedMessages).using(_ :+ proposal)
-
-  def addUnacked(c: Commitments, proposal: LightningMessage) =
-    c.modify(_.unackedMessages).using(_ :+ proposal)
-
-  def replaceRevoke(ms: LightningMessages, r: RevokeAndAck) = ms.filter { case _: RevokeAndAck => false case _ => true } :+ r
-  def cutAcked(ms: LightningMessages) = ms.drop(ms.indexWhere { case _: CommitSig => true case _ => false } + 1)
-
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
+  def hasNoPendingHtlcs(c: Commitments): Boolean = c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
+
+  def addRemoteProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
+  def addLocalProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.localChanges.proposed).using(_ :+ proposal)
 
   def getHtlcCrossSigned(commitments: Commitments, incomingRelativeToLocal: Boolean, htlcId: Long) = {
     val remoteSigned = CommitmentSpec.findHtlcById(commitments.localCommit.spec, htlcId, incomingRelativeToLocal)
@@ -189,10 +171,11 @@ object Commitments {
     } yield htlcIn.add
   }
 
-  def sendAdd(c: Commitments, cmd: CMDAddHtlc, blockCount: Int) =
-    if (cmd.spec.expiry <= blockCount) throw ExtendedException(cmd)
+  def sendAdd(c: Commitments, cmd: CMDAddHtlc, blockLimit: Int) =
+    if (cmd.spec.expiry <= blockLimit) throw ExtendedException(cmd)
     else if (cmd.spec.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd)
     else if (cmd.spec.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd)
+    else if (cmd.spec.request.paymentHash.size != 32) throw ExtendedException(cmd)
     else {
 
       // Let's compute the current commitment *as seen by them* with this change taken into account
@@ -210,18 +193,14 @@ object Commitments {
       if (htlcValueInFlightOverflow) throw ExtendedException(cmd)
       else if (acceptedHtlcsOverflow) throw ExtendedException(cmd)
       else if (feesOverflow) throw ExtendedException(cmd)
-      else c1
+      else c1 -> add
     }
 
-  // Instead of forgetting their htlc proposal
-  // we check if it's an old one before proceeding
-  def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockCount: Int) =
-    if (add.id < c.remoteNextHtlcId) c else doReceiveAdd(c, add, blockCount)
-
-  private def doReceiveAdd(c: Commitments, add: UpdateAddHtlc, blockCount: Int) =
+  private def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockLimit: Int) =
     if (add.amountMsat < c.localParams.htlcMinimumMsat) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
+    else if (add.expiry <= blockLimit) throw new LightningException
     else {
 
       // Let's compute the current commitment *as seen by us* including this change
@@ -240,23 +219,21 @@ object Commitments {
     }
 
   def sendFulfill(c: Commitments, cmd: CMDFulfillHtlc) = {
-    val ok = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
-    getHtlcCrossSigned(c, incomingRelativeToLocal = true, htlcId = cmd.id) match {
-      case Some(add) if ok.paymentHash == add.paymentHash => addLocalProposal(c, ok)
+    val fulfill = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
+    getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id) match {
+      case Some(add) if fulfill.paymentHash == add.paymentHash =>
+        addLocalProposal(c, fulfill) -> fulfill
+
       case Some(add) => throw new LightningException
       case _ => throw new LightningException
     }
   }
 
-  // Instead of forgetting their fulfill proposal
-  // we check if it's an old one before proceeding
-  def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
-    if (Changes all c.remoteChanges contains fulfill) c
-    else doReceiveFulfill(c, fulfill)
+  private def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
+    getHtlcCrossSigned(c, incomingRelativeToLocal = false, fulfill.id) match {
+      case Some(add) if fulfill.paymentHash == add.paymentHash =>
+        addRemoteProposal(c, fulfill)
 
-  private def doReceiveFulfill(c: Commitments, ok: UpdateFulfillHtlc) =
-    getHtlcCrossSigned(c, incomingRelativeToLocal = false, htlcId = ok.id) match {
-      case Some(add) if ok.paymentHash == add.paymentHash => addRemoteProposal(c, ok)
       case Some(add) => throw new LightningException
       case _ => throw new LightningException
     }
@@ -264,34 +241,28 @@ object Commitments {
   def sendFail(c: Commitments, cmd: CMDFailHtlc) = {
     val fail = UpdateFailHtlc(c.channelId, cmd.id, cmd.reason)
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id)
-    if (found.isEmpty) throw new LightningException else addLocalProposal(c, fail)
+    if (found.isEmpty) throw new LightningException else addLocalProposal(c, fail) -> fail
   }
 
   def sendFailMalformed(c: Commitments, cmd: CMDFailMalformedHtlc) = {
     val fail = UpdateFailMalformedHtlc(c.channelId, cmd.id, cmd.onionHash, cmd.code)
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = true, htlcId = cmd.id)
-    if (found.isEmpty) throw new LightningException else addLocalProposal(c, fail)
+    if (found.isEmpty) throw new LightningException else addLocalProposal(c, fail) -> fail
   }
 
-  // Instead of forgetting their fail proposal
-  // we check if it's an old one before proceeding
-  def receiveFail(c: Commitments, fail: FailHtlc) =
-    if (Changes all c.remoteChanges contains fail) c
-    else doReceiveFail(c, fail)
-
-  private def doReceiveFail(c: Commitments, fail: FailHtlc) = {
+  private def receiveFail(c: Commitments, fail: FailHtlc) = {
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = false, fail.id)
     if (found.isEmpty) throw new LightningException else addRemoteProposal(c, fail)
   }
 
-  def sendFee(c: Commitments, rate: Long) = {
-    val updateFee = UpdateFee(c.channelId, rate)
+  def sendFee(c: Commitments, ratePerKw: Long) = {
+    val updateFee = UpdateFee(c.channelId, ratePerKw)
     val c1 = addLocalProposal(c, updateFee)
 
     val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
     val fees = Scripts.commitTxFee(dustLimit = Satoshi(c1.remoteParams.dustLimitSatoshis), spec = reduced).amount
     val feesOverflow = reduced.toRemoteMsat / satFactor - c1.remoteParams.channelReserveSatoshis - fees < 0
-    if (feesOverflow) throw new LightningException else c1
+    if (feesOverflow) throw new LightningException else c1 -> updateFee
   }
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {
@@ -312,27 +283,13 @@ object Commitments {
     val remote1 = RemoteCommit(c.remoteCommit.index + 1, spec, remoteCommitTx.tx.txid, remoteNextPerCommitmentPoint)
     val localChanges1 = c.localChanges.copy(proposed = Vector.empty, signed = c.localChanges.proposed)
     val remoteChanges1 = c.remoteChanges.copy(acked = Vector.empty, signed = c.remoteChanges.acked)
-    val remoteNextCommitInfo1 = Left apply WaitingForRevocation(remote1, commitSig)
+    val c1 = c.copy(remoteNextCommitInfo = Left apply WaitingForRevocation(remote1, commitSig),
+      localChanges = localChanges1, remoteChanges = remoteChanges1)
 
-    addUnacked(c.copy(remoteNextCommitInfo = remoteNextCommitInfo1,
-      localChanges = localChanges1, remoteChanges = remoteChanges1), commitSig)
+    c1 -> commitSig
   }
 
-  // Instead of forgetting their commit sig
-  // we check if it's an old one before proceeding
   def receiveCommit(c: Commitments, commit: CommitSig) = {
-    // TODO: change string sig check to something more elegant
-    val oldTx = Transaction.write(c.localCommit.commitTx.tx)
-    val oldCommit = oldTx.toString.contains(commit.signature.toString)
-
-    oldCommit match {
-      case false if remoteHasChanges(c) => doReceiveCommit(c, commit)
-      case false => throw new LightningException
-      case true => c
-    }
-  }
-
-  private def doReceiveCommit(c: Commitments, commit: CommitSig) = {
     val spec = CommitmentSpec.reduce(c.localCommit.spec, c.localChanges.acked, c.remoteChanges.proposed)
     val localPerCommitmentSecret = Generators.perCommitSecret(c.localParams.shaSeed, c.localCommit.index)
     val localPerCommitmentPoint = Generators.perCommitPoint(c.localParams.shaSeed, c.localCommit.index + 1)
@@ -367,13 +324,12 @@ object Commitments {
     }
 
     val localChanges1 = c.localChanges.copy(acked = Vector.empty)
-    val remoteChange1 = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed)
-    c.copy(remoteChanges = remoteChange1, localCommit = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx),
-      unackedMessages = replaceRevoke(c.unackedMessages, revocation), localChanges = localChanges1)
+    val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx)
+    val remoteChanges1 = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed)
+    c.copy(remoteChanges = remoteChanges1, localChanges = localChanges1, localCommit = localCommit1) -> revocation
   }
 
   def receiveRevocation(c: Commitments, rev: RevokeAndAck) = c.remoteNextCommitInfo match {
-    case Left(wait) if wait.nextRemoteCommit.remotePerCommitmentPoint == rev.nextPerCommitmentPoint => c
     case Left(_) if c.remoteCommit.remotePerCommitmentPoint != rev.perCommitmentSecret.toPoint =>
       throw new LightningException
 
@@ -384,9 +340,9 @@ object Commitments {
 
       c.copy(localChanges = localChanges1, remoteChanges = c.remoteChanges.copy(signed = Vector.empty),
         remoteCommit = wait.nextRemoteCommit, remoteNextCommitInfo = Right apply rev.nextPerCommitmentPoint,
-        unackedMessages = cutAcked(c.unackedMessages), remotePerCommitmentSecrets = secrets1)
+        remotePerCommitmentSecrets = secrets1)
 
-    case Right(point) if point == rev.nextPerCommitmentPoint => c
+    // Unexpected revocation when we have Point
     case _ => throw new LightningException
   }
 }

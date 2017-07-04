@@ -16,7 +16,7 @@ object ConnectionManager {
   val connections = mutable.Map.empty[BinaryData, Worker]
   val listeners = mutable.Set.empty[ConnectionListener]
 
-  private val events = new ConnectionListener {
+  protected[this] val events = new ConnectionListener {
     override def onDisconnect(id: BinaryData) = for (lst <- listeners) lst onDisconnect id
     override def onTerminalError(id: BinaryData) = for (lst <- listeners) lst onTerminalError id
     override def onOperational(id: BinaryData, their: Init) = for (lst <- listeners) lst.onOperational(id, their)
@@ -52,13 +52,13 @@ object ConnectionManager {
       }
     }
 
-    def feed(message: LightningMessage) = {
+    def send(message: LightningMessage) = {
       val raw = LightningMessageCodecs serialize message
       handler.process(TransportHandler.Send -> raw)
     }
 
     def intercept(message: LightningMessage) = message match {
-      case Ping(response, _) => if (response > 0) me feed Pong("00" * response)
+      case Ping(response, _) => if (response > 0) me send Pong("00" * response)
       case theirInit: Init if Features mustDisconnect theirInit.localFeatures =>
         // Features are not supported, this is terminal
         events onTerminalError nodeId
@@ -75,9 +75,9 @@ object ConnectionManager {
 
     handler.listeners += new StateMachineListener {
       override def onBecome: PartialFunction[Transition, Unit] = {
-        case (_, _, TransportHandler.HANDSHAKE, TransportHandler.WAITING_CYPHERTEXT) =>
+        case (_, TransportHandler.HANDSHAKE, TransportHandler.WAITING_CYPHERTEXT) =>
           Tools log s"Handler handshake phase completed, now sending Init message"
-          me feed Init(LNParams.globalFeatures, LNParams.localFeatures)
+          me send Init(LNParams.globalFeatures, LNParams.localFeatures)
       }
 
       override def onError = {

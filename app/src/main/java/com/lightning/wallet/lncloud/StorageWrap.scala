@@ -33,12 +33,12 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
   def toInfo(rcu: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rcu string data), rcu long status)
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = RichCursor(me byHash hash) headTry toInfo
 
-  def updatePaymentStatus(hash: BinaryData, status: Long): Unit = {
-    LNParams.db.change(sql = updStatusSql, status.toString, hash.toString)
+  def updatePaymentStatus(hash: BinaryData, status: Long) = {
+    LNParams.db.change(updStatusSql, status.toString, hash.toString)
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 
-  def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit =
+  def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec) =
     LNParams.db.change(updDataSql, spec.toJson.toString,
       spec.request.paymentHash.toString)
 
