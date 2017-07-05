@@ -254,7 +254,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       startShutdown(norm)
 
 
-    // We have not yet send or received a shutdown so send it and retry
+    // We have not yet sent or received a shutdown so send it and retry
     case (norm @ NormalData(_, _, None, None, _), remote: Shutdown, NORMAL)
       if remote.channelId == norm.commitments.channelId =>
 
@@ -299,7 +299,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         case Some(closeTx) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closeTx)
         case Some(closeTx) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closeTx)
         case Some(_) => stayAndSend(neg.copy(localClosingSigned = nextMessage), nextMessage)
-        case None => throw new LightningException
+        case _ => throw new LightningException
       }
 
 
@@ -332,12 +332,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // GUARD: check all incoming transactions if they spend our funding output
       if tx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
       me doProcess CMDSomethingSpent(tx, isFunding = true)
-
-
-    case (_, _: CMDDepth, _) =>
-      // IMPORTANT: active state listeners should be idempotent
-      // IMPORTANT: listeners should not send CMDDepth from onBecome
-      notifyListeners
 
 
     case _ =>

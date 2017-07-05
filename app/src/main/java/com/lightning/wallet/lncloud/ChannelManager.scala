@@ -3,10 +3,11 @@ package com.lightning.wallet.lncloud
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import org.bitcoinj.core.{StoredBlock, Transaction}
 
+import org.bitcoinj.core.{StoredBlock, Transaction}
 import org.bitcoinj.core.listeners.NewBestBlockListener
 import com.lightning.wallet.TxTracker
+import fr.acinq.bitcoin.BinaryData
 
 
 object ChannelManager {
@@ -25,5 +26,7 @@ object ChannelManager {
   app.kit.wallet addCoinsSentEventListener blockchainListener
   app.kit.blockChain addNewBestBlockListener blockchainListener
   app.kit.wallet addTransactionConfidenceEventListener blockchainListener
+
+  def fromNode(id: BinaryData) = all.filter(_.data.announce.nodeId == id)
   def operational = all.filterNot(_.state == Channel.CLOSING)
 }
