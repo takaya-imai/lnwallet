@@ -14,7 +14,12 @@ object ChannelManager {
   val blockchainListener = new TxTracker with NewBestBlockListener {
     override def txConfirmed(tx: Transaction) = for (chan <- operational) chan process CMDSomethingConfirmed(tx)
     override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSomethingSpent(tx, isFunding = false)
-    override def notifyNewBestBlock(block: StoredBlock) = for (chan <- operational) chan process CMDDepth(block.getHeight)
+
+    override def notifyNewBestBlock(block: StoredBlock) = {
+      val ratePerKw = LNParams feerateKb2Kw RatesSaver.rates.feeLive.value
+      for (chan <- operational) chan process CMDDepth(block.getHeight)
+      for (chan <- operational) chan process CMDFeerate(ratePerKw)
+    }
   }
 
   app.kit.wallet addCoinsSentEventListener blockchainListener

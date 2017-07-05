@@ -271,11 +271,11 @@ object ImplicitJsonFormats { me =>
   implicit val shaHashesWithIndexFmt = jsonFormat[Map[Index, Bytes], Option[Long],
     ShaHashesWithIndex](ShaHashesWithIndex.apply, "hashes", "lastIndex")
 
-  implicit val commitmentsFmt = jsonFormat[LocalParams, RemoteParams, LocalCommit, RemoteCommit, Changes, Changes,
-    Long, Long, Either[WaitingForRevocation, Point], LightningMessages, InputInfo, ShaHashesWithIndex, BinaryData,
+  implicit val commitmentsFmt = jsonFormat[LocalParams, RemoteParams, LocalCommit, RemoteCommit,
+    Changes, Changes, Long, Long, Either[WaitingForRevocation, Point], InputInfo, ShaHashesWithIndex, BinaryData,
     Commitments](Commitments.apply, "localParams", "remoteParams", "localCommit", "remoteCommit", "localChanges",
-    "remoteChanges", "localNextHtlcId", "remoteNextHtlcId", "remoteNextCommitInfo", "unackedMessages",
-    "commitInput", "remotePerCommitmentSecrets", "channelId")
+    "remoteChanges", "localNextHtlcId", "remoteNextHtlcId", "remoteNextCommitInfo", "commitInput",
+    "remotePerCommitmentSecrets", "channelId")
 
   implicit val localCommitPublishedFmt = jsonFormat[Seq[Transaction],
     Seq[Transaction], Seq[Transaction], Seq[Transaction], Seq[Transaction], Transaction,

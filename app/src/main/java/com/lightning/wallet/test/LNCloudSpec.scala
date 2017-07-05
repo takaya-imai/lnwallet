@@ -2,7 +2,7 @@ package com.lightning.wallet.test
 
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools._
-import com.lightning.wallet.ln.wire.{ChannelUpdate, Hop, NodeAnnouncement, UpdateFulfillHtlc}
+import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto}
@@ -52,6 +52,8 @@ class LNCloudSpec {
       case _ =>
         println(s"Channel mock got something: $change")
     }
+
+    override def send(message: LightningMessage): Unit = ???
 
   }
 

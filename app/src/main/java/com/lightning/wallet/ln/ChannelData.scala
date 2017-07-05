@@ -150,9 +150,14 @@ object Commitments {
     c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && blockHeight >= htlc.add.expiry) ||
       c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && blockHeight >= htlc.add.expiry)
 
+  def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
+    case Left(wait) => c.localCommit.spec.htlcs.isEmpty && wait.nextRemoteCommit.spec.htlcs.isEmpty
+    case _ => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
+  }
+
+  def canSendCommitSig(c: Commitments): Boolean = localHasChanges(c) && c.remoteNextCommitInfo.isRight
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
-  def hasNoPendingHtlcs(c: Commitments): Boolean = c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
 
   def addRemoteProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
   def addLocalProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.localChanges.proposed).using(_ :+ proposal)
