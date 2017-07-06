@@ -14,7 +14,7 @@ import fr.acinq.bitcoin.Crypto.PrivateKey
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
   // When in sync state we may receive commands from user, save them
-  private var cmdBuffer: Vector[Command] = Vector.empty
+  private var cmdBuffer = Vector.empty[Command]
 
   def send(message: LightningMessage): Unit
   def notifyListeners = events onBecome Tuple3(data, null, state)
@@ -119,17 +119,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       me send our
 
 
-    // Channel closing in WAIT_FUNDING_DONE
-    // remember that from now on we have a funding transaction!
-    case (wait: WaitFundingConfirmedData, CMDShutdown, WAIT_FUNDING_DONE) =>
-      startLocalCurrentClose(wait)
-
-
-    case (wait: WaitFundingConfirmedData, err: Error, WAIT_FUNDING_DONE)
-      if err.channelId == wait.commitments.channelId =>
-      startLocalCurrentClose(wait)
-
-
     // NORMAL MODE
 
 
@@ -232,33 +221,29 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       startLocalCurrentClose(norm)
 
 
-    // When initiating or receiving a shutdown message
-    // we can't proceed with cooperative close if have unacked changes
-    // and we can't enter negotiations util in-flight HTLCs are present
+    // NORMAL: SHUTDOWN
 
 
-    case (norm: NormalData, CMDShutdown, NORMAL)
-      // GUARD: start uncooperative close in this state
-      if Commitments.localHasChanges(norm.commitments) =>
+    // We can start a mutual shutdown here
+    case (norm @ NormalData(_, commitments, None, _, _), CMDShutdown, NORMAL) =>
+      val localShutdown = Shutdown(commitments.channelId, commitments.localParams.defaultFinalScriptPubKey)
+      stayAndSend(data = norm.copy(localShutdown = Some apply localShutdown), message = localShutdown)
+
+
+    case (norm: NormalData, remote: Shutdown, NORMAL)
+      if remote.channelId == norm.commitments.channelId &&
+        Commitments.remoteHasChanges(norm.commitments) =>
+
+      // Can't start mutual shutdown
       startLocalCurrentClose(norm)
 
 
-    case (norm: NormalData, _: Shutdown, NORMAL)
-      // GUARD: start uncooperative close in this state
-      if Commitments.remoteHasChanges(norm.commitments) =>
-      startLocalCurrentClose(norm)
-
-
-    // We can start a shutdown normally
-    case (norm: NormalData, CMDShutdown, NORMAL) =>
-      startShutdown(norm)
-
-
-    // We have not yet sent or received a shutdown so send it and retry
-    case (norm @ NormalData(_, _, None, None, _), remote: Shutdown, NORMAL)
+    // We have not yet sent or received a shutdown so send one and retry
+    case (norm @ NormalData(_, commitments, None, None, _), remote: Shutdown, NORMAL)
       if remote.channelId == norm.commitments.channelId =>
 
-      startShutdown(norm)
+      val localShutdown = Shutdown(commitments.channelId, commitments.localParams.defaultFinalScriptPubKey)
+      stayAndSend(data = norm.copy(localShutdown = Some apply localShutdown), message = localShutdown)
       doProcess(remote)
 
 
@@ -271,11 +256,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
 
-    case (norm: NormalData, err: Error, NORMAL)
-      if err.channelId == norm.commitments.channelId =>
-      startLocalCurrentClose(norm)
-
-
     // SYNC MODE
 
 
@@ -285,20 +265,22 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       become(wait, WAIT_FUNDING_DONE)
       cmdBuffer foreach doProcess
+      cmdBuffer = Vector.empty
 
 
-    // Should also re-send last closingSigned according to spec
+    // Should re-send last closingSigned according to spec
     case (neg: NegotiationsData, cr: ChannelReestablish, SYNC)
       if cr.channelId == neg.commitments.channelId =>
 
       become(neg, NEGOTIATIONS)
-      cmdBuffer foreach doProcess
       me send neg.localClosingSigned
+      cmdBuffer foreach doProcess
+      cmdBuffer = Vector.empty
 
 
-    // Record user command for future use
-    case (_, userCmd: Command, SYNC) =>
-      cmdBuffer = cmdBuffer :+ userCmd
+    // Record command for future use
+    case (_, command: Command, SYNC) =>
+      cmdBuffer = cmdBuffer :+ command
 
 
     // We just close a channel if this is some kind of irregular state
@@ -329,36 +311,37 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       }
 
 
-    // Unilateral channel closing in NEGOTIATIONS
-    case (neg: NegotiationsData, CMDShutdown, NEGOTIATIONS) =>
-      startLocalCurrentClose(neg)
-
-
-    case (neg: NegotiationsData, err: Error, NEGOTIATIONS)
-      if err.channelId == neg.commitments.channelId =>
-      startLocalCurrentClose(neg)
-
-
     // Tuple(tx, does it spend a funding) instead of a Command
-    case (neg: NegotiationsData, (tx: Transaction, true), NEGOTIATIONS) =>
+    case (neg: NegotiationsData, (spendTx: Transaction, true), NEGOTIATIONS) =>
       val (closeTx, _) = Closing.makeClosing(neg.commitments, neg.localShutdown.scriptPubKey,
         neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
 
       // Happens when we agreed on a closeSig, but we don't know it yet
       // we receive a tx notification before their ClosingSigned arrives
-      if (closeTx.tx.txid == tx.txid) startMutualClose(neg, closeTx.tx)
-      else defineClosingAction(neg, tx)
+      if (closeTx.tx.txid == spendTx.txid) startMutualClose(neg, closeTx.tx)
+      else defineClosingAction(neg, spendTx)
 
 
     // Something which spends our funding is broadcasted so we react in any state
-    case (norm: ChannelData with HasCommitments, (tx: Transaction, true), _) =>
-      defineClosingAction(norm, tx)
+    case (norm: ChannelData with HasCommitments, (spendTx: Transaction, true), _) =>
+      defineClosingAction(norm, spendTx)
 
 
     // Check all incoming transactions if they spend our funding output
-    case (some: ChannelData with HasCommitments, (tx: Transaction, false), _)
-      if tx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
-      me doProcess Tuple2(tx, true)
+    case (some: ChannelData with HasCommitments, (spendTx: Transaction, false), _)
+      if spendTx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
+      me doProcess Tuple2(spendTx, true)
+
+
+    // Error in any state means we have to close a chan right now
+    case (some: ChannelData with HasCommitments, err: Error, _)
+      if err.channelId == some.commitments.channelId =>
+      startLocalCurrentClose(some)
+
+
+    // In all states except normal this will lead to uncooperative close
+    case (some: ChannelData with HasCommitments, CMDShutdown, _) =>
+      startLocalCurrentClose(some)
 
 
     case _ =>
@@ -369,12 +352,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def becomeNormal(wait: WaitFundingConfirmedData, their: FundingLocked) =
     become(NormalData(wait.announce, wait.commitments.copy(remoteNextCommitInfo =
       Right apply their.nextPerCommitmentPoint), None, None), NORMAL)
-
-  private def startShutdown(norm: NormalData) = {
-    // We don't have a special shutdown state but instead use a special NormalData shutdown slots to define it
-    val localShutdown = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
-    stayAndSend(data = norm.copy(localShutdown = Some apply localShutdown), message = localShutdown)
-  }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
     val firstSigned = Closing.makeFirstClosing(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)

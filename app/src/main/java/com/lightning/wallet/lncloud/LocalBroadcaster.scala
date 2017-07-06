@@ -22,7 +22,6 @@ object LocalBroadcaster extends Broadcaster { me =>
   }.toMap
 
   override def onBecome = {
-    // This will only work on channel init calls
     case (wait: WaitFundingConfirmedData, null, WAIT_FUNDING_DONE) =>
       // In a thin wallet we need to watch for transactions which spend external outputs
       app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
