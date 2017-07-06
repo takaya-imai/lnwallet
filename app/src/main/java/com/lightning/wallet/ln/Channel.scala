@@ -14,7 +14,7 @@ import fr.acinq.bitcoin.Crypto.PrivateKey
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
   // When in sync state we may receive commands from user, save them
-  private var cmdBuffer = Vector.empty[Command]
+  private var memoCmdBuffer = Vector.empty[MemoCommand]
 
   def send(message: LightningMessage): Unit
   def notifyListeners = events onBecome Tuple3(data, null, state)
@@ -264,8 +264,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       if channelId == wait.commitments.channelId =>
 
       become(wait, WAIT_FUNDING_DONE)
-      cmdBuffer foreach doProcess
-      cmdBuffer = Vector.empty
+      memoCmdBuffer foreach doProcess
+      memoCmdBuffer = Vector.empty
 
 
     // Should re-send last closingSigned according to spec
@@ -274,13 +274,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       become(neg, NEGOTIATIONS)
       me send neg.localClosingSigned
-      cmdBuffer foreach doProcess
-      cmdBuffer = Vector.empty
+      memoCmdBuffer foreach doProcess
+      memoCmdBuffer = Vector.empty
 
 
     // Record command for future use
-    case (_, command: Command, SYNC) =>
-      cmdBuffer = cmdBuffer :+ command
+    case (_, cmd: MemoCommand, SYNC) =>
+      memoCmdBuffer = memoCmdBuffer :+ cmd
 
 
     // We just close a channel if this is some kind of irregular state

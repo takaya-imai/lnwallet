@@ -12,21 +12,24 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 sealed trait Command
+// These won't be memorized in channel sync mode
+case class CMDFeerate(rate: Long) extends Command
+case class CMDDepth(depth: Int) extends Command
 case object CMDShutdown extends Command
-case object CMDCommitSig extends Command
+
+sealed trait MemoCommand extends Command
+// These will be memorized in channel sync mode
+case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends MemoCommand
+case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends MemoCommand
+case class CMDFailHtlc(id: Long, reason: BinaryData) extends MemoCommand
+case object CMDCommitSig extends MemoCommand
 
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
                           pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
-trait CMDAddHtlc extends Command { val spec: OutgoingPaymentSpec }
-case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
+trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
 case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
-
-case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends Command
-case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
-case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
-case class CMDFeerate(rate: Long) extends Command
-case class CMDDepth(depth: Int) extends Command
+case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 
 // CHANNEL DATA
 
