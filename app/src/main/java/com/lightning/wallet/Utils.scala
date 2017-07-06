@@ -86,26 +86,22 @@ trait ToolbarActivity extends TimerActivity { me =>
   lazy val ui = anyToRunnable(getSupportActionBar setSubtitle infos.head.value)
   private[this] var infos = List.empty[Informer]
 
-  class CatchTracker extends MyPeerDataListener {
-    def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = {
-      app.kit.peerGroup addBlocksDownloadedEventListener new NextTracker(left)
-      app.kit.peerGroup removeBlocksDownloadedEventListener this
-    }
-  }
+  class BlocksCatchUp extends BlocksOnce {
+    def getNextTracker(initBlocksLeft: Int) = new BlocksListener { self =>
+      def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
+        if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.SYNC)
+        if (blocksLeft < 1) add(me getString info_progress_done, Informer.SYNC).timer.schedule(me del Informer.SYNC, 5000)
+        if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener self
+        if (blocksLeft < 1) app.kit.wallet saveToFile app.walletFile
+        runOnUiThread(ui)
+      }
 
-  class NextTracker(initBlocksLeft: Int) extends MyPeerDataListener {
-    def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
-      if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.SYNC)
-      if (blocksLeft < 1) add(me getString info_progress_done, Informer.SYNC).timer.schedule(me del Informer.SYNC, 5000)
-      if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener this
-      if (blocksLeft < 1) app.kit.wallet saveToFile app.walletFile
-      runOnUiThread(ui)
+      // We only add a SYNC item if we have a large enough
+      // lag (more than two days), otherwise no updates are visible
+      private val syncOps = app.getResources getStringArray R.array.info_progress
+      private val text = app.plurOrZero(syncOps, initBlocksLeft / blocksPerDay)
+      if (initBlocksLeft > blocksPerDay * 2) add(text, Informer.SYNC)
     }
-
-    // We only add a SYNC item if we have a large enough
-    // lag (more than two days), otherwise no updates are visible
-    private val text = app.plurOrZero(syncOps, initBlocksLeft / blocksPerDay)
-    if (initBlocksLeft > blocksPerDay * 2) add(text, Informer.SYNC)
   }
 
   lazy val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
@@ -455,12 +451,19 @@ abstract class TextChangedWatcher extends TextWatcher {
   override def afterTextChanged(editableCharSequence: Editable) = none
 }
 
-trait MyPeerDataListener extends PeerDataEventListener {
+trait BlocksListener extends PeerDataEventListener {
   def getData(peer: Peer, message: GetDataMessage) = null
   def onChainDownloadStarted(peer: Peer, blocksLeft: Int) = none
   def onPreMessageReceived(peer: Peer, message: Message) = message
-  val syncOps = app.getResources getStringArray R.array.info_progress
   val blocksPerDay = 144
+}
+
+abstract class BlocksOnce extends BlocksListener {
+  def getNextTracker(initBlocksLeft: Int): BlocksListener
+  def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = {
+    app.kit.peerGroup addBlocksDownloadedEventListener getNextTracker(left)
+    app.kit.peerGroup removeBlocksDownloadedEventListener this
+  }
 }
 
 abstract class TxTracker extends WalletCoinsSentEventListener

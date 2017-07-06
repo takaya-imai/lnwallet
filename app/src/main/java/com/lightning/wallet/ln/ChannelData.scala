@@ -25,9 +25,6 @@ case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends Command
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
-
-case class CMDSomethingSpent(tx: Transaction, isFunding: Boolean) extends Command
-case class CMDSomethingConfirmed(tx: Transaction) extends Command
 case class CMDFeerate(rate: Long) extends Command
 case class CMDDepth(depth: Int) extends Command
 

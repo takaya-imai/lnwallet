@@ -207,8 +207,8 @@ with ListUpdater { me =>
       // Wire up general listeners
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
+      app.kit.peerGroup addBlocksDownloadedEventListener new BlocksCatchUp
       app.kit.wallet addTransactionConfidenceEventListener txTracker
-      app.kit.peerGroup addBlocksDownloadedEventListener new CatchTracker
       app.kit.peerGroup addDisconnectedEventListener constListener
       app.kit.peerGroup addConnectedEventListener constListener
     } else me exitTo classOf[MainActivity]

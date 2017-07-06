@@ -13,8 +13,8 @@ import fr.acinq.bitcoin.BinaryData
 object ChannelManager {
   var all = Vector.empty[Channel]
   val blockchainListener = new TxTracker with NewBestBlockListener {
-    override def txConfirmed(tx: Transaction) = for (chan <- operational) chan process CMDSomethingConfirmed(tx)
-    override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSomethingSpent(tx, isFunding = false)
+    override def txConfirmed(tx: Transaction) = for (chan <- operational) chan process tx
+    override def coinsSent(tx: Transaction) = for (chan <- all) chan process Tuple2(tx, false)
 
     override def notifyNewBestBlock(block: StoredBlock) = {
       val ratePerKw = LNParams feerateKb2Kw RatesSaver.rates.feeLive.value

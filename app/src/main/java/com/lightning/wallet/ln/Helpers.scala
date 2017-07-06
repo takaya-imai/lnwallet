@@ -215,7 +215,7 @@ object Helpers { me =>
         commitTx = tx)
     }
 
-    def claimRevokedRemoteCommitTxOutputs(commitments: Commitments, tx: Transaction): Option[RevokedCommitPublished] = ???
+    def claimRevokedRemoteCommitTxOutputs(commitments: Commitments, tx: Transaction): Option[RevokedCommitPublished] = None
   }
 
   object Funding {
