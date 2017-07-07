@@ -9,8 +9,11 @@ import java.nio.ByteOrder
 
 // Used to decrypt remote messages -> send to channel as well as encrypt outgoing messages -> send to socket
 abstract class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData) extends StateMachine[Data] { me =>
+  override def process(change: Any) = try super.process(change) catch { case err: Throwable => me handleError err }
   def handleDecryptedIncomingData(data: BinaryData): Unit
   def handleEncryptedOutgoingData(data: BinaryData): Unit
+  def handleEnterOperationalState: Unit
+  def handleError(err: Throwable): Unit
 
   def init: Unit = {
     val writer = makeWriter(keyPair, remotePubKey)
@@ -36,6 +39,7 @@ abstract class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData) exte
           val decoder1 = ExtendedCipherState(decoder, ck)
           val d1 = CyphertextData(encoder1, decoder1, None, remainder)
           become(d1, WAITING_CYPHERTEXT)
+          handleEnterOperationalState
           doProcess(Ping)
 
         case (writer, _, _) =>
@@ -46,6 +50,7 @@ abstract class TransportHandler(keyPair: KeyPair, remotePubKey: BinaryData) exte
               val d1 = CyphertextData(encoder1, decoder1, None, remainder)
               handleEncryptedOutgoingData(prefix +: message)
               become(d1, WAITING_CYPHERTEXT)
+              handleEnterOperationalState
               doProcess(Ping)
 
             case (reader2, _, message) =>

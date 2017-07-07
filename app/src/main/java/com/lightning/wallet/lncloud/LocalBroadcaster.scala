@@ -6,41 +6,39 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import rx.lang.scala.{Observable => Obs}
-import fr.acinq.bitcoin.{BinaryData, Transaction}
-import com.lightning.wallet.ln.wire.Error
 import com.lightning.wallet.Utils.app
+import fr.acinq.bitcoin.Transaction
 
 
-object LocalBroadcaster extends Broadcaster { me =>
+object LocalBroadcaster extends Broadcaster {
   def currentFeeRate: Long = RatesSaver.rates.feeLive.value
   def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
   def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
 
   def getParentsDepth: ParentTxidToDepth = {
     val txs = app.kit.wallet.getTransactions(false).asScala
-    txs.map(tx => tx.getHashAsString -> tx.getConfidence.getDepthInBlocks)
+    for (tx <- txs) yield tx.getHashAsString -> tx.getConfidence.getDepthInBlocks
   }.toMap
 
   override def onBecome = {
-    case (wait: WaitFundingConfirmedData, null, WAIT_FUNDING_DONE) =>
+    case (_, wait: WaitFundingConfirmedData, null, WAIT_FUNDING_DONE) =>
       // In a thin wallet we need to watch for transactions which spend external outputs
       app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
       safeSend(wait.fundingTx).foreach(Tools.log, _.printStackTrace)
 
-    case (closing: ClosingData, _, CLOSING) =>
+    case (_, closing: ClosingData, _, CLOSING) =>
       // Mutual closing and local commit should not be present at once but anyway an order matters here
       val toPublish = closing.mutualClose ++ closing.localCommit.map(_.commitTx) ++ extractTxs(closing)
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
+
+    case (chan, wait: WaitFundingConfirmedData, SYNC, WAIT_FUNDING_DONE) =>
+      // Funding tx may get confirmed while chan is in sync so we repeat here
+      val depthOpt: Option[Int] = getParentsDepth get wait.fundingTx.txid.toString
+      for (depth <- depthOpt if depth >= LNParams.minDepth) chan process wait.fundingTx.txid
   }
 
   override def onError = {
     case chanRelated: Throwable =>
       chanRelated.printStackTrace
-  }
-
-  override def onPostProcess = {
-    case Error(_, reason: BinaryData) =>
-      val decoded = new String(reason.toArray)
-      Tools log s"Got remote Error: $decoded"
   }
 }

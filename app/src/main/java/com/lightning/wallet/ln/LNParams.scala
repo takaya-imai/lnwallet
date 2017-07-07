@@ -72,7 +72,7 @@ object LNParams {
   }
 }
 
-trait Broadcaster extends StateMachineListener { me =>
+trait Broadcaster extends ChannelListener { me =>
   def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply).onErrorReturn(_.getMessage)
   def convertToBroadcastStatus(txs: Seq[Transaction], parents: ParentTxidToDepth): Seq[BroadcastStatus] = {
     val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)

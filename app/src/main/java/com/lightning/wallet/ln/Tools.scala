@@ -69,7 +69,6 @@ object Features {
 
   implicit def binData2BitSet(data: BinaryData): java.util.BitSet = java.util.BitSet valueOf data.reverse.toArray
   def initialRoutingSync(bitset: java.util.BitSet): Boolean = bitset get INITIAL_ROUTING_SYNC_BIT_OPTIONAL
-  def mustDisconnect(bitset: java.util.BitSet): Boolean = !areSupported(bitset)
 
   def areSupported(bitset: java.util.BitSet): Boolean =
     if (bitset get INITIAL_ROUTING_SYNC_BIT_MANDATORY) false else {
@@ -84,36 +83,11 @@ case class ExtendedException[T](details: T) extends LightningException
 
 // STATE MACHINE
 
-trait StateMachineListener {
-  type Transition = (Any, String, String)
-  def onError: PartialFunction[Throwable, Unit] = none
-  def onPostProcess: PartialFunction[Any, Unit] = none
-  def onBecome: PartialFunction[Transition, Unit] = none
-}
-
 abstract class StateMachine[T] { grounding =>
-  var listeners = Set.empty[StateMachineListener]
+  def process(anyChange: Any) = grounding synchronized doProcess(change = anyChange)
+  def become(data1: T, state1: String) = wrap { data = data1 } { state = state1 }
+  def stayWith(d1: T) = become(d1, state)
+  def doProcess(change: Any)
   var state: String = _
   var data: T = _
-
-  protected[this] val events = new StateMachineListener {
-    override def onError = { case error => for (lst <- listeners if lst.onError isDefinedAt error) lst onError error }
-    override def onBecome = { case trans => for (lst <- listeners if lst.onBecome isDefinedAt trans) lst onBecome trans }
-    override def onPostProcess = { case x => for (lst <- listeners if lst.onPostProcess isDefinedAt x) lst onPostProcess x }
-  }
-
-  def stayWith(d1: T) = become(d1, state)
-  def become(data1: T, state1: String) = {
-    // Should be defined before the vars are updated
-    val transition = Tuple3(data1, state, state1)
-    wrap { data = data1 } { state = state1 }
-    events onBecome transition
-  }
-
-  def doProcess(change: Any)
-  def process(anyChange: Any) =
-    try grounding synchronized {
-      doProcess(change = anyChange)
-      events onPostProcess anyChange
-    } catch events.onError
 }

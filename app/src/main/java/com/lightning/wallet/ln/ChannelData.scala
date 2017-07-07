@@ -14,7 +14,7 @@ import com.lightning.wallet.ln.MSat.satFactor
 sealed trait Command
 // These won't be memorized in channel sync mode
 case class CMDFeerate(rate: Long) extends Command
-case class CMDDepth(depth: Int) extends Command
+case class CMDHeight(height: Int) extends Command
 case object CMDShutdown extends Command
 
 sealed trait MemoCommand extends Command
@@ -27,7 +27,7 @@ case object CMDCommitSig extends MemoCommand
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
                           pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
-trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
+sealed trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
 case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 
@@ -146,9 +146,9 @@ case class Commitments(localParams: LocalParams, remoteParams: RemoteParams, loc
                        remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
 
 object Commitments {
-  def hasTimedoutOutgoingHtlcs(c: Commitments, blockHeight: Long): Boolean =
-    c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && blockHeight >= htlc.add.expiry) ||
-      c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && blockHeight >= htlc.add.expiry)
+  def hasTimedoutOutgoingHtlcs(c: Commitments, chainHeight: Long): Boolean =
+    c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && chainHeight >= htlc.add.expiry) ||
+      c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && chainHeight >= htlc.add.expiry)
 
   def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
     case Left(wait) => c.localCommit.spec.htlcs.isEmpty && wait.nextRemoteCommit.spec.htlcs.isEmpty
@@ -177,9 +177,9 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.spec.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd)
-    else if (cmd.spec.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd)
-    else if (cmd.spec.request.paymentHash.size != 32) throw ExtendedException(cmd)
+    if (cmd.spec.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd.spec)
+    else if (cmd.spec.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd.spec)
+    else if (cmd.spec.request.paymentHash.size != 32) throw ExtendedException(cmd.spec)
     else {
 
       // Let's compute the current commitment *as seen by them* with this change taken into account
@@ -194,9 +194,9 @@ object Commitments {
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
       // The rest of the guards
-      if (htlcValueInFlightOverflow) throw ExtendedException(cmd)
-      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd)
-      else if (feesOverflow) throw ExtendedException(cmd)
+      if (htlcValueInFlightOverflow) throw ExtendedException(cmd.spec)
+      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd.spec)
+      else if (feesOverflow) throw ExtendedException(cmd.spec)
       else c1 -> add
     }
 

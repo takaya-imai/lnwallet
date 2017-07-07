@@ -34,6 +34,8 @@ object ConnectionManager {
     val handler: TransportHandler = new TransportHandler(pair, remotePubKey = nodeId) {
       def handleDecryptedIncomingData(data: BinaryData): Unit = intercept(LightningMessageCodecs deserialize data)
       def handleEncryptedOutgoingData(data: BinaryData): Unit = try socket.getOutputStream write data catch none
+      def handleEnterOperationalState = me send Init(LNParams.globalFeatures, LNParams.localFeatures)
+      def handleError(err: Throwable) = events onTerminalError nodeId
     }
 
     var savedInit: Init = _
@@ -58,34 +60,21 @@ object ConnectionManager {
     }
 
     def intercept(message: LightningMessage) = message match {
-      case Ping(response, _) => if (response > 0) me send Pong("00" * response)
-      case theirInit: Init if Features mustDisconnect theirInit.localFeatures =>
-        // Features are not supported, this is terminal
-        events onTerminalError nodeId
+      case Ping(length, _) if length > 0 => me send Pong("00" * length)
 
-      case theirInit: Init =>
-        // Need to remember Init for later calls
-        events.onOperational(nodeId, theirInit)
-        savedInit = theirInit
+      case their: Init if null == savedInit =>
+        // Need to remember it for later calls
+        events.onOperational(nodeId, their)
+        savedInit = their
+
+      case error: Error =>
+        events onMessage error
+        val decoded = new String(error.data.toArray)
+        Tools log s"Got remote Error: $decoded"
 
       case _ =>
-        // Send to channel via listeners
+        // Send to channels
         events onMessage message
-    }
-
-    handler.listeners += new StateMachineListener {
-      override def onBecome: PartialFunction[Transition, Unit] = {
-        case (_, TransportHandler.HANDSHAKE, TransportHandler.WAITING_CYPHERTEXT) =>
-          Tools log s"Handler handshake phase completed, now sending Init message"
-          me send Init(LNParams.globalFeatures, LNParams.localFeatures)
-      }
-
-      override def onError = {
-        case transportRelated =>
-          // These errors are always terminal
-          transportRelated.printStackTrace
-          events onTerminalError nodeId
-      }
     }
 
     process onComplete { _ =>

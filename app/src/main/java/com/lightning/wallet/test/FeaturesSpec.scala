@@ -10,11 +10,6 @@ class FeaturesSpec {
   def allTests = {
 
     {
-      println("'channel_public' feature")
-      assert(mustDisconnect(BinaryData("03")))
-    }
-
-    {
       println("'initial_routing_sync' feature")
       assert(initialRoutingSync(BinaryData("02")))
     }

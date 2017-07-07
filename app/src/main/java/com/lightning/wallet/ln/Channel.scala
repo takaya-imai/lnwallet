@@ -5,21 +5,38 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
+import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
-import fr.acinq.bitcoin.{Satoshi, Transaction}
-
-import com.lightning.wallet.ln.Tools.runAnd
+import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.Crypto.PrivateKey
+import scala.collection.mutable
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
   // When in sync state we may receive commands from user, save them
-  private var memoCmdBuffer = Vector.empty[MemoCommand]
+  private[this] var memoCmdBuffer = Vector.empty[MemoCommand].toIterator
+  val listeners = mutable.Set.empty[ChannelListener]
+
+  private[this] val events = new ChannelListener {
+    override def onError = { case error => for (lst <- listeners if lst.onError isDefinedAt error) lst onError error }
+    override def onBecome = { case trans => for (lst <- listeners if lst.onBecome isDefinedAt trans) lst onBecome trans }
+  }
 
   def send(message: LightningMessage): Unit
-  def notifyListeners = events onBecome Tuple3(data, null, state)
-  private def stayAndSend(data: ChannelData, message: LightningMessage) =
+  def notifyListeners = events onBecome Tuple4(me, data, null, state)
+  def stayAndSend(data: ChannelData, message: LightningMessage) =
     runAnd(me stayWith data)(me send message)
+
+  override def process(change: Any) =
+    try super.process(change)
+    catch events.onError
+
+  override def become(data1: ChannelData, state1: String) = {
+    // Transition should be defined before the vars are updated
+    val transition = Tuple4(me, data1, state, state1)
+    super.become(data1, state1)
+    events onBecome transition
+  }
 
   def doProcess(change: Any): Unit = (data, change, state) match {
     case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
@@ -109,14 +126,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We got a local funding confirmation and now we need to decide what to do
-    case (wait: WaitFundingConfirmedData, tx: Transaction, WAIT_FUNDING_DONE)
-      if wait.fundingTx.txid == tx.txid =>
+    case (wait: WaitFundingConfirmedData, txid: BinaryData, WAIT_FUNDING_DONE)
+      if wait.fundingTx.txid == txid =>
 
-      val point = Generators.perCommitPoint(wait.commitments.localParams.shaSeed, index = 1)
-      val our = FundingLocked(wait.commitments.channelId, nextPerCommitmentPoint = point)
+      val fundingLocked = makeFundingLocked(wait.commitments)
       if (wait.their.isDefined) becomeNormal(wait, wait.their.get)
-      else me stayWith wait.copy(our = Some apply our)
-      me send our
+      else me stayWith wait.copy(our = Some apply fundingLocked)
+      me send fundingLocked
 
 
     // NORMAL MODE
@@ -215,19 +231,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       doProcess(CMDCommitSig)
 
 
-    case (norm: NormalData, CMDDepth(blockHeight), NORMAL)
-      // Periodic watch for timed-out outgoing HTLCs: disconnect if found
-      if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, blockHeight) =>
-      startLocalCurrentClose(norm)
-
-
     // NORMAL: SHUTDOWN
 
 
-    // We can start a mutual shutdown here
+    // We can start a mutual shutdown here, should be preferred to uncooperative
     case (norm @ NormalData(_, commitments, None, _, _), CMDShutdown, NORMAL) =>
-      val localShutdown = Shutdown(commitments.channelId, commitments.localParams.defaultFinalScriptPubKey)
-      stayAndSend(data = norm.copy(localShutdown = Some apply localShutdown), message = localShutdown)
+      startShutdown(norm)
 
 
     case (norm: NormalData, remote: Shutdown, NORMAL)
@@ -242,8 +251,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (norm @ NormalData(_, commitments, None, None, _), remote: Shutdown, NORMAL)
       if remote.channelId == norm.commitments.channelId =>
 
-      val localShutdown = Shutdown(commitments.channelId, commitments.localParams.defaultFinalScriptPubKey)
-      stayAndSend(data = norm.copy(localShutdown = Some apply localShutdown), message = localShutdown)
+      startShutdown(norm)
       doProcess(remote)
 
 
@@ -256,6 +264,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
 
+    // Periodic watch for timed-out outgoing HTLCs
+    case (norm: NormalData, CMDHeight(chainHeight), NORMAL | SYNC)
+      if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, chainHeight) =>
+      startLocalCurrentClose(norm)
+
+
     // SYNC MODE
 
 
@@ -265,7 +279,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       become(wait, WAIT_FUNDING_DONE)
       memoCmdBuffer foreach doProcess
-      memoCmdBuffer = Vector.empty
 
 
     // Should re-send last closingSigned according to spec
@@ -275,12 +288,31 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       become(neg, NEGOTIATIONS)
       me send neg.localClosingSigned
       memoCmdBuffer foreach doProcess
-      memoCmdBuffer = Vector.empty
+
+
+    case (norm: NormalData, cr: ChannelReestablish, SYNC)
+      if norm.commitments.remoteChanges.acked.isEmpty &&
+        norm.commitments.remoteChanges.signed.isEmpty &&
+        norm.commitments.localCommit.index == 0 =>
+
+      // They may not received our FundingLocked
+      // also we could have started a local shutdown
+
+      become(norm, NORMAL)
+      me send makeFundingLocked(norm.commitments)
+      for(our <- norm.localShutdown) me send our
+      memoCmdBuffer foreach doProcess
+
+
+    case (norm: NormalData, cr: ChannelReestablish, SYNC) =>
+      for(our <- norm.localShutdown) me send our
+      memoCmdBuffer foreach doProcess
 
 
     // Record command for future use
     case (_, cmd: MemoCommand, SYNC) =>
-      memoCmdBuffer = memoCmdBuffer :+ cmd
+      val memoCmdBuffer1 = memoCmdBuffer.toVector :+ cmd
+      memoCmdBuffer = memoCmdBuffer1.toIterator
 
 
     // We just close a channel if this is some kind of irregular state
@@ -349,9 +381,21 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       Tools log s"Channel: unhandled $change : $data"
   }
 
+  private def makeFundingLocked(cs: Commitments) = {
+    val point = Generators.perCommitPoint(cs.localParams.shaSeed, index = 1)
+    FundingLocked(cs.channelId, nextPerCommitmentPoint = point)
+  }
+
   private def becomeNormal(wait: WaitFundingConfirmedData, their: FundingLocked) =
     become(NormalData(wait.announce, wait.commitments.copy(remoteNextCommitInfo =
       Right apply their.nextPerCommitmentPoint), None, None), NORMAL)
+
+  private def startShutdown(norm: NormalData) = {
+    val finalScriptPubKey = norm.commitments.localParams.defaultFinalScriptPubKey
+    val localShutdown = Shutdown(norm.commitments.channelId, finalScriptPubKey)
+    become(norm.copy(localShutdown = Some apply localShutdown), NORMAL)
+    me send localShutdown
+  }
 
   private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
     val firstSigned = Closing.makeFirstClosing(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
@@ -415,4 +459,10 @@ object Channel {
 
   // Makes chan inactive
   val CLOSING = "Closing"
+}
+
+trait ChannelListener {
+  type Transition = (Channel, Any, String, String)
+  def onError: PartialFunction[Throwable, Unit] = none
+  def onBecome: PartialFunction[Transition, Unit] = none
 }
