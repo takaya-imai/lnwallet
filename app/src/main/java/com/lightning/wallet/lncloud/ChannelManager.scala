@@ -13,7 +13,7 @@ import fr.acinq.bitcoin.BinaryData
 object ChannelManager {
   var all = Vector.empty[Channel]
   val blockchainListener = new TxTracker with NewBestBlockListener {
-    override def txConfirmed(tx: Transaction) = for (chan <- operational) chan process tx.txid
+    override def txConfirmed(tx: Transaction) = for (chan <- operational) chan process CMDConfirmed(tx)
     override def coinsSent(tx: Transaction) = for (chan <- all) chan process Tuple2(tx, false)
 
     override def notifyNewBestBlock(block: StoredBlock) = {

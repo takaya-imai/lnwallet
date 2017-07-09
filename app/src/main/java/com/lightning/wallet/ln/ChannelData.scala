@@ -13,6 +13,7 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 sealed trait Command
 // These won't be memorized in channel sync mode
+case class CMDConfirmed(tx: Transaction) extends Command
 case class CMDFeerate(rate: Long) extends Command
 case class CMDHeight(height: Int) extends Command
 case object CMDShutdown extends Command

@@ -84,9 +84,9 @@ case class ExtendedException[T](details: T) extends LightningException
 // STATE MACHINE
 
 abstract class StateMachine[T] { grounding =>
-  def process(anyChange: Any) = grounding synchronized doProcess(change = anyChange)
+  def process(change: Any) = grounding synchronized doProcess(change = change)
   def become(data1: T, state1: String) = wrap { data = data1 } { state = state1 }
-  def stayWith(d1: T) = become(d1, state)
+  def stayWith(data1: T) = become(data1, state)
   def doProcess(change: Any)
   var state: String = _
   var data: T = _

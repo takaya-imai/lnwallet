@@ -30,11 +30,6 @@ object LocalBroadcaster extends Broadcaster {
       // Mutual closing and local commit should not be present at once but anyway an order matters here
       val toPublish = closing.mutualClose ++ closing.localCommit.map(_.commitTx) ++ extractTxs(closing)
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
-
-    case (chan, wait: WaitFundingConfirmedData, SYNC, WAIT_FUNDING_DONE) =>
-      // Funding tx may get confirmed while chan is in sync so we repeat here
-      val depthOpt: Option[Int] = getParentsDepth get wait.fundingTx.txid.toString
-      for (depth <- depthOpt if depth >= LNParams.minDepth) chan process wait.fundingTx.txid
   }
 
   override def onError = {

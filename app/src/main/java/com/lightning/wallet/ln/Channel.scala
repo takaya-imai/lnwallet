@@ -33,9 +33,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   override def become(data1: ChannelData, state1: String) = {
     // Transition should be defined before the vars are updated
-    val transition = Tuple4(me, data1, state, state1)
+    val t4 = Tuple4(me, data1, state, state1)
     super.become(data1, state1)
-    events onBecome transition
+    events onBecome t4
   }
 
   def doProcess(change: Any): Unit = (data, change, state) match {
@@ -125,14 +125,22 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       becomeNormal(wait, their)
 
 
-    // We got a local funding confirmation and now we need to decide what to do
-    case (wait: WaitFundingConfirmedData, txid: BinaryData, WAIT_FUNDING_DONE)
-      if wait.fundingTx.txid == txid =>
+    // We got our lock when their is already present so we can safely enter normal state now
+    case (wait @ WaitFundingConfirmedData(_, _, Some(their), _, commitments, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
+      if wait.fundingTx.txid == tx.txid =>
 
-      val fundingLocked = makeFundingLocked(wait.commitments)
-      if (wait.their.isDefined) becomeNormal(wait, wait.their.get)
-      else me stayWith wait.copy(our = Some apply fundingLocked)
-      me send fundingLocked
+      val our = makeFundingLocked(commitments)
+      becomeNormal(wait, their)
+      me send our
+
+
+    // We got our lock but their is not yet present so we save ours and just keep waiting for their
+    case (wait @ WaitFundingConfirmedData(_, _, None, _, commitments, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
+      if wait.fundingTx.txid == tx.txid =>
+
+      val our = makeFundingLocked(commitments)
+      me stayWith wait.copy(our = Some apply our)
+      me send our
 
 
     // NORMAL MODE
@@ -273,7 +281,23 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // SYNC MODE
 
 
-    // Funding tx confirmation may arrive in sync state, wallet should resend it later
+    // We may get this message any time so save it here
+    case (wait: WaitFundingConfirmedData, CMDConfirmed(tx), SYNC)
+      if wait.fundingTx.txid == tx.txid =>
+
+      val our = makeFundingLocked(wait.commitments)
+      me stayWith wait.copy(our = Some apply our)
+
+
+    // This is a special case where we have both locks when exiting a sync phase so we go directly to normal state from here
+    case (wait @ WaitFundingConfirmedData(_, Some(our), Some(their), _, commitments, _), ChannelReestablish(channelId, 1, 0), SYNC)
+      if channelId == commitments.channelId =>
+
+      becomeNormal(wait, their)
+      me send our
+
+
+    // We're exiting a sync state but don't have enough locks so we keep waiting
     case (wait: WaitFundingConfirmedData, ChannelReestablish(channelId, 1, 0), SYNC)
       if channelId == wait.commitments.channelId =>
 
@@ -309,16 +333,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       memoCmdBuffer foreach doProcess
 
 
-    // Record command for future use
-    case (_, cmd: MemoCommand, SYNC) =>
-      val memoCmdBuffer1 = memoCmdBuffer.toVector :+ cmd
-      memoCmdBuffer = memoCmdBuffer1.toIterator
-
-
     // We just close a channel if this is some kind of irregular state
     case (some: ChannelData with HasCommitments, cr: ChannelReestablish, SYNC)
       if cr.channelId == some.commitments.channelId =>
       startLocalCurrentClose(some)
+
+
+    // Record command for future use
+    case (_, cmd: MemoCommand, SYNC) =>
+      val memoCmdBuffer1 = memoCmdBuffer.toVector :+ cmd
+      memoCmdBuffer = memoCmdBuffer1.toIterator
 
 
     // NEGOTIATIONS MODE
