@@ -129,9 +129,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (wait @ WaitFundingConfirmedData(_, _, Some(their), _, commitments, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
       if wait.fundingTx.txid == tx.txid =>
 
-      val our = makeFundingLocked(commitments)
       becomeNormal(wait, their)
-      me send our
+      me send makeFundingLocked(commitments)
 
 
     // We got our lock but their is not yet present so we save ours and just keep waiting for their
@@ -139,8 +138,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       if wait.fundingTx.txid == tx.txid =>
 
       val our = makeFundingLocked(commitments)
-      me stayWith wait.copy(our = Some apply our)
-      me send our
+      stayAndSend(wait.copy(our = Some apply our), our)
 
 
     // NORMAL MODE
@@ -281,7 +279,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // SYNC MODE
 
 
-    // We may get this message any time so save it here
+    // We may get this message any time so just save it in this state
     case (wait: WaitFundingConfirmedData, CMDConfirmed(tx), SYNC)
       if wait.fundingTx.txid == tx.txid =>
 
@@ -289,7 +287,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       me stayWith wait.copy(our = Some apply our)
 
 
-    // This is a special case where we have both locks when exiting a sync phase so we go directly to normal state from here
+    // This is a special case where we already have both locks when exiting a sync phase so we go directly to normal state
     case (wait @ WaitFundingConfirmedData(_, Some(our), Some(their), _, commitments, _), ChannelReestablish(channelId, 1, 0), SYNC)
       if channelId == commitments.channelId =>
 
@@ -302,7 +300,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       if channelId == wait.commitments.channelId =>
 
       become(wait, WAIT_FUNDING_DONE)
-      memoCmdBuffer foreach doProcess
+      wait.our foreach send
 
 
     // Should re-send last closingSigned according to spec
