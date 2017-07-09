@@ -67,9 +67,9 @@ object ConnectionManager {
         savedInit = their
 
       case error: Error =>
-        events onMessage error
         val decoded = new String(error.data.toArray)
         Tools log s"Got remote Error: $decoded"
+        events onMessage error
 
       case _ =>
         // Send to channels
