@@ -98,7 +98,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
         // At this point funding tx should be broadcasted
-        become(WaitFundingConfirmedData(wait.announce, None,
+        become(WaitFundingDoneData(wait.announce, None,
           None, wait.fundingTx, commitments), WAIT_FUNDING_DONE)
       }
 
@@ -117,19 +117,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We have not yet sent a FundingLocked but just got one from them so we save it and keep waiting
-    case (wait @ WaitFundingConfirmedData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
+    case (wait @ WaitFundingDoneData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
       if their.channelId == wait.commitments.channelId =>
       me stayWith wait.copy(their = Some apply their)
 
 
     // We have already sent them a FundingLocked and now we got one from them so we can enter normal state now
-    case (wait @ WaitFundingConfirmedData(_, Some(our), _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
+    case (wait @ WaitFundingDoneData(_, Some(our), _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
       if their.channelId == wait.commitments.channelId =>
       becomeNormal(wait, their)
 
 
     // We got our lock but their is not yet present so we save ours and just keep waiting for their
-    case (wait @ WaitFundingConfirmedData(_, _, None, _, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
+    case (wait @ WaitFundingDoneData(_, _, None, _, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
       if wait.fundingTx.txid == tx.txid =>
 
       val our = makeFundingLocked(wait.commitments)
@@ -137,7 +137,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We got our lock when their is already present so we can safely enter normal state now
-    case (wait @ WaitFundingConfirmedData(_, _, Some(their), _, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
+    case (wait @ WaitFundingDoneData(_, _, Some(their), _, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
       if wait.fundingTx.txid == tx.txid =>
 
       val our = makeFundingLocked(wait.commitments)
@@ -283,8 +283,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // SYNC MODE
 
 
-    // We may get this message any time so just save it in this state
-    case (wait: WaitFundingConfirmedData, CMDConfirmed(tx), SYNC)
+    // We may get this message any time so just save it here
+    case (wait: WaitFundingDoneData, CMDConfirmed(tx), SYNC)
       if wait.fundingTx.txid == tx.txid =>
 
       val our = makeFundingLocked(wait.commitments)
@@ -292,7 +292,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
     // This is a special case where we already have both locks when exiting a sync phase so we go directly to normal state
-    case (wait @ WaitFundingConfirmedData(_, Some(our), Some(their), _, commitments, _), ChannelReestablish(channelId, 1, 0), SYNC)
+    case (wait @ WaitFundingDoneData(_, Some(our), Some(their), _, commitments, _), ChannelReestablish(channelId, 1, 0), SYNC)
       if channelId == commitments.channelId =>
 
       becomeNormal(wait, their)
@@ -300,7 +300,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
     // We're exiting a sync state but don't have enough locks so we keep waiting
-    case (wait: WaitFundingConfirmedData, ChannelReestablish(channelId, 1, 0), SYNC)
+    case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0), SYNC)
       if channelId == wait.commitments.channelId =>
 
       become(wait, WAIT_FUNDING_DONE)
@@ -313,16 +313,14 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       become(neg, NEGOTIATIONS)
       me send neg.localClosingSigned
-      for (cmd <- memoCmdBuffer) doProcess(cmd)
 
 
+    // They may not received our FundingLocked
+    // also we could have started a local shutdown
     case (norm: NormalData, cr: ChannelReestablish, SYNC)
       if norm.commitments.remoteChanges.acked.isEmpty &&
         norm.commitments.remoteChanges.signed.isEmpty &&
         norm.commitments.localCommit.index == 0 =>
-
-      // They may not received our FundingLocked
-      // also we could have started a local shutdown
 
       become(norm, NORMAL)
       me send makeFundingLocked(norm.commitments)
@@ -363,7 +361,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       }
 
 
-    // Tuple(tx, does it spend a funding) instead of a Command
+    // HANDLE FUNDING SPEND
+
+
     case (neg: NegotiationsData, CMDSpent(spendTx, true), NEGOTIATIONS) =>
       val (closeTx, _) = Closing.makeClosing(neg.commitments, neg.localShutdown.scriptPubKey,
         neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
@@ -385,6 +385,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       me doProcess CMDSpent(spendTx, funding = true)
 
 
+    // INITIALIZE CHANNEL
+
+
+    case (null, init: InitData, null) => become(init, WAIT_FOR_INIT)
+    case (null, closing: ClosingData, null) => become(closing, CLOSING)
+    case (null, wait: WaitFundingDoneData, null) => become(wait, SYNC)
+    case (null, negs: NegotiationsData, null) => become(negs, SYNC)
+    case (null, norm: NormalData, null) => become(norm, SYNC)
+
+
     case _ =>
       // Let know if received an unhandled message
       Tools log s"Channel: unhandled $change : $state"
@@ -395,7 +405,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     FundingLocked(cs.channelId, nextPerCommitmentPoint = point)
   }
 
-  private def becomeNormal(wait: WaitFundingConfirmedData, their: FundingLocked) =
+  private def becomeNormal(wait: WaitFundingDoneData, their: FundingLocked) =
     become(NormalData(wait.announce, wait.commitments.copy(remoteNextCommitInfo =
       Right apply their.nextPerCommitmentPoint), None, None), NORMAL)
 

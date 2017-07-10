@@ -299,12 +299,12 @@ object ImplicitJsonFormats { me =>
         case JsString("NormalData") => json.convertTo[NormalData]
         case JsString("ClosingData") => json.convertTo[ClosingData]
         case JsString("NegotiationsData") => json.convertTo[NegotiationsData]
-        case JsString("WaitFundingConfirmedData") => json.convertTo[WaitFundingConfirmedData]
+        case JsString("WaitFundingDoneData") => json.convertTo[WaitFundingDoneData]
         case _ => throw new RuntimeException
       }
 
     def write(internal: ChannelData) = internal match {
-      case data: WaitFundingConfirmedData => data.toJson
+      case data: WaitFundingDoneData => data.toJson
       case data: NegotiationsData => data.toJson
       case data: ClosingData => data.toJson
       case data: NormalData => data.toJson
@@ -324,8 +324,8 @@ object ImplicitJsonFormats { me =>
   implicit val normalDataFmt = jsonFormat[NodeAnnouncement, Commitments, Option[Shutdown], Option[Shutdown], String,
     NormalData](NormalData.apply, "announce", "commitments", "localShutdown", "remoteShutdown", "kind")
 
-  implicit val waitFundingConfirmedDataFmt = jsonFormat[NodeAnnouncement,
+  implicit val waitFundingDoneDataFmt = jsonFormat[NodeAnnouncement,
     Option[FundingLocked], Option[FundingLocked], Transaction, Commitments, String,
-    WaitFundingConfirmedData](WaitFundingConfirmedData.apply, "announce", "our",
-    "their", "fundingTx", "commitments", "kind")
+    WaitFundingDoneData](WaitFundingDoneData.apply, "announce", "our", "their",
+    "fundingTx", "commitments", "kind")
 }

@@ -65,7 +65,7 @@ object MSat {
 
 object Features {
   val INITIAL_ROUTING_SYNC_BIT_MANDATORY = 0
-  val INITIAL_ROUTING_SYNC_BIT_OPTIONAL = 1
+  val INITIAL_ROUTING_SYNC_BIT_OPTIONAL = 3
 
   implicit def binData2BitSet(data: BinaryData): java.util.BitSet = java.util.BitSet valueOf data.reverse.toArray
   def initialRoutingSync(bitset: java.util.BitSet): Boolean = bitset get INITIAL_ROUTING_SYNC_BIT_OPTIONAL

@@ -50,9 +50,9 @@ case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalP
 
 // All the data below will be stored
 
-case class WaitFundingConfirmedData(announce: NodeAnnouncement, our: Option[FundingLocked],
-                                    their: Option[FundingLocked], fundingTx: Transaction, commitments: Commitments,
-                                    kind: String = "WaitFundingConfirmedData") extends ChannelData with HasCommitments
+case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLocked],
+                               their: Option[FundingLocked], fundingTx: Transaction, commitments: Commitments,
+                               kind: String = "WaitFundingDoneData") extends ChannelData with HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
                       localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown] = None,

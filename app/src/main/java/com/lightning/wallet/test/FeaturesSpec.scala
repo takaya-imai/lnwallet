@@ -11,7 +11,7 @@ class FeaturesSpec {
 
     {
       println("'initial_routing_sync' feature")
-      assert(initialRoutingSync(BinaryData("02")))
+      assert(initialRoutingSync(BinaryData("08")))
     }
 
     {

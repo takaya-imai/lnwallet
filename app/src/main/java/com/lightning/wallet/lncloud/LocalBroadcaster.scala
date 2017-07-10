@@ -21,7 +21,7 @@ object LocalBroadcaster extends Broadcaster {
   }.toMap
 
   override def onBecome = {
-    case (_, wait: WaitFundingConfirmedData, null, WAIT_FUNDING_DONE) =>
+    case (_, wait: WaitFundingDoneData, null, WAIT_FUNDING_DONE) =>
       // In a thin wallet we need to watch for transactions which spend external outputs
       app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
       safeSend(wait.fundingTx).foreach(Tools.log, _.printStackTrace)
