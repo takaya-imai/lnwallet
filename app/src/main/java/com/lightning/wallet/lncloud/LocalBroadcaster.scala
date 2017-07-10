@@ -30,6 +30,10 @@ object LocalBroadcaster extends Broadcaster {
       // Mutual closing and local commit should not be present at once but anyway an order matters here
       val toPublish = closing.mutualClose ++ closing.localCommit.map(_.commitTx) ++ extractTxs(closing)
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
+
+    case (chan, _, SYNC, NORMAL) =>
+      val perKb = RatesSaver.rates.feeLive.value
+      chan process CMDFeerate(LNParams feerateKb2Kw perKb)
   }
 
   override def onError = {
