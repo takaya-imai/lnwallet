@@ -56,14 +56,6 @@ object PrivateDataSaver extends Saver {
   val KEY = "lnCloudPrivate"
 }
 
-object ChannelSaver extends Saver {
-  type ChannelSnapshot = (ChannelData, String)
-  type ChannelSnapshotVec = Vector[ChannelSnapshot]
-  def tryGetObject: Try[ChannelSnapshotVec] = tryGet map to[ChannelSnapshotVec]
-  def saveObject(data: ChannelSnapshotVec): Unit = save(data.toJson)
-  val KEY = "channelData"
-}
-
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]

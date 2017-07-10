@@ -100,7 +100,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       // lag (more than two days), otherwise no updates are visible
       private val syncOps = app.getResources getStringArray R.array.info_progress
       private val text = app.plurOrZero(syncOps, initBlocksLeft / blocksPerDay)
-      if (initBlocksLeft > blocksPerDay * 2) add(text, Informer.SYNC)
+      if (initBlocksLeft > blocksPerDay) add(text, Informer.SYNC)
     }
   }
 

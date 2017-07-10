@@ -103,7 +103,7 @@ with TimerActivity with ViewSwitch { me =>
 
         mainPassCheck setOnClickListener onButtonTap {
           // Check password after wallet initialization is complete
-          <<(prepareKit map setSeed, wrongPass)(_ => app.kit.startAsync)
+          <<(prepareKit map setup, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 
@@ -112,7 +112,7 @@ with TimerActivity with ViewSwitch { me =>
         System exit 0
     }
 
-  private def setSeed(some: Any) = {
+  private def setup(some: Any) = {
     val pass = mainPassData.getText.toString
     LNParams setup Mnemonic.decrypt(pass).getSeedBytes
   }

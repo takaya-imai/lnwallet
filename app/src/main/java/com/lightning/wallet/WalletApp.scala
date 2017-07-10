@@ -3,15 +3,18 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
+import spray.json._
+import spray.json.DefaultJsonProtocol._
+import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
-import com.lightning.wallet.lncloud.RatesSaver
+import com.lightning.wallet.lncloud.{RatesSaver, Saver}
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
-import com.lightning.wallet.ln.Tools.wrap
+import com.lightning.wallet.ln.Tools._
 import com.google.protobuf.ByteString
 import org.bitcoinj.wallet.Protos
 import android.app.Application
@@ -20,7 +23,12 @@ import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
 import Context.CLIPBOARD_SERVICE
-import com.lightning.wallet.ln.PaymentRequest
+import com.lightning.wallet.ln.wire.{Init, LightningMessage}
+import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.ln._
+import fr.acinq.bitcoin.BinaryData
+import fr.acinq.bitcoin.Crypto.PublicKey
+import org.bitcoinj.core.listeners.NewBestBlockListener
 import org.bitcoinj.net.discovery.DnsDiscovery
 
 
@@ -77,6 +85,48 @@ class WalletApp extends Application { me =>
       case s if s startsWith "lnbc" => PaymentRequest read s
       case s if s startsWith "lntb" => PaymentRequest read s
       case s => getTo(s)
+    }
+  }
+
+  object ChannelManager extends Saver {
+    type ChannelDataVec = Vector[ChannelData]
+    var all = tryGet map to[ChannelDataVec] getOrElse Vector.empty map restoreChannel
+    def fromNode(id: PublicKey) = all.filter(_.data.announce.nodeId == id)
+    def operational = all.filterNot(_.state == Channel.CLOSING)
+    def saveChannels = save(all.map(_.data).toJson)
+
+    val KEY = "channels"
+    val channelsListener = new TxTracker with NewBestBlockListener {
+      override def txConfirmed(tx: Transaction) = for (chan <- operational) chan process CMDConfirmed(tx)
+      override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx, funding = false)
+
+      override def notifyNewBestBlock(block: StoredBlock) = {
+        val ratePerKw = LNParams feerateKb2Kw RatesSaver.rates.feeLive.value
+        for (chan <- operational) chan process CMDHeight(block.getHeight)
+        for (chan <- operational) chan process CMDFeerate(ratePerKw)
+      }
+    }
+
+    val bridgeListener = new ConnectionListener {
+      override def onTerminalError(id: PublicKey) = fromNode(id).foreach(_ process CMDShutdown)
+      override def onOperational(id: PublicKey, their: Init) = fromNode(id).foreach(_ process CMDOnline)
+      override def onDisconnect(id: PublicKey) = fromNode(id).foreach(_ process CMDOffline)
+      override def onMessage(msg: LightningMessage) = all.foreach(_ process msg)
+    }
+
+    val reconnectListener = new ConnectionListener {
+      // Automatically reconnect if we have related operational channels
+      override def onDisconnect(id: PublicKey) = operational collectFirst {
+        case channel if channel.data.announce.nodeId == id => channel.data.announce
+      } foreach ConnectionManager.requestConnection
+    }
+
+    def restoreChannel(saved: ChannelData): Channel = new Channel {
+      private def getSocket = ConnectionManager.connections get data.announce.nodeId
+      def send(msg: LightningMessage) = for (socket <- getSocket) socket send msg
+      listeners += LNParams.broadcaster
+      state = Channel.SYNC
+      data = saved
     }
   }
 
