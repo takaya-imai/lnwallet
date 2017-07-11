@@ -12,7 +12,7 @@ import java.util.Locale
 
 object ~ {
   // Matching Tuple2 via arrows with much less noise
-  def unapply[A, B](tuple: (A, B) /* got a tuple */) = Some(tuple)
+  def unapply[A, B](t2: (A, B) /* got a tuple */) = Some(t2)
 }
 
 object Tools {

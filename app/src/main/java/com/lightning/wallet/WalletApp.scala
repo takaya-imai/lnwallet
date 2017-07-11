@@ -4,6 +4,7 @@ import Utils._
 import R.string._
 import org.bitcoinj.core._
 import spray.json._
+import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
@@ -28,13 +29,13 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.ln._
 import fr.acinq.bitcoin.BinaryData
 import fr.acinq.bitcoin.Crypto.PublicKey
-import org.bitcoinj.core.listeners.NewBestBlockListener
+import org.bitcoinj.core.listeners.{NewBestBlockListener, PeerConnectedEventListener}
 import org.bitcoinj.net.discovery.DnsDiscovery
 
 
 class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val params = org.bitcoinj.params.RegTestParams.get
+  lazy val params = org.bitcoinj.params.TestNet3Params.get
   var walletFile, chainFile: java.io.File = _
   var kit: WalletKit = _
 
@@ -96,13 +97,13 @@ class WalletApp extends Application { me =>
     def saveChannels = save(all.map(_.data).toJson)
 
     val KEY = "channels"
-    val chainListener = new TxTracker with NewBestBlockListener {
-      override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
+    val chainEventsListener = new TxTracker with NewBestBlockListener {
       override def notifyNewBestBlock(block: StoredBlock) = for (chan <- alive) chan process CMDHeight(block.getHeight)
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx, funding = false)
+      override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
     }
 
-    val socketListener = new ConnectionListener {
+    val socketEventsListener = new ConnectionListener {
       override def onTerminalError(id: PublicKey) = from(alive, id).foreach(_ process CMDShutdown)
       override def onOperational(id: PublicKey, their: Init) = from(alive, id).foreach(_ process CMDOnline)
       override def onDisconnect(id: PublicKey) = from(alive, id).foreach(_ process CMDOffline)
@@ -110,15 +111,48 @@ class WalletApp extends Application { me =>
     }
 
     val reconnectListener = new ConnectionListener {
-      override def onDisconnect(id: PublicKey) = from(alive, id).headOption
-        .foreach(ConnectionManager requestConnection _.data.announce)
+      // We can request for all sockets because this is idempotent
+      override def onDisconnect(id: PublicKey) = for (chan <- alive)
+        ConnectionManager requestConnection chan.data.announce
     }
 
     def createChannel(saved: ChannelData): Channel = new Channel {
-      private def getSocket = ConnectionManager.connections get data.announce.nodeId
-      def send(msg: LightningMessage) = for (socket <- getSocket) socket send msg
+      private def getWorker = ConnectionManager.connections get data.announce.nodeId
+      def send(msg: LightningMessage) = for (worker <- getWorker) worker send msg
       listeners += LNParams.broadcaster
       process(saved)
+    }
+
+    class InitBlocksListener {
+      val peers = new PeerConnectedEventListener {
+        def onPeerConnected(p: Peer, pc: Int) = ???
+      }
+
+      val blocks =
+    }
+
+    class SocketStartListener
+    extends PeerConnectedEventListener { self =>
+      def onPeerConnected(p: Peer, pc: Int) = if (pc > 4) {
+        val current = math abs kit.wallet.getLastBlockSeenHeight
+        val best = math abs kit.peerGroup.getMostCommonChainHeight
+        if (best - current < downloadListener.blocksPerDay) startSocks
+        else kit.peerGroup addBlocksDownloadedEventListener downloadListener
+      }
+
+      val downloadListener = new BlocksListener {
+        def onBlocksDownloaded(peer: Peer, block: Block, filteredBlock: FilteredBlock, blocksLeft: Int) = {
+          if (blocksLeft < blocksPerDay) app.kit.peerGroup removeBlocksDownloadedEventListener downloadListener
+          if (blocksLeft < blocksPerDay) startSocks
+        }
+      }
+
+      def startSocks = {
+        app.kit.peerGroup removeConnectedEventListener self
+        ConnectionManager.listeners += socketEventsListener
+        ConnectionManager.listeners += reconnectListener
+        reconnectListener onDisconnect null
+      }
     }
   }
 
@@ -140,8 +174,8 @@ class WalletApp extends Application { me =>
     }
 
     def useCheckPoints(time: Long) = {
-//      val pts = getAssets open "checkpoints-testnet.txt"
-//      CheckpointManager.checkpoint(params, pts, store, time)
+      val pts = getAssets open "checkpoints-testnet.txt"
+      CheckpointManager.checkpoint(params, pts, store, time)
     }
 
     def setupAndStartDownload = {
@@ -150,10 +184,10 @@ class WalletApp extends Application { me =>
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addTransactionConfidenceEventListener Vibr.generalTracker
       wallet.autosaveToFile(walletFile, 500, MILLISECONDS, null)
-//      peerGroup addPeerDiscovery new DnsDiscovery(params)
+      peerGroup addPeerDiscovery new DnsDiscovery(params)
 
-      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
-      peerGroup.addAddress(pa1)
+//      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
+//      peerGroup.addAddress(pa1)
 
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0

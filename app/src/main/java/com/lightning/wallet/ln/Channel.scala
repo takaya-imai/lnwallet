@@ -22,14 +22,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     override def onBecome = { case trans => for (lst <- listeners if lst.onBecome isDefinedAt trans) lst onBecome trans }
   }
 
-  def send(message: LightningMessage): Unit
-  def notifyListeners = events onBecome Tuple4(me, data, null, state)
-  def stayAndSend(data: ChannelData, message: LightningMessage) =
-    runAnd(me stayWith data)(me send message)
-
-  override def process(change: Any) =
-    try super.process(change)
-    catch events.onError
+  def send(msg: LightningMessage): Unit
+  def stayAndSend(data: ChannelData, msg: LightningMessage) = runAnd(me stayWith data)(me send msg)
+  override def process(change: Any) = try super.process(change) catch events.onError
 
   override def become(data1: ChannelData, state1: String) = {
     // Transition should be defined before the vars are updated
@@ -83,7 +78,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (wait: WaitFundingSignedData, remote: FundingSigned, WAIT_FUNDING_SIGNED)
       if remote.channelId == wait.channelId =>
 
-      val dummy = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
       val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
         wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
@@ -91,26 +85,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val localCommit = LocalCommit(index = 0, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
         val localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty)
         val remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty)
+        val dummy = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
 
         val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit,
           remoteCommit = wait.remoteCommit, localChanges, remoteChanges, localNextHtlcId = 0,
           remoteNextHtlcId = 0, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
           remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
-        // At this point funding tx should be broadcasted
         become(WaitFundingDoneData(wait.announce, None,
           None, wait.fundingTx, commitments), WAIT_FUNDING_DONE)
       }
-
-
-    // Channel closing in WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED
-    case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) =>
-      become(some, CLOSING)
-
-
-    // In all states except NORMAL and CLOSING this will immediately lead to an uncooperative close
-    case (some: ChannelData with HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) =>
-      startLocalCurrentClose(some)
 
 
     // FUNDING TX IS BROADCASTED AT THIS POINT
@@ -244,11 +228,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // NORMAL: SHUTDOWN
 
 
-    // We can start a mutual shutdown here, should be preferred to uncooperative
-    case (norm @ NormalData(_, commitments, None, _, _), CMDShutdown, NORMAL) =>
-      startShutdown(norm)
+    // We may start a mutual shutdown here
+    case (norm @ NormalData(_, _, None, None, _), CMDShutdown, NORMAL) => startShutdown(norm)
+    case (norm @ NormalData(_, _, Some(_), _, _), CMDShutdown, NORMAL) => startLocalCurrentClose(norm)
+    case (norm @ NormalData(_, _, _, Some(_), _), CMDShutdown, NORMAL) => startLocalCurrentClose(norm)
 
 
+    // They try to shutdown with uncommited changes
     case (norm: NormalData, remote: Shutdown, NORMAL)
       if remote.channelId == norm.commitments.channelId &&
         Commitments.remoteHasChanges(norm.commitments) =>
@@ -257,9 +243,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       startLocalCurrentClose(norm)
 
 
-    // We have not yet sent or received a shutdown so send one and retry
+    // We have not yet sent or received a shutdown so send one and re-call again
     case (norm @ NormalData(_, commitments, None, None, _), remote: Shutdown, NORMAL)
-      if remote.channelId == norm.commitments.channelId =>
+      if remote.channelId == commitments.channelId =>
 
       startShutdown(norm)
       doProcess(remote)
@@ -267,7 +253,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
     // We have already sent a shutdown (initially or in response to their shutdown above)
     case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL)
-      if remote.channelId == norm.commitments.channelId =>
+      if remote.channelId == commitments.channelId =>
 
       // We can start negotiations if there are no in-flight HTLCs, otherwise wait until they are cleared
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(announce, commitments, local, remote)
@@ -318,7 +304,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // They may not received our FundingLocked
     // also we could have started a local shutdown
     case (norm: NormalData, cr: ChannelReestablish, SYNC)
-      if norm.commitments.remoteChanges.acked.isEmpty &&
+      if cr.channelId == norm.commitments.channelId &&
+        norm.commitments.remoteChanges.acked.isEmpty &&
         norm.commitments.remoteChanges.signed.isEmpty &&
         norm.commitments.localCommit.index == 0 =>
 
@@ -337,6 +324,20 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (_, cmd: MemoCommand, SYNC) =>
       val memoCmdBuffer1 = memoCmdBuffer.toVector :+ cmd
       memoCmdBuffer = memoCmdBuffer1.toIterator
+
+
+    // SYNC: CONNECT/DISCONNECT
+
+
+    case (some: ChannelData with HasCommitments, CMDOnline, SYNC) =>
+      me send ChannelReestablish(channelId = some.commitments.channelId,
+        nextLocalCommitmentNumber = some.commitments.localCommit.index + 1,
+        nextRemoteRevocationNumber = some.commitments.remoteCommit.index)
+
+
+    case (wait: WaitFundingDoneData, CMDOffline, WAIT_FUNDING_DONE) => become(wait, SYNC)
+    case (negs: NegotiationsData, CMDOffline, NEGOTIATIONS) => become(negs, SYNC)
+    case (norm: NormalData, CMDOffline, NORMAL) => become(norm, SYNC)
 
 
     // NEGOTIATIONS MODE
@@ -385,7 +386,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       me doProcess CMDSpent(spendTx, funding = true)
 
 
-    // INITIALIZE CHANNEL
+    // HANDLE INITIALIZATION
 
 
     case (null, init: InitData, null) => become(init, WAIT_FOR_INIT)
@@ -393,6 +394,14 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (null, wait: WaitFundingDoneData, null) => become(wait, SYNC)
     case (null, negs: NegotiationsData, null) => become(negs, SYNC)
     case (null, norm: NormalData, null) => become(norm, SYNC)
+
+
+    // HANDLE SHUTDOWN
+
+
+    // In all states except NORMAL and CLOSING this will immediately lead to an uncooperative close
+    case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => become(some, CLOSING)
+    case (some: ChannelData with HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
 
 
     case _ =>

@@ -62,8 +62,6 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
                             localClosingSigned: ClosingSigned, localShutdown: Shutdown, remoteShutdown: Shutdown,
                             kind: String = "NegotiationsData") extends ChannelData with HasCommitments
 
-// Storing all the tx types to be published
-
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,

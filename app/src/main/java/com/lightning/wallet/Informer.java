@@ -7,8 +7,8 @@ public class Informer {
     public static final int LNSTATE = 2;
 
     // Temporary btc infos
-    public static final int SYNC = 3;
-    public static final int BTCEVENT = 4;
+    public static final int BTCEVENT = 3;
+    public static final int CHAINSYNC = 4;
     public static final int CODECHECK = 5;
     public static final int TXCONFIRMED = 6;
 

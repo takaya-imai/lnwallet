@@ -24,7 +24,7 @@ object ConnectionManager {
   }
 
   def requestConnection(announce: NodeAnnouncement) = connections get announce.nodeId match {
-    case Some(work) if !work.process.isCompleted & work.savedInit == null => Tools log "Awaiting for their Init"
+    case Some(work) if !work.process.isCompleted && work.savedInit == null => Tools log "Awaiting for their Init"
     case Some(work) if !work.process.isCompleted => events.onOperational(announce.nodeId, work.savedInit)
     case _ => connections(announce.nodeId) = new Worker(announce.nodeId, announce.addresses.head)
   }
@@ -32,8 +32,8 @@ object ConnectionManager {
   class Worker(nodeId: PublicKey, location: InetSocketAddress) { me =>
     val pair: KeyPair = KeyPair(nodePrivateKey.publicKey, nodePrivateKey.toBin)
     val handler: TransportHandler = new TransportHandler(pair, remotePubKey = nodeId) {
-      def handleDecryptedIncomingData(data: BinaryData): Unit = intercept(LightningMessageCodecs deserialize data)
-      def handleEncryptedOutgoingData(data: BinaryData): Unit = try socket.getOutputStream write data catch none
+      def handleDecryptedIncomingData(data: BinaryData) = intercept(LightningMessageCodecs deserialize data)
+      def handleEncryptedOutgoingData(data: BinaryData) = try socket.getOutputStream write data catch none
       def handleEnterOperationalState = me send Init(LNParams.globalFeatures, LNParams.localFeatures)
       def handleError(err: Throwable) = events.onTerminalError(nodeId)
     }

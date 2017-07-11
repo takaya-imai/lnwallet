@@ -119,8 +119,8 @@ with ListUpdater { me =>
       // Only update interface if this tx changes balance
       // and ESTIMATED_SPENDABLE takes care of correct balance
 
-      adapter.transactions prepend tx
       mnemonicWarn setVisibility View.GONE
+      adapter.transactions prepend tx
       adapter.notifyDataSetChanged
     }
   }
