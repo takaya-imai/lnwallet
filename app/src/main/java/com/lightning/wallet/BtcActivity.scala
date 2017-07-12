@@ -91,7 +91,7 @@ abstract class TxViewHolder(view: View) {
   view setTag this
 }
 
-class BtcActivity extends NfcReaderActivity
+class BtcActivity extends DataReader
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater { me =>
 
@@ -235,27 +235,7 @@ with ListUpdater { me =>
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  // Data reading
-
-  override def onResume: Unit =
-    wrap(super.onResume)(checkTransData)
-
-  def readNdefMessage(msg: Message) = try {
-    val asText = readFirstTextNdefMessage(msg)
-    app.TransData recordValue asText
-    checkTransData
-
-  } catch { case _: Throwable =>
-    // Could not process a message
-    app toast nfc_error
-  }
-
-  def onNfcStateEnabled = none
-  def onNfcStateDisabled = none
-  def onNfcFeatureNotFound = none
-  def onNfcStateChange(ok: Boolean) = none
-  def readNonNdefMessage = app toast nfc_error
-  def readEmptyNdefMessage = app toast nfc_error
+  // DATA READING AND BUTTON ACTIONS
 
   def checkTransData =
     app.TransData.value match {

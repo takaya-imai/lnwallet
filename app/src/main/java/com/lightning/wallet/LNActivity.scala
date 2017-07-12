@@ -52,7 +52,33 @@ trait SearchBar { me =>
   }
 }
 
-class LNActivity extends NfcReaderActivity
+trait DataReader extends NfcReaderActivity {
+  // Data may come via NFC message or share action
+  // so we check both of them at once
+
+  override def onResume =
+    wrap(super.onResume)(checkTransData)
+
+  def readNdefMessage(msg: Message) = try {
+    val asText = readFirstTextNdefMessage(msg)
+    app.TransData recordValue asText
+    checkTransData
+
+  } catch { case _: Throwable =>
+    // Could not process a message
+    app toast nfc_error
+  }
+
+  def checkTransData: Unit
+  def onNfcStateEnabled = none
+  def onNfcStateDisabled = none
+  def onNfcFeatureNotFound = none
+  def onNfcStateChange(ok: Boolean) = none
+  def readNonNdefMessage = app toast nfc_error
+  def readEmptyNdefMessage = app toast nfc_error
+}
+
+class LNActivity extends DataReader
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
@@ -161,24 +187,6 @@ with ListUpdater with SearchBar { me =>
 
   // DATA READING AND BUTTON ACTIONS
 
-  def readNdefMessage(msg: Message) = try {
-    val asText = readFirstTextNdefMessage(msg)
-    app.TransData recordValue asText
-    checkTransData
-
-  } catch { case _: Throwable =>
-    // Could not process a message
-    app toast nfc_error
-  }
-
-  def onNfcStateEnabled = none
-  def onNfcStateDisabled = none
-  def onNfcStateChange(ok: Boolean) = none
-  def onNfcFeatureNotFound = checkTransData
-  def readNonNdefMessage = app toast nfc_error
-  def readEmptyNdefMessage = app toast nfc_error
-
-  // Working with transitional data
   def checkTransData = app.TransData.value match {
     case uri: BitcoinURI => me goTo classOf[BtcActivity]
     case adr: Address => me goTo classOf[BtcActivity]
