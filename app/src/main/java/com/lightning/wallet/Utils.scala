@@ -188,20 +188,21 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
 
     changePass setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_pass_change) { oldPass =>
-        val (textAsk, secret) = generatePasswordPromptView(textType, password_new)
-        mkForm(mkChoiceDialog(changePass, none, dialog_ok, dialog_cancel),
-          me getString sets_pass_change, textAsk)
+        val (textAsk, secretField) = generatePasswordPromptView(textType, password_new)
+        mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_pass_change, textAsk)
+        def proceed = if (newPass.length >= 6) changePassword else app toast password_too_short
+        def newPass = secretField.getText.toString.trim
 
-        def newPass = secret.getText.toString.trim
-        def changePass = if (newPass.length >= 6) {
+        def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
           add(app getString pass_changing, Informer.CODECHECK).ui.run
           timer.schedule(me del Informer.CODECHECK, 5000)
-        } else app toast password_too_short
+        }
 
         def rotatePass = {
           app.kit.wallet decrypt oldPass
-          app.kit encryptWallet newPass
+          val (crypter, key) = app getCrypter newPass
+          app.kit.wallet.encrypt(crypter, key)
         }
       }
 

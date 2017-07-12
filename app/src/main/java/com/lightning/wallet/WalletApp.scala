@@ -66,6 +66,13 @@ class WalletApp extends Application { me =>
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
   }
 
+  def getCrypter(pass: CharSequence) = {
+    val randSalt = ByteString copyFrom KeyCrypterScrypt.randomSalt
+    val scryptBuilder = Protos.ScryptParameters.newBuilder setSalt randSalt
+    val crypter = new KeyCrypterScrypt(scryptBuilder.setN(65536).build)
+    Tuple2(crypter, crypter deriveKey pass)
+  }
+
   object TransData {
     var value: Any = _
     def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
@@ -128,13 +135,6 @@ class WalletApp extends Application { me =>
     def blockingSend(tx: Transaction) =
       // Wait for at least one peer confirmation or failure
       peerGroup.broadcastTransaction(tx, 1).broadcast.get
-
-    def encryptWallet(pass: CharSequence) = {
-      val randSalt = ByteString copyFrom KeyCrypterScrypt.randomSalt
-      val scryptBuilder = Protos.ScryptParameters.newBuilder setSalt randSalt
-      val crypter = new KeyCrypterScrypt(scryptBuilder.setN(65536).build)
-      wallet.encrypt(crypter, crypter deriveKey pass)
-    }
 
     def useCheckPoints(time: Long) = {
       val pts = getAssets open "checkpoints-testnet.txt"

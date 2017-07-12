@@ -176,8 +176,6 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
     imageFile
   }
 
-  // NFC
-
   // No NFC reading in this activity
   def readNdefMessage(m: Message) = none
   def readEmptyNdefMessage = none

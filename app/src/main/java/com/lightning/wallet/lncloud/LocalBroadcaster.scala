@@ -11,13 +11,13 @@ import fr.acinq.bitcoin.Transaction
 
 
 object LocalBroadcaster extends Broadcaster {
-  def currentFeeRate: Long = RatesSaver.rates.feeLive.value
-  def currentHeight: Int = app.kit.peerGroup.getMostCommonChainHeight
-  def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
+  def currentFeeRate = RatesSaver.rates.feeLive.value
+  def currentHeight = app.kit.peerGroup.getMostCommonChainHeight
+  def send(tx: Transaction) = app.kit.blockingSend(tx).toString
 
   def getParentsDepth: ParentTxidToDepth = {
     val txs = app.kit.wallet.getTransactions(false).asScala
-    for (tx <- txs) yield tx.getHashAsString -> tx.getConfidence.getDepthInBlocks
+    for (tx <- txs) yield (tx.getHashAsString, tx.getConfidence.getDepthInBlocks)
   }.toMap
 
   override def onBecome = {

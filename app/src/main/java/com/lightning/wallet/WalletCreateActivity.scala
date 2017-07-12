@@ -60,12 +60,13 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
         // Get seed before encryption
         wallet = new Wallet(app.params)
         val seed = wallet.getKeyChainSeed
+        LNParams setup seed.getSeedBytes
 
         // Encrypt wallet and use checkpoints
+        val (crypter, key) = app getCrypter createPass.getText
         store = new SPVBlockStore(app.params, app.chainFile)
         useCheckPoints(wallet.getEarliestKeyCreationTime)
-        app.kit encryptWallet createPass.getText
-        LNParams setup seed.getSeedBytes
+        wallet.encrypt(crypter, key)
 
         // These should be initialized after checkpoints
         blockChain = new BlockChain(app.params, wallet, store)

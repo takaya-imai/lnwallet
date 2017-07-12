@@ -28,6 +28,7 @@ class ScanActivity extends TimerActivity with BarcodeCallback { me =>
   def tryParseQR(text: String) = try {
     lastAttempt = System.currentTimeMillis
     beeper.playRawResource(R.raw.beep, false)
+    // This may throw which is what we need
     app.TransData recordValue text
 
     // Find out where to go
