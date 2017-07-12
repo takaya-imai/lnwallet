@@ -60,9 +60,9 @@ extends StateMachine[PublicData] with Pathfinder { me =>
 
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
-      invoice ~ memo <- retry(getInfo, pickInc, times = 2 to 3)
+      invoice ~ blindMemo <- retry(getInfo, pickInc, 2 to 3)
       Some(spec) <- retry(makeOutgoingSpecOpt(invoice), pickInc, 2 to 3)
-    } me doProcess Tuple2(spec, memo)
+    } me doProcess Tuple2(spec, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition

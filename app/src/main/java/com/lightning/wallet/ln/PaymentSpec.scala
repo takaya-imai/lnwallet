@@ -22,8 +22,8 @@ case class OutgoingPaymentSpec(request: PaymentRequest, preimage: Option[BinaryD
 
 trait PaymentSpecBag {
   def putInfo(info: ExtendedPaymentInfo): Unit
+  def updateInfo(spec: OutgoingPaymentSpec): Unit
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
-  def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit
   def updatePaymentStatus(hash: BinaryData, status: Long): Unit
   def newPreimage = BinaryData(random getBytes 32)
 }

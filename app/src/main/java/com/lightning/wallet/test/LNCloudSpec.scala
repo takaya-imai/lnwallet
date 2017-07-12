@@ -31,7 +31,7 @@ class LNCloudSpec {
 
     def putInfo(info: ExtendedPaymentInfo): Unit = ???
     def updatePaymentStatus(hash: BinaryData, status: Long): Unit = ???
-    def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec): Unit = ???
+    def updateInfo(spec: OutgoingPaymentSpec): Unit = ???
   }
 
   val hops = Vector(

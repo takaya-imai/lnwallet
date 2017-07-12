@@ -28,7 +28,7 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
   import com.lightning.wallet.lncloud.PaymentSpecTable._
 
   def byStatus: Cursor = LNParams.db select selectRecentSql
-  def byQuery(query: String): Cursor = LNParams.db.select(selectVirtualSql, s"$query*")
+  def byQuery(query: String): Cursor = LNParams.db.select(searchSql, s"$query*")
   def byHash(hash: BinaryData): Cursor = LNParams.db.select(selectByHashSql, hash.toString)
   def toInfo(rcu: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rcu string data), rcu long status)
   def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = RichCursor(me byHash hash) headTry toInfo
@@ -38,14 +38,16 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 
-  def updateOutgoingPaymentSpec(spec: OutgoingPaymentSpec) =
-    LNParams.db.change(updDataSql, spec.toJson.toString,
-      spec.request.paymentHash.toString)
+  def updateInfo(spec: OutgoingPaymentSpec) = {
+    val hashString = spec.request.paymentHash.toString
+    LNParams.db.change(updDataSql, spec.toJson.toString, hashString)
+    app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
+  }
 
   def putInfo(info: ExtendedPaymentInfo) = {
-    val hash = info.spec.request.paymentHash.toString
-    LNParams.db.change(newSql, info.spec.toJson.toString, hash, info.status.toString)
-    LNParams.db.change(newVirtualSql, s"${info.spec.request.description} $hash", hash)
+    val hashString = info.spec.request.paymentHash.toString
+    LNParams.db.change(newSql, info.spec.toJson.toString, hashString, info.status.toString)
+    LNParams.db.change(newVirtualSql, s"${info.spec.request.description} $hashString", hashString)
     app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
   }
 }

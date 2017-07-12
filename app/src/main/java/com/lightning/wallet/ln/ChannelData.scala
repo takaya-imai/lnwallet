@@ -34,6 +34,7 @@ case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryDa
 sealed trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
 case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
+case class RetryAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 
 // CHANNEL DATA
 
