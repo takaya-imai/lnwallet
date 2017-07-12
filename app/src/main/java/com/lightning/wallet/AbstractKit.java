@@ -6,10 +6,14 @@ import com.google.common.util.concurrent.ListenableFuture;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.MoreExecutors;
+
 import org.bitcoinj.store.SPVBlockStore;
 import org.bitcoinj.wallet.Wallet;
+
+import java.util.concurrent.Executor;
+
 import javax.annotation.Nullable;
-import java.util.List;
 
 
 public abstract class AbstractKit extends AbstractIdleService {
@@ -22,19 +26,11 @@ public abstract class AbstractKit extends AbstractIdleService {
     public volatile SPVBlockStore store;
     public volatile Wallet wallet;
 
-    private class NonePeerDataListener implements PeerDataEventListener {
-        public void onBlocksDownloaded(Peer peer, Block block, @Nullable FilteredBlock fb, int left) { /* none */ }
-        public Message onPreMessageReceived(Peer peerSender, Message message) { return message; }
-        public List<Message> getData(Peer peer, GetDataMessage msg) { return null; }
-        public void onChainDownloadStarted(Peer peer, int left) { /* none */ }
-    }
+    public void startDownload(final PeerDataEventListener listener) {
 
-    private NonePeerDataListener noopPeerListener = new NonePeerDataListener();
-
-    public void startDownload() {
         FutureCallback futureListener = new FutureCallback() {
             @Override public void onSuccess(@Nullable Object res) {
-                peerGroup.startBlockChainDownload(noopPeerListener);
+                peerGroup.startBlockChainDownload(listener);
             }
 
             @Override public void onFailure(@Nullable Throwable err) {
@@ -43,6 +39,7 @@ public abstract class AbstractKit extends AbstractIdleService {
         };
 
         ListenableFuture future = peerGroup.startAsync();
-        Futures.addCallback(future, futureListener);
+        Executor executor = MoreExecutors.directExecutor();
+        Futures.addCallback(future, futureListener, executor);
     }
 }

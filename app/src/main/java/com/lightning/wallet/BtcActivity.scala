@@ -207,7 +207,7 @@ with ListUpdater { me =>
       // Wire up general listeners
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
-      app.kit.peerGroup addBlocksDownloadedEventListener new BlocksCatchUp
+      app.kit.peerGroup addBlocksDownloadedEventListener catchListener
       app.kit.wallet addTransactionConfidenceEventListener txTracker
       app.kit.peerGroup addDisconnectedEventListener constListener
       app.kit.peerGroup addConnectedEventListener constListener

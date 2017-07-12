@@ -79,35 +79,32 @@ object Utils { me =>
   // Rate is fiat per BTC so we need to divide by btc factor in the end
   def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
   def inFiat(ms: MilliSatoshi) = currentRate.map(perBtc => ms.amount * perBtc / btcFactor)
-  def currentRate = Try(RatesSaver.rates exchange currentFiatName)
+  def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
 }
 
 trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
   lazy val ui = anyToRunnable(getSupportActionBar setSubtitle infos.head.value)
   private[this] var infos = List.empty[Informer]
 
-  class SyncInformer extends CatchListener {
-
-    def initAction(left: Int)
-    def awaitAction(left: Int)
-    def targetAction = {
-
-    }
-
-    def getNextTracker(initBlocksLeft: Int) = new BlocksListener { self =>
+  val catchListener = new BlocksListener {
+    def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
       def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
         if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.CHAINSYNC)
         if (blocksLeft < 1) add(me getString info_progress_done, Informer.CHAINSYNC).timer.schedule(me del Informer.CHAINSYNC, 5000)
-        if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener self
-        if (blocksLeft < 1) app.kit.wallet saveToFile app.walletFile
+        if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener this
         runOnUiThread(ui)
       }
 
       // We only add a SYNC item if we have a large enough
-      // lag (more than two days), otherwise no updates are visible
+      // lag (more than a day), otherwise no updates are visible
       private val syncOps = app.getResources getStringArray R.array.info_progress
       private val text = app.plurOrZero(syncOps, initBlocksLeft / blocksPerDay)
       if (initBlocksLeft > blocksPerDay) add(text, Informer.CHAINSYNC)
+    }
+
+    def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = {
+      app.kit.peerGroup addBlocksDownloadedEventListener getNextTracker(left)
+      app.kit.peerGroup removeBlocksDownloadedEventListener this
     }
   }
 
@@ -127,10 +124,7 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
   // Settings and helper functions
   def tellGenError = wrap(app toast err_general)(mkSetsForm)
   def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
-
-  def initToolbar = setSupportActionBar {
-    findViewById(R.id.toolbar).asInstanceOf[Toolbar]
-  }
+  def initToolbar = me setSupportActionBar findViewById(R.id.toolbar).asInstanceOf[Toolbar]
 
   // Informer CRUD
   def del(delTag: Int) = uiTask {
@@ -408,7 +402,7 @@ class BtcManager(val man: RateManager) { me =>
 
   addressPaste setOnClickListener new OnClickListener {
     def onClick(button: View) = try setAddress(app getTo app.getBuffer)
-      catch { case _: Throwable => app toast dialog_address_absent }
+    catch { case _: Throwable => app toast dialog_address_absent }
   }
 
   def setAddress(adr: Address) = {
@@ -461,30 +455,10 @@ abstract class TextChangedWatcher extends TextWatcher {
   override def afterTextChanged(editableCharSequence: Editable) = none
 }
 
-abstract class CatchListener { me =>
-  val blocks = new PeerDataEventListener {
-    def getData(peer: Peer, message: GetDataMessage) = null
-    def onChainDownloadStarted(peer: Peer, blocksLeft: Int) = none
-    def onPreMessageReceived(peer: Peer, receivedMessage: Message) = receivedMessage
-    def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = awaitAction(left)
-  }
-
-  val peers = new PeerConnectedEventListener {
-    def onPeerConnected(p: Peer, total: Int) = if (total > 2) {
-      val currentHeight = math abs app.kit.wallet.getLastBlockSeenHeight
-      val bestHeight = math abs app.kit.peerGroup.getMostCommonChainHeight
-      if (bestHeight - currentHeight < blocksPerDay) executeTargetAction
-      else executeInitAction(left = bestHeight - currentHeight)
-      app.kit.peerGroup removeConnectedEventListener peers
-    }
-  }
-
-  def executeInitAction(left: Int) = wrap(app.kit.peerGroup addBlocksDownloadedEventListener blocks)(me initAction left)
-  def executeTargetAction = wrap(targetAction)(app.kit.peerGroup removeBlocksDownloadedEventListener blocks)
-
-  def initAction(left: Int)
-  def awaitAction(left: Int)
-  def targetAction: Unit
+trait BlocksListener extends PeerDataEventListener {
+  def getData(peer: Peer, message: GetDataMessage) = null
+  def onChainDownloadStarted(peer: Peer, blocksLeft: Int) = none
+  def onPreMessageReceived(peer: Peer, message: Message) = message
   val blocksPerDay = 144
 }
 

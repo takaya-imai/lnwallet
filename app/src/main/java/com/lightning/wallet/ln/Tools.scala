@@ -64,18 +64,17 @@ object MSat {
 }
 
 object Features {
-  val INITIAL_ROUTING_SYNC_BIT_MANDATORY = 0
+  val INITIAL_ROUTING_SYNC_BIT_MANDATORY = 2
   val INITIAL_ROUTING_SYNC_BIT_OPTIONAL = 3
 
   implicit def binData2BitSet(data: BinaryData): java.util.BitSet = java.util.BitSet valueOf data.reverse.toArray
   def initialRoutingSync(bitset: java.util.BitSet): Boolean = bitset get INITIAL_ROUTING_SYNC_BIT_OPTIONAL
 
-  def areSupported(bitset: java.util.BitSet): Boolean =
-    if (bitset get INITIAL_ROUTING_SYNC_BIT_MANDATORY) false else {
-      val (accumulator: List[Int], range: Range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
-      val bits = (accumulator /: range) { case (accum, _) => bitset.nextSetBit(accum.head + 1) :: accum }
-      !bits.reverse.exists(value => value % 2 == 0 && value > INITIAL_ROUTING_SYNC_BIT_OPTIONAL)
-    }
+  def areSupported(bitset: java.util.BitSet): Boolean = {
+    val (accumulator, range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
+    val bits = (accumulator /: range) { case (ac, _) => bitset.nextSetBit(ac.head + 1) :: ac }
+    !bits.reverse.exists(_ % 2 == 0)
+  }
 }
 
 class LightningException extends RuntimeException

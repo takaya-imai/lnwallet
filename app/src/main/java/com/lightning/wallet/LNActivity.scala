@@ -138,7 +138,7 @@ with ListUpdater with SearchBar { me =>
     app.kit.wallet addCoinsSentEventListener txTracker
     app.kit.wallet addCoinsReceivedEventListener txTracker
     app.kit.wallet addTransactionConfidenceEventListener txTracker
-    app.kit.peerGroup addBlocksDownloadedEventListener new BlocksCatchUp
+    app.kit.peerGroup addBlocksDownloadedEventListener catchListener
   }
 
   override def onDestroy = wrap(super.onDestroy) {
