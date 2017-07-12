@@ -2,7 +2,6 @@ package com.lightning.wallet
 
 import android.widget._
 import org.bitcoinj.core._
-
 import collection.JavaConverters._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
@@ -10,30 +9,29 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
-import com.lightning.wallet.Utils.{TryMSat, app, sumIn, sumOut}
 import android.view.{Menu, MenuItem, View, ViewGroup}
-
+import com.lightning.wallet.Utils.{TryMSat, app}
 import scala.util.{Failure, Success, Try}
+
 import android.text.format.DateUtils.getRelativeTimeSpanString
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
+import com.lightning.wallet.ln.PaymentRequest
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
-
 import android.graphics.Typeface
-
 import scala.collection.mutable
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.net.Uri
+
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
-import com.lightning.wallet.ln.PaymentRequest
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -74,7 +72,7 @@ trait ListUpdater { me: TimerActivity =>
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
   lazy val minLinesNum = if (scrHeight < 4.8) 3 else 5
   private[this] var state = SCROLL_STATE_IDLE
-  val maxLinesNum = 75
+  val maxLinesNum = 50
 
   def startListUpdates(adapter: BaseAdapter) =
     list setOnScrollListener new OnScrollListener {
@@ -115,12 +113,12 @@ with ListUpdater { me =>
     override def txConfirmed(tx: Transaction) =
       me runOnUiThread adapter.notifyDataSetChanged
 
-    def tell(tx: Transaction) = if (me isNative tx) {
+    def tell(wrap: TxWrap) = if (wrap.isNative) {
       // Only update interface if this tx changes balance
       // and ESTIMATED_SPENDABLE takes care of correct balance
 
       mnemonicWarn setVisibility View.GONE
-      adapter.transactions prepend tx
+      adapter.transactions prepend wrap
       adapter.notifyDataSetChanged
     }
   }
@@ -134,23 +132,26 @@ with ListUpdater { me =>
       view
     }
 
-    var transactions = mutable.Buffer.empty[Transaction]
+    var transactions = mutable.Buffer.empty[TxWrap]
     def getItem(position: Int) = transactions(position)
     def getItemId(position: Int) = position
     def getCount = transactions.size
   }
 
-  // Here we update both subtitle and title
   def updateTitleAndSub(sub: String, infoType: Int) =
-    app.kit.currentBalance match { case balance: Coin =>
-      val exactValue = btcTitle format coin2String(balance)
+    app.kit.currentBalance match { case balance =>
+      // Tell wallet is empty or show exact sum
+
+      val exactValue = btcTitle.format(balance: String)
       val title = if (balance.isZero) walletEmpty else exactValue
       me runOnUiThread getSupportActionBar.setTitle(title.html)
       me runOnUiThread add(sub, infoType).ui
     }
 
-  def notifySubTitle(subtitle: String, infoType: Int) = {
-    me.updateTitleAndSub(subtitle, infoType)
+  def notifySubTitle(sub: String, infoType: Int) = {
+    // Here we update not just subtitle but also a title
+
+    me.updateTitleAndSub(sub, infoType)
     timer.schedule(me del infoType, 25000)
   }
 
@@ -169,24 +170,21 @@ with ListUpdater { me =>
         val confNumber = detailsWrapper.findViewById(R.id.confNumber).asInstanceOf[TextView]
         val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
 
-        val tx = adapter getItem pos
-        val coloring = paymentMarking(tx)
-        val direction = value(tx).amount > 0
-
-        val payDatas = tx.getOutputs.asScala.filter(_.isMine(app.kit.wallet) == direction).map(outputToPayData).flatMap(_.toOption)
-        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, payDatas.map(_.cute(coloring).html).toArray)
+        val wrap = adapter getItem pos
+        val objects = wrap.payDatas.flatMap(_.toOption).map(_.cute(wrap.marking).html).toArray
+        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, objects)
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
 
         outside setOnClickListener onButtonTap {
-          val uri = "https://blockexplorer.com/tx/" + tx.getHashAsString
+          val uri = "https://blockexplorer.com/tx/" + wrap.tx.getHashAsString
           me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
-        val sumPretty: String = coloring format withSign(me value tx)
-        val title = s"$sumPretty<br><small>${me time tx.getUpdateTime}</small>"
+        val sumPretty: String = wrap.marking format withSign(wrap.nativeValue)
+        val title = s"$sumPretty<br><small>${me time wrap.tx.getUpdateTime}</small>"
         mkForm(me negBld dialog_ok, title.html, lst)
-        confNumber setText status(tx).html
+        confNumber setText status(wrap).html
       }
 
       // Wait for transactions list
@@ -295,7 +293,7 @@ with ListUpdater { me =>
     }
   }
 
-  type TransactionBuffer = mutable.Buffer[Transaction]
+  type TransactionBuffer = mutable.Buffer[TxWrap]
   private val showMore = (result: TransactionBuffer) => {
     toggler.setImageResource(R.drawable.ic_expand_less_black_24dp)
     adapter.transactions = result take maxLinesNum
@@ -368,32 +366,26 @@ with ListUpdater { me =>
   }
 
   // Working with transactions
-  private def isNative(tx: Transaction) = 0 != value(tx).amount
-  private def paymentMarking(tx: Transaction) = if (value(tx).amount > 0) sumIn else sumOut
-  private def value(tx: Transaction) = coin2MilliSatoshi(tx getExcludeWatchedValue app.kit.wallet)
-  private def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala take maxLinesNum filter isNative
+  private def nativeTransactions = app.kit.wallet.getTransactionsByTime
+    .asScala.take(maxLinesNum).map(bitcoinjTx2Wrap).filter(_.isNative)
 
-  private def status(trans: Transaction) = {
-    val cfs = app.plurOrZero(txsConfs, trans.getConfidence.getDepthInBlocks)
-    if (value(trans).amount > 0) feeIncoming format cfs else trans.getFee match {
+  private def status(wrap: TxWrap) = {
+    val cfs = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
+    if (wrap.nativeValue.isPositive) feeIncoming format cfs else wrap.tx.getFee match {
       case null => feeAbsent format cfs case fee => feeDetails.format(withSign(fee), cfs)
     }
   }
 
-  private def outputToPayData(out: TransactionOutput) = Try(out.getScriptPubKey) map {
-    case publicKeyScript if publicKeyScript.isSentToP2WSH => P2WSHData(out.getValue, publicKeyScript)
-    case publicKeyScript => AddrData(out.getValue, publicKeyScript getToAddress app.params)
-  }
+  class BtcView(view: View) extends TxViewHolder(view) {
+    // Display given Bitcoin transaction properties to user
 
-  class BtcView(view: View)
-  extends TxViewHolder(view) {
-    def fillView(tx: Transaction) = {
-      val time = when(System.currentTimeMillis, tx.getUpdateTime)
-      val shortValue = paymentMarking(tx).format(value(tx): String)
+    def fillView(wrap: TxWrap) = {
+      val time = when(System.currentTimeMillis, wrap.tx.getUpdateTime)
+      val shortValue = wrap.marking.format(wrap.nativeValue: String)
 
       val image =
-        if (tx.getConfidence.getConfidenceType == DEAD) dead
-        else if (tx.getConfidence.getDepthInBlocks >= minDepth) conf1
+        if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
+        else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
         else await
 
       transactWhen setText time.html

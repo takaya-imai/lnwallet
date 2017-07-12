@@ -34,9 +34,10 @@ import org.bitcoinj.net.discovery.DnsDiscovery
 
 
 class WalletApp extends Application { me =>
+  lazy val params = org.bitcoinj.params.TestNet3Params.get
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-  lazy val params = org.bitcoinj.params.RegTestParams.get
-  var walletFile, chainFile: java.io.File = _
+  lazy val chainFile = new File(getFilesDir, s"$appName.spvchain")
+  lazy val walletFile = new File(getFilesDir, s"$appName.wallet")
   var kit: WalletKit = _
 
   lazy val plur = getString(lang) match {
@@ -59,16 +60,10 @@ class WalletApp extends Application { me =>
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
   def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
+  override def onCreate = wrap(super.onCreate) { startupAppReference = me }
 
   def setBuffer(text: String) = wrap(me toast copied_to_clipboard) {
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
-  }
-
-  // Startup actions
-  override def onCreate = wrap(super.onCreate) {
-    chainFile = new File(getFilesDir, s"$appName.spvchain")
-    walletFile = new File(getFilesDir, s"$appName.wallet")
-    startupAppReference = me
   }
 
   object TransData {
@@ -99,7 +94,7 @@ class WalletApp extends Application { me =>
     def saveChannels = save(all.map(_.data).toJson)
 
     val chainEventsListener = new TxTracker with NewBestBlockListener {
-      override def notifyNewBestBlock(block: StoredBlock) = for (chan <- alive) chan process CMDHeight(block.getHeight)
+      override def notifyNewBestBlock(b: StoredBlock) = for (chan <- alive) chan process CMDHeight(b.getHeight)
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx, funding = false)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
     }
@@ -142,8 +137,8 @@ class WalletApp extends Application { me =>
     }
 
     def useCheckPoints(time: Long) = {
-//      val pts = getAssets open "checkpoints-testnet.txt"
-//      CheckpointManager.checkpoint(params, pts, store, time)
+      val pts = getAssets open "checkpoints-testnet.txt"
+      CheckpointManager.checkpoint(params, pts, store, time)
     }
 
     def setupAndStartDownload = {
@@ -167,11 +162,11 @@ class WalletApp extends Application { me =>
       blockChain addNewBestBlockListener ChannelManager.chainEventsListener
 
       wallet setAcceptRiskyTransactions true
-      wallet.autosaveToFile(walletFile, 500, MILLISECONDS, null)
-//      peerGroup addPeerDiscovery new DnsDiscovery(params)
+      wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
+      peerGroup addPeerDiscovery new DnsDiscovery(params)
 
-      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
-      peerGroup.addAddress(pa1)
+//      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
+//      peerGroup.addAddress(pa1)
 
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0

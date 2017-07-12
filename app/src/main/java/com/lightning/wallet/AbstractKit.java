@@ -5,14 +5,11 @@ import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ListenableFuture;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
-
+import com.google.common.util.concurrent.Futures;
 import org.bitcoinj.store.SPVBlockStore;
-import org.bitcoinj.wallet.Wallet;
-
 import java.util.concurrent.Executor;
-
+import org.bitcoinj.wallet.Wallet;
 import javax.annotation.Nullable;
 
 

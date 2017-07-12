@@ -80,5 +80,5 @@ case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
   lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
   lazy val cutOutliers = Coin parseCoin statistics.meanWithin(feeHistory, stdDevs = 1)
   lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else cutOutliers
-  lazy val feeRisky = feeLive div 2
+  lazy val feeRisky = feeLive div 3
 }
