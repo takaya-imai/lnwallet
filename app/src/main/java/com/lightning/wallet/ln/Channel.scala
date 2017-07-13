@@ -6,31 +6,45 @@ import com.lightning.wallet.ln.Channel._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
-import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+
 import fr.acinq.bitcoin.Crypto.PrivateKey
+import com.lightning.wallet.ln.Tools.none
 import scala.collection.mutable
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
-  // When in sync state we may receive commands from user, save them
+  // When in sync state we may receive commands from user so save them
   private[this] var memoCmdBuffer = Vector.empty[MemoCommand].toIterator
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
     override def onError = { case error => for (lst <- listeners if lst.onError isDefinedAt error) lst onError error }
     override def onBecome = { case trans => for (lst <- listeners if lst.onBecome isDefinedAt trans) lst onBecome trans }
+    override def onPostProcess = { case some => for (lst <- listeners if lst.onPostProcess isDefinedAt some) lst onPostProcess some }
   }
 
-  def send(msg: LightningMessage): Unit
-  def stayAndSend(data: ChannelData, msg: LightningMessage) = runAnd(me stayWith data)(me send msg)
-  override def process(change: Any) = try super.process(change) catch events.onError
+  override def process(message: Any) = try {
+    // Only call onPostProcess if it was a success
+
+    super.process(change = message)
+    events onPostProcess message
+  } catch events.onError
 
   override def become(data1: ChannelData, state1: String) = {
     // Transition should be defined before the vars are updated
+
     val t4 = Tuple4(me, data1, state, state1)
     super.become(data1, state1)
     events onBecome t4
+  }
+
+  def send(msg: LightningMessage): Unit
+  def stayAndSend(data: ChannelData, msg: LightningMessage) = {
+    // Convinience method to stay at current state and send a message
+
+    me stayWith data
+    me send msg
   }
 
   def doProcess(change: Any): Unit = (data, change, state) match {
@@ -489,5 +503,6 @@ object Channel {
 trait ChannelListener {
   type Transition = (Channel, Any, String, String)
   def onError: PartialFunction[Throwable, Unit] = none
+  def onPostProcess: PartialFunction[Any, Unit] = none
   def onBecome: PartialFunction[Transition, Unit] = none
 }

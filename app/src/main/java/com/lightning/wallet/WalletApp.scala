@@ -35,7 +35,7 @@ import org.bitcoinj.net.discovery.DnsDiscovery
 
 
 class WalletApp extends Application { me =>
-  lazy val params = org.bitcoinj.params.TestNet3Params.get
+  lazy val params = org.bitcoinj.params.RegTestParams.get
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
   lazy val chainFile = new File(getFilesDir, s"$appName.spvchain")
   lazy val walletFile = new File(getFilesDir, s"$appName.wallet")
@@ -129,7 +129,6 @@ class WalletApp extends Application { me =>
   }
 
   abstract class WalletKit extends AbstractKit {
-    override def shutDown = if (peerGroup.isRunning) peerGroup.stop
     def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
@@ -139,8 +138,14 @@ class WalletApp extends Application { me =>
       peerGroup.broadcastTransaction(tx, 1).broadcast.get
 
     def useCheckPoints(time: Long) = {
-      val pts = getAssets open "checkpoints-testnet.txt"
-      CheckpointManager.checkpoint(params, pts, store, time)
+//      val pts = getAssets open "checkpoints-testnet.txt"
+//      CheckpointManager.checkpoint(params, pts, store, time)
+    }
+
+    override def shutDown = {
+      ConnectionManager.listeners -= ChannelManager.socketEventsListener
+      ConnectionManager.listeners -= ChannelManager.reconnectListener
+      if (peerGroup.isRunning) peerGroup.stop
     }
 
     def setupAndStartDownload = {
@@ -165,10 +170,10 @@ class WalletApp extends Application { me =>
 
       wallet setAcceptRiskyTransactions true
       wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
-      peerGroup addPeerDiscovery new DnsDiscovery(params)
+//      peerGroup addPeerDiscovery new DnsDiscovery(params)
 
-//      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
-//      peerGroup.addAddress(pa1)
+      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
+      peerGroup.addAddress(pa1)
 
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup setDownloadTxDependencies 0

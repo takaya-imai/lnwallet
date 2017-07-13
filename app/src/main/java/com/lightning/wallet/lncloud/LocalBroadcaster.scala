@@ -32,8 +32,8 @@ object LocalBroadcaster extends Broadcaster {
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
 
     case (chan, _, SYNC, NORMAL) =>
-      val perKb = RatesSaver.rates.feeLive.value
-      chan process CMDFeerate(LNParams feerateKb2Kw perKb)
+      // Will be sent once on app lauch, should suffice
+      chan process CMDFeerate(LNParams kb2Kw currentFeeRate)
   }
 
   override def onError = {

@@ -1,8 +1,8 @@
 package com.lightning.wallet.ln.crypto
 
-import com.lightning.wallet.ln.crypto.MultiStreamUtils.aconcat
 import org.spongycastle.crypto.params.{KeyParameter, ParametersWithIV}
 import org.spongycastle.crypto.engines.{ChaCha7539Engine, ChaChaEngine}
+import com.lightning.wallet.ln.crypto.MultiStreamUtils.aconcat
 import org.spongycastle.crypto.SkippingStreamCipher
 import com.lightning.wallet.ln.LightningException
 import fr.acinq.bitcoin.Protocol.writeUInt64
