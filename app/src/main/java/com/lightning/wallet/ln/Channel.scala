@@ -362,10 +362,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       }
 
 
-    // HANDLE FUNDING SPEND
+    // HANDLE FUNDING SPENT
 
 
-    case (neg: NegotiationsData, CMDSpent(spendTx, true), NEGOTIATIONS) =>
+    case (neg: NegotiationsData, CMDSpent(spendTx), NEGOTIATIONS)
+      if spendTx.txIn.exists(_.outPoint == neg.commitments.commitInput.outPoint) =>
+
       val (closeTx, _) = Closing.makeClosing(neg.commitments, neg.localShutdown.scriptPubKey,
         neg.remoteShutdown.scriptPubKey, closingFee = Satoshi apply neg.localClosingSigned.feeSatoshis)
 
@@ -375,15 +377,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       else defineClosingAction(neg, spendTx)
 
 
-    // Something which spends our funding is broadcasted so we react in any state
-    case (norm: ChannelData with HasCommitments, CMDSpent(spendTx, true), _) =>
+    // Something which spends our funding is broadcasted
+    case (norm: ChannelData with HasCommitments, CMDSpent(spendTx), _)
+      if spendTx.txIn.exists(_.outPoint == norm.commitments.commitInput.outPoint) =>
       defineClosingAction(norm, spendTx)
-
-
-    // Check all incoming transactions if they spend our funding output
-    case (some: ChannelData with HasCommitments, CMDSpent(spendTx, false), _)
-      if spendTx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
-      me doProcess CMDSpent(spendTx, funding = true)
 
 
     // HANDLE INITIALIZATION

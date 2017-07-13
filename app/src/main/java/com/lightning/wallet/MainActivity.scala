@@ -62,7 +62,7 @@ with TimerActivity with ViewSwitch { me =>
     setContentView(R.layout.activity_main)
   }
 
-  // NFC and link
+  // NFC AND SHARE
 
   override def onNoNfcIntentFound = {
     // Filter out failures and nulls, try to set value, proceed if successful and inform if not

@@ -13,13 +13,16 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 sealed trait Command
 // These won't be memorized in channel sync mode
-case class CMDSpent(tx: Transaction, funding: Boolean) extends Command
 case class CMDConfirmed(tx: Transaction) extends Command
+case class CMDSpent(tx: Transaction) extends Command
 case class CMDFeerate(rate: Long) extends Command
 case class CMDHeight(height: Int) extends Command
 case object CMDShutdown extends Command
 case object CMDOffline extends Command
 case object CMDOnline extends Command
+
+case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
+                          pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
 sealed trait MemoCommand extends Command
 // These will be memorized in channel sync mode
@@ -27,9 +30,6 @@ case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) exte
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends MemoCommand
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends MemoCommand
 case object CMDCommitSig extends MemoCommand
-
-case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
-                          pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
 sealed trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
 case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
@@ -141,7 +141,6 @@ case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[Ht
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
-object Changes { def all(c: Changes): LightningMessages = c.proposed ++ c.signed ++ c.acked }
 
 case class Commitments(localParams: LocalParams, remoteParams: RemoteParams, localCommit: LocalCommit, remoteCommit: RemoteCommit,
                        localChanges: Changes, remoteChanges: Changes, localNextHtlcId: Long, remoteNextHtlcId: Long,

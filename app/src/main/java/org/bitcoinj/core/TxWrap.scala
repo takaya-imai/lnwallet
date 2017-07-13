@@ -27,6 +27,9 @@ class TxWrap(val tx: Transaction) {
     case accumulator ~ _ => accumulator
   }
 
+  // Depending on whether this is an incoming or outgoing transaction
+  // we collect either outputs which belong to us or the foreign ones
+
   def payDatas = tx.getOutputs.asScala filter { out =>
     out.isMine(app.kit.wallet) == nativeValue.isPositive
   } map outputToPayData

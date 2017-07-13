@@ -1,6 +1,7 @@
 package com.lightning.wallet.lncloud
 
 import spray.json._
+import com.lightning.wallet.ln._
 import scala.concurrent.duration._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
@@ -8,7 +9,6 @@ import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 
 import org.bitcoinj.core.{Coin, Transaction}
 import rx.lang.scala.{Scheduler, Observable => Obs}
-import com.lightning.wallet.ln.{ChannelData, ~, LNParams}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.helper.Statistics
 import spray.json.JsonFormat
@@ -63,7 +63,7 @@ object RatesSaver extends Saver {
   val KEY = "rates"
 
   private val updatePeriod: FiniteDuration = 20.minutes
-  var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0L)
+  var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
 
   def process = {
     def getResult = LNParams.getCloud.getRates map toVec[Result]

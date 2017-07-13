@@ -103,8 +103,8 @@ class WalletApp extends Application { me =>
 
     val chainEventsListener = new TxTracker with NewBestBlockListener {
       override def notifyNewBestBlock(b: StoredBlock) = for (chan <- alive) chan process CMDHeight(b.getHeight)
-      override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx, funding = false)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
+      override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
     }
 
     val socketEventsListener = new ConnectionListener {
@@ -115,8 +115,9 @@ class WalletApp extends Application { me =>
     }
 
     val reconnectListener = new ConnectionListener {
-      override def onDisconnect(id: PublicKey) = for (chan <- alive)
-        ConnectionManager requestConnection chan.data.announce
+      override def onDisconnect(id: PublicKey) = reconnectAllDistinctSockets
+      def reconnectAllDistinctSockets: Unit = alive.map(_.data.announce)
+        .distinct.foreach(ConnectionManager.requestConnection)
     }
 
     def createChannel(saved: ChannelData): Channel = new Channel {
@@ -150,8 +151,8 @@ class WalletApp extends Application { me =>
         def checkIfReady(left: Int) = if (left < blocksPerDay) {
           ConnectionManager.listeners += ChannelManager.socketEventsListener
           ConnectionManager.listeners += ChannelManager.reconnectListener
+          ChannelManager.reconnectListener.reconnectAllDistinctSockets
           peerGroup removeBlocksDownloadedEventListener self
-          ChannelManager.reconnectListener onDisconnect null
         }
       }
 
