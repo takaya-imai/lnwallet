@@ -4,7 +4,6 @@ import spray.json._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.BinaryData

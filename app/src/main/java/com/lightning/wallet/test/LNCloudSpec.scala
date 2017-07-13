@@ -7,6 +7,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.eclair.payment.PaymentRequest
 import rx.lang.scala.schedulers.IOScheduler
 
 import scala.util.Try

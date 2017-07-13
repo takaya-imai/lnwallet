@@ -6,27 +6,25 @@ import collection.JavaConverters._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
-import android.provider.Settings.{System => FontSystem}
-import android.view.{Menu, MenuItem, View, ViewGroup}
-import com.lightning.wallet.Utils.{TryMSat, app}
-import scala.util.{Failure, Success, Try}
-
 import android.text.format.DateUtils.getRelativeTimeSpanString
-import org.ndeftools.util.activity.NfcReaderActivity
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
-import com.lightning.wallet.ln.PaymentRequest
+import fr.acinq.eclair.payment.PaymentRequest
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
 import android.graphics.Typeface
 import scala.collection.mutable
 import android.content.Intent
-import org.ndeftools.Message
 import android.os.Bundle
 import android.net.Uri
+
+import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
+import android.provider.Settings.{System => FontSystem}
+import android.view.{Menu, MenuItem, View, ViewGroup}
+import com.lightning.wallet.Utils.{TryMSat, app}
+import scala.util.{Failure, Success, Try}
 
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD

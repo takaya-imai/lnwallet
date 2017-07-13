@@ -29,6 +29,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.ln._
 import fr.acinq.bitcoin.BinaryData
 import fr.acinq.bitcoin.Crypto.PublicKey
+import fr.acinq.eclair.payment.PaymentRequest
 import org.bitcoinj.core.listeners.{NewBestBlockListener, PeerConnectedEventListener}
 import org.bitcoinj.net.discovery.DnsDiscovery
 

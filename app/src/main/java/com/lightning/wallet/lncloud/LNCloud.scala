@@ -15,6 +15,7 @@ import rx.lang.scala.{Observable => Obs}
 
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
+import fr.acinq.eclair.payment.PaymentRequest
 import rx.lang.scala.schedulers.IOScheduler
 import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools.none

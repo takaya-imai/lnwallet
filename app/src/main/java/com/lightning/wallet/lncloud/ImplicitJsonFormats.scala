@@ -22,6 +22,7 @@ import java.math.BigInteger
 
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.crypto.ShaChain.Index
+import fr.acinq.eclair.payment.PaymentRequest
 
 
 object ImplicitJsonFormats { me =>
