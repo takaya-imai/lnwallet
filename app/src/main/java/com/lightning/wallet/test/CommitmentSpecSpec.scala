@@ -15,11 +15,11 @@ class CommitmentSpecSpec {
       val R = Crypto.sha256(BinaryData("42" * 32))
       val H = Crypto.sha256(R)
 
-      val add1 = UpdateAddHtlc("00" * 32, 1, 2000 * 1000, 400, H, "")
+      val add1 = UpdateAddHtlc("00" * 32, 1, 2000 * 1000, H, 400, "")
       val spec1 = CommitmentSpec.reduce(spec, Vector(add1), Vector.empty)
       println(spec1 == spec.copy(htlcs = Set(Htlc(false, add1)), toLocalMsat = 3000 * 1000))
 
-      val add2 = UpdateAddHtlc("00" * 32, 2, 1000 * 1000, 400, H, "")
+      val add2 = UpdateAddHtlc("00" * 32, 2, 1000 * 1000, H, 400, "")
       val spec2 = CommitmentSpec.reduce(spec1, Vector(add2), Vector.empty)
       println(spec2 == spec1.copy(htlcs = Set(Htlc(false, add1), Htlc(false, add2)), toLocalMsat = 2000 * 1000))
 
@@ -39,11 +39,11 @@ class CommitmentSpecSpec {
       val R = Crypto.sha256(BinaryData("42" * 32))
       val H = Crypto.sha256(R)
 
-      val add1 = UpdateAddHtlc("00" * 32, 1, 2000 * 1000, 400, H, "")
+      val add1 = UpdateAddHtlc("00" * 32, 1, 2000 * 1000, H, 400, "")
       val spec1 = CommitmentSpec.reduce(spec, Vector.empty, Vector(add1))
       println(spec1 == spec.copy(htlcs = Set(Htlc(true, add1)), toRemoteMsat = 3000 * 1000))
 
-      val add2 = UpdateAddHtlc("00" * 32, 2, 1000 * 1000, 400, H, "")
+      val add2 = UpdateAddHtlc("00" * 32, 2, 1000 * 1000, H, 400, "")
       val spec2 = CommitmentSpec.reduce(spec1, Vector.empty, Vector(add2))
       println(spec2 == spec1.copy(htlcs = Set(Htlc(true, add1), Htlc(true, add2)), toRemoteMsat = 2000 * 1000))
 

@@ -31,7 +31,7 @@ case class OpenChannel(chainHash: BinaryData, temporaryChannelId: BinaryData,
 
 case class AcceptChannel(temporaryChannelId: BinaryData,
                          dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
-                         channelReserveSatoshis: Long, minimumDepth: Long, htlcMinimumMsat: Long, toSelfDelay: Int,
+                         channelReserveSatoshis: Long, htlcMinimumMsat: Long, minimumDepth: Long, toSelfDelay: Int,
                          maxAcceptedHtlcs: Int, fundingPubkey: PublicKey, revocationBasepoint: Point, paymentBasepoint: Point,
                          delayedPaymentBasepoint: Point, firstPerCommitmentPoint: Point) extends ChannelMessage
 
@@ -45,8 +45,8 @@ case class ClosingSigned(channelId: BinaryData, feeSatoshis: Long, signature: Bi
 case class Shutdown(channelId: BinaryData, scriptPubKey: BinaryData) extends ChannelMessage
 
 
-case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, expiry: Long,
-                         paymentHash: BinaryData, onionRoutingPacket: BinaryData) extends HasHtlcId
+case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, paymentHash: BinaryData,
+                         expiry: Long, onionRoutingPacket: BinaryData) extends HasHtlcId
 
 case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc

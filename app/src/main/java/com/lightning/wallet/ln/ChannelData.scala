@@ -185,9 +185,10 @@ object Commitments {
     else if (cmd.spec.request.paymentHash.size != 32) throw ExtendedException(cmd.spec)
     else {
 
-      // Let's compute the current commitment *as seen by them* with this change taken into account
-      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.spec.amountWithFee, cmd.spec.expiry,
-        cmd.spec.request.paymentHash, cmd.spec.onion.packet.serialize)
+      // Let's compute the current commitment
+      // *as seen by them* with this change taken into account
+      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.spec.amountWithFee,
+        cmd.spec.request.paymentHash, cmd.spec.expiry, cmd.spec.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)

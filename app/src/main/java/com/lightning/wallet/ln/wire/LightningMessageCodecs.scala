@@ -222,8 +222,8 @@ object LightningMessageCodecs { me =>
     (binarydata(32) withContext "channelId") ::
       (uint64 withContext "id") ::
       (uint64 withContext "amountMsat") ::
-      (uint32 withContext "expiry") ::
       (binarydata(32) withContext "paymentHash") ::
+      (uint32 withContext "expiry") ::
       (binarydata(Sphinx.PacketLength) withContext "onionRoutingPacket")
 
   val updateAddHtlcCodec: Codec[UpdateAddHtlc] = updateAddHtlc.as[UpdateAddHtlc]
