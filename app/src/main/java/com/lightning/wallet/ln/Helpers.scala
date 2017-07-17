@@ -123,11 +123,8 @@ object Helpers { me =>
         commitments.remoteParams.fundingPubKey, closingSigned.signature, remoteClosingSig)
     }
 
-    def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi) = {
-      val resultingClosingFee: Satoshi = (localClosingFee + remoteClosingFee) / 4 * 2
-      if (resultingClosingFee == localClosingFee) resultingClosingFee + Satoshi(2)
-      else resultingClosingFee
-    }
+    def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi): Satoshi =
+      (localClosingFee + remoteClosingFee) / 4 * 2
 
     def claimCurrentLocalCommitTxOutputs(commitments: Commitments, tx: Transaction, bag: PaymentSpecBag) = {
       val localPerCommitmentPoint = Generators.perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)

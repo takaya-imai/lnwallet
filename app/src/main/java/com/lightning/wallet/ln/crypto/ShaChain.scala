@@ -37,9 +37,9 @@ object ShaChain { me =>
       doAddHash(hashes - (index1 :+ false) - (index1 :+ true), hash, index1)
     }
 
-  def addHash(shi: ShaHashesWithIndex, hash: Bytes, index: Long) = {
-    for (last <- shi.lastIndex if index != last - 1) throw new LightningException
-    ShaHashesWithIndex(doAddHash(shi.hashes, hash, me moves index), Some apply index)
+  def addHash(shwi: ShaHashesWithIndex, hash: Bytes, index: Long) = {
+    for (last <- shwi.lastIndex if index != last - 1) throw new LightningException
+    ShaHashesWithIndex(doAddHash(shwi.hashes, hash, me moves index), Some apply index)
   }
 
   def getHash(hashes: Map[Index, Bytes], index: Index) =

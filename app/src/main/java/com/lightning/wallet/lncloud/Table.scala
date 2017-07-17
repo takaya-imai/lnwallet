@@ -32,7 +32,8 @@ object PaymentSpecTable extends Table {
   // Data must be updated in case of route switches
   def updDataSql = s"UPDATE $table SET $data = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def newSql = s"INSERT OR IGNORE INTO $table ($data, $hash, $status) VALUES (?, ?, ?)"
+  // Inserting duplicate will result in exception but that is what we need
+  def newSql = s"INSERT INTO $table ($data, $hash, $status) VALUES (?, ?, ?)"
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
 
   // Create tables

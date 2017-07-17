@@ -94,10 +94,11 @@ class WalletApp extends Application { me =>
 
   object ChannelManager extends Saver {
     type ChannelDataVec = Vector[ChannelData]
+    type ChannelVec = Vector[Channel]
     val KEY = "channels"
 
-    var all: Vector[Channel] = tryGet map to[ChannelDataVec] getOrElse Vector.empty map createChannel
-    def from(of: Vector[Channel], id: PublicKey) = of.filter(_.data.announce.nodeId == id)
+    var all: ChannelVec = tryGet map to[ChannelDataVec] getOrElse Vector.empty map createChannel
+    def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
     def alive = all.filterNot(_.state == Channel.CLOSING)
     def saveChannels = save(all.map(_.data).toJson)
 
@@ -115,10 +116,13 @@ class WalletApp extends Application { me =>
     }
 
     val reconnectListener = new ConnectionListener {
-      override def onDisconnect(id: PublicKey) = reconnectAllDistinctSockets
-      def reconnectAllDistinctSockets: Unit = alive.map(_.data.announce)
-        .distinct.foreach(ConnectionManager.requestConnection)
+      override def onDisconnect(id: PublicKey) = ChannelManager reconnect from(alive, id)
+      override def onTerminalError(id: PublicKey) = Tools log s"Terminal error while decrypting $id"
+      override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket $id is operational"
     }
+
+    def reconnect(chans: ChannelVec) = chans.map(_.data.announce)
+      .distinct.foreach(ConnectionManager.requestConnection)
 
     def createChannel(saved: ChannelData): Channel = new Channel {
       private def getWorker = ConnectionManager.connections get data.announce.nodeId
@@ -149,15 +153,15 @@ class WalletApp extends Application { me =>
     }
 
     def setupAndStartDownload = {
-      val catchListener = new BlocksListener { self =>
+      lazy val catchListener: BlocksListener = new BlocksListener {
         override def onChainDownloadStarted(peer: Peer, left: Int) = checkIfReady(left)
         def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = checkIfReady(left)
 
         def checkIfReady(left: Int) = if (left < blocksPerDay) {
           ConnectionManager.listeners += ChannelManager.socketEventsListener
           ConnectionManager.listeners += ChannelManager.reconnectListener
-          ChannelManager.reconnectListener.reconnectAllDistinctSockets
-          peerGroup removeBlocksDownloadedEventListener self
+          peerGroup removeBlocksDownloadedEventListener catchListener
+          ChannelManager reconnect ChannelManager.alive
         }
       }
 

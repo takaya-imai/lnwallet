@@ -14,8 +14,6 @@ import scala.collection.mutable
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
-  // When in sync state we may receive commands from user so save them
-  private[this] var memoCmdBuffer = Vector.empty[MemoCommand].toIterator
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -149,7 +147,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (norm @ NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
       val c1 ~ updateAddHtlcMessage = Commitments.sendAdd(commitments, cmd)
       stayAndSend(norm.copy(commitments = c1), updateAddHtlcMessage)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
@@ -164,7 +162,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>
       val c1 ~ updateFulfillHtlcMessage = Commitments.sendFulfill(norm.commitments, cmd)
       stayAndSend(norm.copy(commitments = c1), updateFulfillHtlcMessage)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     case (norm: NormalData, fulfill: UpdateFulfillHtlc, NORMAL)
@@ -179,13 +177,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     case (norm: NormalData, cmd: CMDFailHtlc, NORMAL) =>
       val c1 ~ updateFailHtlcMessage = Commitments.sendFail(norm.commitments, cmd)
       stayAndSend(norm.copy(commitments = c1), updateFailHtlcMessage)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     case (norm: NormalData, cmd: CMDFailMalformedHtlc, NORMAL) =>
       val c1 ~ updateFailMalformedHtlcMessage = Commitments.sendFailMalformed(norm.commitments, cmd)
       stayAndSend(norm.copy(commitments = c1), updateFailMalformedHtlcMessage)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     case (norm: NormalData, fail: FailHtlc, NORMAL)
@@ -196,8 +194,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       me stayWith norm.copy(commitments = c1)
 
 
-    // GUARD: we only send in the correct state
-    case (norm: NormalData, CMDCommitSig, NORMAL)
+    // GUARD: only send in the correct state
+    case (norm: NormalData, CMDProceed, NORMAL)
       if Commitments canSendCommitSig norm.commitments =>
 
       // Propose new remote commit via commit tx signature
@@ -207,7 +205,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
     // Serves as a trigger to enter negotiations when shutdown is on
-    case (norm @ NormalData(_, commitments, Some(local), Some(remote), _), CMDCommitSig, NORMAL) =>
+    case (norm @ NormalData(_, commitments, Some(local), Some(remote), _), CMDProceed, NORMAL) =>
       if (Commitments hasNoPendingHtlcs commitments) startNegotiations(norm.announce, commitments, local, remote)
 
 
@@ -217,7 +215,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We received a commit sig from them, now we can update our local commit
       val c1 ~ revokeMessage = Commitments.receiveCommit(norm.commitments, sig)
       stayAndSend(norm.copy(commitments = c1), revokeMessage)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     case (norm: NormalData, rev: RevokeAndAck, NORMAL)
@@ -226,7 +224,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We received a revocation because we sent a commit sig
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
       me stayWith norm.copy(commitments = c1)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     case (norm: NormalData, CMDFeerate(rate), NORMAL)
@@ -236,16 +234,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // Periodic fee updates to ensure commit txs could be confirmed
       val c1 ~ updateFeeMessage = Commitments.sendFee(norm.commitments, rate)
       stayAndSend(norm.copy(commitments = c1), updateFeeMessage)
-      doProcess(CMDCommitSig)
+      doProcess(CMDProceed)
 
 
     // NORMAL: SHUTDOWN
 
 
     // We may start a mutual shutdown here
+    case (norm: NormalData, CMDShutdown, NORMAL) if norm.localShutdown.isDefined => startLocalCurrentClose(norm)
+    case (norm: NormalData, CMDShutdown, NORMAL) if norm.remoteShutdown.isDefined => startLocalCurrentClose(norm)
     case (norm @ NormalData(_, _, None, None, _), CMDShutdown, NORMAL) => startShutdown(norm)
-    case (norm @ NormalData(_, _, Some(_), _, _), CMDShutdown, NORMAL) => startLocalCurrentClose(norm)
-    case (norm @ NormalData(_, _, _, Some(_), _), CMDShutdown, NORMAL) => startLocalCurrentClose(norm)
 
 
     // They try to shutdown with uncommited changes
@@ -274,7 +272,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       else me stayWith norm.copy(remoteShutdown = Some apply remote)
 
 
-    // Periodic watch for timed-out outgoing HTLCs
+    // HTLC TIMEOUT WATCH
+
+
     case (norm: NormalData, CMDHeight(chainHeight), NORMAL | SYNC)
       if Commitments.hasTimedoutOutgoingHtlcs(norm.commitments, chainHeight) =>
       startLocalCurrentClose(norm)
@@ -304,7 +304,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       if channelId == wait.commitments.channelId =>
 
       become(wait, WAIT_FUNDING_DONE)
-      for (our <- wait.our) me send our
+      wait.our foreach send
 
 
     // Should re-send last closingSigned according to spec
@@ -323,9 +323,50 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         norm.commitments.remoteChanges.signed.isEmpty &&
         norm.commitments.localCommit.index == 0 =>
 
-      become(norm, NORMAL)
-      me send makeFundingLocked(norm.commitments)
-      for (cmd <- memoCmdBuffer) doProcess(cmd)
+      val locked = makeFundingLocked(norm.commitments)
+      become(data1 = norm, state1 = NORMAL)
+      me send locked
+
+
+    case (norm: NormalData, cr: ChannelReestablish, SYNC)
+      if cr.channelId == norm.commitments.channelId =>
+
+      // First we clean up unacknowledged updates
+      val localProposedIdDelta = norm.commitments.localChanges.proposed count { case u: UpdateAddHtlc => true }
+      val remoteProposedIdDelta = norm.commitments.remoteChanges.proposed count { case u: UpdateAddHtlc => true }
+      val c1 = norm.commitments.modifyAll(_.localChanges.proposed, _.remoteChanges.proposed).setTo(Vector.empty)
+        .modify(_.remoteNextHtlcId).using(currentRemoteCount => currentRemoteCount - remoteProposedIdDelta)
+        .modify(_.localNextHtlcId).using(currentLocalCount => currentLocalCount - localProposedIdDelta)
+
+      // Let's see the state of remote sigs
+      if (c1.localCommit.index == cr.nextRemoteRevocationNumber + 1) {
+        val localPerCommitmentSecret = Generators.perCommitSecret(c1.localParams.shaSeed, c1.localCommit.index - 1)
+        val localNextPerCommitmentPoint = Generators.perCommitPoint(c1.localParams.shaSeed, c1.localCommit.index + 1)
+        me send RevokeAndAck(channelId = c1.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
+      } else if (c1.localCommit.index != cr.nextRemoteRevocationNumber) throw new LightningException
+
+      // Let's see the state of local sigs
+      val c2 = c1.remoteNextCommitInfo match {
+        // We had sent a new sig and were waiting for their revocation, they didn't receive the new sig because of the disconnection
+        // for now we simply discard the changes we had just signed, we also "un-sign" their changes that we already acked
+        case Left(wait) if wait.nextRemoteCommit.index == cr.nextLocalCommitmentNumber =>
+
+          val localSignedDelta = c1.localChanges.signed count { case u: UpdateAddHtlc => true }
+          c1.copy(localNextHtlcId = c1.localNextHtlcId - localSignedDelta, localChanges = c1.localChanges.copy(signed = Vector.empty),
+            remoteChanges = c1.remoteChanges.copy(acked = c1.remoteChanges.signed ++ c1.remoteChanges.acked, signed = Vector.empty),
+            remoteNextCommitInfo = Right apply wait.nextRemoteCommit.remotePerCommitmentPoint)
+
+        // We had sent a new sig and were waiting for their revocation, they had received the new sig
+        // but their revocation was lost during the disconnection, they'll resend us the revocation
+        case Left(wait) if wait.nextRemoteCommit.index + 1 == cr.nextLocalCommitmentNumber => c1
+        // There wasn't any sig in-flight when the disconnection occured so we do nothing here
+        case Right(_) if c1.remoteCommit.index + 1 == cr.nextLocalCommitmentNumber => c1
+        case _ => throw new LightningException
+      }
+
+      become(norm.copy(commitments = c2), NORMAL)
+      norm.localShutdown foreach send
+      doProcess(CMDProceed)
 
 
     // We just close a channel if this is some kind of irregular state
@@ -334,10 +375,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       startLocalCurrentClose(some)
 
 
-    // Record command for future use
+    // Don't accept these while in sync
     case (_, cmd: MemoCommand, SYNC) =>
-      val memoCmdBuffer1 = memoCmdBuffer.toVector :+ cmd
-      memoCmdBuffer = memoCmdBuffer1.toIterator
+      throw SyncException(cmd)
 
 
     // SYNC: CONNECT/DISCONNECT

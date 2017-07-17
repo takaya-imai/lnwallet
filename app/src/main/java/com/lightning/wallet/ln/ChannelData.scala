@@ -29,7 +29,7 @@ sealed trait MemoCommand extends Command
 case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends MemoCommand
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends MemoCommand
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends MemoCommand
-case object CMDCommitSig extends MemoCommand
+case object CMDProceed extends MemoCommand
 
 sealed trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
 case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
@@ -273,7 +273,6 @@ object Commitments {
   }
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {
-    // Remote commitment will include all local proposed changes as well as remote acked changes
     val spec = CommitmentSpec.reduce(c.remoteCommit.spec, c.remoteChanges.acked, c.localChanges.proposed)
     val paymentKey = Generators.derivePrivKey(c.localParams.paymentKey, remoteNextPerCommitmentPoint)
 
@@ -330,10 +329,11 @@ object Commitments {
         if (!isSigValid) throw new LightningException else HtlcTxAndSigs(htlcTx, localSig, remoteSig)
     }
 
-    val localChanges1 = c.localChanges.copy(acked = Vector.empty)
     val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx)
     val remoteChanges1 = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed)
-    c.copy(remoteChanges = remoteChanges1, localChanges = localChanges1, localCommit = localCommit1) -> revocation
+    val c1 = c.copy(remoteChanges = remoteChanges1, localChanges = c.localChanges.copy(acked = Vector.empty), localCommit = localCommit1)
+
+    c1 -> revocation
   }
 
   def receiveRevocation(c: Commitments, rev: RevokeAndAck) = c.remoteNextCommitInfo match {
@@ -343,10 +343,9 @@ object Commitments {
     case Left(wait: WaitingForRevocation) =>
       val nextIndex = ShaChain.largestTxIndex - c.remoteCommit.index
       val secrets1 = ShaChain.addHash(c.remotePerCommitmentSecrets, rev.perCommitmentSecret.toBin, nextIndex)
-      val localChanges1 = c.localChanges.copy(signed = Vector.empty, acked = c.localChanges.acked ++ c.localChanges.signed)
-
-      c.copy(localChanges = localChanges1, remoteChanges = c.remoteChanges.copy(signed = Vector.empty),
-        remoteCommit = wait.nextRemoteCommit, remoteNextCommitInfo = Right apply rev.nextPerCommitmentPoint,
+      c.copy(localChanges = c.localChanges.copy(signed = Vector.empty, acked = c.localChanges.acked ++ c.localChanges.signed),
+        remoteChanges = c.remoteChanges.copy(signed = Vector.empty), remoteCommit = wait.nextRemoteCommit,
+        remoteNextCommitInfo = Right apply rev.nextPerCommitmentPoint,
         remotePerCommitmentSecrets = secrets1)
 
     // Unexpected revocation when we have Point
