@@ -91,5 +91,6 @@ extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
     dbs execSQL PaymentSpecTable.createVirtualSql
     dbs execSQL PaymentSpecTable.createSql
     dbs execSQL StorageTable.createSql
+    dbs execSQL ChannelTable.createSql
   }
 }

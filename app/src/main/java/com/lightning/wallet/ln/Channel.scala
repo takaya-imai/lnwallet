@@ -23,7 +23,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   def SEND(msg: LightningMessage): Unit
   def SAVE(content: HasCommitments): HasCommitments
-  def STAY(d1: ChannelData): Channel = BECOME(d1, state)
+  def WITH(d1: ChannelData): Channel = BECOME(d1, state)
   def BECOME(data1: ChannelData, state1: String): Channel = {
     // Transition should be defined before the vars are updated
     // Returns a self-reference for next channel operations
@@ -99,7 +99,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // We have not yet sent a FundingLocked but just got one from them so we save it and keep waiting
     case (wait @ WaitFundingDoneData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
       if their.channelId == wait.commitments.channelId =>
-      me STAY wait.copy(their = Some apply their)
+      me WITH wait.copy(their = Some apply their)
 
 
     // We have already sent them a FundingLocked and now we got one from them so we can enter normal state now
@@ -116,7 +116,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       val our = makeFundingLocked(wait.commitments)
       val d1 = me SAVE wait.copy(our = Some apply our)
-      me STAY d1 SEND our
+      me WITH d1 SEND our
 
 
     // We got our lock when their is already present so we can safely enter normal state now
@@ -133,7 +133,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // We only can add new HTLCs when mutual shutdown process is not active
     case (norm @ NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
       val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
-      me STAY norm.copy(commitments = c1) SEND updateAddHtlc
+      me WITH norm.copy(commitments = c1) SEND updateAddHtlc
       doProcess(CMDProceed)
 
 
@@ -142,13 +142,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       val incomingExpiry: Int = LNParams.broadcaster.currentHeight + 6
       val c1 = Commitments.receiveAdd(norm.commitments, add, incomingExpiry)
-      me STAY norm.copy(commitments = c1)
+      me WITH norm.copy(commitments = c1)
 
 
     // We're fulfilling an HTLC we got earlier
     case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>
       val c1 ~ updateFulfillHtlc = Commitments.sendFulfill(norm.commitments, cmd)
-      me STAY norm.copy(commitments = c1) SEND updateFulfillHtlc
+      me WITH norm.copy(commitments = c1) SEND updateFulfillHtlc
       doProcess(CMDProceed)
 
 
@@ -157,19 +157,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // Got a fulfill for an outgoing HTLC we sent them earlier
       val c1 = Commitments.receiveFulfill(norm.commitments, fulfill)
-      me STAY norm.copy(commitments = c1)
+      me WITH norm.copy(commitments = c1)
 
 
     // Failing an HTLC we got earlier
     case (norm: NormalData, cmd: CMDFailHtlc, NORMAL) =>
       val c1 ~ updateFailHtlc = Commitments.sendFail(norm.commitments, cmd)
-      me STAY norm.copy(commitments = c1) SEND updateFailHtlc
+      me WITH norm.copy(commitments = c1) SEND updateFailHtlc
       doProcess(CMDProceed)
 
 
     case (norm: NormalData, cmd: CMDFailMalformedHtlc, NORMAL) =>
       val c1 ~ updateFailMalformedHtlс = Commitments.sendFailMalformed(norm.commitments, cmd)
-      me STAY norm.copy(commitments = c1) SEND updateFailMalformedHtlс
+      me WITH norm.copy(commitments = c1) SEND updateFailMalformedHtlс
       doProcess(CMDProceed)
 
 
@@ -178,18 +178,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // Got a failure for an outgoing HTLC we sent earlier
       val c1 = Commitments.receiveFail(norm.commitments, fail)
-      me STAY norm.copy(commitments = c1)
+      me WITH norm.copy(commitments = c1)
 
 
     // GUARD: only send in the correct state
     case (norm: NormalData, CMDProceed, NORMAL)
-      if Commitments canSendCommitSig norm.commitments =>
+      if Commitments.localHasChanges(norm.commitments) &&
+        norm.commitments.remoteNextCommitInfo.isRight =>
 
       // Propose new remote commit via commit tx sig
       val nextRemotePoint = norm.commitments.remoteNextCommitInfo.right.get
       val c1 ~ commitSig = Commitments.sendCommit(norm.commitments, nextRemotePoint)
       val d1 = me SAVE norm.copy(commitments = c1)
-      me STAY d1 SEND commitSig
+      me WITH d1 SEND commitSig
 
 
     // Serves as a trigger to enter negotiations when shutdown is on
@@ -203,7 +204,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We received a commit sig from them, now we can update our local commit
       val c1 ~ revokeAndAck = Commitments.receiveCommit(norm.commitments, sig)
       val d1 = me SAVE norm.copy(commitments = c1)
-      me STAY d1 SEND revokeAndAck
+      me WITH d1 SEND revokeAndAck
       doProcess(CMDProceed)
 
 
@@ -212,7 +213,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // We received a revocation because we sent a commit sig
       val c1 = Commitments.receiveRevocation(norm.commitments, rev)
-      me STAY norm.copy(commitments = c1)
+      me WITH norm.copy(commitments = c1)
       doProcess(CMDProceed)
 
 
@@ -222,7 +223,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // Periodic fee updates to ensure commit txs could be confirmed
       val c1 ~ updateFeeMessage = Commitments.sendFee(norm.commitments, rate)
-      me STAY norm.copy(commitments = c1) SEND updateFeeMessage
+      me WITH norm.copy(commitments = c1) SEND updateFeeMessage
       doProcess(CMDProceed)
 
 
@@ -258,7 +259,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // We can start negotiations if there are no in-flight HTLCs, otherwise wait until they are cleared
       if (Commitments hasNoPendingHtlcs commitments) STARTNegotiations(announce, commitments, local, remote)
-      else me STAY norm.copy(remoteShutdown = Some apply remote)
+      else me WITH norm.copy(remoteShutdown = Some apply remote)
 
 
     // HTLC TIMEOUT WATCH
@@ -277,7 +278,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       if wait.fundingTx.txid == tx.txid =>
 
       val our = makeFundingLocked(wait.commitments)
-      me STAY wait.copy(our = Some apply our)
+      me WITH wait.copy(our = Some apply our)
 
 
     // This is a special case where we already have both locks when exiting a sync phase so we go directly to normal state
@@ -285,15 +286,15 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       if channelId == commitments.channelId =>
 
       val c1 = wait.commitments.copy(remoteNextCommitInfo = Right apply their.nextPerCommitmentPoint)
-      BECOME(me SAVE NormalData(wait.announce, c1, None, None), NORMAL) SEND our
+      BECOME(me SAVE NormalData(wait.announce, c1, localShutdown = None, remoteShutdown = None), NORMAL) SEND our
 
 
     // We're exiting a sync state but don't have enough locks so we keep waiting
     case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0), SYNC)
       if channelId == wait.commitments.channelId =>
 
-      wait.our foreach SEND
       BECOME(wait, WAIT_FUNDING_DONE)
+      wait.our foreach SEND
 
 
     case (neg: NegotiationsData, cr: ChannelReestablish, SYNC)
@@ -329,7 +330,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val localPerCommitmentSecret = Generators.perCommitSecret(c1.localParams.shaSeed, c1.localCommit.index - 1)
         val localNextPerCommitmentPoint = Generators.perCommitPoint(c1.localParams.shaSeed, c1.localCommit.index + 1)
         me SEND RevokeAndAck(channelId = c1.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
-      } else if (c1.localCommit.index != cr.nextRemoteRevocationNumber) throw new LightningException
+      } else if (c1.localCommit.index != cr.nextRemoteRevocationNumber) throw ExtendedException(norm)
 
       // Let's see the state of local sigs
       val c2 = c1.remoteNextCommitInfo match {
@@ -347,7 +348,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         case Left(wait) if wait.nextRemoteCommit.index + 1 == cr.nextLocalCommitmentNumber => c1
         // There wasn't any sig in-flight when the disconnection occured so we do nothing here
         case Right(_) if c1.remoteCommit.index + 1 == cr.nextLocalCommitmentNumber => c1
-        case _ => throw new LightningException
+        case _ => throw ExtendedException(norm)
       }
 
       BECOME(norm.copy(commitments = c2), NORMAL)
@@ -397,8 +398,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       closeTxOpt match {
         case Some(closeTx) if closeFeeSat == remoteFeeSat => STARTMutualClose(neg, closeTx)
         case Some(closeTx) if nextCloseFee == remoteFeeSat => STARTMutualClose(neg, closeTx)
-        case Some(_) => me STAY neg.copy(localClosingSigned = nextMessage) SEND nextMessage
-        case _ => throw new LightningException
+        case Some(_) => me WITH neg.copy(localClosingSigned = nextMessage) SEND nextMessage
+        case _ => STARTLocalCurrentClose(neg)
       }
 
 
@@ -453,7 +454,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   private def STARTShutdown(norm: NormalData) = {
     val localShutdown = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
-    BECOME(me SAVE norm.copy(localShutdown = Some apply localShutdown), NORMAL) SEND localShutdown
+    BECOME(norm.copy(localShutdown = Some apply localShutdown), NORMAL) SEND localShutdown
   }
 
   private def STARTNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {

@@ -152,7 +152,6 @@ object Commitments {
     case _ => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
   }
 
-  def canSendCommitSig(c: Commitments): Boolean = localHasChanges(c) && c.remoteNextCommitInfo.isRight
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
 
