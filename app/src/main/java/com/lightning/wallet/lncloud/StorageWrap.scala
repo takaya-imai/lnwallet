@@ -2,6 +2,7 @@ package com.lightning.wallet.lncloud
 
 import spray.json._
 import com.lightning.wallet.ln._
+import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.helper.RichCursor
@@ -13,13 +14,31 @@ import scala.util.Try
 
 object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {
-    LNParams.db.change(sql = StorageTable.newSql, params = value, key)
+    LNParams.db.change(sql = StorageTable.newSql, params = key, value)
     LNParams.db.change(sql = StorageTable.updSql, params = value, key)
   }
 
   def get(key: String): Try[String] = {
     val cursor = LNParams.db.select(StorageTable.selectSql, key)
     RichCursor(cursor).headTry(_ string StorageTable.value)
+  }
+}
+
+object ChannelWrap {
+  import com.lightning.wallet.lncloud.ChannelTable._
+  def get = RichCursor(LNParams.db select selectAllSql) vec {
+    shiftedCursor => to[HasCommitments](shiftedCursor string data)
+  }
+
+  def remove(chanId: BinaryData) =
+    LNParams.db.change(killSql, chanId.toString)
+
+  def put(data: HasCommitments) = LNParams.db txWrap {
+    val chanIdString = data.commitments.channelId.toString
+    val content = data.toJson.toString
+
+    LNParams.db.change(newSql, content, chanIdString)
+    LNParams.db.change(updSql, content, chanIdString)
   }
 }
 

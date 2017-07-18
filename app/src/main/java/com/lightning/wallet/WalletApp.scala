@@ -3,15 +3,12 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
-import spray.json._
-import spray.json.DefaultJsonProtocol._
-import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
-import com.lightning.wallet.lncloud.{RatesSaver, Saver}
+import com.lightning.wallet.lncloud.{ChannelWrap, RatesSaver, Saver}
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
@@ -92,15 +89,13 @@ class WalletApp extends Application { me =>
     }
   }
 
-  object ChannelManager extends Saver {
-    type ChannelDataVec = Vector[ChannelData]
+  object ChannelManager {
     type ChannelVec = Vector[Channel]
-    val KEY = "channels"
+    var all: ChannelVec = ChannelWrap.get map createChannel
 
-    var all: ChannelVec = tryGet map to[ChannelDataVec] getOrElse Vector.empty map createChannel
-    def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
-    def alive = all.filterNot(_.state == Channel.CLOSING)
-    def saveChannels = save(all.map(_.data).toJson)
+    def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
+    def from(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
+    def reconnect(cs: ChannelVec) = cs.map(_.data.announce).distinct foreach ConnectionManager.requestConnection
 
     val chainEventsListener = new TxTracker with NewBestBlockListener {
       override def notifyNewBestBlock(b: StoredBlock) = for (chan <- alive) chan process CMDHeight(b.getHeight)
@@ -109,8 +104,8 @@ class WalletApp extends Application { me =>
     }
 
     val socketEventsListener = new ConnectionListener {
-      override def onTerminalError(id: PublicKey) = from(alive, id).foreach(_ process CMDShutdown)
       override def onOperational(id: PublicKey, their: Init) = from(alive, id).foreach(_ process CMDOnline)
+      override def onTerminalError(id: PublicKey) = from(alive, id).foreach(_ process CMDShutdown)
       override def onDisconnect(id: PublicKey) = from(alive, id).foreach(_ process CMDOffline)
       override def onMessage(msg: LightningMessage) = alive.foreach(_ process msg)
     }
@@ -121,14 +116,11 @@ class WalletApp extends Application { me =>
       override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket $id is operational"
     }
 
-    def reconnect(chans: ChannelVec) = chans.map(_.data.announce)
-      .distinct.foreach(ConnectionManager.requestConnection)
-
-    def createChannel(saved: ChannelData): Channel = new Channel {
-      private def getWorker = ConnectionManager.connections get data.announce.nodeId
-      def send(msg: LightningMessage) = for (worker <- getWorker) worker send msg
+    def createChannel(data1: ChannelData) = new Channel {
+      def SEND(msg: LightningMessage) = for (work <- ConnectionManager.connections get data.announce.nodeId) work send msg
+      def SAVE(content: HasCommitments): HasCommitments = runAnd(result = content)(action = ChannelWrap put content)
       listeners += LNParams.broadcaster
-      process(saved)
+      process(data1)
     }
   }
 

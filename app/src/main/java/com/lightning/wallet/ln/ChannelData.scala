@@ -39,7 +39,7 @@ case class RetryAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
 // CHANNEL DATA
 
 sealed trait ChannelData { val announce: NodeAnnouncement }
-sealed trait HasCommitments { val commitments: Commitments }
+sealed trait HasCommitments extends ChannelData { val commitments: Commitments }
 
 case class InitData(announce: NodeAnnouncement) extends ChannelData
 case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel) extends ChannelData
@@ -51,22 +51,19 @@ case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalP
 
 // All the data below will be stored
 
-case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLocked],
-                               their: Option[FundingLocked], fundingTx: Transaction, commitments: Commitments,
-                               kind: String = "WaitFundingDoneData") extends ChannelData with HasCommitments
+case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLocked], their: Option[FundingLocked],
+                               fundingTx: Transaction, commitments: Commitments, kind: String = "WaitFundingDoneData") extends HasCommitments
 
-case class NormalData(announce: NodeAnnouncement, commitments: Commitments,
-                      localShutdown: Option[Shutdown], remoteShutdown: Option[Shutdown] = None,
-                      kind: String = "NormalData") extends ChannelData with HasCommitments
+case class NormalData(announce: NodeAnnouncement, commitments: Commitments, localShutdown: Option[Shutdown],
+                      remoteShutdown: Option[Shutdown] = None, kind: String = "NormalData") extends HasCommitments
 
-case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments,
-                            localClosingSigned: ClosingSigned, localShutdown: Shutdown, remoteShutdown: Shutdown,
-                            kind: String = "NegotiationsData") extends ChannelData with HasCommitments
+case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
+                            localShutdown: Shutdown, remoteShutdown: Shutdown, kind: String = "NegotiationsData") extends HasCommitments
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       kind: String = "ClosingData") extends ChannelData with HasCommitments
+                       kind: String = "ClosingData") extends HasCommitments
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
 case class LocalCommitPublished(claimMainDelayedOutputTx: Seq[Transaction], htlcSuccessTxs: Seq[Transaction],
@@ -126,15 +123,13 @@ object CommitmentSpec {
   }
 }
 
-case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
-                       channelReserveSat: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
-                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey, delayedPaymentKey: Scalar,
-                       defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean)
+case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSat: Long,
+                       htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
+                       paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean)
 
-case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
-                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey,
-                        revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
-                        globalFeatures: BinaryData, localFeatures: BinaryData)
+case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
+                        toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey, revocationBasepoint: Point, paymentBasepoint: Point,
+                        delayedPaymentBasepoint: Point, globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)

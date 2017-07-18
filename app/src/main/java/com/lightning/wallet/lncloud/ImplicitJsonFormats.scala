@@ -292,19 +292,18 @@ object ImplicitJsonFormats { me =>
     RevokedCommitPublished](RevokedCommitPublished.apply, "claimMainOutputTx", "mainPenaltyTx",
     "claimHtlcTimeoutTxs", "htlcTimeoutTxs", "htlcPenaltyTxs", "commitTx")
 
-  implicit object ChannelDataFmt
-    extends JsonFormat[ChannelData] {
+  implicit object HasCommitmentsFmt
+    extends JsonFormat[HasCommitments] {
 
-    def read(json: JsValue) =
-      json.asJsObject fields "kind" match {
-        case JsString("NormalData") => json.convertTo[NormalData]
-        case JsString("ClosingData") => json.convertTo[ClosingData]
-        case JsString("NegotiationsData") => json.convertTo[NegotiationsData]
-        case JsString("WaitFundingDoneData") => json.convertTo[WaitFundingDoneData]
-        case _ => throw new RuntimeException
-      }
+    def read(json: JsValue) = json.asJsObject fields "kind" match {
+      case JsString("WaitFundingDoneData") => json.convertTo[WaitFundingDoneData]
+      case JsString("NegotiationsData") => json.convertTo[NegotiationsData]
+      case JsString("ClosingData") => json.convertTo[ClosingData]
+      case JsString("NormalData") => json.convertTo[NormalData]
+      case _ => throw new RuntimeException
+    }
 
-    def write(internal: ChannelData) = internal match {
+    def write(internal: HasCommitments) = internal match {
       case data: WaitFundingDoneData => data.toJson
       case data: NegotiationsData => data.toJson
       case data: ClosingData => data.toJson

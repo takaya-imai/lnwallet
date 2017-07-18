@@ -8,8 +8,8 @@ import android.net.Uri
 
 
 object StorageTable extends Table {
-  val (table, value, key) = ("storage", "value", "key")
-  def newSql = s"INSERT OR IGNORE INTO $table ($value, $key) VALUES (?, ?)"
+  val (table, key, value) = ("storage", "value", "key")
+  def newSql = s"INSERT OR IGNORE INTO $table ($key, $value) VALUES (?, ?)"
   def updSql = s"UPDATE $table SET $value = ? WHERE $key = ?"
   def selectSql = s"SELECT * FROM $table WHERE $key = ?"
   def killSql = s"DELETE FROM $table WHERE $key = ?"
@@ -22,11 +22,29 @@ object StorageTable extends Table {
     )"""
 }
 
+object ChannelTable extends Table {
+  val (table, identifier, data) = ("channel", "identifier", "data")
+  def newSql = s"INSERT OR IGNORE INTO $table ($identifier, $data) VALUES (?, ?)"
+  def updSql = s"UPDATE $table SET $data = ? WHERE $identifier = ?"
+  def selectAllSql = s"SELECT * FROM $table ORDER BY $id DESC"
+  def killSql = s"DELETE FROM $table WHERE $identifier = ?"
+
+  def createSql = s"""
+    CREATE TABLE $table(
+      $id INTEGER PRIMARY KEY AUTOINCREMENT,
+      $identifier TEXT NOT NULL UNIQUE,
+      $data TEXT NOT NULL
+    )"""
+}
+
 object PaymentSpecTable extends Table {
   val (table, data, hash, status, search) = ("payments", "data", "hash", "status", "search")
-  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"
   def selectRecentSql = s"SELECT * FROM $table ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
+
+  // Fuzzy user generated queries
+  def searchSql = s"""SELECT * FROM $table WHERE $hash IN
+    (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"""
 
   // Hidden -> Visible -> Failed or Success
   // Data must be updated in case of route switches

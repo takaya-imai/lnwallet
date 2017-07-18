@@ -54,8 +54,8 @@ class LNCloudSpec {
         println(s"Channel mock got something: $change")
     }
 
-    override def send(message: LightningMessage): Unit = ???
-
+    override def SEND(message: LightningMessage) = ???
+    override def SAVE(content: HasCommitments) = content
   }
 
   def getCloud =
