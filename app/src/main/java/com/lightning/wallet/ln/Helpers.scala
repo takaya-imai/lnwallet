@@ -237,8 +237,8 @@ object Helpers { me =>
         remoteParams.fundingPubKey)
 
       val localPerCommitmentPoint = Generators.perCommitPoint(cmd.localParams.shaSeed, 0)
-      val localSpec = CommitmentSpec(feeratePerKw = cmd.initialFeeratePerKw, toLocalMsat = toLocalMsat, toRemoteMsat = cmd.pushMsat)
-      val remoteSpec = CommitmentSpec(feeratePerKw = cmd.initialFeeratePerKw, toLocalMsat = cmd.pushMsat, toRemoteMsat = toLocalMsat)
+      val localSpec = CommitmentSpec(Set.empty, Set.empty, Set.empty, cmd.initialFeeratePerKw, toLocalMsat, cmd.pushMsat)
+      val remoteSpec = CommitmentSpec(Set.empty, Set.empty, Set.empty, cmd.initialFeeratePerKw, cmd.pushMsat, toLocalMsat)
       val (localCommitTx, _, _) = makeLocalTxs(0, cmd.localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
       val (remoteCommitTx, _, _) = makeRemoteTxs(0, cmd.localParams, remoteParams, commitmentInput, remoteFirstPoint, remoteSpec)
       (localSpec, localCommitTx, remoteSpec, remoteCommitTx)

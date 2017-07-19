@@ -80,45 +80,52 @@ case class RevokedCommitPublished(claimMainOutputTx: Seq[Transaction], mainPenal
 // COMMITMENTS
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(feeratePerKw: Long, toLocalMsat: Long,
-                          toRemoteMsat: Long, htlcs: Set[Htlc] = Set.empty)
+case class CommitmentSpec(htlcs: Set[Htlc], failed: Set[Htlc], fulfilled: Set[Htlc],
+                          feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
   private def fulfill(cs: CommitmentSpec, in: Boolean, update: UpdateFulfillHtlc) = findHtlcById(cs, update.id, in) match {
-    case Some(htlc) if htlc.incoming => cs.copy(toLocalMsat = cs.toLocalMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
-    case Some(htlc) => cs.copy(toRemoteMsat = cs.toRemoteMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
+    case Some(h) if h.incoming => cs.copy(toLocalMsat = cs.toLocalMsat + h.add.amountMsat, htlcs = cs.htlcs - h, fulfilled = cs.fulfilled + h)
+    case Some(h) => cs.copy(toRemoteMsat = cs.toRemoteMsat + h.add.amountMsat, htlcs = cs.htlcs - h, fulfilled = cs.fulfilled + h)
     case None => cs
   }
 
   private def fail(cs: CommitmentSpec, in: Boolean, update: UpdateFailHtlc) = findHtlcById(cs, update.id, in) match {
-    case Some(htlc) if htlc.incoming => cs.copy(toRemoteMsat = cs.toRemoteMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
-    case Some(htlc) => cs.copy(toLocalMsat = cs.toLocalMsat + htlc.add.amountMsat, htlcs = cs.htlcs - htlc)
+    case Some(h) if h.incoming => cs.copy(toRemoteMsat = cs.toRemoteMsat + h.add.amountMsat, htlcs = cs.htlcs - h, failed = cs.failed + h)
+    case Some(h) => cs.copy(toLocalMsat = cs.toLocalMsat + h.add.amountMsat, htlcs = cs.htlcs - h, failed = cs.failed + h)
     case None => cs
   }
 
-  private def plus(htlc: Htlc, cs: CommitmentSpec) =
-    if (htlc.incoming) cs.copy(htlcs = cs.htlcs + htlc, toRemoteMsat = cs.toRemoteMsat - htlc.add.amountMsat)
-    else cs.copy(htlcs = cs.htlcs + htlc, toLocalMsat = cs.toLocalMsat - htlc.add.amountMsat)
+  private def plusOutgoing(data: UpdateAddHtlc, cs: CommitmentSpec) =
+    cs.copy(htlcs = cs.htlcs + Htlc(incoming = false, add = data),
+      toRemoteMsat = cs.toRemoteMsat - data.amountMsat)
+
+  private def plusIncoming(data: UpdateAddHtlc, cs: CommitmentSpec) =
+    cs.copy(htlcs = cs.htlcs + Htlc(incoming = true, add = data),
+      toLocalMsat = cs.toLocalMsat - data.amountMsat)
 
   def reduce(cs: CommitmentSpec, localChanges: LightningMessages, remoteChanges: LightningMessages) = {
-    val spec1 = (cs /: localChanges) { case (spec, add: UpdateAddHtlc) => plus(Htlc(incoming = false, add), spec) case (spec, _) => spec }
-    val spec2 = (spec1 /: remoteChanges) { case (spec, add: UpdateAddHtlc) => plus(Htlc(incoming = true, add), spec) case (spec, _) => spec }
+    // Before starting to reduce fresh changes we need to get rid of previous fulfilled and failed htlcs
 
-    val spec3 = (spec2 /: localChanges) {
-      case (spec, msg: UpdateFailHtlc) => fail(spec, in = true, msg)
-      case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, in = true, msg)
-      case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
-      case (spec, _) => spec
+    val spec1 = cs.copy(failed = Set.empty, fulfilled = Set.empty)
+    val spec2 = (spec1 /: localChanges) { case (s, add: UpdateAddHtlc) => plusOutgoing(add, s) case (s, _) => s }
+    val spec3 = (spec2 /: remoteChanges) { case (s, add: UpdateAddHtlc) => plusIncoming(add, s) case (s, _) => s }
+
+    val spec4 = (spec3 /: localChanges) {
+      case (s, msg: UpdateFailHtlc) => fail(s, in = true, msg)
+      case (s, msg: UpdateFulfillHtlc) => fulfill(s, in = true, msg)
+      case (s, u: UpdateFee) => s.copy(feeratePerKw = u.feeratePerKw)
+      case (s, _) => s
     }
 
-    (spec3 /: remoteChanges) {
-      case (spec, msg: UpdateFailHtlc) => fail(spec, in = false, msg)
-      case (spec, msg: UpdateFulfillHtlc) => fulfill(spec, in = false, msg)
-      case (spec, u: UpdateFee) => spec.copy(feeratePerKw = u.feeratePerKw)
-      case (spec, _) => spec
+    (spec4 /: remoteChanges) {
+      case (s, msg: UpdateFailHtlc) => fail(s, in = false, msg)
+      case (s, msg: UpdateFulfillHtlc) => fulfill(s, in = false, msg)
+      case (s, u: UpdateFee) => s.copy(feeratePerKw = u.feeratePerKw)
+      case (s, _) => s
     }
   }
 }
