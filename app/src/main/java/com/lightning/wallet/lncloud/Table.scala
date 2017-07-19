@@ -38,29 +38,28 @@ object ChannelTable extends Table {
 }
 
 object PaymentSpecTable extends Table {
-  val (table, data, hash, status, search) = ("payments", "data", "hash", "status", "search")
-  def selectRecentSql = s"SELECT * FROM $table ORDER BY $id DESC LIMIT 50"
+  import com.lightning.wallet.ln.PaymentSpec._
+  val (table, hash, progress, status, channel, data, search) = ("payments", "hash", "progress", "status", "channel", "data", "search")
+  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
-  // Fuzzy user generated queries
-  def searchSql = s"""SELECT * FROM $table WHERE $hash IN
-    (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"""
-
-  // Hidden -> Visible -> Failed or Success
-  // Data must be updated in case of route switches
   def updDataSql = s"UPDATE $table SET $data = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  // Inserting duplicate will result in exception but that is what we need
-  def newSql = s"INSERT INTO $table ($data, $hash, $status) VALUES (?, ?, ?)"
+  def updProgressSql = s"UPDATE $table SET $progress = ? WHERE $hash = ?"
+
+  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $progress, $status, $channel, $data) VALUES (?, ?, ?, ?, ?)"
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
 
   // Create tables
   def createSql = s"""
     CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
-      $data STRING NOT NULL,
       $hash STRING UNIQUE NOT NULL,
-      $status INTEGER NOT NULL
+      $progress INTEGER NOT NULL,
+      $status INTEGER NOT NULL,
+      $channel STRING NOT NULL,
+      $data STRING NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status);
     CREATE INDEX idx2 ON $table ($hash);

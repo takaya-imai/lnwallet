@@ -27,12 +27,13 @@ class LNCloudSpec {
   val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
 
   object TestPaymentSpecBag extends PaymentSpecBag {
-    def getRecentInfos: Vector[ExtendedPaymentInfo] = ???
-    def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS))
+    def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.FINALIZED, PaymentSpec.SUCCESS, BinaryData("00000000")))
 
-    def putInfo(info: ExtendedPaymentInfo): Unit = ???
-    def updatePaymentStatus(hash: BinaryData, status: Long): Unit = ???
-    def updateInfo(spec: OutgoingPaymentSpec): Unit = ???
+    def putData(info: ExtendedPaymentInfo): Unit = ???
+    def updateProgress(hash: BinaryData, status: Long): Unit = ???
+    def updateStatus(hash: BinaryData, status: Long): Unit = ???
+    def updateData(spec: OutgoingPaymentSpec): Unit = ???
+
   }
 
   val hops = Vector(
@@ -55,7 +56,7 @@ class LNCloudSpec {
     }
 
     override def SEND(message: LightningMessage) = ???
-    override def SAVE(content: HasCommitments) = content
+    override def STORE(content: HasCommitments) = content
   }
 
   def getCloud =

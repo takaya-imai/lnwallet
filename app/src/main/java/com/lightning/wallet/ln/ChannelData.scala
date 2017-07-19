@@ -143,10 +143,6 @@ case class Commitments(localParams: LocalParams, remoteParams: RemoteParams, loc
                        remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
 
 object Commitments {
-  def hasTimedoutOutgoingHtlcs(c: Commitments, chainHeight: Long): Boolean =
-    c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && chainHeight >= htlc.add.expiry) ||
-      c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && chainHeight >= htlc.add.expiry)
-
   def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
     case Left(wait) => c.localCommit.spec.htlcs.isEmpty && wait.nextRemoteCommit.spec.htlcs.isEmpty
     case _ => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty

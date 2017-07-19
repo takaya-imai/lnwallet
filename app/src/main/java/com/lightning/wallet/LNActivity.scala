@@ -94,7 +94,7 @@ with ListUpdater with SearchBar { me =>
   class PaymentsDataProvider extends ReactCallback(me) { self =>
     def updatePaymentList(payments: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = payments)
     def reload(txt: String) = runAnd(lastQuery = txt)(getSupportLoaderManager.restartLoader(1, null, self).forceLoad)
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.byStatus }
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
     def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
     val observeTablePath = db sqlPath PaymentSpecTable.table
@@ -129,7 +129,7 @@ with ListUpdater with SearchBar { me =>
 
       val image = info.status match {
         case PaymentSpec.SUCCESS => conf1
-        case PaymentSpec.FAIL => dead
+        case PaymentSpec.FAILURE => dead
         case _ => await
       }
 

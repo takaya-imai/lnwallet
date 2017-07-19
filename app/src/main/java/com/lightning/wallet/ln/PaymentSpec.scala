@@ -16,25 +16,30 @@ import scala.util.{Success, Try}
 
 
 trait PaymentSpec { val request: PaymentRequest }
-case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long)
+case class ExtendedPaymentInfo(spec: PaymentSpec, progress: Long, status: Long, chanId: BinaryData)
 case class IncomingPaymentSpec(request: PaymentRequest, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
 case class OutgoingPaymentSpec(request: PaymentRequest, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
 
 trait PaymentSpecBag {
-  def putInfo(info: ExtendedPaymentInfo): Unit
-  def updateInfo(spec: OutgoingPaymentSpec): Unit
-  def getInfoByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
-  def updatePaymentStatus(hash: BinaryData, status: Long): Unit
-  def newPreimage = BinaryData(random getBytes 32)
+  def putData(info: ExtendedPaymentInfo): Unit
+  def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
+  def newPreimage: BinaryData = BinaryData(random getBytes 32)
+  def updateProgress(hash: BinaryData, status: Long): Unit
+  def updateStatus(hash: BinaryData, status: Long): Unit
+  def updateData(spec: OutgoingPaymentSpec): Unit
 }
 
 object PaymentSpec {
-  // PaymentSpec states
   final val HIDDEN = 1L
-  final val VISIBLE = 2L
+  final val WAITING = 2L
   final val SUCCESS = 3L
-  final val FAIL = 4L
+  final val FAILURE = 4L
+
+  // Progress states
+  final val EPHEMERAL = 10L
+  final val COMMITTED = 20L
+  final val FINALIZED = 30L
 
   // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
@@ -93,7 +98,7 @@ object PaymentSpec {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
       // We are the final HTLC recipient, the only viable option
 
-      bag.getInfoByHash(add.paymentHash).map(_.spec) match {
+      bag.getDataByHash(add.paymentHash).map(_.spec) match {
         case Success(spec) if spec.request.amount.exists(add.amountMsat > _.amount * 2) =>
           // GUARD: they have sent too much funds, this is a protective measure against that
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)

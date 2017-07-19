@@ -3,6 +3,7 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.PaymentSpec._
 import com.lightning.wallet.lncloud.LNCloud._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -23,7 +24,6 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
-import scala.util.Success
 
 
 // User can set this one instead of public one
@@ -85,11 +85,12 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     // Start request while payment is in progress
     // Payment may be finished already so we ask the bag
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
-      bag.getInfoByHash(invoice.paymentHash).map(_.status) match {
-        case Success(PaymentSpec.SUCCESS) => me resolveSuccess memo
-        case Success(PaymentSpec.FAIL) => resetState
-        case Success(_) => me stayWith data
-        case _ => resetState
+
+      bag.getDataByHash(invoice.paymentHash) getOrElse null match {
+        case ExtendedPaymentInfo(_, FINALIZED, SUCCESS, _) => me resolveSuccess memo
+        case ExtendedPaymentInfo(_, FINALIZED, FAILURE, _) => resetState
+        case _: ExtendedPaymentInfo => me stayWith data
+        case null => resetState
       }
 
     case (_, action: LNCloudAct) =>
