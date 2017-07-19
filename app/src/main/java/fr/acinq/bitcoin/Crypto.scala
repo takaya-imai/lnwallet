@@ -3,6 +3,7 @@ package fr.acinq.bitcoin
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.math.BigInteger
 
+import org.bitcoin.{NativeSecp256k1, Secp256k1Context}
 import org.spongycastle.asn1.sec.SECNamedCurves
 import org.spongycastle.asn1.{ASN1Integer, DERSequenceGenerator}
 import org.spongycastle.crypto.Digest
@@ -31,11 +32,17 @@ object Crypto {
     * @param value value to initialize this scalar with
     */
   case class Scalar(value: BigInteger) {
-    def add(scalar: Scalar): Scalar = Scalar(value.add(scalar.value)).mod(Crypto.curve.getN)
+    def add(scalar: Scalar): Scalar = if (Secp256k1Context.isEnabled)
+      Scalar(NativeSecp256k1.privKeyTweakAdd(toBin, scalar.toBin))
+    else
+      Scalar(value.add(scalar.value)).mod(Crypto.curve.getN)
 
     def substract(scalar: Scalar): Scalar = Scalar(value.subtract(scalar.value)).mod(Crypto.curve.getN)
 
-    def multiply(scalar: Scalar): Scalar = Scalar(value.multiply(scalar.value).mod(Crypto.curve.getN))
+    def multiply(scalar: Scalar): Scalar = if (Secp256k1Context.isEnabled)
+      Scalar(NativeSecp256k1.privKeyTweakMul(toBin, scalar.toBin))
+    else
+      Scalar(value.multiply(scalar.value).mod(Crypto.curve.getN))
 
     def +(that: Scalar): Scalar = add(that)
 
@@ -53,7 +60,10 @@ object Crypto {
       *
       * @return this * G where G is the curve generator
       */
-    def toPoint: Point = Point(params.getG() * value)
+    def toPoint: Point = if (Secp256k1Context.isEnabled)
+      Point(NativeSecp256k1.computePubkey(toBin))
+    else
+      Point(params.getG() * value)
 
     override def toString = this.toBin.toString
   }
@@ -122,7 +132,10 @@ object Crypto {
 
     def substract(point: Point): Point = Point(value.subtract(point.value))
 
-    def multiply(scalar: Scalar): Point = Point(value.multiply(scalar.value))
+    def multiply(scalar: Scalar): Point = if (Secp256k1Context.isEnabled)
+      Point(NativeSecp256k1.pubKeyTweakMul(toBin(true), scalar.toBin))
+    else
+      Point(value.multiply(scalar.value))
 
     def normalize = Point(value.normalize())
 
@@ -328,6 +341,16 @@ object Crypto {
     s.compareTo(halfCurveOrder) <= 0
   }
 
+  def normalizeSignature(r: BigInteger, s: BigInteger): (BigInteger, BigInteger) = {
+    val s1 = if (s.compareTo(halfCurveOrder) > 0) curve.getN().subtract(s) else s
+    (r, s1)
+  }
+
+  def normalizeSignature(sig: BinaryData): BinaryData = {
+    val (r, s) = decodeSignature(sig)
+    encodeSignature(normalizeSignature(r, s))
+  }
+
   def checkSignatureEncoding(sig: Seq[Byte], flags: Int): Boolean = {
     import ScriptFlags._
     // Empty signature. Not strictly DER encoded, but allowed to provide a
@@ -410,18 +433,8 @@ object Crypto {
 
   def decodeSignatureLax(input: BinaryData) : (BigInteger, BigInteger) = decodeSignatureLax(new ByteArrayInputStream(input))
 
-    def verifySignature(data: Seq[Byte], signature: (BigInteger, BigInteger), publicKey: PublicKey): Boolean = {
-    val (r, s) = signature
-    require(r.compareTo(one) >= 0, "r must be >= 1")
-    require(r.compareTo(curve.getN) < 0, "r must be < N")
-    require(s.compareTo(one) >= 0, "s must be >= 1")
-    require(s.compareTo(curve.getN) < 0, "s must be < N")
-
-    val signer = new ECDSASigner
-    val params = new ECPublicKeyParameters(publicKey.value, curve)
-    signer.init(false, params)
-    signer.verifySignature(data.toArray, r, s)
-  }
+  def verifySignature(data: Seq[Byte], signature: (BigInteger, BigInteger), publicKey: PublicKey): Boolean =
+    verifySignature(data, encodeSignature(signature), publicKey)
 
   /**
     * @param data      data
@@ -429,7 +442,24 @@ object Crypto {
     * @param publicKey public key
     * @return true is signature is valid for this data with this public key
     */
-  def verifySignature(data: Seq[Byte], signature: Seq[Byte], publicKey: PublicKey): Boolean = verifySignature(data, decodeSignature(signature), publicKey)
+  def verifySignature(data: BinaryData, signature: BinaryData, publicKey: PublicKey): Boolean = {
+    if (Secp256k1Context.isEnabled) {
+      val signature1 = normalizeSignature(signature)
+      val native = NativeSecp256k1.verify(data, signature1, publicKey.toBin)
+      native
+    } else {
+      val (r, s) = decodeSignature(signature)
+      require(r.compareTo(one) >= 0, "r must be >= 1")
+      require(r.compareTo(curve.getN) < 0, "r must be < N")
+      require(s.compareTo(one) >= 0, "s must be >= 1")
+      require(s.compareTo(curve.getN) < 0, "s must be < N")
+
+      val signer = new ECDSASigner
+      val params = new ECPublicKeyParameters(publicKey.value, curve)
+      signer.init(false, params)
+      signer.verifySignature(data.toArray, r, s)
+    }
+  }
 
   /**
     *
@@ -447,15 +477,20 @@ object Crypto {
     * @return a (r, s) ECDSA signature pair
     */
   def sign(data: BinaryData, privateKey: PrivateKey): (BigInteger, BigInteger) = {
-    val signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest))
-    val privateKeyParameters = new ECPrivateKeyParameters(privateKey.value, curve)
-    signer.init(true, privateKeyParameters)
-    val Array(r, s) = signer.generateSignature(data.toArray)
-
-    if (s.compareTo(halfCurveOrder) > 0) {
-      (r, curve.getN().subtract(s)) // if s > N/2 then s = N - s
+    if (Secp256k1Context.isEnabled) {
+      val bin = NativeSecp256k1.sign(data, privateKey.value.toBin)
+      Crypto.decodeSignature(bin)
     } else {
-      (r, s)
+      val signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest))
+      val privateKeyParameters = new ECPrivateKeyParameters(privateKey.value, curve)
+      signer.init(true, privateKeyParameters)
+      val Array(r, s) = signer.generateSignature(data.toArray)
+
+      if (s.compareTo(halfCurveOrder) > 0) {
+        (r, curve.getN().subtract(s)) // if s > N/2 then s = N - s
+      } else {
+        (r, s)
+      }
     }
   }
 

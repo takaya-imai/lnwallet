@@ -420,7 +420,6 @@ object Transaction extends BtcSerializer[Transaction] {
     * @param privateKey           private key
     * @return the encoded signature of this tx for this specific tx input
     */
-
   def signInput(tx: Transaction, inputIndex: Int, previousOutputScript: BinaryData, sighashType: Int, privateKey: PrivateKey): BinaryData =
   signInput(tx, inputIndex, previousOutputScript, sighashType, amount = 0 satoshi, signatureVersion = SigVersion.SIGVERSION_BASE, privateKey)
 
