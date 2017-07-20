@@ -13,8 +13,8 @@ import scala.util.Try
 
 object StorageWrap {
   def put(value: String, key: String) = LNParams.db txWrap {
-    LNParams.db.change(sql = StorageTable.newSql, params = key, value)
-    LNParams.db.change(sql = StorageTable.updSql, params = value, key)
+    LNParams.db.change(StorageTable.newSql, params = key, value)
+    LNParams.db.change(StorageTable.updSql, params = value, key)
   }
 
   def get(key: String): Try[String] = {
@@ -46,24 +46,26 @@ object PaymentSpecWrap extends PaymentSpecBag { me =>
 
   def recentPayments: Cursor = LNParams.db select selectRecentSql
   def byQuery(query: String): Cursor = LNParams.db.select(searchSql, s"$query*")
-  def byHash(hash: BinaryData): Cursor = LNParams.db.select(selectByHashSql, hash.toString)
-  def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = RichCursor(me byHash hash) headTry toInfo
   def uiNotify = app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
+  def toInfo(rc: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rc string data),
+    status = rc long status, chanId = rc string channel)
 
-  def putData(info: ExtendedPaymentInfo) = LNParams.db txWrap {
-    val data ~ hashString = (info.spec.toJson.toString, info.spec.request.paymentHash.toString)
-    LNParams.db.change(newSql, hashString, info.progress.toString, info.status.toString, info.chanId.toString, data)
-    LNParams.db.change(newVirtualSql, params = s"${info.spec.request.description} $hashString", hashString)
-    app.getContentResolver.notifyChange(LNParams.db sqlPath table, null)
+  def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = {
+    val cursor = LNParams.db.select(selectByHashSql, params = hash.toString)
+    RichCursor(cursor) headTry toInfo
   }
 
-  def toInfo(rc: RichCursor) = ExtendedPaymentInfo(to[PaymentSpec](rc string data), rc long progress, rc long status, rc string channel)
-  def updateProgress(hash: BinaryData, progress: Long) = LNParams.db.change(updProgressSql, progress.toString, hash.toString)
-  def updateStatus(hash: BinaryData, status: Long) = LNParams.db.change(updStatusSql, status.toString, hash.toString)
-
-  def updateData(spec: OutgoingPaymentSpec) = {
-    val hashString = spec.request.paymentHash.toString
-    LNParams.db.change(updDataSql, spec.toJson.toString, hashString)
+  def putData(info: ExtendedPaymentInfo): Unit = LNParams.db txWrap {
+    val data ~ hashString = (info.spec.toJson.toString, info.spec.request.paymentHash.toString)
+    LNParams.db.change(newVirtualSql, s"${info.spec.request.description} $hashString", hashString)
+    LNParams.db.change(newSql, hashString, info.status.toString, info.chanId.toString, data)
     uiNotify
   }
+
+  def updateStatus(hash: BinaryData, status: Long): Unit =
+    LNParams.db.change(updStatusSql, status.toString, hash.toString)
+
+  def updateData(spec: OutgoingPaymentSpec): Unit =
+    LNParams.db.change(updDataSql, spec.toJson.toString,
+      spec.request.paymentHash.toString)
 }

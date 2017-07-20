@@ -27,7 +27,7 @@ class LNCloudSpec {
   val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
 
   object TestPaymentSpecBag extends PaymentSpecBag {
-    def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.FINALIZED, PaymentSpec.SUCCESS, BinaryData("00000000")))
+    def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS, BinaryData("00000000")))
 
     def putData(info: ExtendedPaymentInfo): Unit = ???
     def updateProgress(hash: BinaryData, status: Long): Unit = ???

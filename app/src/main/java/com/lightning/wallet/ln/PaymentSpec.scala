@@ -16,7 +16,7 @@ import scala.util.{Success, Try}
 
 
 trait PaymentSpec { val request: PaymentRequest }
-case class ExtendedPaymentInfo(spec: PaymentSpec, progress: Long, status: Long, chanId: BinaryData)
+case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long, chanId: BinaryData)
 case class IncomingPaymentSpec(request: PaymentRequest, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
 case class OutgoingPaymentSpec(request: PaymentRequest, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
                                amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
@@ -25,7 +25,6 @@ trait PaymentSpecBag {
   def putData(info: ExtendedPaymentInfo): Unit
   def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
-  def updateProgress(hash: BinaryData, status: Long): Unit
   def updateStatus(hash: BinaryData, status: Long): Unit
   def updateData(spec: OutgoingPaymentSpec): Unit
 }
@@ -35,11 +34,6 @@ object PaymentSpec {
   final val WAITING = 2L
   final val SUCCESS = 3L
   final val FAILURE = 4L
-
-  // Progress states
-  final val EPHEMERAL = 10L
-  final val COMMITTED = 20L
-  final val FINALIZED = 30L
 
   // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000

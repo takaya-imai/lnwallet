@@ -39,24 +39,21 @@ object ChannelTable extends Table {
 
 object PaymentSpecTable extends Table {
   import com.lightning.wallet.ln.PaymentSpec._
-  val (table, hash, progress, status, channel, data, search) = ("payments", "hash", "progress", "status", "channel", "data", "search")
-  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"
+  val (table, hash, status, channel, data, search) = ("payments", "hash", "status", "channel", "data", "search")
+  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts4$table WHERE $search MATCH ? LIMIT 50)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   def updDataSql = s"UPDATE $table SET $data = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def updProgressSql = s"UPDATE $table SET $progress = ? WHERE $hash = ?"
-
-  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $progress, $status, $channel, $data) VALUES (?, ?, ?, ?, ?)"
-  def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
+  def newVirtualSql = s"INSERT INTO $fts4$table ($search, $hash) VALUES (?, ?)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $status, $channel, $data) VALUES (?, ?, ?, ?)"
 
   // Create tables
   def createSql = s"""
     CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $hash STRING UNIQUE NOT NULL,
-      $progress INTEGER NOT NULL,
       $status INTEGER NOT NULL,
       $channel STRING NOT NULL,
       $data STRING NOT NULL
@@ -66,11 +63,11 @@ object PaymentSpecTable extends Table {
     COMMIT"""
 
   def createVirtualSql = s"""
-    CREATE VIRTUAL TABLE $fts$table
+    CREATE VIRTUAL TABLE $fts4$table
     USING fts4($search, $hash)"""
 }
 
-trait Table { val (id, fts) = "_id" -> "fts" }
+trait Table { val (id, fts4) = "_id" -> "fts" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
 extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
 
