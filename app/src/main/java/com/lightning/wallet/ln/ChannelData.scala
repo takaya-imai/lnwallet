@@ -31,10 +31,10 @@ case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends MemoCommand
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends MemoCommand
 case object CMDProceed extends MemoCommand
 
-sealed trait CMDAddHtlc extends MemoCommand { val spec: OutgoingPaymentSpec }
-case class SilentAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
-case class PlainAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
-case class RetryAddHtlc(spec: OutgoingPaymentSpec) extends CMDAddHtlc
+sealed trait CMDAddHtlc extends MemoCommand { val out: OutgoingPayment }
+case class SilentAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
+case class PlainAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
+case class RetryAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
 
 // CHANNEL DATA
 
@@ -150,10 +150,9 @@ case class Commitments(localParams: LocalParams, remoteParams: RemoteParams, loc
                        remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
 
 object Commitments {
-  def hasNoPendingHtlcs(c: Commitments): Boolean = c.remoteNextCommitInfo match {
-    case Left(wait) => c.localCommit.spec.htlcs.isEmpty && wait.nextRemoteCommit.spec.htlcs.isEmpty
-    case _ => c.localCommit.spec.htlcs.isEmpty && c.remoteCommit.spec.htlcs.isEmpty
-  }
+  def pendingHtlcs(c: Commitments): Set[Htlc] =
+    c.localCommit.spec.htlcs ++ c.remoteCommit.spec.htlcs ++
+      c.remoteNextCommitInfo.left.toSeq.flatMap(_.nextRemoteCommit.spec.htlcs)
 
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
@@ -176,15 +175,15 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.spec.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd.spec)
-    else if (cmd.spec.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd.spec)
-    else if (cmd.spec.request.paymentHash.size != 32) throw ExtendedException(cmd.spec)
+    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd.out)
+    else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd.out)
+    else if (cmd.out.request.paymentHash.size != 32) throw ExtendedException(cmd.out)
     else {
 
       // Let's compute the current commitment
       // *as seen by them* with this change taken into account
-      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.spec.amountWithFee,
-        cmd.spec.request.paymentHash, cmd.spec.expiry, cmd.spec.onion.packet.serialize)
+      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.out.routing.amountWithFee,
+        cmd.out.request.paymentHash, cmd.out.routing.expiry, cmd.out.routing.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
@@ -194,9 +193,9 @@ object Commitments {
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
       // The rest of the guards
-      if (htlcValueInFlightOverflow) throw ExtendedException(cmd.spec)
-      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd.spec)
-      else if (feesOverflow) throw ExtendedException(cmd.spec)
+      if (htlcValueInFlightOverflow) throw ExtendedException(cmd.out)
+      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd.out)
+      else if (feesOverflow) throw ExtendedException(cmd.out)
       else c1 -> add
     }
 

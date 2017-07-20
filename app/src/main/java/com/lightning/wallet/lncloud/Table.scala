@@ -39,24 +39,33 @@ object ChannelTable extends Table {
 
 object PaymentSpecTable extends Table {
   import com.lightning.wallet.ln.PaymentSpec._
-  val (table, hash, status, channel, data, search) = ("payments", "hash", "status", "channel", "data", "search")
+  val names = ("payments", "hash", "request", "status", "chanid", "preimage", "routing", "search")
+  val (table, hash, request, status, chanId, preimage, routing, search) = names
+
+  def newVirtualSql = s"INSERT INTO $fts4$table ($search, $hash) VALUES (?, ?)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $routing) VALUES (?, ?, ?, ?, ?, ?)"
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts4$table WHERE $search MATCH ? LIMIT 50)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
-  def updDataSql = s"UPDATE $table SET $data = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def newVirtualSql = s"INSERT INTO $fts4$table ($search, $hash) VALUES (?, ?)"
-  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $status, $channel, $data) VALUES (?, ?, ?, ?)"
+  def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?"
+  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
+
+  def failPendingSql = s"""
+    UPDATE $table SET $status = $FAILURE
+    WHERE $status = ? AND $chanId = ?"""
 
   // Create tables
   def createSql = s"""
     CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $hash STRING UNIQUE NOT NULL,
+      $request STRING NOT NULL,
       $status INTEGER NOT NULL,
-      $channel STRING NOT NULL,
-      $data STRING NOT NULL
+      $chanId STRING NOT NULL,
+      $preimage STRING,
+      $routing STRING
     );
     CREATE INDEX idx1 ON $table ($status);
     CREATE INDEX idx2 ON $table ($hash);

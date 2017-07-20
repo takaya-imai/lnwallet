@@ -67,7 +67,7 @@ class LNCloudSpec {
         data = savedData
 
         override def makeOutgoingSpecOpt(req: PaymentRequest) = obsOn( {
-          buildOutgoingSpec(Vector(hops), req, LNParams.outgoingExpiry)
+          buildOutgoingSpec(Vector(hops), req, LNParams.expiry)
         }, IOScheduler.apply)
       }
 
@@ -79,7 +79,7 @@ class LNCloudSpec {
         data = data1
 
         override def makeOutgoingSpecOpt(req: PaymentRequest) = obsOn( {
-          buildOutgoingSpec(Vector(hops), req, LNParams.outgoingExpiry)
+          buildOutgoingSpec(Vector(hops), req, LNParams.expiry)
         }, IOScheduler.apply)
       }
 

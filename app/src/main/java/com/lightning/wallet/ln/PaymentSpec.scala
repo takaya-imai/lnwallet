@@ -15,27 +15,26 @@ import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import scala.util.{Success, Try}
 
 
-trait PaymentSpec { val request: PaymentRequest }
-case class ExtendedPaymentInfo(spec: PaymentSpec, status: Long, chanId: BinaryData)
-case class IncomingPaymentSpec(request: PaymentRequest, preimage: BinaryData, kind: String = "IncomingPaymentSpec") extends PaymentSpec
-case class OutgoingPaymentSpec(request: PaymentRequest, preimage: Option[BinaryData], routes: Vector[PaymentRoute], onion: SecretsAndPacket,
-                               amountWithFee: Long, expiry: Long, kind: String = "OutgoingPaymentSpec") extends PaymentSpec
+case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
+case class IncomingPayment(hash: BinaryData, preimage: BinaryData, request: PaymentRequest, status: Long, chanId: BinaryData)
+case class OutgoingPayment(routing: RoutingData, hash: BinaryData, preimage: BinaryData, request: PaymentRequest, status: Long, chanId: BinaryData)
 
 trait PaymentSpecBag {
-  def putData(info: ExtendedPaymentInfo): Unit
-  def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo]
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
-  def updateStatus(hash: BinaryData, status: Long): Unit
-  def updateData(spec: OutgoingPaymentSpec): Unit
+  def getOutgoingPayment(hash: BinaryData): Try[OutgoingPayment]
 }
 
 object PaymentSpec {
+  final val TEMP = 0L
   final val HIDDEN = 1L
   final val WAITING = 2L
   final val SUCCESS = 3L
   final val FAILURE = 4L
 
-  // The fee (in msat) that a node should be paid to forward an HTLC of 'amount' millisatoshis
+  // Used for unresolved outgoing
+  val NOIMAGE = BinaryData("0x00")
+
+  // The fee (in milliSatoshi) that a node should be paid to forward an HTLC of 'amount' milliSatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
 
   // finalAmountMsat = final amount specified by the recipient
@@ -60,26 +59,26 @@ object PaymentSpec {
   private def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
   private def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
 
-  def reduceRoutes(fail: UpdateFailHtlc, spec: OutgoingPaymentSpec) =
-    parseErrorPacket(spec.onion.sharedSecrets, packet = fail.reason) map {
-      case ErrorPacket(nodeId, _: Perm) if spec.request.nodeId == nodeId =>
+  def reduceRoutes(fail: UpdateFailHtlc, payment: OutgoingPayment) =
+    parseErrorPacket(payment.routing.onion.sharedSecrets, fail.reason) map {
+      case ErrorPacket(nodeId, _: Perm) if payment.request.nodeId == nodeId =>
         // Permanent error from a final node, nothing we can do here
         Vector.empty
 
       case ErrorPacket(nodeId, _: Node) =>
-        // Look for channels without this node
-        withoutNode(spec.routes, nodeId.toBin)
+        // Look for channels left without this node
+        withoutNode(payment.routing.routes, nodeId.toBin)
 
       case ErrorPacket(nodeId, message: Update) =>
-        // This node may have other channels so try them out
-        withoutChannel(spec.routes, message.update.shortChannelId)
+        // This node may have other channels left so try them out
+        withoutChannel(payment.routing.routes, message.update.shortChannelId)
 
       case _ =>
-        // Just try another
-        spec.routes drop 1
+        // Just try another route
+        payment.routing.routes drop 1
 
-      // Could not parse, try another
-    } getOrElse spec.routes drop 1
+      // Could not parse, try another route
+    } getOrElse payment.routing.routes drop 1
 
   private def failHtlc(sharedSecret: BinaryData, add: UpdateAddHtlc, failure: FailureMessage) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
@@ -92,22 +91,18 @@ object PaymentSpec {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
       // We are the final HTLC recipient, the only viable option
 
-      bag.getDataByHash(add.paymentHash).map(_.spec) match {
-        case Success(spec) if spec.request.amount.exists(add.amountMsat > _.amount * 2) =>
+      bag.getOutgoingPayment(add.paymentHash) match {
+        case Success(pay) if pay.request.amount.exists(add.amountMsat > _.amount * 2) =>
           // GUARD: they have sent too much funds, this is a protective measure against that
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(spec) if spec.request.amount.exists(add.amountMsat < _.amount) =>
+        case Success(pay) if pay.request.amount.exists(add.amountMsat < _.amount) =>
           // GUARD: amount is less than what we requested, we won't accept such payment
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(spec) if add.expiry < LNParams.outgoingExpiry =>
-          // GUARD: we may not have enough time until expiration
-          failHtlc(sharedSecret, add, FinalExpiryTooSoon)
-
-        case Success(spec: IncomingPaymentSpec) =>
-          // We have a valid *incoming* payment spec
-          CMDFulfillHtlc(add.id, spec.preimage)
+        case Success(pay) =>
+          // We have a valid outgoing payment
+          CMDFulfillHtlc(add.id, pay.preimage)
 
         case _ =>
           // Payment spec has not been found

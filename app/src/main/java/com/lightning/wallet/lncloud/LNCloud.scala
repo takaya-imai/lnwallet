@@ -94,7 +94,7 @@ extends StateMachine[PublicData] with Pathfinder { me =>
 
     case (_, action: LNCloudAct) =>
       // We must always record incoming actions
-      val actions1 = action :: data.acts take 1000
+      val actions1 = action :: data.acts take 500
       me stayWith data.copy(acts = actions1)
       me doProcess CMDStart
 
@@ -138,7 +138,7 @@ trait Pathfinder {
 
   def makeOutgoingSpecOpt(request: PaymentRequest) =
     lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map {
-      routes => buildOutgoingSpec(routes, request, LNParams.outgoingExpiry)
+      routes => buildOutgoingSpec(routes, request, LNParams.expiry)
     }
 
   // since the spec is outgoing, even if recepient did not specify an amount, PaymentRequest nees to have some amount here

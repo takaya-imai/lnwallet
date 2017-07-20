@@ -37,8 +37,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
-      case (InitData(announce), cmd@CMDOpenChannel(localParams, tempChannelId,
-      initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
+      case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
+        initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(localParams.chainHash, tempChannelId, fundingAmountSat, pushMsat,
           localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat, localParams.channelReserveSat, localParams.htlcMinimumMsat,
@@ -80,8 +80,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
           wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
-        if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) BECOME(wait, CLOSING)
-        else {
+        if (Scripts.checkSpendable(signedLocalCommitTx).isFailure) BECOME(wait, CLOSING) else {
           val localCommit = LocalCommit(index = 0, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
           val localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty)
           val remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty)
@@ -142,8 +141,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
         if add.channelId == norm.commitments.channelId =>
 
-        val incomingExpiry: Int = LNParams.broadcaster.currentHeight + 6
-        val c1 = Commitments.receiveAdd(norm.commitments, add, incomingExpiry)
+        // Should check if we have enough blocks to fulfill this HTLC
+        val c1 = Commitments.receiveAdd(norm.commitments, add, LNParams.expiry)
         me UPDATE norm.copy(commitments = c1)
 
 
@@ -197,9 +196,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // GUARD: serves as a trigger to enter negotiations when shutdown mode is active
       case (norm@NormalData(_, commitments, Some(local), Some(remote), _), CMDProceed, NORMAL)
-        if Commitments hasNoPendingHtlcs commitments =>
+        if Commitments.pendingHtlcs(commitments).isEmpty =>
 
-        // Send a message and enter negotiations mode
+        // Send a message and enter negotiations mode right away
         STARTNegotiations(norm.announce, commitments, local, remote)
 
 
@@ -263,17 +262,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if remote.channelId == commitments.channelId =>
 
         // We can start negotiations if there are no in-flight HTLCs, otherwise wait until they are cleared
-        if (Commitments hasNoPendingHtlcs commitments) STARTNegotiations(announce, commitments, local, remote)
+        if (Commitments.pendingHtlcs(commitments).isEmpty) STARTNegotiations(announce, commitments, local, remote)
         else me UPDATE norm.copy(remoteShutdown = Some apply remote)
 
 
-      // HTLC TIMEOUT WATCH
-
-
-      case (norm: NormalData, CMDHeight(chainHeight), NORMAL | SYNC)
-        if norm.commitments.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && chainHeight >= htlc.add.expiry) ||
-          norm.commitments.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && chainHeight >= htlc.add.expiry) =>
-
+      case (norm: NormalData, CMDHeight(height), NORMAL | SYNC)
+        // GUARD: we have to always watch for expired HTLCs and close a chan if they exist
+        if Commitments.pendingHtlcs(norm.commitments).exists(_.add.expiry <= height) =>
         STARTLocalCurrentClose(norm)
 
 
@@ -451,7 +446,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     }
 
     // After successfull process
-    events onProcess change
+    val processed = (data, change)
+    events onProcess processed
   }
 
   private def makeFundingLocked(cs: Commitments) = {
@@ -532,8 +528,9 @@ object Channel {
 }
 
 trait ChannelListener {
-  type Transition = (Channel, Any, String, String)
-  def onError: PartialFunction[Throwable, Unit] = none
+  type Incoming = (ChannelData, Any)
+  type Transition = (Channel, ChannelData, String, String)
   def onBecome: PartialFunction[Transition, Unit] = none
-  def onProcess: PartialFunction[Any, Unit] = none
+  def onProcess: PartialFunction[Incoming, Unit] = none
+  def onError: PartialFunction[Throwable, Unit] = none
 }
