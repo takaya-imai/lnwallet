@@ -26,14 +26,17 @@ class LNCloudSpec {
 
   val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
 
-  object TestPaymentSpecBag extends PaymentSpecBag {
-    def getDataByHash(hash: BinaryData): Try[ExtendedPaymentInfo] = Try(ExtendedPaymentInfo(null, PaymentSpec.SUCCESS, BinaryData("00000000")))
+  object TestPaymentSpecBag extends PaymentInfoBag {
+    def failPending(status: Long, chanId: BinaryData): Unit = ???
+    def updateRouting(routing: RoutingData, hash: BinaryData): Unit = ???
+    def updateStatus(status: Long, hash: BinaryData): Unit = ???
+    def updatePreimage(update: UpdateFulfillHtlc): Unit = ???
 
-    def putData(info: ExtendedPaymentInfo): Unit = ???
-    def updateProgress(hash: BinaryData, status: Long): Unit = ???
-    def updateStatus(hash: BinaryData, status: Long): Unit = ???
-    def updateData(spec: OutgoingPaymentSpec): Unit = ???
+    def getPaymentInfo(hash: BinaryData): Try[PaymentInfo] = Try {
+      OutgoingPayment(null, preimage, null, null, PaymentInfo.SUCCESS)
+    }
 
+    def putPaymentInfo(info: PaymentInfo): Unit = ???
   }
 
   val hops = Vector(
@@ -65,10 +68,6 @@ class LNCloudSpec {
 
       new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
         data = savedData
-
-        override def makeOutgoingSpecOpt(req: PaymentRequest) = obsOn( {
-          buildOutgoingSpec(Vector(hops), req, LNParams.expiry)
-        }, IOScheduler.apply)
       }
 
     } getOrElse {
@@ -77,10 +76,6 @@ class LNCloudSpec {
 
       new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
         data = data1
-
-        override def makeOutgoingSpecOpt(req: PaymentRequest) = obsOn( {
-          buildOutgoingSpec(Vector(hops), req, LNParams.expiry)
-        }, IOScheduler.apply)
       }
 
     }

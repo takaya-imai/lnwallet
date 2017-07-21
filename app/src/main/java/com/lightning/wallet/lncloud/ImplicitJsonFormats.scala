@@ -61,19 +61,6 @@ object ImplicitJsonFormats { me =>
     }
   }
 
-  implicit object PaymentSpecFmt extends JsonFormat[PaymentSpec] {
-    def read(json: JsValue) = json.asJsObject fields "kind" match {
-      case JsString("OutgoingPaymentSpec") => json.convertTo[OutgoingPaymentSpec]
-      case JsString("IncomingPaymentSpec") => json.convertTo[IncomingPaymentSpec]
-      case _ => throw new RuntimeException
-    }
-
-    def write(internal: PaymentSpec) = internal match {
-      case spec: OutgoingPaymentSpec => spec.toJson
-      case spec: IncomingPaymentSpec => spec.toJson
-    }
-  }
-
   implicit object CoinFmt extends JsonFormat[Coin] {
     def read(json: JsValue) = Coin valueOf json.convertTo[Long]
     def write(coin: Coin) = coin.value.toJson
@@ -143,13 +130,8 @@ object ImplicitJsonFormats { me =>
   implicit val secretsAndPacketFmt = jsonFormat[Vector[BytesAndKey], Packet,
     SecretsAndPacket](SecretsAndPacket.apply, "sharedSecrets", "packet")
 
-  implicit val outgoingPaymentSpecFmt = jsonFormat[PaymentRequest,
-    Option[BinaryData], Vector[PaymentRoute], SecretsAndPacket, Long, Long, String,
-    OutgoingPaymentSpec](OutgoingPaymentSpec.apply, "request", "preimage", "routes",
-    "onion", "amountWithFee", "expiry", "kind")
-
-  implicit val incomingPaymentSpecFmt = jsonFormat[PaymentRequest, BinaryData, String,
-    IncomingPaymentSpec](IncomingPaymentSpec.apply, "request", "preimage", "kind")
+  implicit val routingDataFmt = jsonFormat[Vector[PaymentRoute], SecretsAndPacket, Long, Long,
+    RoutingData](RoutingData.apply, "routes", "onion", "amountWithFee", "expiry")
 
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")

@@ -1,6 +1,6 @@
 package com.lightning.wallet.test
 
-import com.lightning.wallet.ln.PaymentSpec
+import com.lightning.wallet.ln.PaymentInfo
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import com.lightning.wallet.ln.Tools.random
@@ -10,7 +10,7 @@ import scodec.bits.BitVector
 
 
 class HtlcGenerationSpec {
-  import PaymentSpec._
+  import PaymentInfo._
 
   def randomKey = PrivateKey(random getBytes 32)
   val (priv_a, priv_b, priv_c, priv_d, priv_e) = (randomKey, randomKey, randomKey, randomKey, randomKey)

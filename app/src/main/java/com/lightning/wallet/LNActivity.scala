@@ -97,13 +97,13 @@ with ListUpdater with SearchBar { me =>
     def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
     def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
-    val observeTablePath = db sqlPath PaymentSpecTable.table
+    val observeTablePath = db sqlPath PaymentInfoTable.table
     private var lastQuery = new String
 
-    type InfoVec = Vector[ExtendedPaymentInfo]
-    abstract class ExtendedPaymentInfoLoader extends ReactLoader[ExtendedPaymentInfo](me) {
+    type InfoVec = Vector[PaymentInfo]
+    abstract class ExtendedPaymentInfoLoader extends ReactLoader[PaymentInfo](me) {
       val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
-      def createItem(shifted: RichCursor) = bag toInfo shifted
+      def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
     }
   }
 
@@ -115,7 +115,7 @@ with ListUpdater with SearchBar { me =>
       view
     }
 
-    var payments = Vector.empty[ExtendedPaymentInfo]
+    var payments = Vector.empty[PaymentInfo]
     def getItem(position: Int) = payments(position)
     def getItemId(position: Int) = position
     def getCount = payments.size
@@ -123,19 +123,19 @@ with ListUpdater with SearchBar { me =>
 
   class LNView(view: View)
   extends TxViewHolder(view) {
-    def fillView(info: ExtendedPaymentInfo) = {
-      val stamp = new Date(info.spec.request.timestamp * 1000)
-      val time = when(System.currentTimeMillis, stamp)
-
-      val image = info.status match {
-        case PaymentSpec.SUCCESS => conf1
-        case PaymentSpec.FAILURE => dead
-        case _ => await
-      }
-
-      transactWhen setText time.html
-      //transactSum setText paymentMarking.html
-      transactCircle setImageResource image
+    def fillView(info: PaymentInfo) = {
+//      val stamp = new Date(info.spec.request.timestamp * 1000)
+//      val time = when(System.currentTimeMillis, stamp)
+//
+//      val image = info.status match {
+//        case PaymentSpec.SUCCESS => conf1
+//        case PaymentSpec.FAILURE => dead
+//        case _ => await
+//      }
+//
+//      transactWhen setText time.html
+//      //transactSum setText paymentMarking.html
+//      transactCircle setImageResource image
     }
   }
 

@@ -21,7 +21,7 @@ object LNParams {
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   lazy val publicCloud = new LNCloud("http://10.0.2.2")
   lazy val broadcaster = LocalBroadcaster
-  lazy val bag = PaymentSpecWrap
+  lazy val bag = PaymentInfoWrap
 
   var nodePrivateKey: PrivateKey = _
   var cloudPrivateKey: PrivateKey = _

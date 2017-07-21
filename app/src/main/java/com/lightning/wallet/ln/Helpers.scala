@@ -126,7 +126,7 @@ object Helpers { me =>
     def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi): Satoshi =
       (localClosingFee + remoteClosingFee) / 4 * 2
 
-    def claimCurrentLocalCommitTxOutputs(commitments: Commitments, tx: Transaction, bag: PaymentSpecBag) = {
+    def claimCurrentLocalCommitTxOutputs(commitments: Commitments, tx: Transaction, bag: PaymentInfoBag) = {
       val localPerCommitmentPoint = Generators.perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)
       val localRevocationPubkey = Generators.revocationPubKey(commitments.remoteParams.revocationBasepoint, localPerCommitmentPoint)
       val localDelayedPrivkey = Generators.derivePrivKey(commitments.localParams.delayedPaymentKey, localPerCommitmentPoint)
@@ -142,7 +142,7 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- localTxs
-        IncomingPaymentSpec(_, preimage, _) <- bag.getDataByHash(info.paymentHash).map(_.spec).toOption
+        IncomingPayment(preimage, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
         success <- makeTx("htlc-success") apply Scripts.addSigs(info, localSig, remoteSig, preimage)
         successClaim <- makeClaimDelayedOutput(success, "htlc-success-claim-delayed")
       } yield success -> successClaim
@@ -162,7 +162,7 @@ object Helpers { me =>
     }
 
     def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit,
-                                   tx: Transaction, bag: PaymentSpecBag): RemoteCommitPublished = {
+                                   tx: Transaction, bag: PaymentInfoBag): RemoteCommitPublished = {
 
       val (remoteCommitTx, _, _) = makeRemoteTxs(remoteCommit.index, commitments.localParams,
         commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint,
@@ -179,7 +179,7 @@ object Helpers { me =>
 
       val claimSuccessTxs = for {
         Htlc(false, add) <- remoteCommit.spec.htlcs
-        IncomingPaymentSpec(_, preimage, _) <- bag.getDataByHash(add.paymentHash).map(_.spec).toOption
+        IncomingPayment(preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
         info: ClaimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 

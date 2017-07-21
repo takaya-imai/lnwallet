@@ -4,6 +4,9 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import scala.util.{Success, Try}
+
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
 import fr.acinq.eclair.payment.PaymentRequest
 import com.lightning.wallet.ln.Tools.random
@@ -11,20 +14,33 @@ import fr.acinq.bitcoin.BinaryData
 import scodec.bits.BitVector
 import scodec.Attempt
 
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import scala.util.{Success, Try}
 
-
-case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
-case class IncomingPayment(hash: BinaryData, preimage: BinaryData, request: PaymentRequest, status: Long, chanId: BinaryData)
-case class OutgoingPayment(routing: RoutingData, hash: BinaryData, preimage: BinaryData, request: PaymentRequest, status: Long, chanId: BinaryData)
-
-trait PaymentSpecBag {
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
-  def getOutgoingPayment(hash: BinaryData): Try[OutgoingPayment]
+trait PaymentInfo {
+  val preimage: BinaryData
+  val request: PaymentRequest
+  val chanId: BinaryData
+  val status: Long
 }
 
-object PaymentSpec {
+case class IncomingPayment(preimage: BinaryData, request: PaymentRequest,
+                           chanId: BinaryData, status: Long) extends PaymentInfo
+
+case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
+case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest,
+                           chanId: BinaryData, status: Long) extends PaymentInfo
+
+trait PaymentInfoBag {
+  def failPending(status: Long, chanId: BinaryData): Unit
+  def updateRouting(routing: RoutingData, hash: BinaryData): Unit
+  def updateStatus(status: Long, hash: BinaryData): Unit
+  def updatePreimage(update: UpdateFulfillHtlc): Unit
+
+  def newPreimage: BinaryData = BinaryData(random getBytes 32)
+  def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
+  def putPaymentInfo(info: PaymentInfo): Unit
+}
+
+object PaymentInfo {
   final val TEMP = 0L
   final val HIDDEN = 1L
   final val WAITING = 2L
@@ -83,7 +99,7 @@ object PaymentSpec {
   private def failHtlc(sharedSecret: BinaryData, add: UpdateAddHtlc, failure: FailureMessage) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
 
-  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentSpecBag) = Try {
+  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag) = Try {
     val packet = parsePacket(nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload)
     Tuple3(payload, packet.nextPacket, packet.sharedSecret)
@@ -91,7 +107,7 @@ object PaymentSpec {
     case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
       // We are the final HTLC recipient, the only viable option
 
-      bag.getOutgoingPayment(add.paymentHash) match {
+      bag getPaymentInfo add.paymentHash match {
         case Success(pay) if pay.request.amount.exists(add.amountMsat > _.amount * 2) =>
           // GUARD: they have sent too much funds, this is a protective measure against that
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
@@ -100,8 +116,8 @@ object PaymentSpec {
           // GUARD: amount is less than what we requested, we won't accept such payment
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(pay) =>
-          // We have a valid outgoing payment
+        case Success(pay: OutgoingPayment) =>
+          // We have a valid *outgoing* payment
           CMDFulfillHtlc(add.id, pay.preimage)
 
         case _ =>

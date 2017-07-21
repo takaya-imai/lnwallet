@@ -3,7 +3,7 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.PaymentSpec._
+import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.LNCloud._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -33,7 +33,7 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
 
   def doProcess(some: Any) = (data, some) match {
     case (PrivateData(actions, _), act: LNCloudAct) =>
-      me stayWith data.copy(acts = act :: actions take 1000)
+      me stayWith data.copy(acts = act :: actions take 500)
       me doProcess CMDStart
 
     case (PrivateData(action :: rest, _), CMDStart) =>
@@ -54,22 +54,22 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
 
 // By default a public pathfinder is used but user may provide their own private pathfinder anytime they want
 case class PublicData(info: Option[RequestAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
-class PublicPathfinder(val bag: PaymentSpecBag, val lnCloud: LNCloud, val channel: Channel)
+class PublicPathfinder(val bag: PaymentInfoBag, val lnCloud: LNCloud, val channel: Channel)
 extends StateMachine[PublicData] with Pathfinder { me =>
 
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
-      invoice ~ blindMemo <- retry(getInfo, pickInc, 2 to 3)
-      Some(spec) <- retry(makeOutgoingSpecOpt(invoice), pickInc, 2 to 3)
-    } me doProcess Tuple2(spec, blindMemo)
+      request ~ blindMemo <- retry(getInfo, pickInc, 2 to 3)
+      payment <- retry(makeOutgoingSpecOpt(request), pickInc, 2 to 3)
+    } me doProcess Tuple2(payment, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
-    case PublicData(None, tokens, _) ~ Tuple2(spec: OutgoingPaymentSpec, memo: BlindMemo) =>
-      me stayWith data.copy(info = Some(spec.request, memo), tokens = tokens)
-      channel doProcess SilentAddHtlc(spec)
+    case PublicData(None, tokens, _) ~ Tuple2(payment: OutgoingPayment, memo: BlindMemo) =>
+      me stayWith data.copy(info = Some(payment.request, memo), tokens = tokens)
+      channel doProcess SilentAddHtlc(payment)
 
     // No matter what the state is: do it if we have acts and tokens
     case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
@@ -85,10 +85,10 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     // Start request while payment is in progress
     // Payment may be finished already so we ask the bag
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
-      bag.getDataByHash(invoice.paymentHash) getOrElse null match {
-        case ExtendedPaymentInfo(_, SUCCESS, _) => me resolveSuccess memo
-        case ExtendedPaymentInfo(_, FAILURE, _) => resetState
-        case _: ExtendedPaymentInfo => me stayWith data
+      bag.getPaymentInfo(invoice.paymentHash) getOrElse null match {
+        case OutgoingPayment(_, _, _, _, SUCCESS) => me resolveSuccess memo
+        case OutgoingPayment(_, _, _, _, FAILURE) => resetState
+        case pending: OutgoingPayment => me stayWith data
         case null => resetState
       }
 
@@ -136,16 +136,11 @@ trait Pathfinder {
   val lnCloud: LNCloud
   val channel: Channel
 
-  def makeOutgoingSpecOpt(request: PaymentRequest) =
-    lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map {
-      routes => buildOutgoingSpec(routes, request, LNParams.expiry)
-    }
-
-  // since the spec is outgoing, even if recepient did not specify an amount, PaymentRequest nees to have some amount here
-  def buildOutgoingSpec(rest: Vector[PaymentRoute], request: PaymentRequest, finalExpiry: Int) = rest.headOption map { route =>
-    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentSpec.buildRoute(request.amount.get.amount, finalExpiry, hops = route)
-    val onion = PaymentSpec.buildOnion(PublicKey(channel.data.announce.nodeId) +: route.map(_.nextNodeId), payloads, request.paymentHash)
-    OutgoingPaymentSpec(request, preimage = None, rest.tail, onion, amountWithAllFees, expiryWithAllDeltas)
+  // This may fail for multiple reasons like network connectivity or channel state, so we should be prepared for that
+  def makeOutgoingSpecOpt(request: PaymentRequest) = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map { routes =>
+    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentInfo.buildRoute(request.amount.get.amount, LNParams.expiry, routes.head)
+    val onion = PaymentInfo.buildOnion(PublicKey(channel.data.announce.nodeId) +: routes.head.map(_.nextNodeId), payloads, request.paymentHash)
+    OutgoingPayment(RoutingData(routes.tail, onion, amountWithAllFees, expiryWithAllDeltas), NOIMAGE, request, channel.id.get, TEMP)
   }
 }
 

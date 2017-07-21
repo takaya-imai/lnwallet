@@ -37,8 +37,9 @@ object ChannelTable extends Table {
     )"""
 }
 
-object PaymentSpecTable extends Table {
-  import com.lightning.wallet.ln.PaymentSpec._
+object PaymentInfoTable extends Table {
+  import com.lightning.wallet.ln.PaymentInfo._
+
   val names = ("payments", "hash", "request", "status", "chanid", "preimage", "routing", "search")
   val (table, hash, request, status, chanId, preimage, routing, search) = names
 
@@ -93,8 +94,8 @@ extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
   } finally base.endTransaction
 
   def onCreate(dbs: SQLiteDatabase) = {
-    dbs execSQL PaymentSpecTable.createVirtualSql
-    dbs execSQL PaymentSpecTable.createSql
+    dbs execSQL PaymentInfoTable.createVirtualSql
+    dbs execSQL PaymentInfoTable.createSql
     dbs execSQL StorageTable.createSql
     dbs execSQL ChannelTable.createSql
   }

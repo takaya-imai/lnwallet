@@ -14,7 +14,8 @@ import scala.collection.mutable
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
-  override def process(cn: Any) = try super.process(cn) catch events.onError
+  def id = Some(data) collectFirst { case some: HasCommitments => some.commitments.channelId }
+  override def process(change: Any) = try super.process(change) catch events.onError
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -445,9 +446,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         Tools log s"Channel: unhandled $state : $change"
     }
 
-    // After successfull process
-    val processed = (data, change)
-    events onProcess processed
+    // After this change has been processed
+    events onProcess Tuple3(me, data, change)
   }
 
   private def makeFundingLocked(cs: Commitments) = {
@@ -528,7 +528,7 @@ object Channel {
 }
 
 trait ChannelListener {
-  type Incoming = (ChannelData, Any)
+  type Incoming = (Channel, ChannelData, Any)
   type Transition = (Channel, ChannelData, String, String)
   def onBecome: PartialFunction[Transition, Unit] = none
   def onProcess: PartialFunction[Incoming, Unit] = none
