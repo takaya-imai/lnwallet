@@ -3,8 +3,10 @@ package com.lightning.wallet.ln
 import com.lightning.wallet.ln.wire._
 import java.net.{InetSocketAddress, Socket}
 import com.lightning.wallet.ln.Tools.{Bytes, none}
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.ln.LNParams.nodePrivateKey
+import com.lightning.wallet.ln.Features.binData2BitSet
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.bitcoin.BinaryData
@@ -55,22 +57,24 @@ object ConnectionManager {
     }
 
     process onComplete { _ =>
+      Tools log s"Socket disconnected"
       events onDisconnect nodeId
-      savedInit = null
     }
 
     def send(message: LightningMessage) = {
-      val raw = LightningMessageCodecs serialize message
+      val raw: BinaryData = LightningMessageCodecs serialize message
       handler process Tuple2(TransportHandler.Send, raw)
     }
 
     def intercept(message: LightningMessage) = message match {
       case Ping(length, _) if length > 0 => me send Pong("00" * length)
-
-      case their: Init if null == savedInit =>
-        // Need to remember it for later calls
-        events.onOperational(nodeId, their)
+      case their: Init if Features areSupported their.localFeatures =>
+        if (savedInit == null) events.onOperational(nodeId, their)
         savedInit = their
+
+      case their: Init =>
+        Tools log s"Unsupported features $their"
+        events.onTerminalError(nodeId)
 
       case error: Error =>
         val decoded = new String(error.data.toArray)
