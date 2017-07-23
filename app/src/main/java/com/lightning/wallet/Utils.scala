@@ -124,7 +124,10 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
   // Settings and helper functions
   def tellGenError = wrap(app toast err_general)(mkSetsForm)
   def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
-  def initToolbar = me setSupportActionBar findViewById(R.id.toolbar).asInstanceOf[Toolbar]
+
+  def initToolbar = setSupportActionBar {
+    findViewById(R.id.toolbar).asInstanceOf[Toolbar]
+  }
 
   // Informer CRUD
   def del(delTag: Int) = uiTask {
@@ -219,6 +222,7 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
   abstract class TxProcessor {
     def onTxFail(exc: Throwable): Unit
     def processTx(password: String, fee: Coin)
+    val pay: PayData
 
     import RatesSaver.rates
     def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
@@ -248,7 +252,6 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
       }
     }
 
-    val pay: PayData
     def makeTx(password: String, fee: Coin) = {
       val crypter = app.kit.wallet.getKeyCrypter
       val keyParameter = crypter deriveKey password
@@ -261,8 +264,15 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
     }
 
     def errorWhenMakingTx: PartialFunction[Throwable, String] = {
+      case insufficientMoneyException: InsufficientMoneyException =>
+        val missing = withSign(insufficientMoneyException.missing)
+        val balance = withSign(app.kit.currentBalance)
+        val sending = withSign(pay.cn)
+
+        val template = app getString err_not_enough_funds
+        template.format(balance, sending, missing)
+
       case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
-      case _: InsufficientMoneyException => app getString err_not_enough_funds
       case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
       case _: KeyCrypterException => app getString err_pass
       case _: Throwable => app getString err_general

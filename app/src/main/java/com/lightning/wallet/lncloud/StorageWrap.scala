@@ -32,7 +32,10 @@ object StorageWrap {
 object ChannelWrap {
   import com.lightning.wallet.lncloud.ChannelTable._
   def remove(chanId: BinaryData) = db.change(killSql, chanId.toString)
-  def get = RichCursor(db select selectAllSql).vec(_ string data) map to[HasCommitments]
+
+  def get = RichCursor(db select selectAllSql) vec {
+    shifted => to[HasCommitments](shifted string data)
+  }
 
   def put(data: HasCommitments): Unit = db txWrap {
     val chanIdString = data.commitments.channelId.toString
@@ -43,18 +46,18 @@ object ChannelWrap {
   }
 }
 
-object PaymentInfoWrap
-extends PaymentInfoBag
-with ChannelListener { me =>
+
+object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
+  // Incoming and outgoing payments are discerned by a presence of routing info
+  // Incoming payments have a null instead of routing info
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._
-
-  def recentPayments: Cursor = db select selectRecentSql
-  def byQuery(query: String): Cursor = db.select(searchSql, s"$query*")
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
+  def byQuery(query: String): Cursor = db.select(searchSql, s"$query*")
+  def recentPayments: Cursor = db select selectRecentSql
 
   def toPaymentInfo(rc: RichCursor) = Option(rc string routing) map to[RoutingData] match {
-    case Some(routes) => OutgoingPayment(routes, rc string preimage, to[PaymentRequest](rc string request), rc string chanId, rc long status)
+    case Some(rs) => OutgoingPayment(rs, rc string preimage, to[PaymentRequest](rc string request), rc string chanId, rc long status)
     case None => IncomingPayment(rc string preimage, to[PaymentRequest](rc string request), rc string chanId, rc long status)
   }
 

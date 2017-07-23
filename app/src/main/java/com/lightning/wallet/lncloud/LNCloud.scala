@@ -87,9 +87,9 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
       bag.getPaymentInfo(invoice.paymentHash) getOrElse null match {
         case OutgoingPayment(_, _, _, _, SUCCESS) => me resolveSuccess memo
-        case OutgoingPayment(_, _, _, _, FAILURE) => resetState
+        case OutgoingPayment(_, _, _, _, FAILURE) => resetPayment
         case pending: OutgoingPayment => me stayWith data
-        case null => resetState
+        case null => resetPayment
       }
 
     case (_, action: LNCloudAct) =>
@@ -105,11 +105,11 @@ extends StateMachine[PublicData] with Pathfinder { me =>
 
   // ADDING NEW TOKENS
 
-  def resetState = me stayWith data.copy(info = None)
+  def resetPayment = me stayWith data.copy(info = None)
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .foreach(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
-      serverError => if (serverError.getMessage == "notfound") resetState)
+      serverError => if (serverError.getMessage == "notfound") resetPayment)
 
   // TALKING TO SERVER
 

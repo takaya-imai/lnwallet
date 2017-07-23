@@ -112,7 +112,7 @@
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
-    <string name="err_not_enough_funds">Failed because you don\'t currently have enough funds\n\nPlease note that incoming transactions need to get at least one confirmation to become spendable</string>
+    <string name="err_not_enough_funds">Not enough bitcoins\n\nbalance %1$s\nsending %2$s\nmissing %3$s\n\nPlease note that incoming transactions need to get at least one confirmation to become spendable</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
     <string name="err_uri">Failed because request contains a malformed URI which could not be parsed</string>
     <string name="err_address">Failed because Bitcoin address in a given request is not valid</string>
@@ -174,7 +174,7 @@
         <item><![CDATA[in <strong>%1$s</strong> blocks]]></item>
     </array>
 
-    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>BTC balance %1$s<br>Max capacity %2$s</small>]]></string>
+    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>Max capacity %2$s</small>]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>
