@@ -310,7 +310,7 @@ object Commitments {
       c.remoteParams.fundingPubKey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey),
       remoteSig = commit.signature)
 
-    if (Scripts.checkSpendable(signedCommitTx).isFailure) throw new LightningException
+    if (Scripts.checkSpendable(signedCommitTx).isEmpty) throw new LightningException
     if (commit.htlcSignatures.size != sortedHtlcTxs.size) throw new LightningException
 
     val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, localPaymentKey)
@@ -319,7 +319,7 @@ object Commitments {
     val htlcTxsAndSigs = combined.collect {
       case (htlcTx: HtlcTimeoutTx, localSig, remoteSig) =>
         val check = Scripts checkSpendable Scripts.addSigs(htlcTx, localSig, remoteSig)
-        if (check.isFailure) throw new LightningException else HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        if (check.isEmpty) throw new LightningException else HtlcTxAndSigs(htlcTx, localSig, remoteSig)
 
       case (htlcTx: HtlcSuccessTx, localSig, remoteSig) =>
         val isSigValid = Scripts.checkSig(htlcTx, remoteSig, remotePaymentPubkey)

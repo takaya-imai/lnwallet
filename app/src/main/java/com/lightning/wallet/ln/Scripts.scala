@@ -239,10 +239,11 @@ object Scripts { me =>
   def sign(txinfo: TransactionWithInputInfo, key: PrivateKey): BinaryData =
     sign(txinfo.tx, inputIndex = 0, txinfo.input.redeemScript, txinfo.input.txOut.amount, key)
 
-  def checkSpendable(txinfo: TransactionWithInputInfo) = Try {
-    val check = Map(txinfo.tx.txIn.head.outPoint -> txinfo.input.txOut)
-    Transaction.correctlySpends(txinfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
-  }
+  def checkSpendable(txWithInputinfo: => TransactionWithInputInfo) = Try {
+    val check = Map(txWithInputinfo.tx.txIn.head.outPoint -> txWithInputinfo.input.txOut)
+    Transaction.correctlySpends(txWithInputinfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
+    txWithInputinfo.tx
+  }.toOption
 
   def checkSig(txinfo: TransactionWithInputInfo, sig: BinaryData, pubKey: PublicKey): Boolean =
     Crypto.verifySignature(Transaction.hashForSigning(txinfo.tx, 0, txinfo.input.redeemScript,

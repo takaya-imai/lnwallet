@@ -186,7 +186,7 @@ class TransactionsSpec {
         val remoteSig = sign(htlcTimeoutTx, remotePaymentPriv)
         val signed = addSigs(htlcTimeoutTx, localSig, remoteSig)
         val foo = checkSpendable(signed)
-        println(checkSpendable(signed).isSuccess)
+        println(checkSpendable(signed).isDefined)
       }
 
       {
@@ -195,7 +195,7 @@ class TransactionsSpec {
         val claimHtlcDelayed = makeClaimDelayedOutputTx(htlcTimeoutTx.tx, localRevocationPriv.publicKey, toLocalDelay, localPaymentPriv.publicKey, finalPubKeyScript, feeratePerKw)
         val localSig = sign(claimHtlcDelayed, localPaymentPriv)
         val signedTx = addSigs(claimHtlcDelayed, localSig)
-        println(checkSpendable(signedTx).isSuccess)
+        println(checkSpendable(signedTx).isDefined)
       }
 
       {
@@ -203,7 +203,7 @@ class TransactionsSpec {
         val claimHtlcSuccessTx = makeClaimHtlcSuccessTx(commitTx.tx, remotePaymentPriv.publicKey, localPaymentPriv.publicKey, localRevocationPriv.publicKey, finalPubKeyScript, htlc1, feeratePerKw)
         val localSig = sign(claimHtlcSuccessTx, remotePaymentPriv)
         val signed = addSigs(claimHtlcSuccessTx, localSig, paymentPreimage1)
-        println(checkSpendable(signed).isSuccess)
+        println(checkSpendable(signed).isDefined)
       }
 
       {
@@ -212,7 +212,7 @@ class TransactionsSpec {
         val localSig = sign(htlcSuccessTx, localPaymentPriv)
         val remoteSig = sign(htlcSuccessTx, remotePaymentPriv)
         val signedTx = addSigs(htlcSuccessTx, localSig, remoteSig, paymentPreimage2)
-        println(checkSpendable(signedTx).isSuccess)
+        println(checkSpendable(signedTx).isDefined)
         // check remote sig
         println(checkSig(htlcSuccessTx, remoteSig, remotePaymentPriv.publicKey))
       }
@@ -223,7 +223,7 @@ class TransactionsSpec {
         val claimHtlcDelayed = makeClaimDelayedOutputTx(htlcSuccessTx.tx, localRevocationPriv.publicKey, toLocalDelay, localPaymentPriv.publicKey, finalPubKeyScript, feeratePerKw)
         val localSig = sign(claimHtlcDelayed, localPaymentPriv)
         val signedTx = addSigs(claimHtlcDelayed, localSig)
-        println(checkSpendable(signedTx).isSuccess)
+        println(checkSpendable(signedTx).isDefined)
       }
 
       {
@@ -231,7 +231,7 @@ class TransactionsSpec {
         val claimP2WPKHOutputTx = makeClaimP2WPKHOutputTx(commitTx.tx, remotePaymentPriv.publicKey, finalPubKeyScript, feeratePerKw)
         val localSig = sign(claimP2WPKHOutputTx, remotePaymentPriv)
         val signedTx = addSigs(claimP2WPKHOutputTx, remotePaymentPriv.publicKey, localSig)
-        println(checkSpendable(signedTx).isSuccess)
+        println(checkSpendable(signedTx).isDefined)
       }
 
       {
@@ -239,7 +239,7 @@ class TransactionsSpec {
         val claimHtlcTimeoutTx = makeClaimHtlcTimeoutTx(commitTx.tx, remotePaymentPriv.publicKey, localPaymentPriv.publicKey, localRevocationPriv.publicKey, finalPubKeyScript, htlc2, feeratePerKw)
         val localSig = sign(claimHtlcTimeoutTx, remotePaymentPriv)
         val signed = addSigs(claimHtlcTimeoutTx, localSig)
-        println(checkSpendable(signed).isSuccess)
+        println(checkSpendable(signed).isDefined)
       }
 
       {
