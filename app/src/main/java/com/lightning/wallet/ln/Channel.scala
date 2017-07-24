@@ -8,6 +8,7 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 
+import com.lightning.wallet.ln.PaymentInfo.resolveHtlc
 import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
@@ -132,26 +133,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // NORMAL MODE
 
 
-      // We only can add new HTLCs when mutual shutdown process is not active
-      case (norm@NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
-        val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
-        me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
-        doProcess(CMDProceed)
-
-
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
         if add.channelId == norm.commitments.channelId =>
 
         // Should check if we have enough blocks to fulfill this HTLC
         val c1 = Commitments.receiveAdd(norm.commitments, add, LNParams.expiry)
         me UPDATE norm.copy(commitments = c1)
-
-
-      // We're fulfilling an HTLC we got earlier
-      case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>
-        val c1 ~ updateFulfillHtlc = Commitments.sendFulfill(norm.commitments, cmd)
-        me UPDATE norm.copy(commitments = c1) SEND updateFulfillHtlc
-        doProcess(CMDProceed)
 
 
       case (norm: NormalData, fulfill: UpdateFulfillHtlc, NORMAL)
@@ -162,19 +149,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE norm.copy(commitments = c1)
 
 
-      // Failing an HTLC we got earlier
-      case (norm: NormalData, cmd: CMDFailHtlc, NORMAL) =>
-        val c1 ~ updateFailHtlc = Commitments.sendFail(norm.commitments, cmd)
-        me UPDATE norm.copy(commitments = c1) SEND updateFailHtlc
-        doProcess(CMDProceed)
-
-
-      case (norm: NormalData, cmd: CMDFailMalformedHtlc, NORMAL) =>
-        val c1 ~ updateFailMalformedHtlс = Commitments.sendFailMalformed(norm.commitments, cmd)
-        me UPDATE norm.copy(commitments = c1) SEND updateFailMalformedHtlс
-        doProcess(CMDProceed)
-
-
       case (norm: NormalData, fail: FailHtlc, NORMAL)
         if fail.channelId == norm.commitments.channelId =>
 
@@ -183,7 +157,30 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE norm.copy(commitments = c1)
 
 
-      // GUARD: only send in the correct state
+      // We only can add new HTLCs when mutual shutdown process is not active
+      case (norm@NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
+        val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
+        me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
+        doProcess(CMDProceed)
+
+      // We're fulfilling an HTLC we got earlier
+      case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>
+        val c1 ~ updateFulfillHtlc = Commitments.sendFulfill(norm.commitments, cmd)
+        me UPDATE norm.copy(commitments = c1) SEND updateFulfillHtlc
+
+
+      // Failing an HTLC we got earlier
+      case (norm: NormalData, cmd: CMDFailHtlc, NORMAL) =>
+        val c1 ~ updateFailHtlc = Commitments.sendFail(norm.commitments, cmd)
+        me UPDATE norm.copy(commitments = c1) SEND updateFailHtlc
+
+
+      case (norm: NormalData, cmd: CMDFailMalformedHtlc, NORMAL) =>
+        val c1 ~ updateFailMalformedHtlс = Commitments.sendFailMalformed(norm.commitments, cmd)
+        me UPDATE norm.copy(commitments = c1) SEND updateFailMalformedHtlс
+
+
+      // GUARD: We can send a commit sig
       case (norm: NormalData, CMDProceed, NORMAL)
         if Commitments.localHasChanges(norm.commitments) &&
           norm.commitments.remoteNextCommitInfo.isRight =>
@@ -219,6 +216,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         // We received a revocation because we sent a commit sig
         val c1 = Commitments.receiveRevocation(norm.commitments, rev)
         me UPDATE norm.copy(commitments = c1)
+        doProcess(CMDHTLCProcess)
+
+
+      // Fail or fulfill incoming HTLCs
+      case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
+        val toProcess = norm.commitments.remoteCommit.spec.htlcs.filterNot(_.incoming)
+        for (Htlc(_, add) <- toProcess) me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
         doProcess(CMDProceed)
 
 
@@ -325,7 +329,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         // Let's see the state of remote sigs
         if (c1.localCommit.index == cr.nextRemoteRevocationNumber + 1) {
-          // Our last revocation got lost, let's resend it, followed by commit sig later
+          // Our last revocation got lost, let's resend it, maybe followed by CommitSig later
           val localPerCommitmentSecret = Generators.perCommitSecret(c1.localParams.shaSeed, c1.localCommit.index - 1)
           val localNextPerCommitmentPoint = Generators.perCommitPoint(c1.localParams.shaSeed, c1.localCommit.index + 1)
           me SEND RevokeAndAck(channelId = c1.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
@@ -352,7 +356,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         BECOME(norm.copy(commitments = c2), NORMAL)
         norm.localShutdown foreach SEND
-        doProcess(CMDProceed)
+        doProcess(CMDHTLCProcess)
 
 
       // We just close a channel in any kind of irregular state

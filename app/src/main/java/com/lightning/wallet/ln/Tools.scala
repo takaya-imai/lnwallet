@@ -69,12 +69,7 @@ object Features {
 
   implicit def binData2BitSet(data: BinaryData): java.util.BitSet = java.util.BitSet valueOf data.reverse.toArray
   def initialRoutingSync(bitset: java.util.BitSet): Boolean = bitset get INITIAL_ROUTING_SYNC_BIT_OPTIONAL
-
-  def areSupported(bitset: java.util.BitSet): Boolean = {
-    val (accumulator, range) = (bitset.nextSetBit(0) :: Nil, 1 until bitset.cardinality)
-    val bits = (accumulator /: range) { case (ac, _) => bitset.nextSetBit(ac.head + 1) :: ac }
-    !bits.reverse.exists(_ % 2 == 0)
-  }
+  def areSupported(bitset: java.util.BitSet): Boolean = !(0 until bitset.length by 2 exists bitset.get)
 }
 
 class LightningException extends RuntimeException

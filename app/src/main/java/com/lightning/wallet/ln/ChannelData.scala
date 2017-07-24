@@ -17,8 +17,10 @@ case class CMDConfirmed(tx: Transaction) extends Command
 case class CMDSpent(tx: Transaction) extends Command
 case class CMDFeerate(rate: Long) extends Command
 case class CMDHeight(height: Int) extends Command
+case object CMDHTLCProcess extends Command
 case object CMDShutdown extends Command
 case object CMDOffline extends Command
+case object CMDProceed extends Command
 case object CMDOnline extends Command
 
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
@@ -29,7 +31,6 @@ sealed trait MemoCommand extends Command
 case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends MemoCommand
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends MemoCommand
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends MemoCommand
-case object CMDProceed extends MemoCommand
 
 sealed trait CMDAddHtlc extends MemoCommand { val out: OutgoingPayment }
 case class SilentAddHtlc(out: OutgoingPayment) extends CMDAddHtlc

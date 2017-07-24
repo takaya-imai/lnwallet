@@ -61,10 +61,9 @@ object ConnectionManager {
       events onDisconnect nodeId
     }
 
-    def send(message: LightningMessage) = {
-      val raw: BinaryData = LightningMessageCodecs serialize message
-      handler process Tuple2(TransportHandler.Send, raw)
-    }
+    def send(message: LightningMessage) =
+      handler process Tuple2(TransportHandler.Send,
+        LightningMessageCodecs serialize message)
 
     def intercept(message: LightningMessage) = message match {
       case Ping(length, _) if length > 0 => me send Pong("00" * length)
