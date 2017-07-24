@@ -51,7 +51,6 @@ object LNParams {
   def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
     channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
-  def kb2Kw(feeratePerKB: Long): Long = feeratePerKB / 2
   def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
     networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
@@ -113,6 +112,6 @@ trait Broadcaster extends ChannelListener { me =>
   type ParentTxidToDepth = Map[String, Int]
   def getParentsDepth: ParentTxidToDepth
   def send(tx: Transaction): String
-  def currentFeeRate: Long
+  def feeRatePerKw: Long
   def currentHeight: Int
 }

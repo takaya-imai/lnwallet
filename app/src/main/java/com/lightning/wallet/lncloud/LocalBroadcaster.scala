@@ -11,7 +11,7 @@ import fr.acinq.bitcoin.Transaction
 
 
 object LocalBroadcaster extends Broadcaster {
-  def currentFeeRate = RatesSaver.rates.feeLive.value
+  def feeRatePerKw = RatesSaver.rates.feeLive.value / 2
   def currentHeight = app.kit.peerGroup.getMostCommonChainHeight
   def send(tx: Transaction) = app.kit.blockingSend(tx).toString
 
@@ -32,8 +32,8 @@ object LocalBroadcaster extends Broadcaster {
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
 
     case (chan, _, SYNC, NORMAL) =>
-      // Will be sent once on app lauch, should suffice
-      chan process CMDFeerate(LNParams kb2Kw currentFeeRate)
+      // Will be sent once on app lauch
+      chan process CMDFeerate(feeRatePerKw)
   }
 
   override def onError = {
