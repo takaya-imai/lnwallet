@@ -172,7 +172,7 @@ class LNCloud(url: String) {
   def getRates = call("rates", identity)
   def getTxs(parent: String) = call("txs", toVec[Transaction], "txid" -> parent)
   def findNodes(query: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> query)
-  def findRoutes(from: BinaryData, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
+  def findRoutes(from: PublicKey, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
 }
 

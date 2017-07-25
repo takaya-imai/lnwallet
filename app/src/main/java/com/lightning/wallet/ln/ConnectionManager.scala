@@ -52,7 +52,7 @@ object ConnectionManager {
       while (true) {
         val length = socket.getInputStream.read(buffer, 0, BUFFER_SIZE)
         if (length < 0) throw new RuntimeException("Connection droppped")
-        else handler.process(buffer take length)
+        else handler process BinaryData(buffer take length)
       }
     }
 

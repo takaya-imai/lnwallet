@@ -81,22 +81,22 @@ case class RevokedCommitPublished(claimMainOutputTx: Seq[Transaction], mainPenal
 // COMMITMENTS
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(htlcs: Set[Htlc], failed: Set[Htlc], fulfilled: Set[Htlc],
+case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[UpdateFailHtlc],
                           feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
-  private def fulfill(cs: CommitmentSpec, in: Boolean, update: UpdateFulfillHtlc) = findHtlcById(cs, update.id, in) match {
+  private def fulfill(cs: CommitmentSpec, in: Boolean, u: UpdateFulfillHtlc) = findHtlcById(cs, u.id, in) match {
     case Some(h) if h.incoming => cs.copy(toLocalMsat = cs.toLocalMsat + h.add.amountMsat, htlcs = cs.htlcs - h, fulfilled = cs.fulfilled + h)
     case Some(h) => cs.copy(toRemoteMsat = cs.toRemoteMsat + h.add.amountMsat, htlcs = cs.htlcs - h, fulfilled = cs.fulfilled + h)
     case None => cs
   }
 
-  private def fail(cs: CommitmentSpec, in: Boolean, update: UpdateFailHtlc) = findHtlcById(cs, update.id, in) match {
-    case Some(h) if h.incoming => cs.copy(toRemoteMsat = cs.toRemoteMsat + h.add.amountMsat, htlcs = cs.htlcs - h, failed = cs.failed + h)
-    case Some(h) => cs.copy(toLocalMsat = cs.toLocalMsat + h.add.amountMsat, htlcs = cs.htlcs - h, failed = cs.failed + h)
+  private def fail(cs: CommitmentSpec, in: Boolean, u: UpdateFailHtlc) = findHtlcById(cs, u.id, in) match {
+    case Some(h) if h.incoming => cs.copy(toRemoteMsat = cs.toRemoteMsat + h.add.amountMsat, htlcs = cs.htlcs - h, failed = cs.failed + u)
+    case Some(h) => cs.copy(toLocalMsat = cs.toLocalMsat + h.add.amountMsat, htlcs = cs.htlcs - h, failed = cs.failed + u)
     case None => cs
   }
 
@@ -131,13 +131,16 @@ object CommitmentSpec {
   }
 }
 
-case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSat: Long,
-                       htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
-                       paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean)
+case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
+                       channelReserveSat: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
+                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey,
+                       delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
+                       shaSeed: BinaryData, isFunder: Boolean)
 
-case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
-                        toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey, revocationBasepoint: Point, paymentBasepoint: Point,
-                        delayedPaymentBasepoint: Point, globalFeatures: BinaryData, localFeatures: BinaryData)
+case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
+                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey,
+                        revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
+                        globalFeatures: BinaryData, localFeatures: BinaryData)
 
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)

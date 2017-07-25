@@ -223,8 +223,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // Fail or fulfill incoming HTLCs
       case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
-        val toProcess = norm.commitments.remoteCommit.spec.htlcs.filterNot(_.incoming)
-        for (Htlc(_, add) <- toProcess) me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
+        for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
+          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
+
+        // And sign right away
         doProcess(CMDProceed)
 
 
@@ -265,7 +267,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We have already sent a shutdown (initially or in response to their shutdown above)
-      case (norm@ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL)
+      case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL)
         if remote.channelId == commitments.channelId =>
 
         // We can start negotiations if there are no in-flight HTLCs, otherwise wait until they are cleared

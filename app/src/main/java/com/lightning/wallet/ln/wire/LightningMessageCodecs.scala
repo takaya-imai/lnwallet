@@ -238,6 +238,8 @@ object LightningMessageCodecs { me =>
       (uint64 withContext "id") ::
       (varsizebinarydata withContext "reason")
 
+  val updateFailHtlcCodec: Codec[UpdateFailHtlc] = updateFailHtlc.as[UpdateFailHtlc]
+
   private val updateFailMalformedHtlc =
     (binarydata(32) withContext "channelId") ::
       (uint64 withContext "id") ::
@@ -333,7 +335,7 @@ object LightningMessageCodecs { me =>
       .typecase(cr = closingSignedCodec, tag = 39)
       .typecase(cr = updateAddHtlcCodec, tag = 128)
       .typecase(cr = updateFulfillHtlc.as[UpdateFulfillHtlc], tag = 130)
-      .typecase(cr = updateFailHtlc.as[UpdateFailHtlc], tag = 131)
+      .typecase(cr = updateFailHtlcCodec, tag = 131)
       .typecase(cr = commitSigCodec, tag = 132)
       .typecase(cr = revokeAndAck.as[RevokeAndAck], tag = 133)
       .typecase(cr = updateFee.as[UpdateFee], tag = 134)

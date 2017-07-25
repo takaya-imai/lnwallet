@@ -1,28 +1,28 @@
 package com.lightning.wallet.lncloud
 
 import spray.json._
-import spray.json.DefaultJsonProtocol._
-import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
-import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
-import com.lightning.wallet.lncloud.LNCloud.{ClearToken, RequestAndMemo}
-import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.wire._
+import spray.json.DefaultJsonProtocol._
+import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
+import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
+import com.lightning.wallet.lncloud.LNCloud.{ClearToken, RequestAndMemo}
+import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
+
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
+import com.lightning.wallet.ln.crypto.ShaChain.Index
 import org.bitcoinj.core.ECKey.CURVE.getCurve
-import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
+import fr.acinq.eclair.payment.PaymentRequest
 import org.spongycastle.math.ec.ECPoint
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
 import scodec.bits.BitVector
 import java.math.BigInteger
-
-import com.lightning.wallet.ln.Scripts._
-import com.lightning.wallet.ln.crypto.ShaChain.Index
-import fr.acinq.eclair.payment.PaymentRequest
 
 
 object ImplicitJsonFormats { me =>
@@ -84,6 +84,11 @@ object ImplicitJsonFormats { me =>
   implicit object UpdateAddHtlcFmt extends JsonFormat[UpdateAddHtlc] {
     def read(rawJson: JsValue) = updateAddHtlcCodec.decode(json2BitVec(rawJson).get).require.value
     def write(add: UpdateAddHtlc) = updateAddHtlcCodec.encode(add).require.toHex.toJson
+  }
+
+  implicit object UpdateFailHtlcFmt extends JsonFormat[UpdateFailHtlc] {
+    def read(rawJson: JsValue) = updateFailHtlcCodec.decode(json2BitVec(rawJson).get).require.value
+    def write(fail: UpdateFailHtlc) = updateFailHtlcCodec.encode(fail).require.toHex.toJson
   }
 
   implicit object CommitSigFmt extends JsonFormat[CommitSig] {
@@ -233,9 +238,8 @@ object ImplicitJsonFormats { me =>
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")
 
-  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[Htlc], Long, Long, Long,
-    CommitmentSpec](CommitmentSpec.apply, "htlcs", "failed", "fulfilled", "feeratePerKw",
-    "toLocalMsat", "toRemoteMsat")
+  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[UpdateFailHtlc], Long, Long, Long,
+    CommitmentSpec](CommitmentSpec.apply, "htlcs", "failed", "fulfilled", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
 
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,
     HtlcTxAndSigs](HtlcTxAndSigs.apply, "txinfo", "localSig", "remoteSig")
