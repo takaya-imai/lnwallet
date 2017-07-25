@@ -62,7 +62,7 @@ extends StateMachine[PublicData] with Pathfinder { me =>
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
       request ~ blindMemo <- retry(getInfo, pickInc, 2 to 3)
-      payment <- retry(makeOutgoingSpecOpt(request), pickInc, 2 to 3)
+      Some(payment) <- retry(outPaymentObs(request), pickInc, 2 to 3)
     } me doProcess Tuple2(payment, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
@@ -136,11 +136,15 @@ trait Pathfinder {
   val lnCloud: LNCloud
   val channel: Channel
 
-  // This may fail for multiple reasons like network connectivity or channel state, so we should be prepared for that
-  def makeOutgoingSpecOpt(request: PaymentRequest) = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map { routes =>
-    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentInfo.buildRoute(request.amount.get.amount, LNParams.expiry, routes.head)
-    val onion = PaymentInfo.buildOnion(PublicKey(channel.data.announce.nodeId) +: routes.head.map(_.nextNodeId), payloads, request.paymentHash)
-    OutgoingPayment(RoutingData(routes.tail, onion, amountWithAllFees, expiryWithAllDeltas), NOIMAGE, request, channel.id.get, TEMP)
+  def outPaymentObs(request: PaymentRequest) = {
+    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
+    for (routes <- routesObs) yield outPaymentOpt(routes, request)
+  }
+
+  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) = channel.id map { chanId =>
+    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentInfo.buildRoute(request.amount.get.amount, LNParams.expiry, rs.head)
+    val onion = PaymentInfo.buildOnion(nodes = channel.data.announce.nodeId +: rs.head.map(_.nextNodeId), payloads, request.paymentHash)
+    OutgoingPayment(RoutingData(rs.tail, onion, amountWithAllFees, expiryWithAllDeltas), NOIMAGE, request, chanId, TEMP)
   }
 }
 
