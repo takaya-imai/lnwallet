@@ -3,21 +3,29 @@ package com.lightning.wallet.ln
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
+import com.lightning.wallet.ln.PaymentInfo._
 
-import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
-import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
-
-import com.lightning.wallet.ln.PaymentInfo.resolveHtlc
+import com.lightning.wallet.ln.Helpers.{Closing, Funding}
+import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+import fr.acinq.eclair.payment.PaymentRequest
 import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
-  def id = Some(data) collectFirst { case some: HasCommitments => some.commitments.channelId }
   override def process(change: Any) = try super.process(change) catch events.onError
   val listeners = mutable.Set.empty[ChannelListener]
+
+  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
+    Some(data, rs) collect { case (some: HasCommitments, route +: rest) =>
+      val (payloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(request.amount.get.amount, LNParams.expiry, route)
+      val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
+      val routing = RoutingData(routes = rest, onion, amountWithAllFees, expiryWithAllDeltas)
+      OutgoingPayment(routing, NOIMAGE, request, some.commitments.channelId, TEMP)
+    }
 
   private[this] val events = new ChannelListener {
     override def onError = { case error => for (lst <- listeners if lst.onError isDefinedAt error) lst onError error }

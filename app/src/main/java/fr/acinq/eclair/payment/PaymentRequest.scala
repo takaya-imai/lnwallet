@@ -8,7 +8,7 @@ import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, _}
 import fr.acinq.eclair.crypto.BitStream
 import fr.acinq.eclair.crypto.BitStream.Bit
-import fr.acinq.eclair.payment.PaymentRequest.{Amount, RoutingInfoTag, Timestamp}
+import fr.acinq.eclair.payment.PaymentRequest.{Amount, ExpiryTag, RoutingInfoTag, Timestamp}
 
 import scala.annotation.tailrec
 import scala.util.Try
@@ -25,6 +25,11 @@ import scala.util.Try
   * @param signature request signature that will be checked against node id
   */
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long, nodeId: PublicKey, tags: List[PaymentRequest.Tag], signature: BinaryData) {
+
+  def isFresh: Boolean = {
+    val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }
+    timestamp + expiry.getOrElse(3600L) > System.currentTimeMillis / 1000L
+  }
 
   /**
     *

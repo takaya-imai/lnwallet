@@ -62,14 +62,14 @@ extends StateMachine[PublicData] with Pathfinder { me =>
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
       request ~ blindMemo <- retry(getInfo, pickInc, 2 to 3)
-      Some(payment) <- retry(outPaymentObs(request), pickInc, 2 to 3)
-    } me doProcess Tuple2(payment, blindMemo)
+      Some(pay) <- retry(outPaymentObs(request), pickInc, 2 to 3)
+    } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
-    case PublicData(None, tokens, _) ~ Tuple2(payment: OutgoingPayment, memo: BlindMemo) =>
-      me stayWith data.copy(info = Some(payment.request, memo), tokens = tokens)
-      channel doProcess SilentAddHtlc(payment)
+    case PublicData(None, tokens, _) ~ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
+      me stayWith data.copy(info = Some(pay.request, memo), tokens = tokens)
+      channel doProcess SilentAddHtlc(pay)
 
     // No matter what the state is: do it if we have acts and tokens
     case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
@@ -87,9 +87,8 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
       bag.getPaymentInfo(invoice.paymentHash) getOrElse null match {
         case OutgoingPayment(_, _, _, _, SUCCESS) => me resolveSuccess memo
-        case OutgoingPayment(_, _, _, _, FAILURE) => resetPayment
-        case pending: OutgoingPayment => me stayWith data
-        case null => resetPayment
+        case OutgoingPayment(_, _, _, _, FAILURE) | null => resetPayment
+        case _ => me stayWith data
       }
 
     case (_, action: LNCloudAct) =>
@@ -138,13 +137,7 @@ trait Pathfinder {
 
   def outPaymentObs(request: PaymentRequest) = {
     val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
-    for (routes <- routesObs) yield outPaymentOpt(routes, request)
-  }
-
-  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) = channel.id map { chanId =>
-    val (payloads, amountWithAllFees, expiryWithAllDeltas) = PaymentInfo.buildRoute(request.amount.get.amount, LNParams.expiry, rs.head)
-    val onion = PaymentInfo.buildOnion(nodes = channel.data.announce.nodeId +: rs.head.map(_.nextNodeId), payloads, request.paymentHash)
-    OutgoingPayment(RoutingData(rs.tail, onion, amountWithAllFees, expiryWithAllDeltas), NOIMAGE, request, chanId, TEMP)
+    for (routes <- routesObs) yield channel.outPaymentOpt(routes, request)
   }
 }
 

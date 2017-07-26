@@ -2,11 +2,11 @@ package com.lightning.wallet.lncloud
 
 import spray.json._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-import com.lightning.wallet.ln.wire.{CommitSig, UpdateFulfillHtlc}
 
 import com.lightning.wallet.helper.RichCursor
 import fr.acinq.eclair.payment.PaymentRequest
@@ -49,7 +49,7 @@ object ChannelWrap {
 
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by a presence of routing info
-  // Incoming payments have a null instead of routing info
+  // Incoming payments have null instead of routing info
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
@@ -64,18 +64,15 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
     val hashString = info.request.paymentHash.toString
     val requestString = info.request.toJson.toString
-    val preimageString = info.preimage.toString
-    val statusString = info.status.toString
-    val chanIdString = info.chanId.toString
 
     info match {
       case out: OutgoingPayment =>
-        db.change(newSql, hashString, requestString, statusString,
-          chanIdString, preimageString, out.routing.toJson.toString)
+        db.change(newSql, hashString, requestString, info.status.toString,
+          info.chanId.toString, info.preimage.toString, out.routing.toJson.toString)
 
       case in: IncomingPayment =>
-        db.change(newSql, hashString, requestString,
-          statusString, chanIdString, preimageString, null)
+        db.change(newSql, hashString, requestString, info.status.toString,
+          info.chanId.toString, info.preimage.toString, null)
     }
 
     val searchKeys = s"${info.request.description} $hashString"
@@ -89,15 +86,27 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
+  private def retry(channel: Channel, fail: UpdateFailHtlc, out: OutgoingPayment) =
+    // We constantly retry payments until either request expires or we run out of routes
+
+    channel.outPaymentOpt(reduceRoutes(fail, out), out.request) match {
+      case Some(updatedPayment) => channel process RetryAddHtlc(updatedPayment)
+      case None => updateStatus(FAILURE, out.request.paymentHash)
+    }
+
   override def onProcess = {
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save it right away
       me updatePreimage fulfill
 
-    case (_, norm: NormalData, sig: CommitSig) => LNParams.db txWrap {
-      // We have finalized payments so should update UI accordingly, failed will be dealt with elsewhere
-      for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
+    case (chan, norm: NormalData, sig: CommitSig) => LNParams.db txWrap {
       for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
+      for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
+      for (htlc ~ fail <- norm.commitments.localCommit.spec.failed) getPaymentInfo(htlc.add.paymentHash) foreach {
+        case outgoingPayment: OutgoingPayment if outgoingPayment.request.isFresh => retry(chan, fail, outgoingPayment)
+        case _ => updateStatus(FAILURE, htlc.add.paymentHash)
+      }
+
       uiNotify
     }
   }

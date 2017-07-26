@@ -238,8 +238,8 @@ object ImplicitJsonFormats { me =>
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")
 
-  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[UpdateFailHtlc], Long, Long, Long,
-    CommitmentSpec](CommitmentSpec.apply, "htlcs", "failed", "fulfilled", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
+  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Map[Htlc, UpdateFailHtlc], Long, Long, Long,
+    CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
 
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,
     HtlcTxAndSigs](HtlcTxAndSigs.apply, "txinfo", "localSig", "remoteSig")
