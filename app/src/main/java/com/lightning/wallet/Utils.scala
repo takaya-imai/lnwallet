@@ -353,7 +353,7 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   // Utils
-  def hideKeys(fun: => Unit) = try {
+  def hideKeys(fun: => Unit): Unit = try {
     val mgr = getSystemService(INPUT_METHOD_SERVICE).asInstanceOf[InputMethodManager]
     mgr.hideSoftInputFromWindow(getCurrentFocus.getWindowToken, HIDE_NOT_ALWAYS)
   } catch none finally me delayUI fun
@@ -451,9 +451,10 @@ case class EmptyAddrData(adr: Address) extends PayData {
 }
 
 case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {
+  // For now this will be exlusively used for funding payment channels
   def destination = app getString txs_p2wsh
 
-  def sendRequest: SendRequest = {
+  def sendRequest = {
     val funding = new Transaction(app.params)
     funding.addOutput(cn, pay2wsh)
     SendRequest forTx funding

@@ -91,7 +91,7 @@ class WalletApp extends Application { me =>
 
   object ChannelManager {
     type ChannelVec = Vector[Channel]
-    var all: ChannelVec = ChannelWrap.get map createChannel
+    var all = ChannelWrap.get map createChannel
 
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)

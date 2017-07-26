@@ -86,17 +86,15 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
-  private def retry(channel: Channel, fail: UpdateFailHtlc, out: OutgoingPayment) =
-    // We constantly retry payments until either request expires or we run out of routes
-
-    channel.outPaymentOpt(reduceRoutes(fail, out), out.request) match {
-      case Some(updatedPayment) => channel process RetryAddHtlc(updatedPayment)
-      case None => updateStatus(FAILURE, out.request.paymentHash)
+  def retry(channel: Channel, f: UpdateFailHtlc, outgoingPayment: OutgoingPayment) =
+    channel.outPaymentOpt(reduceRoutes(f, outgoingPayment), outgoingPayment.request) match {
+      case Some(updatedOutgoingPayment) => channel process RetryAddHtlc(updatedOutgoingPayment)
+      case None => updateStatus(FAILURE, outgoingPayment.request.paymentHash)
     }
 
   override def onProcess = {
     case (_, _, fulfill: UpdateFulfillHtlc) =>
-      // We need to save it right away
+      // We need to save a preimage right away
       me updatePreimage fulfill
 
     case (chan, norm: NormalData, sig: CommitSig) => LNParams.db txWrap {

@@ -6,26 +6,21 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+import com.lightning.wallet.ln.Tools.{none, runAnd}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+import concurrent.ExecutionContext.Implicits.global
 import fr.acinq.eclair.payment.PaymentRequest
-import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
+import scala.concurrent.Future
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
   override def process(change: Any) = try super.process(change) catch events.onError
+  def async(change: Any): Future[Unit] = Future apply process(change)
   val listeners = mutable.Set.empty[ChannelListener]
-
-  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
-    Some(data, rs) collect { case (some: HasCommitments, route +: rest) =>
-      val (payloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(request.amount.get.amount, LNParams.expiry, route)
-      val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
-      val routing = RoutingData(routes = rest, onion, amountWithAllFees, expiryWithAllDeltas)
-      OutgoingPayment(routing, NOIMAGE, request, some.commitments.channelId, TEMP)
-    }
 
   private[this] val events = new ChannelListener {
     override def onError = { case error => for (lst <- listeners if lst.onError isDefinedAt error) lst onError error }
@@ -36,14 +31,20 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   def SEND(msg: LightningMessage): Unit
   def STORE(content: HasCommitments): HasCommitments
   def UPDATE(d1: ChannelData): Channel = BECOME(d1, state)
-  def BECOME(data1: ChannelData, state1: String): Channel = {
-    // Transition should be defined before the vars are updated
-    // Returns a self-reference for next channel operations
+  def BECOME(data1: ChannelData, state1: String) = runAnd(me) {
+    // Transition should always be defined before vars are updated
     val trans = Tuple4(me, data1, state, state1)
     super.become(data1, state1)
     events onBecome trans
-    me
   }
+
+  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
+    Some(data, rs) collect { case (some: HasCommitments, route +: restOfPaymentRoutes) =>
+      val (payloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(request.amount.get.amount, LNParams.expiry, route)
+      val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
+      val routing = RoutingData(restOfPaymentRoutes, onion, amountWithAllFees, expiryWithAllDeltas)
+      OutgoingPayment(routing, NOIMAGE, request, some.commitments.channelId, TEMP)
+    }
 
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
