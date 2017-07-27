@@ -186,18 +186,18 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         case Failure(_) => app toast dialog_sum_empty
         case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_capacity
         case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
-        case Success(ms) => rm(alert) { openChannel(ms.amount / satFactor) /* proceed */ }
+
+        case Success(ms) => rm(alert) {
+          val amountSat = ms.amount / satFactor
+          val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
+          val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
+          val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
+          chan async CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
+        }
       }
 
       val ok = alert getButton BUTTON_POSITIVE
       ok setOnClickListener onButtonTap(attempt)
-    }
-
-    def openChannel(amountSat: Long) = chan async {
-      val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
-      val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
-      val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-      CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
     }
   }
 

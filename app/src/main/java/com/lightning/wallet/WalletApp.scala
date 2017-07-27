@@ -95,7 +95,7 @@ class WalletApp extends Application { me =>
 
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
-    def reconnect(cs: ChannelVec) = cs.map(_.data.announce).distinct foreach ConnectionManager.requestConnection
+    def reconnect(cs: ChannelVec) = cs.map(_.data.announce) foreach ConnectionManager.requestConnection
 
     val chainEventsListener = new TxTracker with NewBestBlockListener {
       override def notifyNewBestBlock(b: StoredBlock) = for (chan <- all) chan process CMDHeight(b.getHeight)
@@ -111,9 +111,9 @@ class WalletApp extends Application { me =>
     }
 
     val reconnectListener = new ConnectionListener {
-      override def onDisconnect(id: PublicKey) = ChannelManager reconnect from(alive, id)
-      override def onTerminalError(id: PublicKey) = Tools log s"Terminal error while decrypting $id"
       override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket $id is operational"
+      override def onTerminalError(id: PublicKey) = Tools log s"Terminal error while decrypting $id"
+      override def onDisconnect(id: PublicKey) = ChannelManager reconnect from(alive, id)
     }
 
     def createChannel(data1: ChannelData) = new Channel {

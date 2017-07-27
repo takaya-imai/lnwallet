@@ -49,7 +49,7 @@ object ChannelWrap {
 
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by a presence of routing info
-  // Incoming payments have null instead of routing info
+  // Incoming payments have null instead of routing info in a database
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
@@ -105,12 +105,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
         case _ => updateStatus(FAILURE, htlc.add.paymentHash)
       }
 
+      // Fail everything not included in a commit
+      failPending(TEMP, norm.commitments.channelId)
       uiNotify
     }
-  }
-
-  override def onBecome = {
-    case (_, norm: NormalData, _, SYNC | CLOSING) =>
-      failPending(TEMP, norm.commitments.channelId)
   }
 }
