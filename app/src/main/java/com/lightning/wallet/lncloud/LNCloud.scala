@@ -156,12 +156,8 @@ trait LNCloudAct {
 // This is a basic interface to cloud which does not require a channel
 // failover invariant will fall back to default in case of failure
 
-class LNCloud(url: String) {
-  def addBitcoinNode(pr: PeerGroup) = pr addAddress {
-    new PeerAddress(app.params, InetAddresses forString url, 8333)
-  }
-
-  def http(way: String) = post(s"$url:9001/v1/$way", true) connectTimeout 7500
+class LNCloud(val url: String) {
+  def http(way: String) = post(s"http://$url:9001/v1/$way", true)
   def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)

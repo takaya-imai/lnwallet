@@ -156,8 +156,9 @@ class WalletApp extends Application { me =>
         wallet setAcceptRiskyTransactions true
         wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
         //      peerGroup addPeerDiscovery new DnsDiscovery(params)
-        LNParams.getCloud addBitcoinNode peerGroup
 
+        val address = InetAddresses forString LNParams.getCloud.url
+        peerGroup addAddress new PeerAddress(app.params, address, 8333)
         peerGroup.setUserAgent(appName, "0.01")
         peerGroup setDownloadTxDependencies 0
         peerGroup setPingIntervalMsec 10000

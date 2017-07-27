@@ -30,6 +30,10 @@ class LNOpsActivity extends TimerActivity { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
+    app.ChannelManager.alive.headOption match {
+      case Some(channel) => manageActive(channel)
+      case None => manageNoActiveChannelInfo
+    }
   }
 
   private def getConfirmations(tx: Transaction) = {
