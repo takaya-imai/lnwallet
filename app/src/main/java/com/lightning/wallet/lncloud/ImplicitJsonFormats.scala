@@ -81,6 +81,11 @@ object ImplicitJsonFormats { me =>
     def write(route: PaymentRoute) = hopsCodec.encode(route).require.toHex.toJson
   }
 
+  implicit object AcceptChannelFmt extends JsonFormat[AcceptChannel] {
+    def read(rawJson: JsValue) = acceptChannelCodec.decode(json2BitVec(rawJson).get).require.value
+    def write(accept: AcceptChannel) = acceptChannelCodec.encode(accept).require.toHex.toJson
+  }
+
   implicit object UpdateAddHtlcFmt extends JsonFormat[UpdateAddHtlc] {
     def read(rawJson: JsValue) = updateAddHtlcCodec.decode(json2BitVec(rawJson).get).require.value
     def write(add: UpdateAddHtlc) = updateAddHtlcCodec.encode(add).require.toHex.toJson
@@ -230,11 +235,6 @@ object ImplicitJsonFormats { me =>
     "htlcMinimumMsat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret", "paymentKey", "delayedPaymentKey",
     "defaultFinalScriptPubKey", "shaSeed", "isFunder")
 
-  implicit val remoteParamsFmt = jsonFormat[Long, Long, Long, Long, Int, Int, PublicKey, Point, Point, Point, BinaryData, BinaryData,
-    RemoteParams](RemoteParams.apply, "dustLimitSatoshis", "maxHtlcValueInFlightMsat", "channelReserveSatoshis", "htlcMinimumMsat",
-    "toSelfDelay", "maxAcceptedHtlcs", "fundingPubKey", "revocationBasepoint", "paymentBasepoint", "delayedPaymentBasepoint",
-    "globalFeatures", "localFeatures")
-
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")
 
@@ -259,7 +259,7 @@ object ImplicitJsonFormats { me =>
   implicit val shaHashesWithIndexFmt = jsonFormat[Map[Index, Bytes], Option[Long],
     ShaHashesWithIndex](ShaHashesWithIndex.apply, "hashes", "lastIndex")
 
-  implicit val commitmentsFmt = jsonFormat[LocalParams, RemoteParams, LocalCommit, RemoteCommit,
+  implicit val commitmentsFmt = jsonFormat[LocalParams, AcceptChannel, LocalCommit, RemoteCommit,
     Changes, Changes, Long, Long, Either[WaitingForRevocation, Point], InputInfo, ShaHashesWithIndex, BinaryData,
     Commitments](Commitments.apply, "localParams", "remoteParams", "localCommit", "remoteCommit", "localChanges",
     "remoteChanges", "localNextHtlcId", "remoteNextHtlcId", "remoteNextCommitInfo", "commitInput",

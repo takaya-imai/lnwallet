@@ -157,7 +157,10 @@ trait LNCloudAct {
 // failover invariant will fall back to default in case of failure
 
 class LNCloud(url: String) {
-  def addBitcoinNode(pr: PeerGroup): Unit = none
+  def addBitcoinNode(pr: PeerGroup) = pr addAddress {
+    new PeerAddress(app.params, InetAddresses forString url, 8333)
+  }
+
   def http(way: String) = post(s"$url:9001/v1/$way", true) connectTimeout 7500
   def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
@@ -174,7 +177,6 @@ class LNCloud(url: String) {
 }
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
-  override def addBitcoinNode(pr: PeerGroup) = pr addAddress new PeerAddress(app.params, InetAddresses forString url, 8333)
   override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
   override def getTxs(parent: String) = super.getTxs(parent).onErrorResumeNext(_ => failover getTxs parent)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)

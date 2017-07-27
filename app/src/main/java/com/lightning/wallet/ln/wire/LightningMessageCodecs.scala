@@ -189,6 +189,8 @@ object LightningMessageCodecs { me =>
       (point withContext "delayedPaymentBasepoint") ::
       (point withContext "firstPerCommitmentPoint")
 
+  val acceptChannelCodec: Codec[AcceptChannel] = acceptChannel.as[AcceptChannel]
+
   private val fundingCreated =
     (binarydata(32) withContext "temporaryChannelId") ::
       (binarydata(32) withContext "txid") ::
@@ -327,7 +329,7 @@ object LightningMessageCodecs { me =>
       .typecase(cr = ping.as[Ping], tag = 18)
       .typecase(cr = pong.as[Pong], tag = 19)
       .typecase(cr = openChannel.as[OpenChannel], tag = 32)
-      .typecase(cr = acceptChannel.as[AcceptChannel], tag = 33)
+      .typecase(cr = acceptChannelCodec, tag = 33)
       .typecase(cr = fundingCreated.as[FundingCreated], tag = 34)
       .typecase(cr = fundingSigned.as[FundingSigned], tag = 35)
       .typecase(cr = fundingLockedCodec, tag = 36)

@@ -107,6 +107,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val chan = app.ChannelManager createChannel InitData(announce)
 
     val socketOpenListener = new ConnectionListener {
+      override def onMessage(msg: LightningMessage) = chan process msg
       override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan async CMDShutdown
       override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan async CMDShutdown
       override def onOperational(id: PublicKey, their: Init) = if (id == announce.nodeId) askForFunding(chan, their)

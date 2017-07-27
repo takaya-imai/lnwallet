@@ -71,18 +71,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // They have accepted our proposal, now let them sign a first commit tx
       case (WaitFundingData(announce, cmd, accept), (fundTx: Transaction, outIndex: Int), WAIT_FOR_FUNDING) =>
-        val remoteParams = RemoteParams(accept.dustLimitSatoshis, accept.maxHtlcValueInFlightMsat, accept.channelReserveSatoshis,
-          accept.htlcMinimumMsat, accept.toSelfDelay, accept.maxAcceptedHtlcs, accept.fundingPubkey, accept.revocationBasepoint,
-          accept.paymentBasepoint, accept.delayedPaymentBasepoint, cmd.remoteInit.globalFeatures, cmd.remoteInit.localFeatures)
-
-        val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
-          Funding.makeFirstFunderCommitTxs(cmd, remoteParams, fundTx.hash,
-            outIndex, accept.firstPerCommitmentPoint)
+        val (localSpec, localCommitTx, remoteSpec, remoteCommitTx) = Funding.makeFirstFunderCommitTxs(cmd, accept,
+          fundTx.hash, outIndex, accept.firstPerCommitmentPoint)
 
         val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
         val firstRemoteCommit = RemoteCommit(index = 0, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
-        BECOME(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex), remoteParams, fundTx,
-          localSpec, localCommitTx, firstRemoteCommit), WAIT_FUNDING_SIGNED) SEND FundingCreated(cmd.temporaryChannelId,
+        BECOME(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex), remoteParams = accept,
+          fundTx, localSpec, localCommitTx, firstRemoteCommit), WAIT_FUNDING_SIGNED) SEND FundingCreated(cmd.temporaryChannelId,
           fundTx.hash, outIndex, localSigOfRemoteTx)
 
 
@@ -91,7 +86,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if remote.channelId == wait.channelId =>
 
         val signedLocalCommitTx = Scripts.addSigs(wait.localCommitTx, wait.localParams.fundingPrivKey.publicKey,
-          wait.remoteParams.fundingPubKey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
+          wait.remoteParams.fundingPubkey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
         if (Scripts.checkSpendable(signedLocalCommitTx).isEmpty) BECOME(wait, CLOSING) else {
           val localCommit = LocalCommit(index = 0, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)

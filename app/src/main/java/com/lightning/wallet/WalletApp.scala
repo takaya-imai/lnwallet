@@ -98,7 +98,7 @@ class WalletApp extends Application { me =>
     def reconnect(cs: ChannelVec) = cs.map(_.data.announce).distinct foreach ConnectionManager.requestConnection
 
     val chainEventsListener = new TxTracker with NewBestBlockListener {
-      override def notifyNewBestBlock(b: StoredBlock) = for (chan <- alive) chan process CMDHeight(b.getHeight)
+      override def notifyNewBestBlock(b: StoredBlock) = for (chan <- all) chan process CMDHeight(b.getHeight)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
     }
@@ -124,7 +124,7 @@ class WalletApp extends Application { me =>
     }
   }
 
-  abstract class WalletKit extends AbstractKit {
+  abstract class WalletKit extends AbstractKit { self =>
     def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
@@ -144,10 +144,25 @@ class WalletApp extends Application { me =>
       if (peerGroup.isRunning) peerGroup.stop
     }
 
-    def setupAndStartDownload = {
-      lazy val catchListener: BlocksListener = new BlocksListener {
-        override def onChainDownloadStarted(peer: Peer, left: Int) = checkIfReady(left)
-        def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = checkIfReady(left)
+    def setupAndStartDownload =
+      self startDownload new BlocksListener { catchListener =>
+        blockChain addNewBestBlockListener ChannelManager.chainEventsListener
+        wallet addTransactionConfidenceEventListener ChannelManager.chainEventsListener
+        wallet addCoinsSentEventListener ChannelManager.chainEventsListener
+        wallet addTransactionConfidenceEventListener Vibr.generalTracker
+        wallet addCoinsReceivedEventListener Vibr.generalTracker
+        wallet addCoinsSentEventListener Vibr.generalTracker
+
+        wallet setAcceptRiskyTransactions true
+        wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
+        //      peerGroup addPeerDiscovery new DnsDiscovery(params)
+        LNParams.getCloud addBitcoinNode peerGroup
+
+        peerGroup.setUserAgent(appName, "0.01")
+        peerGroup setDownloadTxDependencies 0
+        peerGroup setPingIntervalMsec 10000
+        peerGroup setMaxConnections 6
+        peerGroup addWallet wallet
 
         def checkIfReady(left: Int) = if (left < blocksPerDay) {
           ConnectionManager.listeners += ChannelManager.socketEventsListener
@@ -155,32 +170,11 @@ class WalletApp extends Application { me =>
           peerGroup removeBlocksDownloadedEventListener catchListener
           ChannelManager reconnect ChannelManager.alive
         }
+
+        def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = checkIfReady(left)
+        override def onChainDownloadStarted(peer: Peer, left: Int) = checkIfReady(left)
+        RatesSaver.process
       }
-
-      wallet addCoinsSentEventListener Vibr.generalTracker
-      wallet addCoinsReceivedEventListener Vibr.generalTracker
-      wallet addTransactionConfidenceEventListener Vibr.generalTracker
-      wallet addCoinsSentEventListener ChannelManager.chainEventsListener
-      wallet addTransactionConfidenceEventListener ChannelManager.chainEventsListener
-      blockChain addNewBestBlockListener ChannelManager.chainEventsListener
-
-      wallet setAcceptRiskyTransactions true
-      wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
-//      peerGroup addPeerDiscovery new DnsDiscovery(params)
-
-      val pa1 = new PeerAddress(params, InetAddresses.forString("10.0.2.2"), 8333)
-      peerGroup.addAddress(pa1)
-
-      peerGroup.setUserAgent(appName, "0.01")
-      peerGroup setDownloadTxDependencies 0
-      peerGroup setPingIntervalMsec 10000
-      peerGroup setMaxConnections 6
-      peerGroup addWallet wallet
-
-      // Get it all going already
-      startDownload(catchListener)
-      RatesSaver.process
-    }
   }
 }
 

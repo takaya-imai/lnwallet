@@ -21,7 +21,7 @@ object Helpers { me =>
   }
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,
-                   remoteParams: RemoteParams, commitmentInput: InputInfo,
+                   remoteParams: AcceptChannel, commitmentInput: InputInfo,
                    localPerCommitmentPoint: Point, spec: CommitmentSpec) = {
 
     val remotePubkey = Generators.derivePubKey(remoteParams.paymentBasepoint, localPerCommitmentPoint)
@@ -40,7 +40,7 @@ object Helpers { me =>
   }
 
   def makeRemoteTxs(commitTxNumber: Long, localParams: LocalParams,
-                    remoteParams: RemoteParams, commitmentInput: InputInfo,
+                    remoteParams: AcceptChannel, commitmentInput: InputInfo,
                     remotePerCommitmentPoint: Point, spec: CommitmentSpec) = {
 
     val localPubkey = Generators.derivePubKey(localParams.paymentKey.toPoint, remotePerCommitmentPoint)
@@ -73,7 +73,7 @@ object Helpers { me =>
       // This is just to estimate the weight, it depends on size of the pubkey scripts
       val dummy: ClosingTx = Scripts.addSigs(makeFunderClosingTx(commitments.commitInput, localScriptPubkey,
         remoteScriptPubkey, dustLimit = Satoshi(0), closingFee = Satoshi(0), spec = commitments.localCommit.spec),
-        commitments.localParams.fundingPrivKey.publicKey, commitments.remoteParams.fundingPubKey, "aa" * 71, "bb" * 71)
+        commitments.localParams.fundingPrivKey.publicKey, commitments.remoteParams.fundingPubkey, "aa" * 71, "bb" * 71)
 
       val closingWeight = Transaction.weight(dummy.tx)
       val closingFee = Scripts.weight2fee(feeratePerKw = rate, closingWeight)
@@ -115,7 +115,7 @@ object Helpers { me =>
 
       val (closingTx, closingSigned) = makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
       Scripts checkSpendable Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
-        commitments.remoteParams.fundingPubKey, closingSigned.signature, remoteClosingSig)
+        commitments.remoteParams.fundingPubkey, closingSigned.signature, remoteClosingSig)
     }
 
     def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi): Satoshi =
@@ -259,14 +259,14 @@ object Helpers { me =>
     }
 
     // Assuming we are always a funder
-    def makeFirstFunderCommitTxs(cmd: CMDOpenChannel, remoteParams: RemoteParams,
+    def makeFirstFunderCommitTxs(cmd: CMDOpenChannel, remoteParams: AcceptChannel,
                                  fundingTxHash: BinaryData, fundingTxOutputIndex: Int,
                                  remoteFirstPoint: Point) = {
 
       val toLocalMsat = cmd.fundingAmountSat * satFactor - cmd.pushMsat
       val commitmentInput = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex,
         Satoshi(cmd.fundingAmountSat), cmd.localParams.fundingPrivKey.publicKey,
-        remoteParams.fundingPubKey)
+        remoteParams.fundingPubkey)
 
       val localPerCommitmentPoint = Generators.perCommitPoint(cmd.localParams.shaSeed, 0)
       val localSpec = CommitmentSpec(Set.empty, Set.empty, Map.empty, cmd.initialFeeratePerKw, toLocalMsat, cmd.pushMsat)

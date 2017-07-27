@@ -19,7 +19,7 @@ object LNParams {
 
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
-  lazy val publicCloud = new LNCloud("http://10.0.2.2")
+  lazy val publicCloud = new LNCloud("10.0.2.2")
   lazy val broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
 

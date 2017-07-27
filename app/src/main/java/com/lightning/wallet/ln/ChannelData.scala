@@ -47,7 +47,7 @@ case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel) exten
 case class WaitFundingData(announce: NodeAnnouncement, cmd: CMDOpenChannel, accept: AcceptChannel) extends ChannelData
 
 case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalParams, channelId: BinaryData,
-                                 remoteParams: RemoteParams, fundingTx: Transaction, localSpec: CommitmentSpec,
+                                 remoteParams: AcceptChannel, fundingTx: Transaction, localSpec: CommitmentSpec,
                                  localCommitTx: CommitTx, remoteCommit: RemoteCommit) extends ChannelData
 
 // All the data below will be stored
@@ -155,18 +155,13 @@ case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcVa
                        delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
                        shaSeed: BinaryData, isFunder: Boolean)
 
-case class RemoteParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long,
-                        htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubKey: PublicKey,
-                        revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
-                        globalFeatures: BinaryData, localFeatures: BinaryData)
-
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
 
-case class Commitments(localParams: LocalParams, remoteParams: RemoteParams, localCommit: LocalCommit, remoteCommit: RemoteCommit,
+case class Commitments(localParams: LocalParams, remoteParams: AcceptChannel, localCommit: LocalCommit, remoteCommit: RemoteCommit,
                        localChanges: Changes, remoteChanges: Changes, localNextHtlcId: Long, remoteNextHtlcId: Long,
                        remoteNextCommitInfo: Either[WaitingForRevocation, Point], commitInput: InputInfo,
                        remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
@@ -328,7 +323,7 @@ object Commitments {
 
     val sortedHtlcTxs = (htlcTimeoutTxs ++ htlcSuccessTxs).sortBy(_.input.outPoint.index)
     val signedCommitTx = Scripts.addSigs(localCommitTx, c.localParams.fundingPrivKey.publicKey,
-      c.remoteParams.fundingPubKey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey),
+      c.remoteParams.fundingPubkey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey),
       remoteSig = commit.signature)
 
     if (Scripts.checkSpendable(signedCommitTx).isEmpty) throw new LightningException
