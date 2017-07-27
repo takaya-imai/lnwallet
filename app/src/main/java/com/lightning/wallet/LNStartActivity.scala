@@ -115,7 +115,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
     chan.listeners += new ChannelListener { chanOpenListener =>
       // We monitor internal channel state here to interact with user
-      // and control the program flow
 
       override def onBecome = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>

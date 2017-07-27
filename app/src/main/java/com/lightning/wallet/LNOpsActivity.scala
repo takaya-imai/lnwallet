@@ -38,10 +38,10 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   private def manageActive(chan: Channel) = {
-    def manageOpeningInfo(c: Commitments, confs: Int) = {
+    def manageOpeningInfo(c: Commitments, open: Transaction) = {
       val threshold = math.max(c.remoteParams.minimumDepth, LNParams.minDepth)
       val channelCapacity = sumIn format withSign(c.commitInput.txOut.amount)
-      val currentState = app.plurOrZero(txsConfs, confs)
+      val currentState = app.plurOrZero(txsConfs, me getConfirmations open)
       me runOnUiThread updateInterface
 
       def updateInterface = {
@@ -64,13 +64,13 @@ class LNOpsActivity extends TimerActivity { me =>
         dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
     val chanOpsListener = new ChannelListener {
-      // We monitor internal channel state here to
-      // interact with user and control the program flow
+      // We monitor internal channel state here to interact with user
+      def reloadOnBecome = onBecome(chan, chan.data, null, chan.state)
 
       override def onBecome = {
         // A new channel has been created with funding transaction broadcasted
         case (_, WaitFundingDoneData(_, _, _, tx, commitments, _), _, _) =>
-          manageOpeningInfo(commitments, me getConfirmations tx)
+          manageOpeningInfo(commitments, tx)
 
         // Both sides have sent a funding locked so we're all good
         case (_, norm: NormalData, WAIT_FUNDING_DONE | SYNC, NORMAL) =>
@@ -107,8 +107,8 @@ class LNOpsActivity extends TimerActivity { me =>
 
       override def onProcess = {
         case (_, data, _: CMDHeight) =>
-          Tools log s"Calling onBecome method"
-          onBecome(chan, data, null, chan.state)
+          Tools log s"Reloading listener"
+          reloadOnBecome
       }
     }
 
@@ -117,9 +117,8 @@ class LNOpsActivity extends TimerActivity { me =>
       super.onDestroy
     }
 
-    // Get it going
     chan.listeners += chanOpsListener
-    chan process CMDHeight(0)
+    chanOpsListener.reloadOnBecome
   }
 
   // UI which does not need a channel access
