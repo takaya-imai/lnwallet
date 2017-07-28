@@ -1,15 +1,13 @@
 package com.lightning.wallet.ln
 
-import java.math.BigInteger
-import java.nio.ByteOrder
-
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.Bech32._
+import fr.acinq.eclair.crypto.BitStream._
 import com.lightning.wallet.ln.PaymentRequest._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.eclair.crypto.BitStream
-import fr.acinq.eclair.crypto.BitStream._
-
+import java.nio.ByteOrder.BIG_ENDIAN
+import java.math.BigInteger
 import scala.util.Try
 
 
@@ -120,9 +118,9 @@ object PaymentRequest {
   }
 
   case class RoutingInfoTag(pubkey: PublicKey, channelId: BinaryData, fee: Long, cltvExpiryDelta: Int) extends Tag {
-    def toInt5s: Int5Seq = encode(Bech32.eight2five(pubkey.toBin ++ channelId ++ feeUint16 ++ cltvExpiryDeltaUint16), 'r')
-    val cltvExpiryDeltaUint16 = Protocol.writeUInt16(cltvExpiryDelta, ByteOrder.BIG_ENDIAN)
-    val feeUint16 = Protocol.writeUInt64(fee, ByteOrder.BIG_ENDIAN)
+    private val feeAndDelta = Protocol.writeUInt64(fee, BIG_ENDIAN) ++ Protocol.writeUInt16(cltvExpiryDelta, BIG_ENDIAN)
+    def toInt5s: Int5Seq = encode(Bech32.eight2five(pubkey.toBin ++ channelId ++ feeAndDelta), 'r')
+    def shortChannelId: Long = Protocol.uint64(channelId, BIG_ENDIAN)
   }
 
   case class ExpiryTag(seconds: Long) extends Tag {
@@ -208,8 +206,8 @@ object PaymentRequest {
 
         case rTag if rTag == Bech32.map('r') =>
           val data = Bech32 five2eight input.slice(3, len + 3)
-          val fee = Protocol.uint64(data.drop(33 + 8), ByteOrder.BIG_ENDIAN)
-          val cltv = Protocol.uint16(data.drop(33 + 8 + 8), ByteOrder.BIG_ENDIAN)
+          val fee = Protocol.uint64(data.drop(33 + 8), BIG_ENDIAN)
+          val cltv = Protocol.uint16(data.drop(33 + 8 + 8), BIG_ENDIAN)
           RoutingInfoTag(PublicKey(data take 33), data.slice(33, 33 + 8), fee, cltv)
 
         case xTag if xTag == Bech32.map('x') =>
