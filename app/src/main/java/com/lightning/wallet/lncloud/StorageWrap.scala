@@ -81,7 +81,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
-  def updateRouting(routing: RoutingData, hash: BinaryData) = db.change(updRoutingSql, routing.toJson.toString, hash.toString)
+  def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
@@ -93,6 +93,16 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     }
 
   override def onProcess = {
+    case (_, _, retry: RetryAddHtlc) =>
+      // Update existing payment routing
+      me updateRouting retry.out
+      uiNotify
+
+    case (_, _, cmd: CMDAddHtlc) =>
+      // Record new outgoing payment
+      me putPaymentInfo cmd.out
+      uiNotify
+
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away
       me updatePreimage fulfill
@@ -105,9 +115,21 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
         case _ => updateStatus(FAILURE, htlc.add.paymentHash)
       }
 
-      // Fail everything not included in a commit
-      failPending(TEMP, norm.commitments.channelId)
       uiNotify
     }
+  }
+
+  override def onError = {
+    case ExtendedException(cmd: RetryAddHtlc) =>
+      updateStatus(FAILURE, cmd.out.request.paymentHash)
+      uiNotify
+  }
+
+  override def onBecome = {
+    case (_, norm: NormalData, _, SYNC | CLOSING) =>
+      // At worst these will be marked as FAILURE and
+      // then as WAITING once their CommitSig arrives
+      failPending(TEMP, norm.commitments.channelId)
+      uiNotify
   }
 }

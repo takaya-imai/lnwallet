@@ -31,9 +31,9 @@ case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: 
 
 trait PaymentInfoBag {
   def failPending(status: Long, chanId: BinaryData): Unit
-  def updateRouting(routing: RoutingData, hash: BinaryData): Unit
   def updateStatus(status: Long, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
+  def updateRouting(out: OutgoingPayment): Unit
 
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]

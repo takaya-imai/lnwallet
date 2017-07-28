@@ -192,9 +192,9 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd.out)
-    else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd.out)
-    else if (cmd.out.request.paymentHash.size != 32) throw ExtendedException(cmd.out)
+    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd)
+    else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd)
+    else if (cmd.out.request.paymentHash.size != 32) throw ExtendedException(cmd)
     else {
 
       // Let's compute the current commitment
@@ -210,9 +210,9 @@ object Commitments {
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
       // The rest of the guards
-      if (htlcValueInFlightOverflow) throw ExtendedException(cmd.out)
-      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd.out)
-      else if (feesOverflow) throw ExtendedException(cmd.out)
+      if (htlcValueInFlightOverflow) throw ExtendedException(cmd)
+      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd)
+      else if (feesOverflow) throw ExtendedException(cmd)
       else c1 -> add
     }
 
