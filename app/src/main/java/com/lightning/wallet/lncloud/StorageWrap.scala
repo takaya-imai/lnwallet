@@ -9,7 +9,6 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 
 import com.lightning.wallet.helper.RichCursor
-import fr.acinq.eclair.payment.PaymentRequest
 import com.lightning.wallet.ln.LNParams.db
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.BinaryData

@@ -19,7 +19,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import org.ndeftools.util.activity.NfcBeamWriterActivity
 import android.text.Layout.Alignment.ALIGN_NORMAL
 import android.graphics.Bitmap.Config.ARGB_8888
-import fr.acinq.eclair.payment.PaymentRequest
+import com.lightning.wallet.ln.PaymentRequest
 import com.google.zxing.qrcode.QRCodeWriter
 import android.graphics.Bitmap.createBitmap
 import org.ndeftools.wellknown.TextRecord

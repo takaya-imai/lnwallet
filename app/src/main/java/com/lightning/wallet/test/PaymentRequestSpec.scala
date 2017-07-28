@@ -1,8 +1,8 @@
 package com.lightning.wallet.test
 
+import com.lightning.wallet.ln.PaymentRequest
 import fr.acinq.bitcoin.{BinaryData, Btc, Crypto, MilliBtc, MilliSatoshi, Satoshi}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.eclair.payment.PaymentRequest
 
 /**
   * Created by anton on 13.07.17.
@@ -10,7 +10,7 @@ import fr.acinq.eclair.payment.PaymentRequest
 class PaymentRequestSpec {
 
   def allTests = {
-    import PaymentRequest._
+    import com.lightning.wallet.ln.PaymentRequest._
 
     val priv = PrivateKey(BinaryData("e126f68f7eafcc8b74f54d269fe206be715000f94dac067d1c04a8ca3b2db734"), compressed = true)
     val pub = priv.publicKey
@@ -110,7 +110,7 @@ class PaymentRequestSpec {
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
       assert(pr.description == Right(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)))
       assert(pr.fallbackAddress == Some("1RustyRX2oai4EYYDpQGWvEL62BBGqN9T"))
-      assert(pr.routingInfo() == RoutingInfoTag(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), "0102030405060708", 20, 3) :: Nil)
+      assert(pr.routingInfo == RoutingInfoTag(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), "0102030405060708", 20, 3) :: Nil)
       assert(pr.tags.size == 4)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }

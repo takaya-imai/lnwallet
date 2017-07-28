@@ -10,20 +10,15 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
-import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
-import org.bitcoinj.core.{ECKey, PeerAddress, PeerGroup}
 import rx.lang.scala.{Observable => Obs}
-
+import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
-import fr.acinq.eclair.payment.PaymentRequest
 import rx.lang.scala.schedulers.IOScheduler
-import com.google.common.net.InetAddresses
-import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.PublicKey
-import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
+import org.bitcoinj.core.ECKey
 
 
 // User can set this one instead of public one

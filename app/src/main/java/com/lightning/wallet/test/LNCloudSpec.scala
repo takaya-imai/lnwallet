@@ -3,12 +3,9 @@ package com.lightning.wallet.test
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.wire._
-import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import fr.acinq.bitcoin.Crypto.PrivateKey
-import fr.acinq.eclair.payment.PaymentRequest
-import rx.lang.scala.schedulers.IOScheduler
 
 import scala.util.Try
 
@@ -28,7 +25,7 @@ class LNCloudSpec {
 
   object TestPaymentSpecBag extends PaymentInfoBag {
     def failPending(status: Long, chanId: BinaryData): Unit = ???
-    def updateRouting(routing: RoutingData, hash: BinaryData): Unit = ???
+    def updateRouting(out: OutgoingPayment): Unit = ???
     def updateStatus(status: Long, hash: BinaryData): Unit = ???
     def updatePreimage(update: UpdateFulfillHtlc): Unit = ???
 

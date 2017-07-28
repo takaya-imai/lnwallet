@@ -43,9 +43,9 @@ object PaymentInfoTable extends Table {
   val names = ("payments", "hash", "request", "status", "chanid", "preimage", "routing", "search")
   val (table, hash, request, status, chanId, preimage, routing, search) = names
 
-  def newVirtualSql = s"INSERT INTO $fts4$table ($search, $hash) VALUES (?, ?)"
+  def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
   def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $routing) VALUES (?, ?, ?, ?, ?, ?)"
-  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts4$table WHERE $search MATCH ? LIMIT 50)"
+  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
@@ -73,11 +73,11 @@ object PaymentInfoTable extends Table {
     COMMIT"""
 
   def createVirtualSql = s"""
-    CREATE VIRTUAL TABLE $fts4$table
-    USING fts4($search, $hash)"""
+    CREATE VIRTUAL TABLE $fts$table
+    USING $fts($search, $hash)"""
 }
 
-trait Table { val (id, fts4) = "_id" -> "fts" }
+trait Table { val (id, fts) = "_id" -> "fts4" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
 extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
 

@@ -11,7 +11,6 @@ import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import concurrent.ExecutionContext.Implicits.global
-import fr.acinq.eclair.payment.PaymentRequest
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
 import scala.concurrent.Future

@@ -9,7 +9,7 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import android.text.format.DateUtils.getRelativeTimeSpanString
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
-import fr.acinq.eclair.payment.PaymentRequest
+import com.lightning.wallet.ln.PaymentRequest
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat

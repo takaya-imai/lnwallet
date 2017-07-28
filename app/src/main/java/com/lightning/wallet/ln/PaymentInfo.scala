@@ -4,15 +4,14 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import scala.util.{Success, Try}
-
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
-import fr.acinq.eclair.payment.PaymentRequest
 import com.lightning.wallet.ln.Tools.random
 import fr.acinq.bitcoin.BinaryData
 import scodec.bits.BitVector
 import scodec.Attempt
+
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import scala.util.{Success, Try}
 
 
 trait PaymentInfo {

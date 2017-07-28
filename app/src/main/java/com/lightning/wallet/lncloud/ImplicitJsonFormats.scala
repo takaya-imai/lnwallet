@@ -17,7 +17,6 @@ import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.ln.crypto.ShaChain.Index
 import org.bitcoinj.core.ECKey.CURVE.getCurve
-import fr.acinq.eclair.payment.PaymentRequest
 import org.spongycastle.math.ec.ECPoint
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
