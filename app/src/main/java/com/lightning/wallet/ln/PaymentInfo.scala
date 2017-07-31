@@ -52,17 +52,21 @@ object PaymentInfo {
   // The fee (in milliSatoshi) that a node should be paid to forward an HTLC of 'amount' milliSatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
 
-  // finalAmountMsat = final amount specified by the recipient
-  // finalExpiryBlockCount = final expiry specified by the recipient
-  def buildRoute(finalAmountMsat: Long, finalExpiryBlockCount: Int, hops: PaymentRoute) = {
-    val startConditions = (Vector.empty[PerHopPayload], finalAmountMsat, finalExpiryBlockCount)
+  type RouteParams = (Vector[PerHopPayload], Long, Int)
+  def preBuidRoute(request: PaymentRequest): RouteParams = {
+    val start = (Vector.empty[PerHopPayload], request.msat, LNParams.expiry)
+    (start /: request.routingInfo.reverse) { case (payloads, msat, expiry) ~ tag =>
+      val perHopPayload = PerHopPayload(tag.shortChannelId, msat, expiry) +: payloads
+      (perHopPayload, msat + tag.fee, expiry + tag.cltvExpiryDelta)
+    }
+  }
 
-    (startConditions /: hops.reverse) { case Tuple3(payloads, msat, expiry) ~ hop =>
+  def buildRoute(params: RouteParams, hops: PaymentRoute) =
+    (params /: hops.reverse) { case (payloads, msat, expiry) ~ hop =>
       val feeMsat = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
       val perHopPayload = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
       (perHopPayload, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
     }
-  }
 
   def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): SecretsAndPacket = {
     require(nodes.size == payloads.size + 1, "Payload mismatch: there should be one less payload than " + nodes.size)

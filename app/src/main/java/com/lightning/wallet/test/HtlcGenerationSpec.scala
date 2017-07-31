@@ -68,7 +68,8 @@ class HtlcGenerationSpec {
     {
       println("compute route with fees and expiry delta")
 
-      val (payloads, firstAmountMsat, firstExpiry) = buildRoute(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, hops.drop(1))
+      val routeParams = (Vector.empty[PerHopPayload], finalAmountMsat, currentBlockCount + expiryDeltaBlocks)
+      val (payloads, firstAmountMsat, firstExpiry) = buildRoute(routeParams, hops.drop(1))
 
       println(firstAmountMsat == amount_ab)
       println(firstExpiry == expiry_ab)
@@ -80,8 +81,8 @@ class HtlcGenerationSpec {
 
     {
       println("build onion")
-
-      val (payloads, _, _) = buildRoute(finalAmountMsat, currentBlockCount + expiryDeltaBlocks, hops.drop(1))
+      val routeParams = (Vector.empty[PerHopPayload], finalAmountMsat, currentBlockCount + expiryDeltaBlocks)
+      val (payloads, _, _) = buildRoute(routeParams, hops.drop(1))
       val nodes = hops.map(_.nextNodeId)
       val SecretsAndPacket(_, packet_b) = buildOnion(nodes, payloads, paymentHash)
       println(packet_b.serialize.length == Sphinx.PacketLength)

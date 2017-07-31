@@ -24,15 +24,19 @@ import scala.util.Try
   */
 
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
-                          nodeId: PublicKey, tags: List[PaymentRequest.Tag], signature: BinaryData) {
+                          nodeId: PublicKey, tags: Vector[PaymentRequest.Tag], signature: BinaryData) {
 
   def isFresh: Boolean = {
     val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }
     timestamp + expiry.getOrElse(3600L) > System.currentTimeMillis / 1000L
   }
 
-  def routingInfo: Seq[RoutingInfoTag] = tags.collect { case t: RoutingInfoTag => t }
+  def routingInfo: Vector[RoutingInfoTag] = tags.collect { case t: RoutingInfoTag => t }
   def paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
+
+  // Incoming payment request may not initially have an amount
+  // but at some point some amount should be added
+  def msat: Long = amount.get.amount
 
   def description: Either[String, BinaryData] = tags.collectFirst {
     case DescriptionHashTag(descriptionHash) => Right(descriptionHash)
@@ -112,14 +116,14 @@ object PaymentRequest {
     }
 
     def fromBech32Address(address: String): FallbackAddressTag = {
-      val (prefix, hash) = Bech32 decodeWitnessAddress address
+      val (prefix: Int5, hash) = Bech32 decodeWitnessAddress address
       FallbackAddressTag(prefix, hash)
     }
   }
 
   case class RoutingInfoTag(pubkey: PublicKey, channelId: BinaryData, fee: Long, cltvExpiryDelta: Int) extends Tag {
     private val feeAndDelta = Protocol.writeUInt64(fee, BIG_ENDIAN) ++ Protocol.writeUInt16(cltvExpiryDelta, BIG_ENDIAN)
-    def toInt5s: Int5Seq = encode(Bech32.eight2five(pubkey.toBin ++ channelId ++ feeAndDelta), 'r')
+    def toInt5s: Int5Seq = encode(Bech32.eight2five(pubkey.toBin ++ channelId.data ++ feeAndDelta), 'r')
     def shortChannelId: Long = Protocol.uint64(channelId, BIG_ENDIAN)
   }
 
@@ -173,7 +177,7 @@ object PaymentRequest {
     def encode(r: BigInteger, s: BigInteger, recid: Byte) = {
       val rEncoded = Crypto fixSize r.toByteArray.dropWhile(0.==)
       val sEncoded = Crypto fixSize s.toByteArray.dropWhile(0.==)
-      rEncoded ++ sEncoded :+ recid
+      rEncoded.data ++ sEncoded.data :+ recid
     }
   }
 
@@ -271,7 +275,7 @@ object PaymentRequest {
 
     val prefix = hrp take 4
     val amountOpt = Amount decode hrp.drop(4)
-    val pr = PaymentRequest(prefix, amountOpt, Timestamp decode data0, pub, tags.toList, signature)
+    val pr = PaymentRequest(prefix, amountOpt, Timestamp decode data0, pub, tags.toVector, signature)
     require(Crypto.verifySignature(messageHash, r -> s, pub), "Invalid signature")
     pr
   }

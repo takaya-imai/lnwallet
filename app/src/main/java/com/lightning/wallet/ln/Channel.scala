@@ -4,7 +4,6 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
-
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
@@ -39,9 +38,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
     Some(data, rs) collect { case (some: HasCommitments, route +: restOfPaymentRoutes) =>
-      val (payloads, amountWithAllFees, expiryWithAllDeltas) = buildRoute(request.amount.get.amount, LNParams.expiry, route)
-      val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
-      val routing = RoutingData(restOfPaymentRoutes, onion, amountWithAllFees, expiryWithAllDeltas)
+      val (payloads, completeAmount, completeExpiry) = buildRoute(preBuidRoute(request), route)
+      val keys = data.announce.nodeId +: route.map(_.nextNodeId) ++: request.routingInfo.map(_.pubkey)
+
+      val onion = buildOnion(keys, payloads, request.paymentHash)
+      val routing = RoutingData(restOfPaymentRoutes, onion, completeAmount, completeExpiry)
       OutgoingPayment(routing, NOIMAGE, request, some.commitments.channelId, TEMP)
     }
 
