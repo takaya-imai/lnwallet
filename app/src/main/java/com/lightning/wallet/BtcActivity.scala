@@ -6,7 +6,11 @@ import collection.JavaConverters._
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
+import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import android.text.format.DateUtils.getRelativeTimeSpanString
+import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
+import android.content.DialogInterface.BUTTON_POSITIVE
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import com.lightning.wallet.ln.PaymentRequest
@@ -25,11 +29,6 @@ import android.provider.Settings.{System => FontSystem}
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import com.lightning.wallet.Utils.{TryMSat, app}
 import scala.util.{Failure, Success, Try}
-
-import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
-import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
-import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
-import android.content.DialogInterface.BUTTON_POSITIVE
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -179,10 +178,16 @@ with ListUpdater { me =>
           me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
-        val sumPretty: String = wrap.marking format withSign(wrap.nativeValue)
+        val sumPretty = wrap.marking format withSign(wrap.nativeValue)
         val title = s"$sumPretty<br><small>${me time wrap.tx.getUpdateTime}</small>"
+        val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
+        val humanFee = if (wrap.nativeValue.isPositive) feeIncoming else wrap.fee match {
+          case Some(realFee) => feeDetails.format(withSign(realFee), confirms) format confirms
+          case None => feeAbsent
+        }
+
         mkForm(me negBld dialog_ok, title.html, lst)
-        confNumber setText status(wrap).html
+        confNumber setText humanFee.html
       }
 
       // Wait for transactions list
@@ -347,28 +352,18 @@ with ListUpdater { me =>
   private def nativeTransactions = app.kit.wallet.getTransactionsByTime
     .asScala.take(maxLinesNum).map(bitcoinjTx2Wrap).filter(_.isNative)
 
-  private def status(wrap: TxWrap) = {
-    val cfs = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
-    if (wrap.nativeValue.isPositive) feeIncoming format cfs else wrap.tx.getFee match {
-      case null => feeAbsent format cfs case fee => feeDetails.format(withSign(fee), cfs)
-    }
-  }
-
   class BtcView(view: View) extends TxViewHolder(view) {
     // Display given Bitcoin transaction properties to user
 
     def fillView(wrap: TxWrap) = {
-      val time = when(System.currentTimeMillis, wrap.tx.getUpdateTime)
-      val shortValue = wrap.marking.format(wrap.nativeValue: String)
-
-      val image =
-        if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
+      val finalValue = wrap.fee map wrap.nativeValue.subtract getOrElse wrap.nativeValue
+      val statusImage = if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
         else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
         else await
 
-      transactWhen setText time.html
-      transactSum setText shortValue.html
-      transactCircle setImageResource image
+      transactWhen setText when(System.currentTimeMillis, wrap.tx.getUpdateTime).html
+      transactSum setText  wrap.marking.format(finalValue: String).html
+      transactCircle setImageResource statusImage
     }
   }
 }

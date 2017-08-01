@@ -12,6 +12,7 @@ class TxWrap(val tx: Transaction) {
   val nativeValue = getValueSentToMe subtract getValueSentFromMe
   val marking = if (nativeValue.isPositive) sumIn else sumOut
   val isNative = !nativeValue.isZero
+  val fee = Option(tx.getFee)
 
   private def inOuts(input: TransactionInput): Option[TransactionOutput] =
     Stream(UNSPENT, SPENT, PENDING).map(app.kit.wallet.getTransactionPool)
