@@ -131,7 +131,10 @@ trait Pathfinder {
   val channel: Channel
 
   def outPaymentObs(request: PaymentRequest) = {
-    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
+    // Presence of routing tags means a target node is non-public so
+    // we should find routes not to a target node itself but to a first routing tag node
+    val targetNode = request.routingInfo.headOption.map(_.pubkey) getOrElse request.nodeId
+    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, targetNode)
     for (routes <- routesObs) yield channel.outPaymentOpt(routes, request)
   }
 }

@@ -37,11 +37,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   }
 
   def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
-    Some(data, rs) collect { case (some: HasCommitments, route +: restOfPaymentRoutes) =>
+    Some(rs, data) collect { case (route +: restOfPaymentRoutes, some: HasCommitments) =>
       val (payloads, completeAmount, completeExpiry) = buildRoute(preBuidRoute(request), route)
-      val keys = data.announce.nodeId +: route.map(_.nextNodeId) ++: request.routingInfo.map(_.pubkey)
+      val onion = buildOnion(data.announce.nodeId +: route.dropRight(1).map(_.nextNodeId) ++:
+        request.routingInfo.map(_.pubkey) :+ request.nodeId, payloads, request.paymentHash)
 
-      val onion = buildOnion(keys, payloads, request.paymentHash)
+      // We use the first available route and save the rest for retries
       val routing = RoutingData(restOfPaymentRoutes, onion, completeAmount, completeExpiry)
       OutgoingPayment(routing, NOIMAGE, request, some.commitments.channelId, TEMP)
     }
@@ -386,7 +387,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // Don't accept these while in sync
       case (_, cmd: MemoCommand, SYNC) =>
-        throw SyncException(cmd)
+        throw CMDInSyncException(cmd)
 
 
       // SYNC: CONNECT/DISCONNECT

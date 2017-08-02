@@ -356,10 +356,11 @@ object Commitments {
     case Left(wait: WaitingForRevocation) =>
       val nextIndex = ShaChain.largestTxIndex - c.remoteCommit.index
       val secrets1 = ShaChain.addHash(c.remotePerCommitmentSecrets, rev.perCommitmentSecret.toBin, nextIndex)
-      c.copy(localChanges = c.localChanges.copy(signed = Vector.empty, acked = c.localChanges.acked ++ c.localChanges.signed),
-        remoteChanges = c.remoteChanges.copy(signed = Vector.empty), remoteCommit = wait.nextRemoteCommit,
-        remoteNextCommitInfo = Right apply rev.nextPerCommitmentPoint,
-        remotePerCommitmentSecrets = secrets1)
+      val localChanges1 = c.localChanges.copy(signed = Vector.empty, acked = c.localChanges.acked ++ c.localChanges.signed)
+      val remoteChanges1 = c.remoteChanges.copy(signed = Vector.empty)
+
+      c.copy(localChanges = localChanges1, remoteChanges = remoteChanges1, remoteCommit = wait.nextRemoteCommit,
+        remoteNextCommitInfo = Right apply rev.nextPerCommitmentPoint, remotePerCommitmentSecrets = secrets1)
 
     // Unexpected revocation when we have Point
     case _ => throw new LightningException

@@ -74,7 +74,7 @@ object Features {
 
 class LightningException extends RuntimeException
 case class ExtendedException[T](details: T) extends LightningException
-case class SyncException(cmd: MemoCommand) extends LightningException
+case class CMDInSyncException(cmd: MemoCommand) extends LightningException
 
 // STATE MACHINE
 

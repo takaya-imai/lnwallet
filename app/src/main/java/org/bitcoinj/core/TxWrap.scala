@@ -39,7 +39,7 @@ class TxWrap(val tx: Transaction) {
   } map outputToPayData
 
   private def outputToPayData(out: TransactionOutput) = Try(out.getScriptPubKey) map {
-    //case publicKeyScript if publicKeyScript.isSentToP2WSH => P2WSHData(out.getValue, publicKeyScript)
+    case publicKeyScript if publicKeyScript.isSentToP2WSH => P2WSHData(out.getValue, publicKeyScript)
     case publicKeyScript => AddrData(out.getValue, publicKeyScript getToAddress app.params)
   }
 }
