@@ -17,7 +17,6 @@ case class CMDConfirmed(tx: Transaction) extends Command
 case class CMDSpent(tx: Transaction) extends Command
 case class CMDFeerate(rate: Long) extends Command
 case class CMDHeight(height: Int) extends Command
-case object CMDHTLCProcess extends Command
 case object CMDShutdown extends Command
 case object CMDOffline extends Command
 case object CMDProceed extends Command
@@ -171,6 +170,7 @@ object Commitments {
     c.localCommit.spec.htlcs ++ c.remoteCommit.spec.htlcs ++
       c.remoteNextCommitInfo.left.toSeq.flatMap(_.nextRemoteCommit.spec.htlcs)
 
+  def outgoingHtlcs(spec: CommitmentSpec) = spec.htlcs.filterNot(_.incoming)
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
 

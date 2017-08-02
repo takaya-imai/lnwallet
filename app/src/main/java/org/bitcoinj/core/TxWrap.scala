@@ -14,6 +14,9 @@ class TxWrap(val tx: Transaction) {
   val isNative = !nativeValue.isZero
   val fee = Option(tx.getFee)
 
+  def nativeValueWithoutFee: Coin =
+    fee map nativeValue.subtract getOrElse nativeValue
+
   private def inOuts(input: TransactionInput): Option[TransactionOutput] =
     Stream(UNSPENT, SPENT, PENDING).map(app.kit.wallet.getTransactionPool)
       .map(input.getConnectedOutput).find(_ != null)

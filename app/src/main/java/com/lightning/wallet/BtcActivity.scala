@@ -178,12 +178,12 @@ with ListUpdater { me =>
           me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
-        val sumPretty = wrap.marking format withSign(wrap.nativeValue)
+        val sumPretty = wrap.marking format withSign(wrap.nativeValueWithoutFee)
         val title = s"$sumPretty<br><small>${me time wrap.tx.getUpdateTime}</small>"
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
         val humanFee = if (wrap.nativeValue.isPositive) feeIncoming else wrap.fee match {
           case Some(realFee) => feeDetails.format(withSign(realFee), confirms) format confirms
-          case None => feeAbsent
+          case None => feeAbsent format confirms
         }
 
         mkForm(me negBld dialog_ok, title.html, lst)
@@ -356,13 +356,12 @@ with ListUpdater { me =>
     // Display given Bitcoin transaction properties to user
 
     def fillView(wrap: TxWrap) = {
-      val finalValue = wrap.fee map wrap.nativeValue.subtract getOrElse wrap.nativeValue
       val statusImage = if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
         else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
         else await
 
       transactWhen setText when(System.currentTimeMillis, wrap.tx.getUpdateTime).html
-      transactSum setText  wrap.marking.format(finalValue: String).html
+      transactSum setText  wrap.marking.format(wrap.nativeValueWithoutFee: String).html
       transactCircle setImageResource statusImage
     }
   }
