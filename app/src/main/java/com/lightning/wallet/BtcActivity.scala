@@ -182,12 +182,12 @@ with ListUpdater { me =>
         val title = s"$sumPretty<br><small>${me time wrap.tx.getUpdateTime}</small>"
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
         val humanFee = if (wrap.nativeValue.isPositive) feeIncoming else wrap.fee match {
-          case Some(realFee) => feeDetails.format(withSign(realFee), confirms) format confirms
-          case None => feeAbsent format confirms
+          case Some(outgoingFee) => feeDetails.format(withSign(outgoingFee), confirms)
+          case None => feeAbsent
         }
 
         mkForm(me negBld dialog_ok, title.html, lst)
-        confNumber setText humanFee.html
+        confNumber setText humanFee.format(confirms).html
       }
 
       // Wait for transactions list

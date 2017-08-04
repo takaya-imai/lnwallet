@@ -100,7 +100,7 @@
     <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
     <string name="txs_view_outside">View on BlockExplorer.com</string>
-    <string name="txs_p2wsh">Payment Channel funding</string>
+    <string name="txs_p2wsh">Payment Channel Funding</string>
 
     <array name="txs_confs">
         <item><![CDATA[<font color=#E31300>Awaiting confirmation</font>]]></item>
@@ -174,7 +174,7 @@
         <item><![CDATA[in <strong>%1$s</strong> blocks]]></item>
     </array>
 
-    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a channel<br><br><small>Max capacity %2$s</small>]]></string>
+    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a payment channel<br><br><small>Max capacity %1$s</small>]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>

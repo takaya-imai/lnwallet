@@ -93,7 +93,7 @@ class WalletApp extends Application { me =>
     var all = ChannelWrap.get map createChannel
 
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
-    def from(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
+    def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
     def reconnect(cs: ChannelVec) = cs.map(_.data.announce) foreach ConnectionManager.requestConnection
 
     val chainEventsListener = new TxTracker with NewBestBlockListener {
@@ -115,11 +115,11 @@ class WalletApp extends Application { me =>
       override def onDisconnect(id: PublicKey) = ChannelManager reconnect from(alive, id)
     }
 
-    def createChannel(data1: ChannelData) = new Channel {
+    def createChannel(bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = for (work <- ConnectionManager.connections get data.announce.nodeId) work send msg
       def STORE(content: HasCommitments): HasCommitments = runAnd(result = content)(action = ChannelWrap put content)
       listeners ++= Set(LNParams.broadcaster, LNParams.bag)
-      process(data1)
+      process(bootstrap)
     }
   }
 

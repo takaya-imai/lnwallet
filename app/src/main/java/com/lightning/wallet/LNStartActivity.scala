@@ -110,7 +110,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onMessage(msg: LightningMessage) = chan process msg
       override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan async CMDShutdown
       override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan async CMDShutdown
-      override def onOperational(id: PublicKey, their: Init) = if (id == announce.nodeId) askForFunding(chan, their)
+      override def onOperational(id: PublicKey, their: Init) = if (id == announce.nodeId)
+        me runOnUiThread askForFunding(chan, their)
     }
 
     chan.listeners += new ChannelListener { chanOpenListener =>
@@ -119,13 +120,13 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onBecome = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
           // Peer has agreed to open a channel so now we ask user for a tx feerate
-          askForFeerate(chan, cmd, accept)
+          me runOnUiThread askForFeerate(chan, cmd, accept)
 
         case (_, _, _, CLOSING) =>
           // Disconnect, remote Error, back button pressed
           ConnectionManager.listeners -= socketOpenListener
           chan.listeners -= chanOpenListener
-          setListView
+          me runOnUiThread setListView
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
           // Never forget to remove listeners related to local view
@@ -173,32 +174,27 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   def askForFunding(chan: Channel, their: Init) = {
     val humanCap = sumIn format withSign(LNParams.maxChannelCapacity)
-    val title: Spanned = getString(ln_ops_start_fund_title).format(humanCap).html
+    val title = getString(ln_ops_start_fund_title).format(humanCap).html
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-    val builder = negPosBld(dialog_cancel, dialog_next)
-    me runOnUiThread showFundingForm
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
+    val rateManager = new RateManager(content)
 
-    def showFundingForm = {
-      val alert = mkForm(builder, title, content)
-      val rateManager = new RateManager(content)
+    def attempt = rateManager.result match {
+      case Failure(_) => app toast dialog_sum_empty
+      case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_capacity
+      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
 
-      def attempt = rateManager.result match {
-        case Failure(_) => app toast dialog_sum_empty
-        case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_capacity
-        case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
-
-        case Success(ms) => rm(alert) {
-          val amountSat = ms.amount / satFactor
-          val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
-          val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
-          val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-          chan async CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
-        }
+      case Success(ms) => rm(alert) {
+        val amountSat = ms.amount / satFactor
+        val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
+        val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
+        val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
+        chan async CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
       }
-
-      val ok = alert getButton BUTTON_POSITIVE
-      ok setOnClickListener onButtonTap(attempt)
     }
+
+    val ok = alert getButton BUTTON_POSITIVE
+    ok setOnClickListener onButtonTap(attempt)
   }
 
   def askForFeerate(chan: Channel, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = {
@@ -208,7 +204,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     new TxProcessor {
       val funding = Coin valueOf cmd.fundingAmountSat
       val pay = P2WSHData(funding, scriptPubKey)
-      me runOnUiThread chooseFee
+      chooseFee
 
       def processTx(password: String, fee: Coin) = chan async {
         val fundingTransaction: fr.acinq.bitcoin.Transaction = makeTx(password, fee)

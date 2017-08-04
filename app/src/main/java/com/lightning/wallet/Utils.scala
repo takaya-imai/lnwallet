@@ -338,7 +338,8 @@ trait TimerActivity extends AppCompatActivity { me =>
 
   // Show an emergency page in case of a fatal error
   override def onCreate(savedInstanceState: Bundle): Unit = {
-    Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
+    // TODO: remove in production
+    //Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
     super.onCreate(savedInstanceState)
   }
 
