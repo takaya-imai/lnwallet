@@ -17,6 +17,7 @@ case class CMDConfirmed(tx: Transaction) extends Command
 case class CMDSpent(tx: Transaction) extends Command
 case class CMDFeerate(rate: Long) extends Command
 case class CMDHeight(height: Int) extends Command
+case object CMDHTLCProcess extends Command
 case object CMDShutdown extends Command
 case object CMDOffline extends Command
 case object CMDProceed extends Command
@@ -154,7 +155,7 @@ case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcVa
                        delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
                        shaSeed: BinaryData, isFunder: Boolean)
 
-case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig)
+case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig, localCommitIndexSnapshot: Long)
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
@@ -170,7 +171,6 @@ object Commitments {
     c.localCommit.spec.htlcs ++ c.remoteCommit.spec.htlcs ++
       c.remoteNextCommitInfo.left.toSeq.flatMap(_.nextRemoteCommit.spec.htlcs)
 
-  def outgoingHtlcs(spec: CommitmentSpec) = spec.htlcs.filterNot(_.incoming)
   def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def remoteHasChanges(c: Commitments): Boolean = c.localChanges.acked.nonEmpty || c.remoteChanges.proposed.nonEmpty
 
@@ -298,11 +298,13 @@ object Commitments {
     val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, paymentKey)
 
     // Update commitment data
-    val commitSig = CommitSig(c.channelId, Scripts.sign(remoteCommitTx, c.localParams.fundingPrivKey), htlcSigs.toList)
-    val remote1 = RemoteCommit(c.remoteCommit.index + 1, spec, remoteCommitTx.tx.txid, remoteNextPerCommitmentPoint)
-    val localChanges1 = c.localChanges.copy(proposed = Vector.empty, signed = c.localChanges.proposed)
     val remoteChanges1 = c.remoteChanges.copy(acked = Vector.empty, signed = c.remoteChanges.acked)
-    val c1 = c.copy(remoteNextCommitInfo = Left apply WaitingForRevocation(remote1, commitSig),
+    val localChanges1 = c.localChanges.copy(proposed = Vector.empty, signed = c.localChanges.proposed)
+    val remoteCommit1 = RemoteCommit(index = c.remoteCommit.index + 1, spec, remoteCommitTx.tx.txid, remoteNextPerCommitmentPoint)
+    val commitSig = CommitSig(c.channelId, Scripts.sign(remoteCommitTx, c.localParams.fundingPrivKey), htlcSigs.toList)
+    val waiting = WaitingForRevocation(remoteCommit1, commitSig, c.localCommit.index)
+
+    val c1 = c.copy(remoteNextCommitInfo = Left apply waiting,
       localChanges = localChanges1, remoteChanges = remoteChanges1)
 
     c1 -> commitSig
@@ -315,7 +317,6 @@ object Commitments {
     val localNextPerCommitmentPoint = Generators.perCommitPoint(c.localParams.shaSeed, c.localCommit.index + 2)
     val remotePaymentPubkey = Generators.derivePubKey(c.remoteParams.paymentBasepoint, localPerCommitmentPoint)
     val localPaymentKey = Generators.derivePrivKey(c.localParams.paymentKey, localPerCommitmentPoint)
-    val revocation = RevokeAndAck(c.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
 
     val (localCommitTx, htlcTimeoutTxs, htlcSuccessTxs) =
       Helpers.makeLocalTxs(c.localCommit.index + 1, c.localParams,
@@ -344,9 +345,9 @@ object Commitments {
 
     val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx)
     val remoteChanges1 = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed)
-    val c1 = c.copy(remoteChanges = remoteChanges1, localChanges = c.localChanges.copy(acked = Vector.empty), localCommit = localCommit1)
-
-    c1 -> revocation
+    val c1 = c.copy(localChanges = c.localChanges.copy(acked = Vector.empty), remoteChanges = remoteChanges1, localCommit = localCommit1)
+    val revokeAndAck = RevokeAndAck(c.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
+    c1 -> revokeAndAck
   }
 
   def receiveRevocation(c: Commitments, rev: RevokeAndAck) = c.remoteNextCommitInfo match {

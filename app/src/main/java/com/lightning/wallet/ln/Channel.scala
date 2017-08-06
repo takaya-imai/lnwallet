@@ -223,10 +223,14 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         // We received a revocation because we sent a commit sig
         val c1 = Commitments.receiveRevocation(norm.commitments, rev)
         me UPDATE norm.copy(commitments = c1)
+        doProcess(CMDHTLCProcess)
 
-        // Fail or fulfill our incoming (their outgoing) HTLCs
-        val toResolve = Commitments outgoingHtlcs c1.remoteCommit.spec
-        toResolve map resolveHtlc foreach doProcess
+      // Fail or fulfill incoming HTLCs
+      case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
+        for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
+          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
+
+        // And sign right away
         doProcess(CMDProceed)
 
 
@@ -331,52 +335,33 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           .modify(_.remoteNextHtlcId).using(currentRemoteCount => currentRemoteCount - remoteProposedIdDelta)
           .modify(_.localNextHtlcId).using(currentLocalCount => currentLocalCount - localProposedIdDelta)
 
-        // Let's see the state of remote sigs
-        if (c1.localCommit.index == cr.nextRemoteRevocationNumber + 1) {
-          // Our last revocation got lost, let's resend it, maybe followed by CommitSig later
+        def maybeResendRevocation = if (c1.localCommit.index == cr.nextRemoteRevocationNumber + 1) {
           val localPerCommitmentSecret = Generators.perCommitSecret(c1.localParams.shaSeed, c1.localCommit.index - 1)
           val localNextPerCommitmentPoint = Generators.perCommitPoint(c1.localParams.shaSeed, c1.localCommit.index + 1)
           me SEND RevokeAndAck(channelId = c1.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
         } else if (c1.localCommit.index != cr.nextRemoteRevocationNumber) throw ExtendedException(norm)
 
-        // We may send a CommitSig after revocation
-        BECOME(norm.copy(commitments = c1), NORMAL)
-        doProcess(CMDProceed)
-
-        // Let's see the state of local sigs
-        val c2 ~ toResolve = c1.remoteNextCommitInfo match {
-          // We had sent a new sig and were waiting for their revocation, they didn't receive the new sig because of the disconnection
-          // for now we simply discard the changes we had just signed, we also "un-sign" their changes that we already acked
+        c1.remoteNextCommitInfo match {
+          // We had sent a new sig and were waiting for their revocation
+          // they didn't receive the new sig because of the disconnection
+          // we resend the same updates and sig, also be careful about revocation
           case Left(wait) if wait.nextRemoteCommit.index == cr.nextLocalCommitmentNumber =>
+            val revocationWasSentLast = c1.localCommit.index > wait.localCommitIndexSnapshot
 
-            val leftovers = Commitments outgoingHtlcs c1.remoteCommit.spec
-            val localSignedDelta = c1.localChanges.signed count { case u: UpdateAddHtlc => true }
-            c1.copy(localNextHtlcId = c1.localNextHtlcId - localSignedDelta, localChanges = c1.localChanges.copy(signed = Vector.empty),
-              remoteChanges = c1.remoteChanges.copy(acked = c1.remoteChanges.signed ++ c1.remoteChanges.acked, signed = Vector.empty),
-              remoteNextCommitInfo = Right apply wait.nextRemoteCommit.remotePerCommitmentPoint) -> leftovers
+            if (!revocationWasSentLast) maybeResendRevocation
+            c1.localChanges.signed :+ wait.sent foreach SEND
+            if (revocationWasSentLast) maybeResendRevocation
 
-          // We had sent a new sig and were waiting for their revocation, they had received the new sig
-          // but their revocation was lost during the disconnection, they'll resend us the revocation
-          case Left(wait) if wait.nextRemoteCommit.index + 1 == cr.nextLocalCommitmentNumber =>
-            val afterResolving = Commitments outgoingHtlcs wait.nextRemoteCommit.spec
-            val beforeResolving = Commitments outgoingHtlcs c1.remoteCommit.spec
-            val leftovers = beforeResolving intersect afterResolving
-            c1 -> leftovers
-
-          // There wasn't any sig in-flight when the disconnection occured so we do nothing here
-          case Right(_) if c1.remoteCommit.index + 1 == cr.nextLocalCommitmentNumber =>
-            val leftovers = Commitments outgoingHtlcs c1.remoteCommit.spec
-            c1 -> leftovers
-
-          // This is not right, fail a channel
+          // We had sent a new sig and were waiting for their revocation, they had received
+          // the new sig but their revocation was lost during the disconnection, they'll resend us the revocation
+          case Left(wait) if wait.nextRemoteCommit.index + 1 == cr.nextLocalCommitmentNumber => maybeResendRevocation
+          case Right(_) if c1.remoteCommit.index + 1 == cr.nextLocalCommitmentNumber => maybeResendRevocation
           case _ => throw ExtendedException(norm)
         }
 
-        // May not be NORMAL anymore
-        me UPDATE norm.copy(commitments = c2)
-        toResolve map resolveHtlc foreach doProcess
+        BECOME(norm.copy(commitments = c1), NORMAL)
         norm.localShutdown foreach SEND
-        doProcess(CMDProceed)
+        doProcess(CMDHTLCProcess)
 
 
       // We just close a channel in any kind of irregular state

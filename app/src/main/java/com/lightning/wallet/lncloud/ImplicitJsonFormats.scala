@@ -249,8 +249,9 @@ object ImplicitJsonFormats { me =>
   implicit val remoteCommitFmt = jsonFormat[Long, CommitmentSpec, BinaryData, Point,
     RemoteCommit](RemoteCommit.apply, "index", "spec", "txid", "remotePerCommitmentPoint")
 
-  implicit val waitingForRevocationFmt = jsonFormat[RemoteCommit, CommitSig,
-    WaitingForRevocation](WaitingForRevocation.apply, "nextRemoteCommit", "sent")
+  implicit val waitingForRevocationFmt = jsonFormat[RemoteCommit, CommitSig, Long,
+    WaitingForRevocation](WaitingForRevocation.apply, "nextRemoteCommit", "sent",
+    "localCommitIndexSnapshot")
 
   implicit val changesFmt = jsonFormat[LightningMessages, LightningMessages, LightningMessages,
     Changes](Changes.apply, "proposed", "signed", "acked")
