@@ -83,11 +83,11 @@
     </array>
 
     <!-- activity_create, activity_restore, activity_request -->
-    <string name="restore_when">When was your wallet created?\nLeave date as is if not sure</string>
+    <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
     <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
     <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
     <string name="restore_mnemonic_wrong">Mnemonic must be 12 words long</string>
-    <string name="restore_wallet_ready">Your wallet is ready</string>
+    <string name="restore_wallet_ready">Bitcoin wallet is ready</string>
     <string name="restore_hint">Your mnemonic code</string>
     <string name="restore_wallet">Restore Wallet</string>
 
@@ -174,7 +174,7 @@
         <item><![CDATA[in <strong>%1$s</strong> blocks]]></item>
     </array>
 
-    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a payment channel<br><br><small>Max capacity %1$s</small>]]></string>
+    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a Payment Channel<br><small>Max capacity %1$s</small>]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>

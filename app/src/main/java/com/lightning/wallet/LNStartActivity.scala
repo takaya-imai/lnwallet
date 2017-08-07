@@ -24,7 +24,6 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
 import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
-import android.text.Spanned
 import android.os.Bundle
 
 
@@ -115,7 +114,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     chan.listeners += new ChannelListener { chanOpenListener =>
-      // We monitor internal channel state here to interact with user
+      override def onError = { case _ => chan process CMDShutdown }
 
       override def onBecome = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
@@ -134,12 +133,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           ConnectionManager.listeners -= socketOpenListener
           chan.listeners -= chanOpenListener
           me exitTo classOf[LNOpsActivity]
-      }
-
-      override def onError = {
-        case channelRelated: Throwable =>
-          Tools log s"Channel $channelRelated"
-          chan process CMDShutdown
       }
     }
 
@@ -174,9 +167,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   def askForFunding(chan: Channel, their: Init) = {
     val humanCap = sumIn format withSign(LNParams.maxChannelCapacity)
-    val title = getString(ln_ops_start_fund_title).format(humanCap).html
+    val title = getString(ln_ops_start_fund_title).format(humanCap)
+
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title.html, content)
     val rateManager = new RateManager(content)
 
     def attempt = rateManager.result match {

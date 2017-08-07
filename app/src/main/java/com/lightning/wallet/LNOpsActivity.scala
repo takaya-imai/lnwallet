@@ -30,9 +30,9 @@ class LNOpsActivity extends TimerActivity { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
-    app.ChannelManager.alive.headOption match {
-      case Some(channel) => manageActive(channel)
-      case None => manageNoActiveChannelInfo
+    app.ChannelManager.all.headOption match {
+      case Some(channel) => manageFirst(channel)
+      case None => manageNoActiveChannel
     }
   }
 
@@ -41,22 +41,22 @@ class LNOpsActivity extends TimerActivity { me =>
     txOpt.map(_.getConfidence.getDepthInBlocks) getOrElse 0
   }
 
-  private def manageActive(chan: Channel) = {
-    def manageOpeningInfo(c: Commitments, open: Transaction) = {
+  private def prettyTxAmount(tx: Transaction) =
+    sumIn format withSign(tx.txOut.head.amount)
+
+  private def manageFirst(chan: Channel) = {
+    def manageOpening(c: Commitments, open: Transaction) = {
       val threshold = math.max(c.remoteParams.minimumDepth, LNParams.minDepth)
       val channelCapacity = sumIn format withSign(c.commitInput.txOut.amount)
       val currentState = app.plurOrZero(txsConfs, me getConfirmations open)
-      me runOnUiThread updateInterface
 
-      def updateInterface = {
-        lnOpsAction setText ln_force_close
-        lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
-        lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity,
-          app.plurOrZero(txsConfs, threshold), currentState).html
-      }
+      lnOpsAction setText ln_force_close
+      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+      lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity,
+        app.plurOrZero(txsConfs, threshold), currentState).html
     }
 
-    def manageNegotiationsInfo(c: Commitments) = {
+    def manageNegotiations(c: Commitments) = {
       val remainder = sumIn format withSign(MilliSatoshi apply c.localCommit.spec.toLocalMsat)
       lnOpsDescription setText getString(ln_ops_chan_bilateral_negotiations).format(remainder).html
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
@@ -68,51 +68,40 @@ class LNOpsActivity extends TimerActivity { me =>
         dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
     val chanOpsListener = new ChannelListener {
-      // We monitor internal channel state here to interact with user
-      def reloadOnBecome = onBecome(chan, chan.data, null, chan.state)
+      def reloadOnBecome: Unit = onBecome(chan, chan.data, null, chan.state)
+      override def onProcess = { case (_, _, _: CMDHeight) => reloadOnBecome }
+      override def onError = { case _ => chan process CMDShutdown }
 
       override def onBecome = {
         // A new channel has been created with funding transaction broadcasted
         case (_, WaitFundingDoneData(_, _, _, tx, commitments, _), _, _) =>
-          manageOpeningInfo(commitments, tx)
+          me runOnUiThread manageOpening(commitments, tx)
 
-        // Both sides have sent a funding locked so we're all good
-        case (_, norm: NormalData, WAIT_FUNDING_DONE | SYNC, NORMAL) =>
+        // Both sides have sent a funding locked
+        case (_, norm: NormalData, _, NORMAL) =>
           me exitTo classOf[LNActivity]
 
+        // Mutual shutdown initiated
         case (_, norm: NormalData, _, _)
-          // GUARD: mutual shutdown has been initiated
           if norm.localShutdown.isDefined || norm.remoteShutdown.isDefined =>
-          me runOnUiThread manageNegotiationsInfo(norm.commitments)
+          me runOnUiThread manageNegotiations(norm.commitments)
 
         // Closing tx fee negotiations
         case (_, negs: NegotiationsData, _, _) =>
-          me runOnUiThread manageNegotiationsInfo(negs.commitments)
+          me runOnUiThread manageNegotiations(negs.commitments)
 
         // Mutual closing is in progress because only a mutual close tx is available here
         case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me manageMutualClosing tx
+          me runOnUiThread manageMutualClosing(tx)
 
         // Mutual closing but we have no transactions at all so just drop it
         case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me runOnUiThread manageNoActiveChannelInfo
+          me runOnUiThread manageNoActiveChannel
 
         // Someone has initiated a unilateral channel closing
         case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _), _, CLOSING)
           if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          me manageForcedClosing close
-      }
-
-      override def onError = {
-        case channelRelated: Throwable =>
-          Tools log s"Channel $channelRelated"
-          chan process CMDShutdown
-      }
-
-      override def onProcess = {
-        case (_, data, _: CMDHeight) =>
-          Tools log s"Reloading listener"
-          reloadOnBecome
+          me runOnUiThread manageForcedClosing(close)
       }
     }
 
@@ -128,43 +117,29 @@ class LNOpsActivity extends TimerActivity { me =>
   // UI which does not need a channel access
 
   private def manageMutualClosing(close: Transaction) = {
+    val template = me getString ln_ops_chan_bilateral_closing
     val finalizeThreshold = app.plurOrZero(txsConfs, LNParams.minDepth)
     val currentState = app.plurOrZero(txsConfs, me getConfirmations close)
-    me runOnUiThread updateInterface
-
-    def updateInterface = {
-      lnOpsAction setText ln_ops_start
-      lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-      lnOpsDescription setText getString(ln_ops_chan_bilateral_closing)
-        .format(finalizeThreshold, currentState).html
-    }
+    lnOpsDescription setText template.format(finalizeThreshold, currentState).html
+    lnOpsAction setOnClickListener onButtonTap(goStartChannel)
+    lnOpsAction setText ln_ops_start
   }
 
   private def manageForcedClosing(data: ClosingData) = {
-    val bss = LNParams.broadcaster convertToBroadcastStatus data
-    me runOnUiThread updateInterface
-
-    def updateInterface = {
-      val schedule = bss map statusView mkString "<br>"
-      val unilateralClosing = getString(ln_ops_chan_unilateral_closing)
-      lnOpsDescription setText unilateralClosing.format(schedule).html
-      lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-      lnOpsAction setText ln_ops_start
-    }
-
     def statusView(status: BroadcastStatus): String = status match {
       case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
       case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
       case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
     }
 
-    def prettyTxAmount(tx: Transaction) =
-      sumIn format withSign(tx.txOut.head.amount)
+    val schedule = LNParams.broadcaster convertToBroadcastStatus data map statusView mkString "<br>"
+    lnOpsDescription setText getString(ln_ops_chan_unilateral_closing).format(schedule).html
+    lnOpsAction setOnClickListener onButtonTap(goStartChannel)
+    lnOpsAction setText ln_ops_start
   }
 
   // Offer to create a new channel
-
-  private def manageNoActiveChannelInfo = {
+  private def manageNoActiveChannel = {
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText ln_ops_chan_none
     lnOpsAction setText ln_ops_start

@@ -9,13 +9,14 @@ import scala.util.Try
 
 
 class TxWrap(val tx: Transaction) {
+  // Excludes watched inputs and outputs from value calculation
   val nativeValue = getValueSentToMe subtract getValueSentFromMe
-  val marking = if (nativeValue.isPositive) sumIn else sumOut
-  val isNative = !nativeValue.isZero
+  // Fee may be null so we use Option to avoid exceptions
   val fee = Option(tx.getFee)
 
-  def nativeValueWithoutFee: Coin =
-    fee map nativeValue.subtract getOrElse nativeValue
+  val (marking, nativeValueWithoutFee) =
+    if (nativeValue.isPositive) (sumIn, nativeValue)
+    else (sumOut, fee map nativeValue.add getOrElse nativeValue)
 
   private def inOuts(input: TransactionInput): Option[TransactionOutput] =
     Stream(UNSPENT, SPENT, PENDING).map(app.kit.wallet.getTransactionPool)

@@ -21,19 +21,21 @@ object LocalBroadcaster extends Broadcaster {
   }.toMap
 
   override def onBecome = {
-    case (_, wait: WaitFundingDoneData, null, WAIT_FUNDING_DONE) =>
+    case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>
       // In a thin wallet we need to watch for transactions which spend external outputs
       app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
       safeSend(wait.fundingTx).foreach(Tools.log, _.printStackTrace)
 
-    case (_, closing: ClosingData, _, CLOSING) =>
-      // Mutual closing and local commit should not be present at once but anyway an order matters here
-      val toPublish = closing.mutualClose ++ closing.localCommit.map(_.commitTx) ++ extractTxs(closing)
-      Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
-
     case (chan, _, SYNC, NORMAL) =>
       // Will be sent once on app lauch
       chan process CMDFeerate(feeRatePerKw)
+  }
+
+  override def onProcess = {
+    case (_, close: ClosingData, _) =>
+      // Mutual closing and local commit should not be present at once but anyway an order matters here
+      val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ extractTxs(close)
+      Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
   }
 
   override def onError = {

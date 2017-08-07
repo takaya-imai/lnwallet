@@ -55,9 +55,12 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def byQuery(query: String): Cursor = db.select(searchSql, s"$query*")
   def recentPayments: Cursor = db select selectRecentSql
 
-  def toPaymentInfo(rc: RichCursor) = Option(rc string routing) map to[RoutingData] match {
-    case Some(rs) => OutgoingPayment(rs, rc string preimage, to[PaymentRequest](rc string request), rc string chanId, rc long status)
-    case None => IncomingPayment(rc string preimage, to[PaymentRequest](rc string request), rc string chanId, rc long status)
+  def toPaymentInfo(rc: RichCursor) = {
+    val pr = to[PaymentRequest](rc string request)
+    Option(rc string routing) map to[RoutingData] match {
+      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, rc string chanId, rc long status)
+      case None => IncomingPayment(rc string preimage, pr, rc string chanId, rc long status)
+    }
   }
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {

@@ -110,8 +110,8 @@ with ListUpdater { me =>
     override def txConfirmed(tx: Transaction) =
       me runOnUiThread adapter.notifyDataSetChanged
 
-    def tell(wrap: TxWrap) = if (wrap.isNative) {
-      // Only update interface if this tx changes balance
+    def tell(wrap: TxWrap) = if (!wrap.nativeValue.isZero) {
+      // Only update interface if this is not a watched transaction
       // and ESTIMATED_SPENDABLE takes care of correct balance
 
       mnemonicWarn setVisibility View.GONE
@@ -178,16 +178,13 @@ with ListUpdater { me =>
           me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
-        val sumPretty = wrap.marking format withSign(wrap.nativeValueWithoutFee)
-        val title = s"$sumPretty<br><small>${me time wrap.tx.getUpdateTime}</small>"
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
-        val humanFee = if (wrap.nativeValue.isPositive) feeIncoming else wrap.fee match {
-          case Some(outgoingFee) => feeDetails.format(withSign(outgoingFee), confirms)
-          case None => feeAbsent
+        val humanFee = if (wrap.nativeValue.isPositive) feeIncoming format confirms else wrap.fee match {
+          case Some(fee) => feeDetails.format(withSign(fee), confirms) case None => feeAbsent format confirms
         }
 
-        mkForm(me negBld dialog_ok, title.html, lst)
-        confNumber setText humanFee.format(confirms).html
+        mkForm(me negBld dialog_ok, time(wrap.tx.getUpdateTime).html, lst)
+        confNumber setText humanFee.html
       }
 
       // Wait for transactions list
@@ -348,9 +345,9 @@ with ListUpdater { me =>
     fab close true
   }
 
-  // Working with transactions
+  // nativeValue equaling zero means it's a purely watched tx
   private def nativeTransactions = app.kit.wallet.getTransactionsByTime
-    .asScala.take(maxLinesNum).map(bitcoinjTx2Wrap).filter(_.isNative)
+    .asScala.take(maxLinesNum).map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 
   class BtcView(view: View) extends TxViewHolder(view) {
     // Display given Bitcoin transaction properties to user

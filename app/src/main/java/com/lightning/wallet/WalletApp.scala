@@ -91,7 +91,6 @@ class WalletApp extends Application { me =>
   object ChannelManager {
     type ChannelVec = Vector[Channel]
     var all = ChannelWrap.get map createChannel
-
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
     def reconnect(cs: ChannelVec) = cs.map(_.data.announce) foreach ConnectionManager.requestConnection
