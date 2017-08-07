@@ -50,8 +50,8 @@
     <string name="dialog_next">Next</string>
     <string name="dialog_cancel">Cancel</string>
 
+    <string name="spend_address_amount_hint"><![CDATA[amount in Satoshi<br><small>wallet balance %1$s</small>]]></string>
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
-    <string name="spend_address_amount_hint">amount in Satoshi</string>
     <string name="spend_address_hint">Bitcoin address</string>
 
     <string name="dialog_address_absent">No valid address found in clipboard</string>

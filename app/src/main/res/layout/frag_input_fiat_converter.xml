@@ -60,8 +60,7 @@
         style="@style/StdText"
         android:id="@+id/hintMsat"
         android:layout_marginBottom="25dp"
-        android:layout_width="wrap_content"
-        android:text="@string/spend_address_amount_hint"/>
+        android:layout_width="wrap_content"/>
 
     <View style="@style/GrayDivider"/>
 </LinearLayout>

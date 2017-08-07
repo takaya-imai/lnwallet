@@ -400,6 +400,10 @@ class RateManager(val content: View) { me =>
     }
   }
 
+  val hintMsat = content.findViewById(R.id.hintMsat).asInstanceOf[TextView]
+  val hint = app getString spend_address_amount_hint format withSign(app.kit.currentBalance)
+  hintMsat setText hint.html
+
   satInput addTextChangedListener bitListener
   fiatInput addTextChangedListener fiatListener
   fiatType check revFiatMap(currentFiatName)
