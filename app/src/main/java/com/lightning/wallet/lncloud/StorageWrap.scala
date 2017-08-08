@@ -31,10 +31,7 @@ object StorageWrap {
 object ChannelWrap {
   import com.lightning.wallet.lncloud.ChannelTable._
   def remove(chanId: BinaryData) = db.change(killSql, chanId.toString)
-
-  def get = RichCursor(db select selectAllSql) vec {
-    shifted => to[HasCommitments](shifted string data)
-  }
+  def get = RichCursor(db select selectAllSql).vec(_ string data) map to[HasCommitments]
 
   def put(data: HasCommitments): Unit = db txWrap {
     val chanIdString = data.commitments.channelId.toString

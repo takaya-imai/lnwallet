@@ -3,11 +3,13 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
+import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
+import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.lncloud.{ChannelWrap, RatesSaver, Saver}
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
@@ -109,9 +111,9 @@ class WalletApp extends Application { me =>
     }
 
     val reconnectListener = new ConnectionListener {
-      override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket $id is operational"
-      override def onTerminalError(id: PublicKey) = Tools log s"Terminal error while decrypting $id"
-      override def onDisconnect(id: PublicKey) = ChannelManager reconnect from(alive, id)
+      override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket at node $id is operational"
+      override def onDisconnect(id: PublicKey) = Obs.just(Tools log s"Reconnecting a socket at node $id")
+        .delay(5.seconds).subscribe(_ => ChannelManager reconnect from(alive, id), _.printStackTrace)
     }
 
     def createChannel(bootstrap: ChannelData) = new Channel {

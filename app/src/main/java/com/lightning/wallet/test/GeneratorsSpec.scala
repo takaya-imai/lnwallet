@@ -12,6 +12,7 @@ class GeneratorsSpec {
     val base_point = Point(BinaryData("0x036d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2"))
     val per_commitment_point = Point(BinaryData("0x025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486"))
 
+
     val localKey = Generators.derivePubKey(base_point, per_commitment_point)
     println("derivation of key from basepoint and per-commitment-point: " +
       (localKey.toBin == BinaryData("0x0235f2dbfaa89b57ec7b055afe29849ef7ddfeb1cefdb9ebdc43f5494984db29e5")))

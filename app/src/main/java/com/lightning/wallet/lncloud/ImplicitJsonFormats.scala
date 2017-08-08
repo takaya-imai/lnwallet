@@ -6,7 +6,6 @@ import com.lightning.wallet.ln.wire._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
 import com.lightning.wallet.lncloud.LNCloud.{ClearToken, RequestAndMemo}
@@ -20,6 +19,7 @@ import org.bitcoinj.core.ECKey.CURVE.getCurve
 import org.spongycastle.math.ec.ECPoint
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.Coin
+import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
 import java.math.BigInteger
 
@@ -120,13 +120,22 @@ object ImplicitJsonFormats { me =>
     def write(req: PaymentRequest) = PaymentRequest.write(req).toJson
   }
 
+  implicit object Uint64exFmt extends JsonFormat[UInt64] {
+    def read(rawJson: JsValue) = uint64ex.decode(json2BitVec(rawJson).get).require.value
+    def write(uInt64ex: UInt64) = uint64ex.encode(uInt64ex).require.toHex.toJson
+  }
+
+  implicit object PointFmt extends JsonFormat[Point] {
+    def read(rawJson: JsValue) = point.decode(json2BitVec(rawJson).get).require.value
+    def write(ecPointWrap: Point) = point.encode(ecPointWrap).require.toHex.toJson
+  }
+
   implicit val blindParamFmt = jsonFormat[Bytes, BigInteger, BigInteger, BigInteger, BigInteger,
     BlindParam](BlindParam.apply, "point", "a", "b", "c", "bInv")
 
   implicit val blindMemoFmt = jsonFormat[List[BlindParam], List[BigInteger], String,
     BlindMemo](BlindMemo.apply, "params", "clears", "sesPubKeyHex")
 
-  implicit val pointFmt = jsonFormat[ECPoint, Point](Point.apply, "value")
   implicit val scalarFmt = jsonFormat[BigInteger, Scalar](Scalar.apply, "value")
   implicit val privateKeyFmt = jsonFormat[Scalar, Boolean, PrivateKey](PrivateKey.apply, "value", "compressed")
   implicit val publicKeyFmt = jsonFormat[Point, Boolean, PublicKey](PublicKey.apply, "value", "compressed")
@@ -228,11 +237,12 @@ object ImplicitJsonFormats { me =>
   implicit val closingTxFmt = jsonFormat[InputInfo, Transaction, String,
     ClosingTx](ClosingTx.apply, "input", "tx", "kind")
 
-  implicit val localParamsFmt = jsonFormat[BinaryData, Long, Long, Long,
+  implicit val localParamsFmt = jsonFormat[BinaryData, Long, UInt64, Long,
     Long, Int, Int, PrivateKey, Scalar, PrivateKey, Scalar, BinaryData, BinaryData, Boolean,
-    LocalParams](LocalParams.apply, "chainHash", "dustLimitSatoshis", "maxHtlcValueInFlightMsat", "channelReserveSat",
-    "htlcMinimumMsat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret", "paymentKey", "delayedPaymentKey",
-    "defaultFinalScriptPubKey", "shaSeed", "isFunder")
+    LocalParams](LocalParams.apply, "chainHash", "dustLimitSatoshis", "maxHtlcValueInFlightMsat",
+    "channelReserveSat", "htlcMinimumMsat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey",
+    "revocationSecret", "paymentKey", "delayedPaymentKey", "defaultFinalScriptPubKey",
+    "shaSeed", "isFunder")
 
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")

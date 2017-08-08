@@ -479,20 +479,21 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def defineClosingAction(some: HasCommitments, tx: Transaction) =
     // We are not sure what kind of closing transaction this so finding out
     some.commitments.remoteNextCommitInfo.left.map(_.nextRemoteCommit) match {
-      case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, tx, remoteCommit)
-      case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some, tx)
+      case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, remoteCommit)
+      case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some)
       case _ => startOtherClose(some, tx)
     }
 
-  private def startRemoteCurrentClose(some: HasCommitments, tx: Transaction) =
-    // Something went wrong on their side and they decided to spend their CURRENT commit tx, we need to take what's ours
-    Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, tx, LNParams.bag) -> some match {
+  private def startRemoteCurrentClose(some: HasCommitments) =
+    // They've decided to spend their CURRENT commit tx, we need to take what's ours
+    Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, LNParams.bag) -> some match {
       case (claim: RemoteCommitPublished, closing: ClosingData) => BECOME(me STORE closing.copy(remoteCommit = claim :: Nil), CLOSING)
       case (claim, _) => BECOME(me STORE ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil), CLOSING)
     }
 
-  private def startRemoteNextClose(some: HasCommitments, tx: Transaction, nextRemoteCommit: RemoteCommit) =
-    Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, tx, LNParams.bag) -> some match {
+  private def startRemoteNextClose(some: HasCommitments, nextRemoteCommit: RemoteCommit) =
+    // They've decided to spend their NEXT commit tx, once again we need to take what's ours
+    Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, LNParams.bag) -> some match {
       case (claim: RemoteCommitPublished, closing: ClosingData) => BECOME(me STORE closing.copy(nextRemoteCommit = claim :: Nil), CLOSING)
       case (claim, _) => BECOME(me STORE ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil), CLOSING)
     }

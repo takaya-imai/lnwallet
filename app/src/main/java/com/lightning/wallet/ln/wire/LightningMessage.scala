@@ -4,6 +4,7 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import com.lightning.wallet.ln.Tools.fromShortId
 import fr.acinq.bitcoin.BinaryData
+import fr.acinq.eclair.UInt64
 
 
 trait LightningMessage
@@ -24,13 +25,13 @@ case class ChannelReestablish(channelId: BinaryData, nextLocalCommitmentNumber: 
 
 case class OpenChannel(chainHash: BinaryData, temporaryChannelId: BinaryData,
                        fundingSatoshis: Long, pushMsat: Long, dustLimitSatoshis: Long,
-                       maxHtlcValueInFlightMsat: Long, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
+                       maxHtlcValueInFlightMsat: UInt64, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
                        feeratePerKw: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubkey: PublicKey,
                        revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
                        firstPerCommitmentPoint: Point, channelFlags: Byte) extends ChannelMessage
 
 case class AcceptChannel(temporaryChannelId: BinaryData,
-                         dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
+                         dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64,
                          channelReserveSatoshis: Long, htlcMinimumMsat: Long, minimumDepth: Long, toSelfDelay: Int,
                          maxAcceptedHtlcs: Int, fundingPubkey: PublicKey, revocationBasepoint: Point, paymentBasepoint: Point,
                          delayedPaymentBasepoint: Point, firstPerCommitmentPoint: Point) extends ChannelMessage

@@ -7,6 +7,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
+import fr.acinq.eclair.UInt64
 
 
 object LNParams {
@@ -63,8 +64,8 @@ object LNParams {
     derivePrivateKey(extendedNodeKey, index :: n :: Nil).privateKey
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
-    val Seq(funding, revocation, payment, delayed, sha) = for (order <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, order)
-    LocalParams(chainHash = Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = Long.MaxValue,
+    val Seq(funding, revocation, payment, delayed, sha) = for (keyOrder <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, keyOrder)
+    LocalParams(chainHash = Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = UInt64(Long.MaxValue),
       channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = funding,
       revocationSecret = revocation, paymentKey = payment, delayedPaymentKey = delayed, finalScriptPubKey,
       shaSeed = sha256(sha.toBin), isFunder = true)

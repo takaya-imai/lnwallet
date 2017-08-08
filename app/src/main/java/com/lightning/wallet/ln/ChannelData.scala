@@ -9,6 +9,7 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.LightningMessages
 import com.lightning.wallet.ln.MSat.satFactor
+import fr.acinq.eclair.UInt64
 
 
 sealed trait Command
@@ -149,7 +150,7 @@ object CommitmentSpec {
   }
 }
 
-case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: Long,
+case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64,
                        channelReserveSat: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
                        fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey,
                        delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
@@ -205,7 +206,7 @@ object Commitments {
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.remoteParams.dustLimitSatoshis), reduced).amount else 0
-      val htlcValueInFlightOverflow = reduced.htlcs.map(_.add.amountMsat).sum > c1.remoteParams.maxHtlcValueInFlightMsat
+      val htlcValueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.remoteParams.maxHtlcValueInFlightMsat
       val feesOverflow = reduced.toRemoteMsat / satFactor - c1.remoteParams.channelReserveSatoshis - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
@@ -227,7 +228,7 @@ object Commitments {
       val c1 = addRemoteProposal(c, add).copy(remoteNextHtlcId = c.remoteNextHtlcId + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.localParams.dustLimitSatoshis), reduced).amount else 0
-      val htlcValueInFlightOverflow = reduced.htlcs.map(_.add.amountMsat).sum > c1.localParams.maxHtlcValueInFlightMsat
+      val htlcValueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.localParams.maxHtlcValueInFlightMsat
       val feesOverflow = reduced.toRemoteMsat / satFactor - c1.localParams.channelReserveSat - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.localParams.maxAcceptedHtlcs
 
@@ -289,7 +290,7 @@ object Commitments {
     val spec = CommitmentSpec.reduce(c.remoteCommit.spec, c.remoteChanges.acked, c.localChanges.proposed)
     val paymentKey = Generators.derivePrivKey(c.localParams.paymentKey, remoteNextPerCommitmentPoint)
 
-    val (remoteCommitTx, htlcTimeoutTxs, htlcSuccessTxs) =
+    val (remoteCommitTx, htlcTimeoutTxs, htlcSuccessTxs, _, _) =
       Helpers.makeRemoteTxs(c.remoteCommit.index + 1, c.localParams,
         c.remoteParams, c.commitInput, remoteNextPerCommitmentPoint, spec)
 
