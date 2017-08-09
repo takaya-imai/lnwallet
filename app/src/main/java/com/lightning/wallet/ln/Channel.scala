@@ -76,10 +76,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           fundTx.hash, outIndex, accept.firstPerCommitmentPoint)
 
         val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
+        val fundingCreated = FundingCreated(cmd.temporaryChannelId, fundTx.hash, outIndex, localSigOfRemoteTx)
         val firstRemoteCommit = RemoteCommit(index = 0, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
-        BECOME(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex), remoteParams = accept,
-          fundTx, localSpec, localCommitTx, firstRemoteCommit), WAIT_FUNDING_SIGNED) SEND FundingCreated(cmd.temporaryChannelId,
-          fundTx.hash, outIndex, localSigOfRemoteTx)
+
+        BECOME(WaitFundingSignedData(announce, cmd.localParams,
+          Tools.toLongId(fundTx.hash, outIndex), accept, fundTx, localSpec,
+          localCommitTx, firstRemoteCommit), WAIT_FUNDING_SIGNED) SEND fundingCreated
 
 
       // They have signed our first commit tx, we can broadcast a funding tx
@@ -294,12 +296,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val our = makeFundingLocked(wait.commitments)
         me UPDATE wait.copy(our = Some apply our)
-
-
-      // This is a special case where we already have both locks when exiting a sync phase so we go directly to normal state
-      case (wait @ WaitFundingDoneData(_, Some(our), Some(their), _, commitments, _), ChannelReestablish(channelId, 1, 0), SYNC)
-        if channelId == commitments.channelId =>
-        BECOMENormal(wait, their) SEND our
 
 
       // We're exiting a sync state but don't have enough locks so we keep waiting
