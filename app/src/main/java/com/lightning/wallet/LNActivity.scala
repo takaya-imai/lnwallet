@@ -212,7 +212,7 @@ with ListUpdater with SearchBar { me =>
   def makePaymentRequest = {
     val humanCap = sumIn format withSign(maxHtlcValue)
     val title = getString(ln_receive_max_amount).format(humanCap).html
-    val content = getLayoutInflater.inflate(R.layout.frag_input_send_ln, null, false)
+    val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
     val rateManager = new RateManager(content)
 
@@ -263,7 +263,7 @@ with ListUpdater with SearchBar { me =>
     }
   }
 
-  def closeChannel = checkPass(me getString ln_close) { _ =>
-    // This will start a cooperative channel close immediately
+  def closeChannel = checkPass(me getString ln_close) { pass =>
+    for (chan <- app.ChannelManager.alive) chan async CMDShutdown
   }
 }

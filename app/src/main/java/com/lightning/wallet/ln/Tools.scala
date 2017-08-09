@@ -35,11 +35,10 @@ object Tools {
   def toShortId(blockHeight: Int, txIndex: Int, outputIndex: Int): Long =
     blockHeight.&(0xFFFFFFL).<<(40) | txIndex.&(0xFFFFFFL).<<(16) | outputIndex.&(0xFFFFL)
 
-  def toLongId(fundingHash: BinaryData, fundingOutputIndex: Int): BinaryData = {
+  def toLongId(fundingHash: BinaryData, fundingOutputIndex: Int): BinaryData =
     if (fundingOutputIndex >= 65536 | fundingHash.size != 32) throw new LightningException
-    fundingHash.take(30) :+ fundingHash.data(30).^(fundingOutputIndex >> 8).toByte :+
+    else fundingHash.take(30) :+ fundingHash.data(30).^(fundingOutputIndex >> 8).toByte :+
       fundingHash.data(31).^(fundingOutputIndex).toByte
-  }
 }
 
 object MSat {

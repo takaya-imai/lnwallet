@@ -58,7 +58,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
           Generators.perCommitPoint(localParams.shaSeed, index = 0),
-          channelFlags = 0x00)
+          channelFlags = 1.toByte) // TODO: remove announce
 
 
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
@@ -140,6 +140,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // NORMAL MODE
+
+
+      // TODO: remove this
+      case (norm @ NormalData(_, commitments, None, None, _), remote: AnnouncementSignatures, NORMAL) =>
+        val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(remote.shortChannelId,
+          LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey,
+          commitments.remoteParams.fundingPubkey, LNParams.globalFeatures)
+
+        me SEND AnnouncementSignatures(commitments.channelId,
+          remote.shortChannelId, localNodeSig, localBitcoinSig)
 
 
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)

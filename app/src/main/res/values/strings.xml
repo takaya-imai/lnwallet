@@ -130,8 +130,8 @@
     <!-- SPECIFIC TO LIGHTNING NETWORK -->
 
     <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
-    <string name="ln_payment_title"><![CDATA[Send Lightning payment<br><small><font color=#999999>%1$s</font></small>]]></string>
-    <string name="ln_receive_max_amount"><![CDATA[Receive Lightning payment<br><br><small>Max amount %1$s</small>]]></string>
+    <string name="ln_payment_title"><![CDATA[Send Lightning Payment<br><small><font color=#999999>%1$s</font></small>]]></string>
+    <string name="ln_receive_max_amount"><![CDATA[Receive Lightning Payment<br><br><small>Max amount %1$s</small>]]></string>
 
     <!-- ln subtitle messages -->
     <string name="ln_select_peer">Select peer</string>
