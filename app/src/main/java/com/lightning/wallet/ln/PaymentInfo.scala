@@ -52,17 +52,10 @@ object PaymentInfo {
   // The fee (in milliSatoshi) that a node should be paid to forward an HTLC of 'amount' milliSatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
 
-  type RouteParams = (Vector[PerHopPayload], Long, Int)
-  def preBuidRoute(request: PaymentRequest): RouteParams = {
-    val start = (Vector.empty[PerHopPayload], request.msat, LNParams.expiry)
-    (start /: request.routingInfo.reverse) { case (payloads, msat, expiry) ~ tag =>
-      val perHopPayload = PerHopPayload(tag.shortChannelId, msat, expiry) +: payloads
-      (perHopPayload, msat + tag.fee, expiry + tag.cltvExpiryDelta)
-    }
-  }
-
-  def buildRoute(params: RouteParams, hops: PaymentRoute) =
-    (params /: hops.reverse) { case (payloads, msat, expiry) ~ hop =>
+  // Payloads, final receiver amount, final expiry
+  type PaymentParams = (Vector[PerHopPayload], Long, Int)
+  def buildRoute(paymentParams: PaymentParams, hops: PaymentRoute) =
+    (paymentParams /: hops.reverse) { case (payloads, msat, expiry) ~ hop =>
       val feeMsat = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
       val perHopPayload = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
       (perHopPayload, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
