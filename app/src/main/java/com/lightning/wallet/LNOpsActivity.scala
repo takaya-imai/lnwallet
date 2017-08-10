@@ -36,24 +36,17 @@ class LNOpsActivity extends TimerActivity { me =>
     }
   }
 
-  private def getConfirmations(tx: Transaction) = {
-    val txOpt = Option(app.kit.wallet getTransaction tx.txid)
-    txOpt.map(_.getConfidence.getDepthInBlocks) getOrElse 0
-  }
-
   private def prettyTxAmount(tx: Transaction) =
     sumIn format withSign(tx.txOut.head.amount)
 
   private def manageFirst(chan: Channel) = {
     def manageOpening(c: Commitments, open: Transaction) = {
-      val threshold = math.max(c.remoteParams.minimumDepth, LNParams.minDepth)
       val channelCapacity = sumIn format withSign(c.commitInput.txOut.amount)
-      val currentState = app.plurOrZero(txsConfs, me getConfirmations open)
-
-      lnOpsAction setText ln_force_close
+      val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfirmations(open.txid).getOrElse(0).toLong)
+      val confirmationThreshold = app.plurOrZero(number = math.max(c.remoteParams.minimumDepth, LNParams.minDepth), opts = txsConfs)
+      lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity, confirmationThreshold, currentState).html
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
-      lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity,
-        app.plurOrZero(txsConfs, threshold), currentState).html
+      lnOpsAction setText ln_force_close
     }
 
     def manageNegotiations(c: Commitments) = {
@@ -117,10 +110,9 @@ class LNOpsActivity extends TimerActivity { me =>
   // UI which does not need a channel access
 
   private def manageMutualClosing(close: Transaction) = {
-    val template = me getString ln_ops_chan_bilateral_closing
     val finalizeThreshold = app.plurOrZero(txsConfs, LNParams.minDepth)
-    val currentState = app.plurOrZero(txsConfs, me getConfirmations close)
-    lnOpsDescription setText template.format(finalizeThreshold, currentState).html
+    val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfirmations(close.txid).getOrElse(0).toLong)
+    lnOpsDescription setText getString(ln_ops_chan_bilateral_closing).format(finalizeThreshold, currentState).html
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsAction setText ln_ops_start
   }
@@ -132,7 +124,8 @@ class LNOpsActivity extends TimerActivity { me =>
       case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
     }
 
-    val schedule = LNParams.broadcaster convertToBroadcastStatus data map statusView mkString "<br>"
+    val txs = LNParams.broadcaster extractTxs data
+    val schedule = LNParams.broadcaster convertToBroadcastStatus txs map statusView mkString "<br>"
     lnOpsDescription setText getString(ln_ops_chan_unilateral_closing).format(schedule).html
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsAction setText ln_ops_start

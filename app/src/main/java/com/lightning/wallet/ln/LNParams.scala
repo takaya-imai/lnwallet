@@ -73,9 +73,8 @@ object LNParams {
 }
 
 trait Broadcaster extends ChannelListener { me =>
-  def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply).onErrorReturn(_.getMessage)
-  def convertToBroadcastStatus(txs: Seq[Transaction], parents: ParentTxidToDepth): Seq[BroadcastStatus] = {
-    val augmented = for (tx <- txs) yield (tx, parents get tx.txIn.head.outPoint.txid.toString, Scripts csvTimeout tx)
+  val convertToBroadcastStatus: Seq[Transaction] => Seq[BroadcastStatus] = txs => {
+    val augmented = for (tx <- txs) yield (tx, getConfirmations(tx.txIn.head.outPoint.txid), Scripts csvTimeout tx)
 
     augmented map {
       // If CSV is zero then whether parent tx is present or not is irrelevant, we look as CLTV
@@ -92,8 +91,9 @@ trait Broadcaster extends ChannelListener { me =>
     }
   }
 
-  def convertToBroadcastStatus(close: ClosingData): Seq[BroadcastStatus] =
-    convertToBroadcastStatus(me extractTxs close, getParentsDepth)
+  def safeSend(tx: Transaction) =
+    obsOn(me send tx, IOScheduler.apply)
+      .onErrorReturn(_.getMessage)
 
   def extractTxs(cd: ClosingData): Seq[Transaction] =
     cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
@@ -110,8 +110,8 @@ trait Broadcaster extends ChannelListener { me =>
     bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
       bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 
-  type ParentTxidToDepth = Map[String, Int]
-  def getParentsDepth: ParentTxidToDepth
+  // To be defined in concrete implementation
+  def getConfirmations(txid: BinaryData): Option[Int]
   def send(tx: Transaction): String
   def feeRatePerKw: Long
   def currentHeight: Int
