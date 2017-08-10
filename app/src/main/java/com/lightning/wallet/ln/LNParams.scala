@@ -20,6 +20,7 @@ object LNParams {
 
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
+  val chainHash = Block.RegtestGenesisBlock.blockId
   lazy val publicCloud = new LNCloud("10.0.2.2")
   lazy val broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
@@ -65,10 +66,9 @@ object LNParams {
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (keyOrder <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, keyOrder)
-    LocalParams(chainHash = Block.RegtestGenesisBlock.blockId, dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = UInt64(Long.MaxValue),
-      channelReserveSat, htlcMinimumMsat = 500, toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = funding,
-      revocationSecret = revocation, paymentKey = payment, delayedPaymentKey = delayed, finalScriptPubKey,
-      shaSeed = sha256(sha.toBin), isFunder = true)
+    LocalParams(dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), channelReserveSat, htlcMinimumMsat = 500,
+      toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
+      delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
   }
 }
 

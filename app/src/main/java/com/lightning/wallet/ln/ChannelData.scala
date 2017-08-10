@@ -150,10 +150,9 @@ object CommitmentSpec {
   }
 }
 
-case class LocalParams(chainHash: BinaryData, dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64,
-                       channelReserveSat: Long, htlcMinimumMsat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
-                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey,
-                       delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
+case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64, channelReserveSat: Long, htlcMinimumMsat: Long,
+                       toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
+                       paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
                        shaSeed: BinaryData, isFunder: Boolean)
 
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig, localCommitIndexSnapshot: Long)

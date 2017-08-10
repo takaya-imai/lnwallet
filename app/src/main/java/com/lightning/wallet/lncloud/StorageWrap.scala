@@ -85,11 +85,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
-  def retry(channel: Channel, f: UpdateFailHtlc, outgoingPayment: OutgoingPayment) =
-    channel.outPaymentOpt(reduceRoutes(f, outgoingPayment), outgoingPayment.request) match {
-      case Some(updatedOutgoingPayment) => channel process RetryAddHtlc(updatedOutgoingPayment)
-      case None => updateStatus(FAILURE, outgoingPayment.request.paymentHash)
-    }
+  def retry(channel: Channel, f: UpdateFailHtlc, outgoingPayment: OutgoingPayment): Unit = ???
+//    channel.outPaymentOpt(reduceRoutes(f, outgoingPayment), outgoingPayment.request) match {
+//      case Some(updatedOutgoingPayment) => channel process RetryAddHtlc(updatedOutgoingPayment)
+//      case None => updateStatus(FAILURE, outgoingPayment.request.paymentHash)
+//    }
 
   override def onProcess = {
     case (_, _, retry: RetryAddHtlc) =>

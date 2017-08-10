@@ -237,12 +237,11 @@ object ImplicitJsonFormats { me =>
   implicit val closingTxFmt = jsonFormat[InputInfo, Transaction, String,
     ClosingTx](ClosingTx.apply, "input", "tx", "kind")
 
-  implicit val localParamsFmt = jsonFormat[BinaryData, Long, UInt64, Long,
-    Long, Int, Int, PrivateKey, Scalar, PrivateKey, Scalar, BinaryData, BinaryData, Boolean,
-    LocalParams](LocalParams.apply, "chainHash", "dustLimitSatoshis", "maxHtlcValueInFlightMsat",
-    "channelReserveSat", "htlcMinimumMsat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey",
-    "revocationSecret", "paymentKey", "delayedPaymentKey", "defaultFinalScriptPubKey",
-    "shaSeed", "isFunder")
+  implicit val localParamsFmt = jsonFormat[Long, UInt64, Long, Long, Int,
+    Int, PrivateKey, Scalar, PrivateKey, Scalar, BinaryData, BinaryData, Boolean,
+    LocalParams](LocalParams.apply, "dustLimitSatoshis", "maxHtlcValueInFlightMsat", "channelReserveSat",
+    "htlcMinimumMsat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret", "paymentKey",
+    "delayedPaymentKey", "defaultFinalScriptPubKey", "shaSeed", "isFunder")
 
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")

@@ -131,8 +131,16 @@ trait Pathfinder {
   val channel: Channel
 
   def outPaymentObs(request: PaymentRequest) = {
-    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
-    for (routes <- routesObs) yield channel.outPaymentOpt(routes, request)
+    lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId) map { routes =>
+      // Option since this may fail because no routes were found or channel has no id yet
+      channel.id flatMap outPaymentOpt(routes, request)
+    }
+  }
+
+  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest)(chanId: BinaryData) = rs.headOption map { route =>
+    val (payloads, firstAmount, firstExpiry) = buildRoute(Tuple3(Vector.empty, request.msat, LNParams.expiry), route)
+    val onion = buildOnion(channel.data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
+    OutgoingPayment(RoutingData(rs.tail, onion, firstAmount, firstExpiry), NOIMAGE, request, chanId, TEMP)
   }
 }
 

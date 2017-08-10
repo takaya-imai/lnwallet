@@ -4,11 +4,12 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
+
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+
 import concurrent.ExecutionContext.Implicits.global
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
@@ -17,7 +18,8 @@ import scala.concurrent.Future
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
   override def process(change: Any) = try super.process(change) catch events.onError
-  def async(change: Any): Future[Unit] = Future apply process(change)
+  def id = Some(data) collect { case some: HasCommitments => some.commitments.channelId }
+  def async(change: Any) = Future apply process(change)
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -36,20 +38,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     events onBecome trans
   }
 
-  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
-    Some(rs, data) collect { case (route +: restOfPaymentRoutes, some: HasCommitments) =>
-      val (payloads, firstAmount, firstExpiry) = buildRoute(Tuple3(Vector.empty, request.msat, LNParams.expiry), route)
-      val onion = buildOnion(some.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
-      val routing = RoutingData(restOfPaymentRoutes, onion, firstAmount, firstExpiry)
-      OutgoingPayment(routing, NOIMAGE, request, some.commitments.channelId, TEMP)
-    }
-
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
       case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
         initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
 
-        BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(localParams.chainHash,
+        BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
           tempChannelId, fundingAmountSat, pushMsat, localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat,
           localParams.channelReserveSat, localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,

@@ -16,6 +16,7 @@ import com.lightning.wallet.ln.LNParams._
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.os.Bundle
 import Utils.app
+import com.lightning.wallet.ln.PaymentInfo._
 import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
 import android.support.v7.widget.SearchView.OnQueryTextListener
@@ -27,7 +28,8 @@ import com.lightning.wallet.ln._
 
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
-import fr.acinq.bitcoin.MilliSatoshi
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
+import fr.acinq.bitcoin.Crypto.sha256
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
 
@@ -167,7 +169,7 @@ with ListUpdater with SearchBar { me =>
   override def onResume =
     wrap(run = super.onResume) {
       app.ChannelManager.alive.headOption match {
-        case Some(cn) => pathfinder = LNParams getPathfinder cn
+        case Some(chan) => pathfinder = getPathfinder(chan)
         case None => me goTo classOf[LNOpsActivity]
       }
     }
@@ -226,7 +228,15 @@ with ListUpdater with SearchBar { me =>
       case _ if description.isEmpty => app toast ln_description_hint
       case Success(ms) if ms.amount < 100 => app toast dialog_sum_dusty
       case Success(ms) if ms > maxHtlcValue => app toast dialog_capacity
-      case Success(ms) => println(ms)
+      case Success(ms) => rm(alert) { <(proceed(ms), none)(none) }
+    }
+
+    def proceed(sum: MilliSatoshi) = bag.newPreimage match { case preimage =>
+      val btcAddress = if (MIN_NONDUST_OUTPUT multiply 20 isLessThan sum) Some(app.kit.currentAddress.toString) else None
+      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, btcAddress, 3600 * 24)
+      PaymentInfoWrap putPaymentInfo IncomingPayment(preimage, paymentRequest, pathfinder.channel.id.get, HIDDEN)
+      app.TransData.value = paymentRequest
+      me goTo classOf[RequestActivity]
     }
 
     val ok = alert getButton BUTTON_POSITIVE
