@@ -50,7 +50,10 @@
     <string name="dialog_next">Next</string>
     <string name="dialog_cancel">Cancel</string>
 
-    <string name="spend_address_amount_hint"><![CDATA[amount in Satoshi<br><small>wallet balance %1$s</small>]]></string>
+    <string name="satoshi_hint_max_amount"><![CDATA[max amount is %1$s]]></string>
+    <string name="satoshi_hint_wallet"><![CDATA[wallet balance is %1$s]]></string>
+    <string name="satoshi_hint_max_capacity_wallet"><![CDATA[max capacity is %1$s<br>wallet balance is %2$s]]></string>
+    <string name="spend_amount_hint"><![CDATA[Amount in Satoshi<br><small>%1$s</small>]]></string>
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
     <string name="spend_address_hint">Bitcoin address</string>
 
@@ -130,8 +133,8 @@
     <!-- SPECIFIC TO LIGHTNING NETWORK -->
 
     <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
-    <string name="ln_receive_title"><![CDATA[Receive Lightning Payment<br><br><small>Max amount %1$s</small>]]></string>
     <string name="ln_send_title"><![CDATA[Send Lightning Payment<br><small>%1$s</small>]]></string>
+    <string name="ln_receive_title">Receive Lightning Payment</string>
 
     <!-- ln subtitle messages -->
     <string name="ln_select_peer">Select peer</string>
@@ -173,7 +176,7 @@
         <item><![CDATA[in <strong>%1$s</strong> blocks]]></item>
     </array>
 
-    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a Payment Channel<br><small>Max capacity %1$s</small>]]></string>
+    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a Payment Channel]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>

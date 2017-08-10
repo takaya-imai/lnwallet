@@ -374,7 +374,7 @@ trait TimerActivity extends AppCompatActivity { me =>
     }
 }
 
-class RateManager(val content: View) { me =>
+class RateManager(extra: String, val content: View) { me =>
   val satInput = content.findViewById(R.id.inputAmount).asInstanceOf[EditText]
   val fiatType = content.findViewById(R.id.fiatType).asInstanceOf[SegmentedGroup]
   val fiatInput = content.findViewById(R.id.fiatInputAmount).asInstanceOf[EditText]
@@ -401,8 +401,7 @@ class RateManager(val content: View) { me =>
   }
 
   val hintMsat = content.findViewById(R.id.hintMsat).asInstanceOf[TextView]
-  val hint = app getString spend_address_amount_hint format withSign(app.kit.currentBalance)
-  hintMsat setText hint.html
+  hintMsat setText app.getString(spend_amount_hint).format(extra).html
 
   satInput addTextChangedListener bitListener
   fiatInput addTextChangedListener fiatListener

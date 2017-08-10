@@ -4,6 +4,7 @@ import java.util.Date
 
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.Utils._
+import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
@@ -54,11 +55,13 @@ trait SearchBar { me =>
 }
 
 trait DataReader extends NfcReaderActivity {
-  // Data may come via NFC message or share action
-  // so we check both of them at once
-
-  override def onResume =
-    wrap(super.onResume)(checkTransData)
+  def readEmptyNdefMessage = app toast nfc_error
+  def readNonNdefMessage = app toast nfc_error
+  def onNfcStateChange(ok: Boolean) = none
+  def onNfcFeatureNotFound = none
+  def onNfcStateDisabled = none
+  def onNfcStateEnabled = none
+  def checkTransData: Unit
 
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
@@ -69,14 +72,6 @@ trait DataReader extends NfcReaderActivity {
     // Could not process a message
     app toast nfc_error
   }
-
-  def checkTransData: Unit
-  def onNfcStateEnabled = none
-  def onNfcStateDisabled = none
-  def onNfcFeatureNotFound = none
-  def onNfcStateChange(ok: Boolean) = none
-  def readNonNdefMessage = app toast nfc_error
-  def readEmptyNdefMessage = app toast nfc_error
 }
 
 class LNActivity extends DataReader
@@ -169,6 +164,14 @@ with ListUpdater with SearchBar { me =>
     } else me exitTo classOf[MainActivity]
   }
 
+  override def onResume =
+    wrap(run = super.onResume) {
+      app.ChannelManager.alive.headOption match {
+        case Some(cn) => pathfinder = LNParams getPathfinder cn
+        case None => me goTo classOf[LNOpsActivity]
+      }
+    }
+
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
     app.kit.wallet removeCoinsReceivedEventListener txTracker
@@ -212,19 +215,16 @@ with ListUpdater with SearchBar { me =>
   // UI MENUS
 
   def makePaymentRequest = {
-    val humanCap = sumIn format withSign(maxHtlcValue)
-    val title = getString(ln_receive_title).format(humanCap).html
     val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
     val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
-    val rateManager = new RateManager(content)
-
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
+    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxHtlcValue), content)
     def description = inputDescription.getText.toString.trim
 
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
       case _ if description.isEmpty => app toast ln_description_hint
-      case Success(ms) if ms.amount < 10 => app toast dialog_sum_dusty
+      case Success(ms) if ms.amount < 100 => app toast dialog_sum_dusty
       case Success(ms) if ms > maxHtlcValue => app toast dialog_capacity
       case Success(ms) => println(ms)
     }

@@ -212,6 +212,9 @@ with ListUpdater { me =>
     } else me exitTo classOf[MainActivity]
   }
 
+  override def onResume =
+    wrap(super.onResume)(checkTransData)
+
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeTransactionConfidenceEventListener txsTracker
     app.kit.wallet removeCoinsReceivedEventListener txsTracker
@@ -307,9 +310,7 @@ with ListUpdater { me =>
   def sendBtcTxPopup: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_btc, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
-
-    // Can input satoshis and address
-    val rateManager = new RateManager(content)
+    val rateManager = new RateManager(getString(satoshi_hint_wallet) format withSign(app.kit.currentBalance), content)
     val spendManager = new BtcManager(rateManager)
 
     def attempt = rateManager.result match {
@@ -345,9 +346,10 @@ with ListUpdater { me =>
     fab close true
   }
 
-  // nativeValue equaling zero means it's a purely watched tx
-  private def nativeTransactions = app.kit.wallet.getTransactionsByTime
-    .asScala.take(maxLinesNum).map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
+  private def nativeTransactions =
+    // nativeValue equaling zero means it's a purely watched tx
+    app.kit.wallet.getTransactionsByTime.asScala.take(maxLinesNum)
+      .map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 
   class BtcView(view: View) extends TxViewHolder(view) {
     // Display given Bitcoin transaction properties to user
