@@ -56,9 +56,9 @@
 
     <string name="dialog_address_absent">No valid address found in clipboard</string>
     <string name="dialog_address_wrong">Bitcoin address is required</string>
-    <string name="dialog_capacity">Amount exceeds max capacity</string>
     <string name="dialog_sum_empty">Please provide an amount</string>
-    <string name="dialog_sum_dusty">Bitcoin amount is dusty</string>
+    <string name="dialog_sum_dusty">Amount is too small</string>
+    <string name="dialog_capacity">Amount is too large</string>
 
     <!-- notifications -->
     <string name="tx_announce">Announcing transaction&#8230;</string>
@@ -130,8 +130,8 @@
     <!-- SPECIFIC TO LIGHTNING NETWORK -->
 
     <string name="ln_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s <font color=#1BA2E0>/</font> <font color=#BBBBBB>%2$s</font>]]></string>
-    <string name="ln_payment_title"><![CDATA[Send Lightning Payment<br><small><font color=#999999>%1$s</font></small>]]></string>
-    <string name="ln_receive_max_amount"><![CDATA[Receive Lightning Payment<br><br><small>Max amount %1$s</small>]]></string>
+    <string name="ln_receive_title"><![CDATA[Receive Lightning Payment<br><br><small>Max amount %1$s</small>]]></string>
+    <string name="ln_send_title"><![CDATA[Send Lightning Payment<br><small>%1$s</small>]]></string>
 
     <!-- ln subtitle messages -->
     <string name="ln_select_peer">Select peer</string>
@@ -143,8 +143,7 @@
     <string name="ln_close">Close channel</string>
     <string name="ln_receive">Receive payment</string>
     <string name="ln_force_close">Force close channel</string>
-    <string name="ln_description_hint">add some description</string>
-    <string name="ln_no_description">no description provided</string>
+    <string name="ln_description_hint">Add some description</string>
     <string name="ln_backup">Set Backup Server</string>
     <string name="ln_search">Find payments</string>
 

@@ -15,6 +15,7 @@ import com.lightning.wallet.ln.LNParams._
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.os.Bundle
 import Utils.app
+import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.webkit.URLUtil
@@ -82,7 +83,7 @@ class LNActivity extends DataReader
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
-  lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
+  lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentProvider = new PaymentsDataProvider
   lazy val lnTitle = getString(ln_title)
   lazy val adapter = new LNAdapter
@@ -121,8 +122,7 @@ with ListUpdater with SearchBar { me =>
     def getCount = payments.size
   }
 
-  class LNView(view: View)
-  extends TxViewHolder(view) {
+  class LNView(view: View) extends TxViewHolder(view) {
     def fillView(info: PaymentInfo) = {
 //      val stamp = new Date(info.spec.request.timestamp * 1000)
 //      val time = when(System.currentTimeMillis, stamp)
@@ -150,21 +150,23 @@ with ListUpdater with SearchBar { me =>
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
   {
-    super.onCreate(savedState)
-    wrap(initToolbar)(me setContentView R.layout.activity_ln)
-    add(me getString ln_notify_operational, Informer.LNSTATE).ui.run
+    if (app.isAlive) {
+      super.onCreate(savedState)
+      wrap(initToolbar)(me setContentView R.layout.activity_ln)
+      add(me getString ln_notify_operational, Informer.LNSTATE).ui.run
 
-    list setAdapter adapter
-    list setFooterDividersEnabled false
-    paymentProvider reload new String
-    me startListUpdates adapter
-    me setDetecting true
+      list setAdapter adapter
+      list setFooterDividersEnabled false
+      paymentProvider reload new String
+      me startListUpdates adapter
+      me setDetecting true
 
-    // Wire up general listeners
-    app.kit.wallet addCoinsSentEventListener txTracker
-    app.kit.wallet addCoinsReceivedEventListener txTracker
-    app.kit.wallet addTransactionConfidenceEventListener txTracker
-    app.kit.peerGroup addBlocksDownloadedEventListener catchListener
+      // Wire up general listeners
+      app.kit.wallet addCoinsSentEventListener txTracker
+      app.kit.wallet addCoinsReceivedEventListener txTracker
+      app.kit.wallet addTransactionConfidenceEventListener txTracker
+      app.kit.peerGroup addBlocksDownloadedEventListener catchListener
+    } else me exitTo classOf[MainActivity]
   }
 
   override def onDestroy = wrap(super.onDestroy) {
@@ -211,13 +213,19 @@ with ListUpdater with SearchBar { me =>
 
   def makePaymentRequest = {
     val humanCap = sumIn format withSign(maxHtlcValue)
-    val title = getString(ln_receive_max_amount).format(humanCap).html
+    val title = getString(ln_receive_title).format(humanCap).html
     val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
+    val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title, content)
     val rateManager = new RateManager(content)
 
+    def description = inputDescription.getText.toString.trim
+
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
+      case _ if description.isEmpty => app toast ln_description_hint
+      case Success(ms) if ms.amount < 10 => app toast dialog_sum_dusty
+      case Success(ms) if ms > maxHtlcValue => app toast dialog_capacity
       case Success(ms) => println(ms)
     }
 

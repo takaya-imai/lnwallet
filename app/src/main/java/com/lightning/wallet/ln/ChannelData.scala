@@ -221,7 +221,7 @@ object Commitments {
     if (add.amountMsat < c.localParams.htlcMinimumMsat) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
-    else if (add.expiry <= blockLimit) throw new LightningException
+    else if (add.expiry < blockLimit) throw new LightningException
     else {
 
       // Let's compute the current commitment *as seen by us* including this change

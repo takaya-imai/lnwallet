@@ -68,14 +68,27 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
     val (r, s) = Crypto.sign(hash, priv)
     val (pub1, _) = Crypto.recoverPublicKey(r -> s, hash)
     val recid = if (nodeId == pub1) 0.toByte else 1.toByte
-    val signature = Signature.encode(r, s, recid)
-    copy(signature = signature)
+    val signature1 = Signature.encode(r, s, recid)
+    copy(signature = signature1)
   }
 }
 
 object PaymentRequest {
-  type ByteSeq = Seq[Byte]
   type Int5Seq = Seq[Int5]
+
+  def apply(chain: BinaryData, amount: MilliSatoshi, paymentHash: BinaryData, privateKey: PrivateKey,
+            description: String, fallbackAddress: Option[String], expirySeconds: Long): PaymentRequest = {
+
+    val tags = PaymentHashTag(paymentHash) :: DescriptionTag(description) :: ExpiryTag(expirySeconds) :: Nil
+    PaymentRequest(getPrefix(chain), Some(amount), System.currentTimeMillis / 1000L, privateKey.publicKey,
+      tags.toVector, BinaryData.empty) sign privateKey
+  }
+
+  def getPrefix(chain: BinaryData) = chain match {
+    case Block.RegtestGenesisBlock.blockId => "lntb"
+    case Block.TestnetGenesisBlock.blockId => "lntb"
+    case Block.LivenetGenesisBlock.blockId => "lnbc"
+  }
 
   sealed trait Tag {
     def toInt5s: Int5Seq
@@ -182,7 +195,7 @@ object PaymentRequest {
   }
 
   object Tag {
-    def parse(input: ByteSeq): Tag = {
+    def parse(input: Int5Seq): Tag = {
       val len = input(1) * 32 + input(2)
 
       input.head match {
