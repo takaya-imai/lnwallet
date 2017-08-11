@@ -76,11 +76,11 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 object PaymentRequest {
   type Int5Seq = Seq[Int5]
 
-  def apply(chain: BinaryData, amount: MilliSatoshi, paymentHash: BinaryData, privateKey: PrivateKey,
+  def apply(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData, privateKey: PrivateKey,
             description: String, fallbackAddress: Option[String], expirySeconds: Long): PaymentRequest = {
 
     val tags = PaymentHashTag(paymentHash) :: DescriptionTag(description) :: ExpiryTag(expirySeconds) :: Nil
-    PaymentRequest(getPrefix(chain), Some(amount), System.currentTimeMillis / 1000L, privateKey.publicKey,
+    PaymentRequest(getPrefix(chain), amount, System.currentTimeMillis / 1000L, privateKey.publicKey,
       tags.toVector, BinaryData.empty) sign privateKey
   }
 

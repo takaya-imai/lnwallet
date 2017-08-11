@@ -9,7 +9,7 @@ import fr.acinq.bitcoin.{Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
-
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import concurrent.ExecutionContext.Implicits.global
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
@@ -37,6 +37,14 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     super.become(data1, state1)
     events onBecome trans
   }
+
+  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
+    Some(rs, id) collect { case (route +: restOfReservedRoutes) ~ Some(chanId) =>
+      val (payloads, firstAmount, firstExpiry) = buildRoute(Tuple3(Vector.empty, request.msat, LNParams.expiry), route)
+      val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
+      val routing = RoutingData(restOfReservedRoutes, onion, firstAmount, firstExpiry)
+      OutgoingPayment(routing, NOIMAGE, request, chanId, TEMP)
+    }
 
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {

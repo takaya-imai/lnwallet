@@ -71,7 +71,7 @@ object PaymentInfo {
   private def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
   private def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
 
-  def reduceRoutes(fail: UpdateFailHtlc, payment: OutgoingPayment) =
+  def cutRoutes(fail: UpdateFailHtlc, payment: OutgoingPayment) =
     parseErrorPacket(payment.routing.onion.sharedSecrets, fail.reason) map {
       case ErrorPacket(nodeId, _: Perm) if payment.request.nodeId == nodeId =>
         // Permanent error from a final node, nothing we can do here

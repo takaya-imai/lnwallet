@@ -16,6 +16,7 @@ import com.lightning.wallet.ln.LNParams._
 import org.ndeftools.util.activity.NfcReaderActivity
 import android.os.Bundle
 import Utils.app
+import android.app.AlertDialog
 import com.lightning.wallet.ln.PaymentInfo._
 import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
@@ -214,29 +215,45 @@ with ListUpdater with SearchBar { me =>
     fab close true
   }
 
+  private def receiveSendStatus: (Long, Long) =
+    Some(pathfinder.channel.data) collect { case norm: NormalData =>
+      val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
+      val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
+      canReceiveAmount -> canSendAmount
+    } getOrElse 0L -> 0L
+
   // UI MENUS
 
   def makePaymentRequest = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
     val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxHtlcValue), content)
-    def description = inputDescription.getText.toString.trim
 
-    def attempt = rateManager.result match {
-      case Failure(_) => app toast dialog_sum_empty
-      case _ if description.isEmpty => app toast ln_description_hint
-      case Success(ms) if ms.amount < 100 => app toast dialog_sum_dusty
-      case Success(ms) if ms > maxHtlcValue => app toast dialog_capacity
-      case Success(ms) => rm(alert) { <(proceed(ms), none)(none) }
-    }
+    val (canReceiveMsat, _) = receiveSendStatus
+    val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
+    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
+    def onFail(error: Throwable): Unit = mkForm(me negBld dialog_ok, null, error.getMessage)
+    def description: String = inputDescription.getText.toString.trim
 
-    def proceed(sum: MilliSatoshi) = bag.newPreimage match { case preimage =>
-      val btcAddress = if (MIN_NONDUST_OUTPUT multiply 20 isLessThan sum) Some(app.kit.currentAddress.toString) else None
-      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, btcAddress, 3600 * 24)
+    def proceed(sum: Option[MilliSatoshi], preimage: BinaryData): Unit = {
+      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, None, 3600 * 24)
       PaymentInfoWrap putPaymentInfo IncomingPayment(preimage, paymentRequest, pathfinder.channel.id.get, HIDDEN)
       app.TransData.value = paymentRequest
       me goTo classOf[RequestActivity]
+    }
+
+    val go: Option[MilliSatoshi] => Unit = sumOption => {
+      add(me getString tx_pr_make, Informer.LNREQUEST).ui.run
+      <(proceed(sumOption, bag.newPreimage), onFail)(none)
+      timer.schedule(me del Informer.LNREQUEST, 2500)
+    }
+
+    def attempt = rateManager.result match {
+      case _ if description.isEmpty => app toast ln_description_hint
+      case Success(ms) if ms.amount < 100 => app toast dialog_sum_dusty
+      case Success(ms) if ms > maxValue => app toast dialog_capacity
+      case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
+      case _ => rm(alert)(go apply None)
     }
 
     val ok = alert getButton BUTTON_POSITIVE

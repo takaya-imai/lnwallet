@@ -84,15 +84,15 @@ class LNOpsActivity extends TimerActivity { me =>
           me runOnUiThread manageNegotiations(negs.commitments)
 
         // Mutual closing is in progress because only a mutual close tx is available here
-        case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
+        case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _, _), _, CLOSING) =>
           me runOnUiThread manageMutualClosing(tx)
 
         // Mutual closing but we have no transactions at all so just drop it
-        case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
+        case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _, _), _, CLOSING) =>
           me runOnUiThread manageNoActiveChannel
 
         // Someone has initiated a unilateral channel closing
-        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _), _, CLOSING)
+        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _, _), _, CLOSING)
           if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
           me runOnUiThread manageForcedClosing(close)
       }

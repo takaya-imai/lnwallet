@@ -65,6 +65,7 @@
 
     <!-- notifications -->
     <string name="tx_announce">Announcing transaction&#8230;</string>
+    <string name="tx_pr_make">Making a Payment Request&#8230;</string>
     <string name="tx_received">Just received a Bitcoin transaction</string>
     <string name="tx_confirmed">Bitcoin transaction confirmed</string>
     <string name="tx_sent">Just sent a Bitcoin transaction</string>

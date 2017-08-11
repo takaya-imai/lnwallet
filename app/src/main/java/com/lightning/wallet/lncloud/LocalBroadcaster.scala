@@ -21,7 +21,7 @@ object LocalBroadcaster extends Broadcaster { me =>
   override def onBecome = {
     case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>
       // In a thin wallet we need to watch for transactions which spend external outputs
-      app.kit.wallet addWatchedScript wait.commitments.commitInput.txOut.publicKeyScript
+      app.kit.wallet.addWatchedScript(wait.commitments.commitInput.txOut.publicKeyScript)
       safeSend(wait.fundingTx).foreach(Tools.log, _.printStackTrace)
 
     case (chan, _, SYNC, NORMAL) =>
@@ -31,11 +31,10 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onProcess = {
     case (_, close: ClosingData, _) =>
-      val killThreshold = close.commitments.localParams.toSelfDelay * 2
       val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ extractTxs(close)
-      val canKill = toPublish.flatMap(me getConfirmations _.txid).exists(_ > killThreshold)
+      val canRemove = close.startedAt + 1000 * 3600 * 24 * 14 < System.currentTimeMillis
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
-      if (canKill) ChannelWrap remove close.commitments.channelId
+      if (canRemove) ChannelWrap remove close.commitments.channelId
   }
 
   override def onError = {

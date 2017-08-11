@@ -12,8 +12,11 @@ public class Informer {
     public static final int CODECHECK = 5;
     public static final int TXCONFIRMED = 6;
 
+    // Temporary LN infos
+    public static final int LNREQUEST = 7;
+
     // Special emergency state
-    public static final int EMERGENCY = 7;
+    public static final int EMERGENCY = 8;
 
     public int tag;
     public String value;

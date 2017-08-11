@@ -30,7 +30,7 @@ object StorageWrap {
 
 object ChannelWrap {
   import com.lightning.wallet.lncloud.ChannelTable._
-  def remove(chanId: BinaryData) = db.change(killSql, chanId.toString)
+  def remove(channelId: BinaryData) = db.change(killSql, channelId.toString)
   def get = RichCursor(db select selectAllSql).vec(_ string data) map to[HasCommitments]
 
   def put(data: HasCommitments): Unit = db txWrap {
@@ -85,11 +85,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
-  def retry(channel: Channel, f: UpdateFailHtlc, outgoingPayment: OutgoingPayment): Unit = ???
-//    channel.outPaymentOpt(reduceRoutes(f, outgoingPayment), outgoingPayment.request) match {
-//      case Some(updatedOutgoingPayment) => channel process RetryAddHtlc(updatedOutgoingPayment)
-//      case None => updateStatus(FAILURE, outgoingPayment.request.paymentHash)
-//    }
+  def retry(channel: Channel, fail: UpdateFailHtlc, outgoingPayment: OutgoingPayment) =
+    channel.outPaymentOpt(cutRoutes(fail, outgoingPayment), outgoingPayment.request) match {
+      case Some(updatedOutgoingPayment) => channel process RetryAddHtlc(updatedOutgoingPayment)
+      case None => updateStatus(FAILURE, outgoingPayment.request.paymentHash)
+    }
 
   override def onProcess = {
     case (_, _, retry: RetryAddHtlc) =>

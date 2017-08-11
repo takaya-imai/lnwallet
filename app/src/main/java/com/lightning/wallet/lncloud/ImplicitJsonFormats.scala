@@ -309,9 +309,9 @@ object ImplicitJsonFormats { me =>
   }
 
   implicit val closingDataFmt = jsonFormat[NodeAnnouncement, Commitments, Seq[Transaction],
-    Seq[LocalCommitPublished], Seq[RemoteCommitPublished], Seq[RemoteCommitPublished], Seq[RevokedCommitPublished], String,
+    Seq[LocalCommitPublished], Seq[RemoteCommitPublished], Seq[RemoteCommitPublished], Seq[RevokedCommitPublished], Long, String,
     ClosingData](ClosingData.apply, "announce", "commitments", "mutualClose", "localCommit", "remoteCommit", "nextRemoteCommit",
-    "revokedCommits", "kind")
+    "revokedCommits", "startedAt", "kind")
 
   implicit val negotiationsDataFmt = jsonFormat[NodeAnnouncement, Commitments, ClosingSigned, Shutdown, Shutdown, String,
     NegotiationsData](NegotiationsData.apply, "announce", "commitments", "localClosingSigned", "localShutdown",
