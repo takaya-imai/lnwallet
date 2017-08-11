@@ -147,17 +147,16 @@
     <string name="ln_close">Close channel</string>
     <string name="ln_receive">Receive payment</string>
     <string name="ln_force_close">Force close channel</string>
-    <string name="ln_description_hint">Add some description</string>
+    <string name="ln_description_hint">add some description</string>
     <string name="ln_backup">Set Backup Server</string>
     <string name="ln_search">Find payments</string>
 
     <!-- setting a private backup server -->
-    <string name="ln_backup_ip">Backup server address</string>
     <string name="ln_backup_success">Backup Server has been set successfully</string>
+    <string name="ln_backup_ip">Backup server address\n<small>like 127.0.0.1 or myserver.com</small></string>
     <string name="ln_backup_key"><![CDATA[<small>Not sure what is this about?<br><a href=https://lightning-wallet.com/>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
     <string name="ln_backup_key_error">Could not set a Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server knows your backup public key and try again</string>
     <string name="ln_backup_sig_error">Could not set a Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
-    <string name="ln_backup_url_error">Could not set a Backup Server because it\'s address seems to be invalid</string>
     <string name="ln_backup_net_error">Could not set a Backup Server because it is not reachable</string>
 
     <!-- activity_ln_ops, activity_ln_start -->

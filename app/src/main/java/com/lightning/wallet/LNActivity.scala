@@ -26,7 +26,7 @@ import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
-
+import com.lightning.wallet.ln.Tools.{none, random}
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
@@ -83,7 +83,7 @@ with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentProvider = new PaymentsDataProvider
-  lazy val lnTitle = getString(ln_title)
+  lazy val lnTitle = me getString ln_title
   lazy val adapter = new LNAdapter
 
   private[this] var pathfinder: Pathfinder = _
@@ -173,6 +173,8 @@ with ListUpdater with SearchBar { me =>
         case Some(chan) => pathfinder = getPathfinder(chan)
         case None => me goTo classOf[LNOpsActivity]
       }
+
+      checkTransData
     }
 
   override def onDestroy = wrap(super.onDestroy) {
@@ -198,10 +200,17 @@ with ListUpdater with SearchBar { me =>
   def checkTransData = app.TransData.value match {
     case uri: BitcoinURI => me goTo classOf[BtcActivity]
     case adr: Address => me goTo classOf[BtcActivity]
+    case pr: PaymentRequest => sendPayment(pr)
 
     case unusable =>
       app.TransData.value = null
       Tools log s"Unusable $unusable"
+  }
+
+  private def sendPayment(pr: PaymentRequest) = {
+    val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
+    println(pr)
   }
 
   // Reactions to menu
@@ -215,13 +224,6 @@ with ListUpdater with SearchBar { me =>
     fab close true
   }
 
-  private def receiveSendStatus: (Long, Long) =
-    Some(pathfinder.channel.data) collect { case norm: NormalData =>
-      val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
-      val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
-      canReceiveAmount -> canSendAmount
-    } getOrElse 0L -> 0L
-
   // UI MENUS
 
   def makePaymentRequest = {
@@ -233,9 +235,9 @@ with ListUpdater with SearchBar { me =>
     val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
     val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
     def onFail(error: Throwable): Unit = mkForm(me negBld dialog_ok, null, error.getMessage)
-    def description: String = inputDescription.getText.toString.trim
 
-    def proceed(sum: Option[MilliSatoshi], preimage: BinaryData): Unit = {
+    def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
+      val description: String = inputDescription.getText.toString.trim
       val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, None, 3600 * 24)
       PaymentInfoWrap putPaymentInfo IncomingPayment(preimage, paymentRequest, pathfinder.channel.id.get, HIDDEN)
       app.TransData.value = paymentRequest
@@ -249,8 +251,7 @@ with ListUpdater with SearchBar { me =>
     }
 
     def attempt = rateManager.result match {
-      case _ if description.isEmpty => app toast ln_description_hint
-      case Success(ms) if ms.amount < 100 => app toast dialog_sum_dusty
+      case Success(ms) if ms.amount < htlcMinimumMsat => app toast dialog_sum_dusty
       case Success(ms) if ms > maxValue => app toast dialog_capacity
       case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
       case _ => rm(alert)(go apply None)
@@ -273,25 +274,33 @@ with ListUpdater with SearchBar { me =>
     val alert = mkForm(dialog, getString(ln_backup_key).html, view)
     field setTextIsSelectable true
 
-    def proceed: Unit = rm(alert) {
+    private def proceed: Unit = rm(alert) {
       val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
       PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
       mkForm(dialog, me getString ln_backup, view1)
     }
 
-    def trySave(url: String) =
+    private def trySave(url: String) = delayUI {
       if (url.isEmpty) PrivateDataSaver.remove
-      else if (URLUtil isValidUrl url) self save PrivateData(Nil, url)
-      else mkForm(me negBld dialog_ok, null, me getString ln_backup_url_error)
+      else self check PrivateData(Nil, url)
+    }
 
-    def save(privateData: PrivateData) = {
-      PrivateDataSaver.saveObject(data = privateData)
-      //pathfinder = getPathfinder(activeKits.head.chan)
+    private def check(data: PrivateData) = {
+      val pathfinder1 = getPrivatePathfinder(pathfinder.channel)(data)
+      val payload = pathfinder1.signedParams(random getBytes 32)
+      pathfinder1.lnCloud.call("check", none, payload:_*)
+        .subscribe(_ => self save data, onUIError)
+    }
+
+    private def save(privateData: PrivateData) = {
+      pathfinder = getPathfinder(pathfinder.channel)
+      PrivateDataSaver saveObject privateData
       app toast ln_backup_success
     }
 
-    def onError(error: Throwable): Unit = error.getMessage match {
+    private def onUIError(e: Throwable) = me runOnUiThread onError(e)
+    private def onError(error: Throwable): Unit = error.getMessage match {
       case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
       case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
       case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
@@ -301,4 +310,11 @@ with ListUpdater with SearchBar { me =>
   def closeChannel = checkPass(me getString ln_close) { pass =>
     for (chan <- app.ChannelManager.alive) chan async CMDShutdown
   }
+
+  private def receiveSendStatus: (Long, Long) =
+    Some(pathfinder.channel.data) collect { case norm: NormalData =>
+      val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
+      val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
+      canReceiveAmount -> canSendAmount
+    } getOrElse 0L -> 0L
 }

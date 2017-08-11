@@ -47,11 +47,9 @@ with TimerActivity with ViewSwitch { me =>
       blockChain = new BlockChain(app.params, wallet, store)
       peerGroup = new PeerGroup(app.params, blockChain)
 
-      def startUp = try {
+      def startUp = {
         setupAndStartDownload
         exitTo apply classOf[LNActivity]
-      } catch {
-        case e: Throwable => e.printStackTrace
       }
     }
   }

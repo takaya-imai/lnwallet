@@ -50,14 +50,8 @@ object ImplicitJsonFormats { me =>
   }
 
   implicit object LNCloudActFmt extends JsonFormat[LNCloudAct] {
-    def read(json: JsValue) = json.asJsObject fields "kind" match {
-      case JsString("CheckCloudAct") => json.convertTo[CheckCloudAct]
-      case _ => throw new RuntimeException
-    }
-
-    def write(internal: LNCloudAct) = internal match {
-      case pingCloudAct: CheckCloudAct => pingCloudAct.toJson
-    }
+    def write(internal: LNCloudAct): JsValue = ???
+    def read(json: JsValue): LNCloudAct = ???
   }
 
   implicit object CoinFmt extends JsonFormat[Coin] {
@@ -154,9 +148,6 @@ object ImplicitJsonFormats { me =>
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
-  implicit val pingLNCLoudAct = jsonFormat[BinaryData, String,
-    CheckCloudAct](CheckCloudAct.apply, "data", "kind")
-
   implicit val publicDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[LNCloudAct],
     PublicData](PublicData.apply, "info", "tokens", "acts")
 
@@ -237,11 +228,11 @@ object ImplicitJsonFormats { me =>
   implicit val closingTxFmt = jsonFormat[InputInfo, Transaction, String,
     ClosingTx](ClosingTx.apply, "input", "tx", "kind")
 
-  implicit val localParamsFmt = jsonFormat[Long, UInt64, Long, Long, Int,
+  implicit val localParamsFmt = jsonFormat[Long, UInt64, Long, Int,
     Int, PrivateKey, Scalar, PrivateKey, Scalar, BinaryData, BinaryData, Boolean,
-    LocalParams](LocalParams.apply, "dustLimitSatoshis", "maxHtlcValueInFlightMsat", "channelReserveSat",
-    "htlcMinimumMsat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret", "paymentKey",
-    "delayedPaymentKey", "defaultFinalScriptPubKey", "shaSeed", "isFunder")
+    LocalParams](LocalParams.apply, "dustLimitSatoshis", "maxHtlcValueInFlightMsat",
+    "channelReserveSat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret",
+    "paymentKey", "delayedPaymentKey", "defaultFinalScriptPubKey", "shaSeed", "isFunder")
 
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")

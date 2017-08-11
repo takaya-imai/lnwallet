@@ -136,12 +136,6 @@ trait Pathfinder {
   }
 }
 
-// Concrete cloud acts
-
-case class CheckCloudAct(data: BinaryData, kind: String = "CheckCloudAct") extends LNCloudAct {
-  def run(params: Seq[HttpParam], cloud: LNCloud): Obs[Unit] = cloud.call("check", println, params:_*)
-}
-
 trait LNCloudAct {
   // Sending data to server using either token or sig auth
   def run(params: Seq[HttpParam], cloud: LNCloud): Obs[Unit]

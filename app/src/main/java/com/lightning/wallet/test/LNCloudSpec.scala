@@ -59,27 +59,8 @@ class LNCloudSpec {
     override def STORE(content: HasCommitments) = content
   }
 
-  def getCloud =
-    PublicDataSaver.tryGetObject.map { savedData =>
-      println(s"Got LNCloudData from db: $savedData")
-
-      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
-        data = savedData
-      }
-
-    } getOrElse {
-      val data1 = PublicData(info = None, tokens = Nil, acts = for (n <- (0 to 400).toList) yield CheckCloudAct(s"call $n" getBytes "UTF-8"))
-      println(s"Creating a new LNCloudData")
-
-      new PublicPathfinder(TestPaymentSpecBag, new LNCloud("http://10.0.2.2"), chan) {
-        data = data1
-      }
-
-    }
 
   def allTests = {
-    val cloud1 = getCloud
-    println("preprocessing...")
-    cloud1 process CheckCloudAct("call a" getBytes "UTF-8")
+
   }
 }

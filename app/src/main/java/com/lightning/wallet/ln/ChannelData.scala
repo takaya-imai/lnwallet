@@ -150,7 +150,7 @@ object CommitmentSpec {
   }
 }
 
-case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64, channelReserveSat: Long, htlcMinimumMsat: Long,
+case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64, channelReserveSat: Long,
                        toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
                        paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
                        shaSeed: BinaryData, isFunder: Boolean)
@@ -217,7 +217,7 @@ object Commitments {
     }
 
   def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockLimit: Int) =
-    if (add.amountMsat < c.localParams.htlcMinimumMsat) throw new LightningException
+    if (add.amountMsat < LNParams.htlcMinimumMsat) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
     else if (add.expiry < blockLimit) throw new LightningException

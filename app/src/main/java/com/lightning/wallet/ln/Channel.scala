@@ -48,12 +48,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
-      case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempChannelId,
-        initialFeeratePerKw, pushMsat, _, fundingAmountSat), WAIT_FOR_INIT) =>
+      case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempId,
+        initialFeeratePerKw, pushMsat, _, fundingSat), WAIT_FOR_INIT) =>
 
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
-          tempChannelId, fundingAmountSat, pushMsat, localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat,
-          localParams.channelReserveSat, localParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
+          tempId, fundingSat, pushMsat, localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat,
+          localParams.channelReserveSat, LNParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
           Generators.perCommitPoint(localParams.shaSeed, index = 0),

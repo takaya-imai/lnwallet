@@ -5,6 +5,7 @@ import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
@@ -18,6 +19,7 @@ object LNParams {
   val globalFeatures = ""
   val minDepth = 2
 
+  val htlcMinimumMsat = 500
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val chainHash = Block.RegtestGenesisBlock.blockId
@@ -44,9 +46,11 @@ object LNParams {
     privateData => new FailoverLNCloud(publicCloud, privateData.url)
   } getOrElse publicCloud
 
-  def getPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map {
-    privateData => new PrivatePathfinder(new FailoverLNCloud(publicCloud, privateData.url), channel) { data = privateData }
-  } getOrElse new PublicPathfinder(bag, publicCloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
+  def getPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map getPrivatePathfinder(channel) getOrElse
+    new PublicPathfinder(bag, publicCloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
+
+  def getPrivatePathfinder(channel: Channel)(privateData: PrivateData): PrivatePathfinder =
+    new PrivatePathfinder(new FailoverLNCloud(publicCloud, privateData.url), channel) { data = privateData }
 
   // FEE RELATED
 
@@ -66,8 +70,8 @@ object LNParams {
 
   def makeLocalParams(channelReserveSat: Long, finalScriptPubKey: BinaryData, keyIndex: Long) = {
     val Seq(funding, revocation, payment, delayed, sha) = for (keyOrder <- 0 to 4) yield deriveParamsPrivateKey(keyIndex, keyOrder)
-    LocalParams(dustLimitSatoshis = 542, maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), channelReserveSat, htlcMinimumMsat = 500,
-      toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
+    LocalParams(MIN_NONDUST_OUTPUT.value, maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), channelReserveSat, toSelfDelay = 144,
+      maxAcceptedHtlcs = 20, fundingPrivKey = funding, revocationSecret = revocation, paymentKey = payment,
       delayedPaymentKey = delayed, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
   }
 }
