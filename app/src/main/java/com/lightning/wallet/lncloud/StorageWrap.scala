@@ -37,8 +37,8 @@ object ChannelWrap {
     val chanIdString = data.commitments.channelId.toString
     val content = data.toJson.toString
 
-    db.change(newSql, chanIdString, content)
-    db.change(updSql, content, chanIdString)
+    db.change(newSql, params = chanIdString, content)
+    db.change(updSql, params = content, chanIdString)
   }
 }
 
@@ -93,9 +93,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onProcess = {
     case (_, _, retry: RetryAddHtlc) =>
-      // Update existing payment routing
+      // Update existing payment routing data
+      // Fee is not shown so no need for ui changes
       me updateRouting retry.out
-      uiNotify
 
     case (_, _, cmd: CMDAddHtlc) =>
       // Record new outgoing payment
@@ -105,6 +105,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away
       me updatePreimage fulfill
+      uiNotify
 
     case (chan, norm: NormalData, sig: CommitSig) => LNParams.db txWrap {
       for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)

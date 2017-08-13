@@ -138,7 +138,7 @@ trait Pathfinder {
 
 trait LNCloudAct {
   // Sending data to server using either token or sig auth
-  def run(params: Seq[HttpParam], cloud: LNCloud): Obs[Unit]
+  def run(params: Seq[HttpParam], lnCloud: LNCloud): Obs[Unit]
   val data: BinaryData
 }
 
@@ -155,7 +155,7 @@ class LNCloud(val url: String) {
     }
 
   def getRates = call("rates", identity)
-  def getTxs(parent: String) = call("txs", toVec[Transaction], "txid" -> parent)
+  def getTxs(commit: String) = call("txs", toVec[Transaction], "txid" -> commit)
   def findNodes(query: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> query)
   def findRoutes(from: PublicKey, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
@@ -163,7 +163,7 @@ class LNCloud(val url: String) {
 
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
-  override def getTxs(parent: String) = super.getTxs(parent).onErrorResumeNext(_ => failover getTxs parent)
+  override def getTxs(commit: String) = super.getTxs(commit).onErrorResumeNext(_ => failover getTxs commit)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 

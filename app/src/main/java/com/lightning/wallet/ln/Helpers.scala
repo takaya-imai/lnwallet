@@ -12,12 +12,12 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
-  def extractPreimages(tx: Transaction): Seq[BinaryData] = tx.txIn.map(_.witness.stack) flatMap {
-    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => Some(script.slice(109, 109 + 20): BinaryData) // htlc-timeout
-    case Seq(_, BinaryData.empty, script) => Some(script.slice(69, 69 + 20): BinaryData) // claim-htlc-timeout
-    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => Some(preimg) // htlc-success
-    case Seq(_, preimg, _) if preimg.length == 32 => Some(preimg) // claim-htlc-success
-    case _ => None
+  private def toUpdateFulfillHtlc = UpdateFulfillHtlc(BinaryData.empty, 0L, _)
+  def extractPreimages(tx: Transaction) = tx.txIn.map(_.witness.stack) collect {
+    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => toUpdateFulfillHtlc(script.slice(109, 109 + 20): BinaryData)
+    case Seq(_, BinaryData.empty, script) => toUpdateFulfillHtlc(script.slice(69, 69 + 20): BinaryData) // claim-htlc-timeout
+    case Seq(BinaryData.empty, _, _, preimg, _) if preimg.length == 32 => toUpdateFulfillHtlc(preimg) // htlc-success
+    case Seq(_, preimg, _) if preimg.length == 32 => toUpdateFulfillHtlc(preimg) // claim-htlc-success
   }
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,

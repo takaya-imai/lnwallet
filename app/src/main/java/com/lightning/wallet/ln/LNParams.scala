@@ -23,7 +23,6 @@ object LNParams {
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val chainHash = Block.RegtestGenesisBlock.blockId
-  lazy val publicCloud = new LNCloud("10.0.2.2")
   lazy val broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
 
@@ -42,7 +41,8 @@ object LNParams {
 
   // LNCLOUD AND PATHFINDER
 
-  def getCloud: LNCloud = PrivateDataSaver.tryGetObject map {
+  lazy val publicCloud: LNCloud = new LNCloud("10.0.2.2")
+  lazy val cloud: LNCloud = PrivateDataSaver.tryGetObject map {
     privateData => new FailoverLNCloud(publicCloud, privateData.url)
   } getOrElse publicCloud
 

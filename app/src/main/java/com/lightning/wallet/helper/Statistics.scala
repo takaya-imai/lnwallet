@@ -21,10 +21,4 @@ abstract class Statistics[O] {
     val (lowerBound, upperBound) = (mean1 - sd * stdDevs, mean1 + sd * stdDevs)
     items.filter(item => extract(item) >= lowerBound && extract(item) <= upperBound)
   }
-
-  def meanWithin(items: Collection, stdDevs: Double) = {
-    val filtered: Collection = filterWithin(items, stdDevs)
-    val formatter = new java.text.DecimalFormat("##.00000000")
-    formatter format mean(filtered)
-  }
 }

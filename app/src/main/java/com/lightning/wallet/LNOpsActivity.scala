@@ -92,8 +92,8 @@ class LNOpsActivity extends TimerActivity { me =>
           me runOnUiThread manageNoActiveChannel
 
         // Someone has initiated a unilateral channel closing
-        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, localNextTxs, revokedTxs, _, _), _, CLOSING)
-          if localTxs.nonEmpty || remoteTxs.nonEmpty || localNextTxs.nonEmpty || revokedTxs.nonEmpty =>
+        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, remoteNextTxs, revokedTxs, _, _), _, CLOSING)
+          if localTxs.nonEmpty || remoteTxs.nonEmpty || remoteNextTxs.nonEmpty || revokedTxs.nonEmpty =>
           me runOnUiThread manageForcedClosing(close)
       }
     }
