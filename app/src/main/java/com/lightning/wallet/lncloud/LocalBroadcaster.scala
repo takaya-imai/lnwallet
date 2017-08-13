@@ -30,9 +30,9 @@ object LocalBroadcaster extends Broadcaster { me =>
     case (_, close: ClosingData, _, CLOSING)
       // This is an uncooperative close with HTLCs in-flight so we need to ask
       // server if any delayed HTLC has been spent to extract payment preimages
-      if close.nextRemoteCommit.exists(remote => remote.claimHtlcTimeoutTxs.nonEmpty || remote.claimHtlcSuccessTxs.nonEmpty) ||
-        close.remoteCommit.exists(remote => remote.claimHtlcTimeoutTxs.nonEmpty || remote.claimHtlcSuccessTxs.nonEmpty) ||
-        close.localCommit.exists(local => local.claimHtlcTimeoutTxs.nonEmpty || local.claimHtlcSuccessTxs.nonEmpty) =>
+      if close.nextRemoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) ||
+        close.remoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) ||
+        close.localCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) =>
 
       LNParams.cloud.getTxs(close.commitments.commitInput.outPoint.txid.toString)
         .foreach(_ flatMap Helpers.extractPreimages foreach LNParams.bag.updatePreimage,
