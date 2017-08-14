@@ -130,6 +130,5 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // At worst these will be marked as FAILURE and
       // then as WAITING once their CommitSig arrives
       failPending(TEMP, norm.commitments.channelId)
-      uiNotify
   }
 }

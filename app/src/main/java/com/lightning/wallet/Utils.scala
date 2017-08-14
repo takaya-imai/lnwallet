@@ -108,11 +108,11 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
     }
   }
 
-  lazy val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
+  val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
     def onPeerDisconnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
     def onPeerConnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
     def mkTxt = app.plurOrZero(peersInfoOpts, app.kit.peerGroup.numConnectedPeers)
-    val peersInfoOpts = getResources getStringArray R.array.info_peers
+    lazy val peersInfoOpts = getResources getStringArray R.array.info_peers
   }
 
   val txTracker = new TxTracker {

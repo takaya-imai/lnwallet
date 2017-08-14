@@ -12,10 +12,10 @@ import com.lightning.wallet.ln.MSat.satFactor
 
 
 object Helpers { me =>
-  private val toUpdateFulfillHtlc = UpdateFulfillHtlc(BinaryData.empty, 0L, _)
+  val toMessage = UpdateFulfillHtlc(BinaryData.empty, 0L, _: BinaryData)
   def extractPreimages(tx: Transaction) = tx.txIn.map(_.witness.stack) collect {
-    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => toUpdateFulfillHtlc(script.slice(109, 109 + 20): BinaryData)
-    case Seq(_, BinaryData.empty, script) => toUpdateFulfillHtlc(script.slice(69, 69 + 20): BinaryData) // claim-htlc-timeout
+    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => toMessage(script.slice(109, 109 + 20): BinaryData) // claim-htlc
+    case Seq(_, BinaryData.empty, script) => toMessage(script.slice(69, 69 + 20): BinaryData) // claim-htlc-timeout
   }
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,

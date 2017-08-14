@@ -2,6 +2,7 @@ package com.lightning.wallet.lncloud
 
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Channel._
+import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import rx.lang.scala.{Observable => Obs}
@@ -40,11 +41,15 @@ object LocalBroadcaster extends Broadcaster { me =>
   }
 
   override def onProcess = {
-    case (_, close: ClosingData, _) =>
+    case (_, close: ClosingData, _: Command) =>
       val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ extractTxs(close)
-      val canRemove = close.startedAt + 1000 * 3600 * 24 * 14 < System.currentTimeMillis
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
-      if (canRemove) ChannelWrap remove close.commitments.channelId
+
+      val limit = 1000 * 3600 * 24 * 7 * 2
+      if (close.startedAt + limit < System.currentTimeMillis) {
+        LNParams.bag.failPending(WAITING, close.commitments.channelId)
+        ChannelWrap remove close.commitments.channelId
+      }
   }
 
   override def onError = {

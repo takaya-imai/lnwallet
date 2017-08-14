@@ -290,7 +290,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         else me UPDATE norm.copy(remoteShutdown = Some apply remote)
 
 
-      case (norm: NormalData, CMDHeight(height), NORMAL | SYNC)
+      case (norm: NormalData, CMDBestHeight(height), NORMAL | SYNC)
         // GUARD: we have to always watch for expired HTLCs and close a chan if they exist
         if Commitments.pendingHtlcs(norm.commitments).exists(_.add.expiry <= height) =>
         startLocalCurrentClose(norm)

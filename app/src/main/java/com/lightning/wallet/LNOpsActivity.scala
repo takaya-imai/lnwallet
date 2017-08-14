@@ -62,7 +62,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
     val chanOpsListener = new ChannelListener {
       def reloadOnBecome: Unit = onBecome(chan, chan.data, null, chan.state)
-      override def onProcess = { case (_, _, _: CMDHeight) => reloadOnBecome }
+      override def onProcess = { case (_, _, _: CMDBestHeight) => reloadOnBecome }
       override def onError = { case _ => chan process CMDShutdown }
 
       override def onBecome = {

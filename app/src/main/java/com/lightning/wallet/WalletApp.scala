@@ -97,10 +97,20 @@ class WalletApp extends Application { me =>
     def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
     def reconnect(cs: ChannelVec) = cs.map(_.data.announce) foreach ConnectionManager.requestConnection
 
-    val chainEventsListener = new TxTracker with NewBestBlockListener {
-      override def notifyNewBestBlock(b: StoredBlock) = for (chan <- all) chan process CMDHeight(b.getHeight)
-      override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
+    val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
+      override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
+      def tellHeight = for (chan <- all) chan process CMDBestHeight(LNParams.broadcaster.currentHeight)
+      def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) connect.run
+      override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) connect.run
+
+      private var connect: Runnable = anyToRunnable {
+        ConnectionManager.listeners += socketEventsListener
+        ConnectionManager.listeners += reconnectListener
+        connect = anyToRunnable(tellHeight)
+        reconnect(alive)
+        tellHeight
+      }
     }
 
     val socketEventsListener = new ConnectionListener {
@@ -144,38 +154,27 @@ class WalletApp extends Application { me =>
       if (peerGroup.isRunning) peerGroup.stop
     }
 
-    def setupAndStartDownload =
-      self startDownload new BlocksListener { catchListener =>
-        blockChain addNewBestBlockListener ChannelManager.chainEventsListener
-        wallet addTransactionConfidenceEventListener ChannelManager.chainEventsListener
-        wallet addCoinsSentEventListener ChannelManager.chainEventsListener
-        wallet addTransactionConfidenceEventListener Vibr.generalTracker
-        wallet addCoinsReceivedEventListener Vibr.generalTracker
-        wallet addCoinsSentEventListener Vibr.generalTracker
+    def setupAndStartDownload = {
+      wallet addTransactionConfidenceEventListener ChannelManager.chainEventsListener
+      wallet addCoinsSentEventListener ChannelManager.chainEventsListener
+      wallet addTransactionConfidenceEventListener Vibr.generalTracker
+      wallet addCoinsReceivedEventListener Vibr.generalTracker
+      wallet addCoinsSentEventListener Vibr.generalTracker
 
-        wallet setAcceptRiskyTransactions true
-        wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
-        //      peerGroup addPeerDiscovery new DnsDiscovery(params)
+      val address = InetAddresses forString LNParams.cloud.url
+      peerGroup addAddress new PeerAddress(app.params, address, 8333)
+      //peerGroup addPeerDiscovery new DnsDiscovery(params)
+      peerGroup.setUserAgent(appName, "0.01")
+      peerGroup setDownloadTxDependencies 0
+      peerGroup setPingIntervalMsec 10000
+      peerGroup setMaxConnections 6
+      peerGroup addWallet wallet
 
-        val address = InetAddresses forString LNParams.cloud.url
-        peerGroup addAddress new PeerAddress(app.params, address, 8333)
-        peerGroup.setUserAgent(appName, "0.01")
-        peerGroup setDownloadTxDependencies 0
-        peerGroup setPingIntervalMsec 10000
-        peerGroup setMaxConnections 6
-        peerGroup addWallet wallet
-
-        def checkIfReady(left: Int) = if (left < blocksPerDay) {
-          ConnectionManager.listeners += ChannelManager.socketEventsListener
-          ConnectionManager.listeners += ChannelManager.reconnectListener
-          peerGroup removeBlocksDownloadedEventListener catchListener
-          ChannelManager reconnect ChannelManager.alive
-        }
-
-        def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = checkIfReady(left)
-        override def onChainDownloadStarted(peer: Peer, left: Int) = checkIfReady(left)
-        RatesSaver.process
-      }
+      wallet setAcceptRiskyTransactions true
+      wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
+      startDownload(ChannelManager.chainEventsListener)
+      RatesSaver.process
+    }
   }
 }
 
