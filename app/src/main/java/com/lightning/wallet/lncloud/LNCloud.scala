@@ -81,8 +81,8 @@ extends StateMachine[PublicData] with Pathfinder { me =>
     // Payment may be finished already so we ask the bag
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
       bag.getPaymentInfo(invoice.paymentHash) getOrElse null match {
-        case OutgoingPayment(_, _, _, _, SUCCESS) => me resolveSuccess memo
-        case OutgoingPayment(_, _, _, _, FAILURE) | null => resetPayment
+        case out: OutgoingPayment if out.preimage != NOIMAGE => me resolveSuccess memo
+        case OutgoingPayment(_, NOIMAGE, _, _, FAILURE) | null => resetPayment
         case _ => me stayWith data
       }
 

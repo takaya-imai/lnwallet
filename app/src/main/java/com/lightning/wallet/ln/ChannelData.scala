@@ -65,7 +65,10 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis, kind: String = "ClosingData") extends HasCommitments
+                       startedAt: Long = System.currentTimeMillis, kind: String = "ClosingData") extends HasCommitments {
+
+  def isOutdated: Boolean = startedAt + 1000 * 3600 * 24 * 7 * 2 < System.currentTimeMillis
+}
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
 case class LocalCommitPublished(claimMainDelayedOutputTx: Seq[Transaction], htlcSuccessTxs: Seq[Transaction],

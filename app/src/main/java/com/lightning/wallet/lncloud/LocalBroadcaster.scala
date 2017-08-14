@@ -42,14 +42,9 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) =>
+      // Each time we get a command we send out commitment spending txs
       val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ extractTxs(close)
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, _.printStackTrace)
-
-      val limit = 1000 * 3600 * 24 * 7 * 2
-      if (close.startedAt + limit < System.currentTimeMillis) {
-        LNParams.bag.failPending(WAITING, close.commitments.channelId)
-        ChannelWrap remove close.commitments.channelId
-      }
   }
 
   override def onError = {

@@ -7,12 +7,13 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.ln.LNParams.db
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.BinaryData
 import net.sqlcipher.Cursor
+import rx.lang.scala.Observable
+
 import scala.util.Try
 
 
@@ -28,17 +29,23 @@ object StorageWrap {
   }
 }
 
-object ChannelWrap {
-  import com.lightning.wallet.lncloud.ChannelTable._
-  def remove(channelId: BinaryData) = db.change(killSql, channelId.toString)
-  def get = RichCursor(db select selectAllSql).vec(_ string data) map to[HasCommitments]
-
+object ChannelWrap extends ChannelListener {
   def put(data: HasCommitments): Unit = db txWrap {
     val chanIdString = data.commitments.channelId.toString
     val content = data.toJson.toString
 
-    db.change(newSql, params = chanIdString, content)
-    db.change(updSql, params = content, chanIdString)
+    db.change(ChannelTable.newSql, params = chanIdString, content)
+    db.change(ChannelTable.updSql, params = content, chanIdString)
+  }
+
+  def get: Vector[HasCommitments] =
+    RichCursor(db select ChannelTable.selectAllSql)
+      .vec(_ string ChannelTable.data) map to[HasCommitments]
+
+  override def onProcess = {
+    case (_, close: ClosingData, _: Command) if close.isOutdated =>
+      // This channel is outdated, remove it so we don't have it on next launch
+      db.change(ChannelTable.killSql, close.commitments.channelId.toString)
   }
 }
 
@@ -117,6 +124,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
       uiNotify
     }
+
+    case (_, close: ClosingData, _: Command) if close.isOutdated =>
+      // This channel is outdated, fail all unfinished HTLCs
+      failPending(WAITING, close.commitments.channelId)
   }
 
   override def onError = {
