@@ -317,7 +317,7 @@ with ListUpdater { me =>
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
       case _ if spendManager.getAddress == null => app toast dialog_address_wrong
-      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
+      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_small
 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {

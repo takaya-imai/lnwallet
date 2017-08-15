@@ -60,8 +60,8 @@
     <string name="dialog_address_absent">No valid address found in clipboard</string>
     <string name="dialog_address_wrong">Bitcoin address is required</string>
     <string name="dialog_sum_empty">Please provide an amount</string>
-    <string name="dialog_sum_dusty">Amount is too small</string>
-    <string name="dialog_capacity">Amount is too large</string>
+    <string name="dialog_sum_small">Amount is too small</string>
+    <string name="dialog_sum_big">Amount is too large</string>
 
     <!-- notifications -->
     <string name="tx_announce">Announcing transaction&#8230;</string>

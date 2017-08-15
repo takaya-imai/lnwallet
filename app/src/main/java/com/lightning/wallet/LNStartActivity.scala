@@ -179,8 +179,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
-      case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_capacity
-      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_dusty
+      case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_sum_big
+      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_small
 
       case Success(ms) => rm(alert) {
         val amountSat = ms.amount / satFactor

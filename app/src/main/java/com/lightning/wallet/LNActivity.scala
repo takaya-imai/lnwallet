@@ -142,7 +142,7 @@ with ListUpdater with SearchBar { me =>
 
       val image = info match {
         case IncomingPayment(_, _, _, _, SUCCESS) => conf1
-        case IncomingPayment(_, _, _, _, WAITING) => await
+        case IncomingPayment(_, _, _, _, HIDDEN | WAITING) => await
         case OutgoingPayment(_, NOIMAGE, _, _, _, TEMP | WAITING) => await
         case out: OutgoingPayment if out.preimage != NOIMAGE => conf1
         case _ => dead
@@ -308,8 +308,24 @@ with ListUpdater with SearchBar { me =>
 
   private def sendPayment(pr: PaymentRequest) = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-    println(pr)
+    val info = pr.description match { case Right(hash) => humanPubkey(hash.toString) case Left(text) => text }
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_send_title).format(info).html, content)
+
+    val (_, canSendMsat) = receiveSendStatus
+    val maxValue = MilliSatoshi apply math.min(canSendMsat, maxHtlcValue.amount)
+    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
+
+    def attempt = rateManager.result match {
+      case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
+      case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
+      case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
+      case Success(ms) if maxValue < ms => app toast dialog_sum_big
+      case Success(ms) =>
+      case _ => app toast dialog_sum_empty
+    }
+
+    val ok = alert getButton BUTTON_POSITIVE
+    ok setOnClickListener onButtonTap(attempt)
   }
 
   // Reactions to menu
@@ -348,8 +364,8 @@ with ListUpdater with SearchBar { me =>
     }
 
     def attempt = rateManager.result match {
-      case Success(ms) if ms.amount < htlcMinimumMsat => app toast dialog_sum_dusty
-      case Success(ms) if ms > maxValue => app toast dialog_capacity
+      case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
+      case Success(ms) if maxValue < ms => app toast dialog_sum_big
       case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
       case _ => rm(alert)(go apply None)
     }
