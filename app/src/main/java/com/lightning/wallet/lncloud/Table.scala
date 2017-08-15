@@ -40,11 +40,11 @@ object ChannelTable extends Table {
 object PaymentInfoTable extends Table {
   import com.lightning.wallet.ln.PaymentInfo._
 
-  val names = ("payments", "hash", "request", "status", "chanid", "preimage", "routing", "search")
-  val (table, hash, request, status, chanId, preimage, routing, search) = names
+  val names = ("payments", "hash", "request", "status", "chanid", "preimage", "routing", "paid", "search")
+  val (table, hash, request, status, chanId, preimage, routing, received, search) = names
 
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
-  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $routing) VALUES (?, ?, ?, ?, ?, ?)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $routing, $received) VALUES (?, ?, ?, ?, ?, ?, 0)"
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
@@ -52,12 +52,11 @@ object PaymentInfoTable extends Table {
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
+  def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?"
 
-  def failPendingSql = s"""
-    UPDATE $table SET $status = $FAILURE
-    WHERE $status = ? AND $chanId = ?"""
+  def failPendingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = ? AND $chanId = ?"
+  def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 
-  // Create tables
   def createSql = s"""
     CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,20 +65,17 @@ object PaymentInfoTable extends Table {
       $status INTEGER NOT NULL,
       $chanId STRING NOT NULL,
       $preimage STRING,
-      $routing STRING
+      $routing STRING,
+      $received INTEGER
     );
     CREATE INDEX idx1 ON $table ($status);
     CREATE INDEX idx2 ON $table ($hash);
     COMMIT"""
-
-  def createVirtualSql = s"""
-    CREATE VIRTUAL TABLE $fts$table
-    USING $fts($search, $hash)"""
 }
 
 trait Table { val (id, fts) = "_id" -> "fts4" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
+extends SQLiteOpenHelper(context, "lndata1.db", null, version) { me =>
 
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)

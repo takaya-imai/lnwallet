@@ -10,9 +10,8 @@ import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.ln.LNParams.db
 import com.lightning.wallet.Utils.app
-import fr.acinq.bitcoin.BinaryData
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import net.sqlcipher.Cursor
-import rx.lang.scala.Observable
 
 import scala.util.Try
 
@@ -53,6 +52,7 @@ object ChannelWrap extends ChannelListener {
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by a presence of routing info
   // Incoming payments have null instead of routing info in a database
+  // All payments initially have 0 received
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
@@ -60,10 +60,12 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def recentPayments: Cursor = db select selectRecentSql
 
   def toPaymentInfo(rc: RichCursor) = {
+    val actual = MilliSatoshi(rc long received)
     val pr = to[PaymentRequest](rc string request)
+
     Option(rc string routing) map to[RoutingData] match {
-      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, rc string chanId, rc long status)
-      case None => IncomingPayment(rc string preimage, pr, rc string chanId, rc long status)
+      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, actual, rc string chanId, rc long status)
+      case None => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
     }
   }
 
@@ -83,13 +85,13 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
     val searchKeys = s"${info.request.description} $hashString"
     db.change(newVirtualSql, searchKeys, hashString)
-    uiNotify
   }
 
   def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
   def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
+  def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
   def retry(channel: Channel, fail: UpdateFailHtlc, outgoingPayment: OutgoingPayment) =
@@ -100,14 +102,20 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onProcess = {
     case (_, _, retry: RetryAddHtlc) =>
-      // Update existing payment routing data
-      // Fee is not shown so no need for ui changes
+      // Update outgoing payment routing data
+      // Fee is not shown so no need for UI changes
       me updateRouting retry.out
 
     case (_, _, cmd: CMDAddHtlc) =>
       // Record new outgoing payment
       me putPaymentInfo cmd.out
       uiNotify
+
+    case (_, _, add: UpdateAddHtlc) =>
+      // Payment request may not contain an amount
+      // or an actual amount paid may differ so
+      // we need to record how much was paid
+      me updateReceived add
 
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away

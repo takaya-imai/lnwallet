@@ -24,7 +24,6 @@ import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.webkit.URLUtil
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
-import com.lightning.wallet.ln.LNParams.getPathfinder
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools.{none, random}
 import scala.concurrent.duration._
@@ -82,31 +81,41 @@ with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
-  lazy val paymentProvider = new PaymentsDataProvider
+  lazy val paymentsViewProvider = new PaymentsViewProvider
   lazy val lnTitle = me getString ln_title
   lazy val adapter = new LNAdapter
 
   private[this] var pathfinder: Pathfinder = _
+  // May change stop action throughout an activity lifecycle
+  private[this] var whenStop = anyToRunnable(super.onStop)
+  override def onStop = whenStop.run
 
   // Payment history and search results loader
   // Remembers last search term in case of reload
-  class PaymentsDataProvider extends ReactCallback(me) { self =>
-    def updatePaymentList(payments: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = payments)
-    def reload(txt: String) = runAnd(lastQuery = txt)(getSupportLoaderManager.restartLoader(1, null, self).forceLoad)
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
+  class PaymentsViewProvider extends ReactCallback(me) { self =>
+    def onCreateLoader(id: Int, bundle: Bundle) = if (lastQuery.isEmpty) recent else search
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
-    def onCreateLoader(id: Int, b: Bundle) = if (lastQuery.isEmpty) recent else search
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
     val observeTablePath = db sqlPath PaymentInfoTable.table
     private var lastQuery = new String
 
-    type InfoVec = Vector[PaymentInfo]
+    def reload(txt: String) = runAnd(lastQuery = txt) {
+      getSupportLoaderManager.restartLoader(1, null, self).forceLoad
+    }
+
     abstract class ExtendedPaymentInfoLoader extends ReactLoader[PaymentInfo](me) {
       val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
+      def updatePaymentList(ps: InfoVec) = wrap(adapter.updateView)(adapter.storedPayments = ps)
       def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
+      type InfoVec = Vector[PaymentInfo]
     }
   }
 
   class LNAdapter extends BaseAdapter {
+    var storedPayments = Vector.empty[PaymentInfo]
+    var ephemeralPayments = Set.empty[PaymentInfo]
+    var allPayments = Vector.empty[PaymentInfo]
+
     def getView(position: Int, cv: View, parent: ViewGroup) = {
       val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
       val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
@@ -114,32 +123,45 @@ with ListUpdater with SearchBar { me =>
       view
     }
 
-    var payments = Vector.empty[PaymentInfo]
-    def getItem(position: Int) = payments(position)
+    def updateView = wrap(notifyDataSetChanged) {
+      val ephemeralPaymentsVec = ephemeralPayments.toVector
+      allPayments = ephemeralPaymentsVec ++ storedPayments
+    }
+
+    def getItem(position: Int) = allPayments(position)
     def getItemId(position: Int) = position
-    def getCount = payments.size
+    def getCount = allPayments.size
   }
 
   class LNView(view: View) extends TxViewHolder(view) {
+    // Display payment details with respect to it's direction
+
     def fillView(info: PaymentInfo) = {
-//      val stamp = new Date(info.spec.request.timestamp * 1000)
-//      val time = when(System.currentTimeMillis, stamp)
-//
-//      val image = info.status match {
-//        case PaymentSpec.SUCCESS => conf1
-//        case PaymentSpec.FAILURE => dead
-//        case _ => await
-//      }
-//
-//      transactWhen setText time.html
-//      //transactSum setText paymentMarking.html
-//      transactCircle setImageResource image
+      val stamp = new Date(info.request.timestamp * 1000)
+      val time = when(System.currentTimeMillis, stamp)
+
+      val image = info match {
+        case IncomingPayment(_, _, _, _, SUCCESS) => conf1
+        case IncomingPayment(_, _, _, _, WAITING) => await
+        case OutgoingPayment(_, NOIMAGE, _, _, _, TEMP | WAITING) => await
+        case out: OutgoingPayment if out.preimage != NOIMAGE => conf1
+        case _ => dead
+      }
+
+      val paymentMarking = info match {
+        case in: IncomingPayment => sumIn format withSign(in.received)
+        case out: OutgoingPayment => sumOut format withSign(out.request.negMSat)
+      }
+
+      transactWhen setText time.html
+      transactSum setText paymentMarking.html
+      transactCircle setImageResource image
     }
   }
 
   // INTERFACE IMPLEMENTING METHODS
 
-  def react(query: String) = paymentProvider reload query
+  def react(query: String) = paymentsViewProvider reload query
   def notifySubTitle(subtitle: String, infoType: Int): Unit = {
     add(subtitle, infoType).timer.schedule(me del infoType, 25000)
     me runOnUiThread ui
@@ -151,11 +173,11 @@ with ListUpdater with SearchBar { me =>
     if (app.isAlive) {
       super.onCreate(savedState)
       wrap(initToolbar)(me setContentView R.layout.activity_ln)
-      add(me getString ln_notify_operational, Informer.LNSTATE).ui.run
+      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
 
       list setAdapter adapter
       list setFooterDividersEnabled false
-      paymentProvider reload new String
+      paymentsViewProvider reload new String
       me startListUpdates adapter
       me setDetecting true
 
@@ -166,16 +188,6 @@ with ListUpdater with SearchBar { me =>
       app.kit.peerGroup addBlocksDownloadedEventListener catchListener
     } else me exitTo classOf[MainActivity]
   }
-
-  override def onResume =
-    wrap(run = super.onResume) {
-      app.ChannelManager.alive.headOption match {
-        case Some(chan) => pathfinder = getPathfinder(chan)
-        case None => me goTo classOf[LNOpsActivity]
-      }
-
-      checkTransData
-    }
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
@@ -190,83 +202,20 @@ with ListUpdater with SearchBar { me =>
     true
   }
 
+  override def onResume =
+    wrap(run = super.onResume) {
+      app.ChannelManager.alive.headOption match {
+        case None => me exitTo classOf[LNOpsActivity]
+        case Some(chan) => manageActive(chan)
+      }
+    }
+
+  // APP MENU
+
   override def onOptionsItemSelected(m: MenuItem) = runAnd(true) {
     if (m.getItemId == R.id.actionSetBackupServer) new SetBackupServer
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
-
-  // DATA READING AND BUTTON ACTIONS
-
-  def checkTransData = app.TransData.value match {
-    case uri: BitcoinURI => me goTo classOf[BtcActivity]
-    case adr: Address => me goTo classOf[BtcActivity]
-    case pr: PaymentRequest => sendPayment(pr)
-
-    case unusable =>
-      app.TransData.value = null
-      Tools log s"Unusable $unusable"
-  }
-
-  private def sendPayment(pr: PaymentRequest) = {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-    println(pr)
-  }
-
-  // Reactions to menu
-  def goBitcoin(top: View) = {
-    me goTo classOf[LNOpsActivity]
-    fab close true
-  }
-
-  def goQR(top: View) = {
-    me goTo classOf[ScanActivity]
-    fab close true
-  }
-
-  // UI MENUS
-
-  def makePaymentRequest = {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
-    val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-
-    val (canReceiveMsat, _) = receiveSendStatus
-    val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
-    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
-    def onFail(error: Throwable): Unit = mkForm(me negBld dialog_ok, null, error.getMessage)
-
-    def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
-      val description: String = inputDescription.getText.toString.trim
-      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, None, 3600 * 24)
-      PaymentInfoWrap putPaymentInfo IncomingPayment(preimage, paymentRequest, pathfinder.channel.id.get, HIDDEN)
-      app.TransData.value = paymentRequest
-      me goTo classOf[RequestActivity]
-    }
-
-    val go: Option[MilliSatoshi] => Unit = sumOption => {
-      add(me getString tx_pr_make, Informer.LNREQUEST).ui.run
-      <(proceed(sumOption, bag.newPreimage), onFail)(none)
-      timer.schedule(me del Informer.LNREQUEST, 2500)
-    }
-
-    def attempt = rateManager.result match {
-      case Success(ms) if ms.amount < htlcMinimumMsat => app toast dialog_sum_dusty
-      case Success(ms) if ms > maxValue => app toast dialog_capacity
-      case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
-      case _ => rm(alert)(go apply None)
-    }
-
-    val ok = alert getButton BUTTON_POSITIVE
-    ok setOnClickListener onButtonTap(attempt)
-  }
-
-  def goReceive(top: View) = {
-    me delayUI makePaymentRequest
-    fab close true
-  }
-
-  // USER CAN SET THEIR OWN PATHFINDER
 
   class SetBackupServer { self =>
     val (view, field) = str2Tuple(cloudPrivateKey.publicKey.toString)
@@ -310,6 +259,111 @@ with ListUpdater with SearchBar { me =>
   def closeChannel = checkPass(me getString ln_close) { pass =>
     for (chan <- app.ChannelManager.alive) chan async CMDShutdown
   }
+
+  // WHEN ACTIVE CHAN IS PRESENT
+
+  def manageActive(chan: Channel) = {
+    val chanListener = new ChannelListener {
+      // Updates UI accordingly to changes in channel
+
+      override def onBecome = {
+        case (_, norm: NormalData, _, _) if norm.isClosing => me exitTo classOf[LNOpsActivity]
+        case (_, funding: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
+        case (_, neg: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]
+        case (_, close: ClosingData, _, _) => me exitTo classOf[LNOpsActivity]
+      }
+
+      override def onError = {
+        case error: Throwable =>
+          // Starts cooperative close
+          chan process CMDShutdown
+      }
+    }
+
+    whenStop = anyToRunnable {
+      chan.listeners -= chanListener
+      super.onStop
+    }
+
+    chan.listeners += chanListener
+    pathfinder = getPathfinder(chan)
+    chanListener reloadOnBecome chan
+    checkTransData
+  }
+
+  // DATA READING AND BUTTON ACTIONS
+
+  def checkTransData = app.TransData.value match {
+    case uri: BitcoinURI => me goTo classOf[BtcActivity]
+    case adr: Address => me goTo classOf[BtcActivity]
+
+    case pr: PaymentRequest =>
+      app.TransData.value = null
+      sendPayment(pr)
+
+    case unusable =>
+      app.TransData.value = null
+      Tools log s"Unusable $unusable"
+  }
+
+  private def sendPayment(pr: PaymentRequest) = {
+    val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
+    println(pr)
+  }
+
+  // Reactions to menu
+  def goBitcoin(top: View) = {
+    me goTo classOf[BtcActivity]
+    fab close true
+  }
+
+  def goQR(top: View) = {
+    me goTo classOf[ScanActivity]
+    fab close true
+  }
+
+  def makePaymentRequest = {
+    val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
+    val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
+    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
+
+    val (canReceiveMsat, _) = receiveSendStatus
+    val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
+    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
+    def onFail(error: Throwable): Unit = mkForm(me negBld dialog_ok, null, error.getMessage)
+
+    def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
+      val description: String = inputDescription.getText.toString.trim
+      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, None, 3600 * 24)
+      PaymentInfoWrap putPaymentInfo IncomingPayment(preimage, paymentRequest, MilliSatoshi(0), pathfinder.channel.id.get, HIDDEN)
+      app.TransData.value = paymentRequest
+      me goTo classOf[RequestActivity]
+    }
+
+    val go: Option[MilliSatoshi] => Unit = sumOption => {
+      add(me getString tx_pr_make, Informer.LNREQUEST).ui.run
+      <(proceed(sumOption, bag.newPreimage), onFail)(none)
+      timer.schedule(me del Informer.LNREQUEST, 2500)
+    }
+
+    def attempt = rateManager.result match {
+      case Success(ms) if ms.amount < htlcMinimumMsat => app toast dialog_sum_dusty
+      case Success(ms) if ms > maxValue => app toast dialog_capacity
+      case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
+      case _ => rm(alert)(go apply None)
+    }
+
+    val ok = alert getButton BUTTON_POSITIVE
+    ok setOnClickListener onButtonTap(attempt)
+  }
+
+  def goReceive(top: View) = {
+    me delayUI makePaymentRequest
+    fab close true
+  }
+
+  // MISC
 
   private def receiveSendStatus: (Long, Long) =
     Some(pathfinder.channel.data) collect { case norm: NormalData =>

@@ -4,7 +4,7 @@ import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.lncloud._
-import fr.acinq.bitcoin.{BinaryData, Crypto}
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PrivateKey
 
 import scala.util.Try
@@ -28,9 +28,10 @@ class LNCloudSpec {
     def updateRouting(out: OutgoingPayment): Unit = ???
     def updateStatus(status: Long, hash: BinaryData): Unit = ???
     def updatePreimage(update: UpdateFulfillHtlc): Unit = ???
+    def updateReceived(add: UpdateAddHtlc): Unit = ???
 
     def getPaymentInfo(hash: BinaryData): Try[PaymentInfo] = Try {
-      OutgoingPayment(null, preimage, null, null, PaymentInfo.SUCCESS)
+      OutgoingPayment(null, preimage, null, MilliSatoshi(0), null, PaymentInfo.SUCCESS)
     }
 
     def putPaymentInfo(info: PaymentInfo): Unit = ???

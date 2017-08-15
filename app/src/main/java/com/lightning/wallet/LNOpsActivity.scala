@@ -61,25 +61,22 @@ class LNOpsActivity extends TimerActivity { me =>
         dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
     val chanOpsListener = new ChannelListener {
-      def reloadOnBecome: Unit = onBecome(chan, chan.data, null, chan.state)
-      override def onProcess = { case (_, _, _: CMDBestHeight) => reloadOnBecome }
-      override def onError = { case _ => chan process CMDShutdown }
+      // Updates UI accordingly to changes in channel
 
       override def onBecome = {
         // A new channel has been created with funding transaction broadcasted
         case (_, WaitFundingDoneData(_, _, _, tx, commitments, _), _, _) =>
           me runOnUiThread manageOpening(commitments, tx)
 
-        // Both sides have sent a funding locked
-        case (_, norm: NormalData, _, NORMAL) =>
-          me exitTo classOf[LNActivity]
-
         // Mutual shutdown initiated
-        case (_, norm: NormalData, _, _)
-          if norm.localShutdown.isDefined || norm.remoteShutdown.isDefined =>
+        case (_, norm: NormalData, _, _) if norm.isClosing =>
           me runOnUiThread manageNegotiations(norm.commitments)
 
-        // Closing tx fee negotiations
+        // Normal is managed by main activity
+        case (_, norm: NormalData, _, _) =>
+          me exitTo classOf[LNActivity]
+
+        // Closing tx fee negotiations started
         case (_, negs: NegotiationsData, _, _) =>
           me runOnUiThread manageNegotiations(negs.commitments)
 
@@ -96,6 +93,18 @@ class LNOpsActivity extends TimerActivity { me =>
           if localTxs.nonEmpty || remoteTxs.nonEmpty || remoteNextTxs.nonEmpty || revokedTxs.nonEmpty =>
           me runOnUiThread manageForcedClosing(close)
       }
+
+      override def onProcess = {
+        case (_, _, _: CMDBestHeight) =>
+          // Need to update UI on each block
+          reloadOnBecome(chan)
+      }
+
+      override def onError = {
+        case error: Throwable =>
+          // Starts uncooperative close
+          chan process CMDShutdown
+      }
     }
 
     whenDestroy = anyToRunnable {
@@ -104,7 +113,7 @@ class LNOpsActivity extends TimerActivity { me =>
     }
 
     chan.listeners += chanOpsListener
-    chanOpsListener.reloadOnBecome
+    chanOpsListener reloadOnBecome chan
   }
 
   // UI which does not need a channel access

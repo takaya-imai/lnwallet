@@ -113,7 +113,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     chan.listeners += new ChannelListener { chanOpenListener =>
-      override def onError = { case _ => chan process CMDShutdown }
+      // Updates UI accordingly to internal changes in channel
 
       override def onBecome = {
         case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
@@ -132,6 +132,12 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           ConnectionManager.listeners -= socketOpenListener
           chan.listeners -= chanOpenListener
           me exitTo classOf[LNOpsActivity]
+      }
+
+      override def onError = {
+        case error: Throwable =>
+          // Aborts channel, updates UI
+          chan process CMDShutdown
       }
     }
 

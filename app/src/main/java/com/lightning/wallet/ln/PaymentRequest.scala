@@ -37,6 +37,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
   // Incoming payment request may not initially have an amount
   // but at some point some amount should be added
   def msat: Long = amount.get.amount
+  def negMSat = MilliSatoshi(-msat)
 
   def description: Either[String, BinaryData] = tags.collectFirst {
     case DescriptionHashTag(descriptionHash) => Right(descriptionHash)

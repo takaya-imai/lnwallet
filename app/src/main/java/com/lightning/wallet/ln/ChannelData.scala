@@ -57,7 +57,10 @@ case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLo
                                fundingTx: Transaction, commitments: Commitments, kind: String = "WaitFundingDoneData") extends HasCommitments
 
 case class NormalData(announce: NodeAnnouncement, commitments: Commitments, localShutdown: Option[Shutdown],
-                      remoteShutdown: Option[Shutdown] = None, kind: String = "NormalData") extends HasCommitments
+                      remoteShutdown: Option[Shutdown] = None, kind: String = "NormalData") extends HasCommitments {
+
+  def isClosing = localShutdown.isDefined || remoteShutdown.isDefined
+}
 
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown, kind: String = "NegotiationsData") extends HasCommitments

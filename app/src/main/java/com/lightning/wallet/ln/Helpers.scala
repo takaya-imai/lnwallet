@@ -134,7 +134,7 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- localTxs
-        IncomingPayment(preimage, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
+        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
         success <- Scripts checkSpendable Scripts.addSigs(info, localSig, remoteSig, preimage)
         successDelayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(success)
       } yield success -> successDelayedClaim
@@ -178,7 +178,7 @@ object Helpers { me =>
 
       val claimSuccessTxs = for {
         Htlc(false, add) <- remoteCommit.spec.htlcs
-        IncomingPayment(preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
+        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
         claimSuccess <- Scripts checkSpendable signedSuccess(add, preimage)
       } yield claimSuccess
 

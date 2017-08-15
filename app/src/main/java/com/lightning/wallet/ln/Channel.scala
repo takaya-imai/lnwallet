@@ -4,10 +4,9 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
-
-import fr.acinq.bitcoin.{Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
+import fr.acinq.bitcoin.{MilliSatoshi, Satoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import concurrent.ExecutionContext.Implicits.global
@@ -43,7 +42,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       val (payloads, firstAmount, firstExpiry) = buildRoute(Tuple3(Vector.empty, request.msat, LNParams.expiry), route)
       val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
       val routing = RoutingData(restOfReservedRoutes, onion, firstAmount, firstExpiry)
-      OutgoingPayment(routing, NOIMAGE, request, chanId, TEMP)
+      OutgoingPayment(routing, NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
     }
 
   def doProcess(change: Any) = {
@@ -532,6 +531,11 @@ object Channel {
 }
 
 trait ChannelListener {
+  def reloadOnBecome(chan: Channel): Unit = {
+    val trans = Tuple4(chan, chan.data, null, chan.state)
+    if (onBecome isDefinedAt trans) onBecome(trans)
+  }
+
   type Incoming = (Channel, ChannelData, Any)
   type Transition = (Channel, ChannelData, String, String)
   def onBecome: PartialFunction[Transition, Unit] = none

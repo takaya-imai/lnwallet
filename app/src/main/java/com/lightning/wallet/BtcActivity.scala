@@ -100,7 +100,7 @@ with ListUpdater { me =>
   lazy val feeDetails = getString(txs_fee_details)
   lazy val feeAbsent = getString(txs_fee_absent)
   lazy val walletEmpty = getString(wallet_empty)
-  lazy val btcTitle = getString(txs_title)
+  lazy val btcTitle = getString(btc_title)
   lazy val adapter = new BtcAdapter
 
   private[this] val txsTracker = new TxTracker {
@@ -178,12 +178,13 @@ with ListUpdater { me =>
           me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
+        val stamp = time(wrap.tx.getUpdateTime).html
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
         val humanFee = if (wrap.nativeValue.isPositive) feeIncoming format confirms else wrap.fee match {
           case Some(fee) => feeDetails.format(withSign(fee), confirms) case None => feeAbsent format confirms
         }
 
-        mkForm(me negBld dialog_ok, time(wrap.tx.getUpdateTime).html, lst)
+        mkForm(me negBld dialog_ok, stamp, lst)
         confNumber setText humanFee.html
       }
 
@@ -212,9 +213,6 @@ with ListUpdater { me =>
     } else me exitTo classOf[MainActivity]
   }
 
-  override def onResume =
-    wrap(super.onResume)(checkTransData)
-
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeTransactionConfidenceEventListener txsTracker
     app.kit.wallet removeCoinsReceivedEventListener txsTracker
@@ -238,6 +236,9 @@ with ListUpdater { me =>
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
+  override def onResume: Unit =
+    wrap(super.onResume)(checkTransData)
+
   // DATA READING AND BUTTON ACTIONS
 
   def checkTransData =
@@ -246,17 +247,17 @@ with ListUpdater { me =>
         me goTo classOf[LNActivity]
 
       case uri: BitcoinURI =>
+        app.TransData.value = null
         val tryAmount: TryMSat = Try(uri.getAmount)
         sendBtcTxPopup.set(tryAmount, uri.getAddress)
-        app.TransData.value = null
 
       case adr: Address =>
-        sendBtcTxPopup setAddress adr
         app.TransData.value = null
+        sendBtcTxPopup setAddress adr
 
       case unusable =>
-        println(s"Unusable $unusable")
         app.TransData.value = null
+        println(s"Unusable $unusable")
     }
 
   // Buy bitcoins

@@ -4,28 +4,29 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import scala.util.{Success, Try}
-
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
 import com.lightning.wallet.ln.Tools.random
-import fr.acinq.bitcoin.BinaryData
 import scodec.bits.BitVector
 import scodec.Attempt
+
+import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import scala.util.{Success, Try}
 
 
 trait PaymentInfo {
   val preimage: BinaryData
   val request: PaymentRequest
+  val received: MilliSatoshi
   val chanId: BinaryData
   val status: Long
 }
 
-case class IncomingPayment(preimage: BinaryData, request: PaymentRequest,
+case class IncomingPayment(preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
                            chanId: BinaryData, status: Long) extends PaymentInfo
 
 case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
-case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest,
+case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
                            chanId: BinaryData, status: Long) extends PaymentInfo
 
 trait PaymentInfoBag {
@@ -33,6 +34,7 @@ trait PaymentInfoBag {
   def updateStatus(status: Long, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
   def updateRouting(out: OutgoingPayment): Unit
+  def updateReceived(add: UpdateAddHtlc): Unit
 
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
