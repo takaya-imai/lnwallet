@@ -317,20 +317,26 @@ with ListUpdater with SearchBar { me =>
     val rateManager = new RateManager(hint, content)
 
     def attempt = rateManager.result match {
+      case Failure(_) => app toast dialog_sum_empty
       case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
       case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
       case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
       case Success(ms) if maxValue < ms => app toast dialog_sum_big
-      case Failure(_) => app toast dialog_sum_empty
 
       case Success(ms) =>
         timer.schedule(me del Informer.LNPAYMENT, 5000)
         add(me getString ln_send, Informer.LNPAYMENT).ui.run
 
         pathfinder.outPaymentObs(pr).foreach(_ match {
-          case Some(out) => pathfinder.channel async PlainAddHtlc(out)
+          case Some(out) => pathfinder.channel process PlainAddHtlc(out)
           case None => me onFail new Exception(me getString err_general)
-        }, onFail)
+        }, onFailDetailed)
+    }
+
+    def onFailDetailed(e: Throwable) = e.getMessage match {
+      case "fromblacklisted" => me onFail new Exception(me getString err_ln_black)
+      case "noroutefound" => me onFail new Exception(me getString err_ln_route)
+      case _ => me onFail new Exception(me getString err_general)
     }
 
     val ok = alert getButton BUTTON_POSITIVE
