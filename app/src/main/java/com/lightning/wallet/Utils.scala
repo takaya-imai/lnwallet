@@ -122,8 +122,8 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
   }
 
   // Settings and helper functions
-  def tellGenError = wrap(app toast err_general)(mkSetsForm)
-  def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
+  def tellGenError: Unit = wrap(app toast err_general)(mkSetsForm)
+  def tellWrongPass: Unit = wrap(app toast password_wrong)(mkSetsForm)
 
   def initToolbar = setSupportActionBar {
     findViewById(R.id.toolbar).asInstanceOf[Toolbar]
@@ -314,7 +314,8 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 225)
-  def rm(prev: Dialog)(fun: => Unit): Unit = wrap(prev.dismiss)(me delayUI fun)
+  def rm(previous: Dialog)(fun: => Unit): Unit = wrap(previous.dismiss)(me delayUI fun)
+  def onFail(e: Throwable) = me runOnUiThread mkForm(me negBld dialog_ok, null, e.getMessage).show
 
   def mkForm(builder: Builder, title: View, content: View) =
     showForm(builder.setCustomTitle(title).setView(content).create)

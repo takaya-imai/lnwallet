@@ -313,15 +313,24 @@ with ListUpdater with SearchBar { me =>
 
     val (_, canSendMsat) = receiveSendStatus
     val maxValue = MilliSatoshi apply math.min(canSendMsat, maxHtlcValue.amount)
-    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
+    val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
+    val rateManager = new RateManager(hint, content)
 
     def attempt = rateManager.result match {
       case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
       case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
       case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
       case Success(ms) if maxValue < ms => app toast dialog_sum_big
+      case Failure(_) => app toast dialog_sum_empty
+
       case Success(ms) =>
-      case _ => app toast dialog_sum_empty
+        timer.schedule(me del Informer.LNPAYMENT, 5000)
+        add(me getString ln_send, Informer.LNPAYMENT).ui.run
+
+        pathfinder.outPaymentObs(pr).foreach(_ match {
+          case Some(out) => pathfinder.channel async PlainAddHtlc(out)
+          case None => me onFail new Exception(me getString err_general)
+        }, onFail)
     }
 
     val ok = alert getButton BUTTON_POSITIVE
@@ -346,13 +355,17 @@ with ListUpdater with SearchBar { me =>
 
     val (canReceiveMsat, _) = receiveSendStatus
     val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
-    val rateManager = new RateManager(getString(satoshi_hint_max_amount) format withSign(maxValue), content)
-    def onFail(error: Throwable): Unit = mkForm(me negBld dialog_ok, null, error.getMessage)
+    val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
+    val rateManager = new RateManager(hint, content)
 
     def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
-      val description: String = inputDescription.getText.toString.trim
-      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage), nodePrivateKey, description, None, 3600 * 24)
-      PaymentInfoWrap putPaymentInfo IncomingPayment(preimage, paymentRequest, MilliSatoshi(0), pathfinder.channel.id.get, HIDDEN)
+      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage),
+        nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 24)
+
+      val incoming = IncomingPayment(preimage, paymentRequest,
+        MilliSatoshi(0), pathfinder.channel.id.get, HIDDEN)
+
+      PaymentInfoWrap putPaymentInfo incoming
       app.TransData.value = paymentRequest
       me goTo classOf[RequestActivity]
     }

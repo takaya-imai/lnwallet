@@ -14,9 +14,10 @@ public class Informer {
 
     // Temporary LN infos
     public static final int LNREQUEST = 7;
+    public static final int LNPAYMENT = 8;
 
     // Special emergency state
-    public static final int EMERGENCY = 8;
+    public static final int EMERGENCY = 9;
 
     public int tag;
     public String value;

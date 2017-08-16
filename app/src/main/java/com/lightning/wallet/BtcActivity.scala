@@ -289,8 +289,6 @@ with ListUpdater { me =>
   }
 
   // Reactions to menu buttons
-  def onFail(e: Throwable): Unit = mkForm(me negBld dialog_ok, null, e.getMessage)
-  def viewMnemonic(top: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
 
   def goQR(top: View) = {
     me goTo classOf[ScanActivity]
@@ -347,10 +345,9 @@ with ListUpdater { me =>
     fab close true
   }
 
-  private def nativeTransactions =
-    // nativeValue equaling zero means it's a purely watched tx
-    app.kit.wallet.getTransactionsByTime.asScala.take(maxLinesNum)
-      .map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
+  def viewMnemonic(top: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
+  private def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala
+    .take(maxLinesNum).map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 
   class BtcView(view: View) extends TxViewHolder(view) {
     // Display given Bitcoin transaction properties to user

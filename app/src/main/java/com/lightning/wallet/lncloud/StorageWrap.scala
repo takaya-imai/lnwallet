@@ -7,12 +7,11 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.ln.LNParams.db
 import com.lightning.wallet.Utils.app
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import net.sqlcipher.Cursor
-
 import scala.util.Try
 
 
@@ -61,10 +60,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   def toPaymentInfo(rc: RichCursor) = {
     val actual = MilliSatoshi(rc long received)
-    val request = to[PaymentRequest](rc string request)
+    val pr = to[PaymentRequest](rc string request)
     Option(rc string routing) map to[RoutingData] match {
-      case Some(rs) => OutgoingPayment(rs, rc string preimage, request, actual, rc string chanId, rc long status)
-      case None => IncomingPayment(rc string preimage, request, actual, rc string chanId, rc long status)
+      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, actual, rc string chanId, rc long status)
+      case None => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
     }
   }
 
@@ -77,10 +76,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
+  def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
-  def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
   def retry(channel: Channel, fail: UpdateFailHtlc, outgoingPayment: OutgoingPayment) =
@@ -112,13 +111,13 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       uiNotify
 
     case (chan, norm: NormalData, sig: CommitSig) => LNParams.db txWrap {
-      for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
-      for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
       for (htlc ~ fail <- norm.commitments.localCommit.spec.failed) getPaymentInfo(htlc.add.paymentHash) foreach {
         case outgoingPayment: OutgoingPayment if outgoingPayment.request.isFresh => retry(chan, fail, outgoingPayment)
         case _ => updateStatus(FAILURE, htlc.add.paymentHash)
       }
 
+      for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
+      for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
       uiNotify
     }
 

@@ -103,14 +103,14 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   }
 
   def showInfo(renderBitmap: Bitmap => Bitmap, data: String) = {
-    <(fun = QRGen.get(data, qrSize), fail)(renderBitmap andThen setView)
+    <(fun = QRGen.get(data, qrSize), onFail)(renderBitmap andThen setView)
     copyData setOnClickListener onButtonTap(app setBuffer data)
     app.TransData.value = NFCData(data)
   }
 
   def setView(displayedImage: Bitmap) = {
     reqShare setOnClickListener onButtonTap {
-      <(me saveImage displayedImage, fail) { file =>
+      <(me saveImage displayedImage, onFail) { file =>
         val share = new Intent setAction Intent.ACTION_SEND setType "image/png"
         me startActivity share.putExtra(Intent.EXTRA_STREAM, Uri fromFile file)
       }
@@ -195,7 +195,6 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   def onNdefPushCompleted = none
   def onNfcStateEnabled = none
 
-  def fail(e: Throwable): Unit = showForm(negBld(dialog_ok).setMessage(me getString err_general).create)
   def showTip(v: View) = showForm(negBld(dialog_ok).setMessage(me getString nfc_payee_tip).create)
   def goSettings(v: View) = startNfcSharingSettingsActivity
 }
