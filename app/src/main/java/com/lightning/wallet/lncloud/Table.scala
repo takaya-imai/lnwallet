@@ -40,11 +40,11 @@ object ChannelTable extends Table {
 object PaymentInfoTable extends Table {
   import com.lightning.wallet.ln.PaymentInfo._
 
-  val names = ("payments", "hash", "request", "status", "chanid", "preimage", "routing", "paid", "search")
-  val (table, hash, request, status, chanId, preimage, routing, received, search) = names
+  val names = ("payments", "hash", "request", "status", "chanid", "preimage", "received", "routing", "search")
+  val (table, hash, request, status, chanId, preimage, received, routing, search) = names
 
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
-  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $routing, $received) VALUES (?, ?, ?, ?, ?, ?, 0)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $received, $routing) VALUES (?, ?, ?, ?, ?, ?, ?)"
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
@@ -65,8 +65,8 @@ object PaymentInfoTable extends Table {
       $status INTEGER NOT NULL,
       $chanId STRING NOT NULL,
       $preimage STRING,
-      $routing STRING,
-      $received INTEGER
+      $received INTEGER,
+      $routing STRING
     );
     CREATE INDEX idx1 ON $table ($status);
     CREATE INDEX idx2 ON $table ($hash);
@@ -75,7 +75,7 @@ object PaymentInfoTable extends Table {
 
 trait Table { val (id, fts) = "_id" -> "fts4" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata1.db", null, version) { me =>
+extends SQLiteOpenHelper(context, "lndata2.db", null, version) { me =>
 
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)

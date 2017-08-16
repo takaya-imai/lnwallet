@@ -358,7 +358,7 @@ with ListUpdater with SearchBar { me =>
     }
 
     val go: Option[MilliSatoshi] => Unit = sumOption => {
-      add(me getString tx_pr_make, Informer.LNREQUEST).ui.run
+      add(me getString ln_pr_make, Informer.LNREQUEST).ui.run
       <(proceed(sumOption, bag.newPreimage), onFail)(none)
       timer.schedule(me del Informer.LNREQUEST, 2500)
     }

@@ -52,7 +52,7 @@ object ChannelWrap extends ChannelListener {
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by a presence of routing info
   // Incoming payments have null instead of routing info in a database
-  // All payments initially have 0 received
+  // All payments initially have 0 msat received
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
@@ -61,30 +61,19 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   def toPaymentInfo(rc: RichCursor) = {
     val actual = MilliSatoshi(rc long received)
-    val pr = to[PaymentRequest](rc string request)
-
+    val request = to[PaymentRequest](rc string request)
     Option(rc string routing) map to[RoutingData] match {
-      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, actual, rc string chanId, rc long status)
-      case None => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
+      case Some(rs) => OutgoingPayment(rs, rc string preimage, request, actual, rc string chanId, rc long status)
+      case None => IncomingPayment(rc string preimage, request, actual, rc string chanId, rc long status)
     }
   }
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
-    val hashString = info.request.paymentHash.toString
-    val requestString = info.request.toJson.toString
-
-    info match {
-      case out: OutgoingPayment =>
-        db.change(newSql, hashString, requestString, info.status.toString,
-          info.chanId.toString, info.preimage.toString, out.routing.toJson.toString)
-
-      case in: IncomingPayment =>
-        db.change(newSql, hashString, requestString, info.status.toString,
-          info.chanId.toString, info.preimage.toString, null)
-    }
-
-    val searchKeys = s"${info.request.description} $hashString"
-    db.change(newVirtualSql, searchKeys, hashString)
+    val description = info.request.description match { case Right(sha) => sha.toString case Left(text) => text }
+    val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case in: IncomingPayment => null }
+    val asStrings = Vector(info.request.paymentHash, info.request, info.status, info.chanId, info.preimage, 0L).map(_.toString)
+    db.change(newVirtualSql, s"$description ${asStrings.head}", asStrings.head)
+    db.change(newSql, asStrings :+ routing:_*)
   }
 
   def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
@@ -136,6 +125,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case (_, close: ClosingData, _: Command) if close.isOutdated =>
       // This channel is outdated, fail all unfinished HTLCs
       failPending(WAITING, close.commitments.channelId)
+      uiNotify
   }
 
   override def onError = {
@@ -149,5 +139,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // At worst these will be marked as FAILURE and
       // then as WAITING once their CommitSig arrives
       failPending(TEMP, norm.commitments.channelId)
+      uiNotify
   }
 }
