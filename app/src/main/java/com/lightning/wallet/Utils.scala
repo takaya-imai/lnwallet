@@ -315,8 +315,11 @@ trait TimerActivity extends AppCompatActivity { me =>
 
   def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 225)
   def rm(previous: Dialog)(fun: => Unit): Unit = wrap(previous.dismiss)(me delayUI fun)
-  def onFail(error: Throwable) = me runOnUiThread mkForm(me negBld dialog_ok, null, error.getMessage).show
-  def mkForm(builder: Builder, title: View, content: View) = showForm(builder.setCustomTitle(title).setView(content).create)
+  def onFail(error: String): Unit = me runOnUiThread mkForm(me negBld dialog_ok, null, error).show
+  def onFail(error: Throwable): Unit = onFail(error.getMessage)
+
+  def mkForm(builder: Builder, title: View, content: View) =
+    showForm(builder.setCustomTitle(title).setView(content).create)
 
   def showForm(alertDialog: AlertDialog) = {
     alertDialog setCanceledOnTouchOutside false

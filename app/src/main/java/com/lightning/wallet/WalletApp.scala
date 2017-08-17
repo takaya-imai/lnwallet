@@ -92,6 +92,8 @@ class WalletApp extends Application { me =>
 
   object ChannelManager {
     type ChannelVec = Vector[Channel]
+    type OutPaymentOption = Option[OutgoingPayment]
+
     var all = ChannelWrap.get map createChannel
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
@@ -131,6 +133,16 @@ class WalletApp extends Application { me =>
       def STORE(content: HasCommitments): HasCommitments = runAnd(result = content)(action = ChannelWrap put content)
       listeners ++= Set(LNParams.broadcaster, LNParams.bag, ChannelWrap)
       process(bootstrap)
+    }
+
+    // Finding routes if channel is in correct state
+
+    def outPayment(request: PaymentRequest): Obs[OutPaymentOption] =
+      if (alive.isEmpty) Obs just None else outPayment(request, alive.head)
+
+    def outPayment(request: PaymentRequest, channel: Channel): Obs[OutPaymentOption] = {
+      val routesObs = LNParams.cloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
+      for (routes <- routesObs) yield channel.outPaymentOpt(routes, request)
     }
   }
 

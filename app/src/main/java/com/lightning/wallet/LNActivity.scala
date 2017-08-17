@@ -24,8 +24,11 @@ import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.webkit.URLUtil
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.MSat._
+import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Tools.{none, random}
+import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
+
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
@@ -85,8 +88,8 @@ with ListUpdater with SearchBar { me =>
   lazy val lnTitle = me getString ln_title
   lazy val adapter = new LNAdapter
 
-  private[this] var pathfinder: Pathfinder = _
-  // May change stop action throughout an activity lifecycle
+  private[this] var sendPayment: PaymentRequest => Unit = none
+  private[this] var makePaymentRequest = anyToRunnable(none)
   private[this] var whenStop = anyToRunnable(super.onStop)
   override def onStop = whenStop.run
 
@@ -105,17 +108,13 @@ with ListUpdater with SearchBar { me =>
 
     abstract class ExtendedPaymentInfoLoader extends ReactLoader[PaymentInfo](me) {
       val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
-      def updatePaymentList(ps: InfoVec) = wrap(adapter.updateView)(adapter.storedPayments = ps)
+      def updatePaymentList(ps: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = ps)
       def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
       type InfoVec = Vector[PaymentInfo]
     }
   }
 
   class LNAdapter extends BaseAdapter {
-    var storedPayments = Vector.empty[PaymentInfo]
-    var ephemeralPayments = Set.empty[PaymentInfo]
-    var allPayments = Vector.empty[PaymentInfo]
-
     def getView(position: Int, cv: View, parent: ViewGroup) = {
       val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
       val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
@@ -123,14 +122,10 @@ with ListUpdater with SearchBar { me =>
       view
     }
 
-    def updateView = wrap(notifyDataSetChanged) {
-      val ephemeralPaymentsVec = ephemeralPayments.toVector
-      allPayments = ephemeralPaymentsVec ++ storedPayments
-    }
-
-    def getItem(position: Int) = allPayments(position)
+    var payments = Vector.empty[PaymentInfo]
+    def getItem(position: Int) = payments(position)
     def getItemId(position: Int) = position
-    def getCount = allPayments.size
+    def getCount = payments.size
   }
 
   class LNView(view: View) extends TxViewHolder(view) {
@@ -223,33 +218,32 @@ with ListUpdater with SearchBar { me =>
     val alert = mkForm(dialog, getString(ln_backup_key).html, view)
     field setTextIsSelectable true
 
-    private def proceed: Unit = rm(alert) {
+    def proceed: Unit = rm(alert) {
       val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
       PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
       mkForm(dialog, me getString ln_backup, view1)
     }
 
-    private def trySave(url: String) = delayUI {
+    def trySave(url: String) = delayUI {
       if (url.isEmpty) PrivateDataSaver.remove
       else self check PrivateData(Nil, url)
     }
 
-    private def check(data: PrivateData) = {
-      val pathfinder1 = getPrivatePathfinder(pathfinder.channel)(data)
-      val payload = pathfinder1.signedParams(random getBytes 32)
-      pathfinder1.lnCloud.call("check", none, payload:_*)
-        .subscribe(_ => self save data, onUIError)
+    def check(data: PrivateData) = {
+      val failover = LNParams getFailoverCloud data
+      val params = new PrivateStorage(failover).signedParams(random getBytes 32)
+      failover.call("check", none, params:_*).subscribe(_ => self save data, onUIError)
     }
 
-    private def save(privateData: PrivateData) = {
-      pathfinder = getPathfinder(pathfinder.channel)
+    def save(privateData: PrivateData) = {
       PrivateDataSaver saveObject privateData
+      LNParams.resetCloudAndStorage
       app toast ln_backup_success
     }
 
-    private def onUIError(e: Throwable) = me runOnUiThread onError(e)
-    private def onError(error: Throwable): Unit = error.getMessage match {
+    def onUIError(e: Throwable) = me runOnUiThread onError(e)
+    def onError(error: Throwable): Unit = error.getMessage match {
       case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
       case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
       case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
@@ -257,27 +251,120 @@ with ListUpdater with SearchBar { me =>
   }
 
   def closeChannel = checkPass(me getString ln_close) { pass =>
+    // Close all of the channels just in case we have more than one
     for (chan <- app.ChannelManager.alive) chan async CMDShutdown
   }
 
   // WHEN ACTIVE CHAN IS PRESENT
 
   def manageActive(chan: Channel) = {
+    def receiveSendStatus: (Long, Long) =
+    Some(chan.data) collect { case norm: NormalData =>
+      val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
+      val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
+      canReceiveAmount -> canSendAmount
+    } getOrElse 0L -> 0L
+
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
+        case (_, norm: NormalData, SYNC, NORMAL) =>
         case (_, norm: NormalData, _, _) if norm.isClosing => me exitTo classOf[LNOpsActivity]
-        case (_, funding: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
-        case (_, neg: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]
-        case (_, close: ClosingData, _, _) => me exitTo classOf[LNOpsActivity]
+        case (_, _: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
+        case (_, _: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]
+        case (_, _: ClosingData, _, _) => me exitTo classOf[LNOpsActivity]
       }
 
       override def onError = {
-        case error: Throwable =>
-          // Starts cooperative close
-          chan process CMDShutdown
+        case ExtendedException(cmd: RetryAddHtlc) => Tools log s"Payment retry rejected $cmd"
+        case ExtendedException(cmd: SilentAddHtlc) => Tools log s"Silent payment rejected $cmd"
+        case ExtendedException(cmd: PlainAddHtlc) => onFail(me getString err_general)
+        case PlainAddInSyncException(add) => onFail(me getString err_ln_add_sync)
+        case _: Throwable => chan process CMDShutdown
       }
+
+      override def onProcess = {
+        case (_, _, _: RevokeAndAck) =>
+        case (_, _, _: CommitSig) =>
+        case (_, _, CMDOffline) =>
+        case (_, _, CMDOnline) =>
+      }
+    }
+
+    sendPayment = pr => {
+      val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
+      val info = pr.description match { case Right(hash) => humanPubkey(hash.toString) case Left(text) => text }
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_send_title).format(info).html, content)
+
+      val (_, canSendMsat) = receiveSendStatus
+      val maxValue = MilliSatoshi apply math.min(canSendMsat, maxHtlcValue.amount)
+      val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
+      val rateManager = new RateManager(hint, content)
+
+      def attempt = rateManager.result match {
+        case Failure(_) => app toast dialog_sum_empty
+        case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
+        case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
+        case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
+        case Success(ms) if maxValue < ms => app toast dialog_sum_big
+
+        case Success(ms) =>
+          timer.schedule(me del Informer.LNPAYMENT, 5000)
+          add(me getString ln_send, Informer.LNPAYMENT).ui.run
+
+          app.ChannelManager.outPayment(pr).foreach(_ match {
+            case Some(payment) => chan process PlainAddHtlc(payment)
+            case None => onFail(me getString err_general)
+          }, onFailDetailed)
+      }
+
+      def onFailDetailed(e: Throwable) = e.getMessage match {
+        case "fromblacklisted" => onFail(me getString err_ln_black)
+        case "noroutefound" => onFail(me getString err_ln_route)
+        case _ => onFail(me getString err_general)
+      }
+
+      val ok = alert getButton BUTTON_POSITIVE
+      ok setOnClickListener onButtonTap(attempt)
+    }
+
+    makePaymentRequest = anyToRunnable {
+      val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
+      val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
+
+      val (canReceiveMsat, _) = receiveSendStatus
+      val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
+      val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
+      val rateManager = new RateManager(hint, content)
+
+      def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
+        val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage),
+          nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 24)
+
+        PaymentInfoWrap putPaymentInfo IncomingPayment(preimage,
+          paymentRequest, MilliSatoshi(0), chan.id.get, HIDDEN)
+
+        app.TransData.value = paymentRequest
+        me goTo classOf[RequestActivity]
+      }
+
+      val go: Option[MilliSatoshi] => Unit = sumOption => {
+        <(proceed(sumOption, bag.newPreimage), onFail)(none)
+        add(me getString ln_pr_make, Informer.LNREQUEST).ui.run
+        timer.schedule(me del Informer.LNREQUEST, 2500)
+      }
+
+      def attempt = rateManager.result match {
+        case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
+        case Success(ms) if maxValue < ms => app toast dialog_sum_big
+        case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
+        case _ => rm(alert)(go apply None)
+      }
+
+      val ok = alert getButton BUTTON_POSITIVE
+      ok setOnClickListener onButtonTap(attempt)
     }
 
     whenStop = anyToRunnable {
@@ -286,7 +373,6 @@ with ListUpdater with SearchBar { me =>
     }
 
     chan.listeners += chanListener
-    pathfinder = getPathfinder(chan)
     chanListener reloadOnBecome chan
     checkTransData
   }
@@ -306,43 +392,6 @@ with ListUpdater with SearchBar { me =>
       Tools log s"Unusable $unusable"
   }
 
-  private def sendPayment(pr: PaymentRequest) = {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-    val info = pr.description match { case Right(hash) => humanPubkey(hash.toString) case Left(text) => text }
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_send_title).format(info).html, content)
-
-    val (_, canSendMsat) = receiveSendStatus
-    val maxValue = MilliSatoshi apply math.min(canSendMsat, maxHtlcValue.amount)
-    val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
-    val rateManager = new RateManager(hint, content)
-
-    def attempt = rateManager.result match {
-      case Failure(_) => app toast dialog_sum_empty
-      case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
-      case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
-      case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
-      case Success(ms) if maxValue < ms => app toast dialog_sum_big
-
-      case Success(ms) =>
-        timer.schedule(me del Informer.LNPAYMENT, 5000)
-        add(me getString ln_send, Informer.LNPAYMENT).ui.run
-
-        pathfinder.outPaymentObs(pr).foreach(_ match {
-          case Some(out) => pathfinder.channel process PlainAddHtlc(out)
-          case None => me onFail new Exception(me getString err_general)
-        }, onFailDetailed)
-    }
-
-    def onFailDetailed(e: Throwable) = e.getMessage match {
-      case "fromblacklisted" => me onFail new Exception(me getString err_ln_black)
-      case "noroutefound" => me onFail new Exception(me getString err_ln_route)
-      case _ => me onFail new Exception(me getString err_general)
-    }
-
-    val ok = alert getButton BUTTON_POSITIVE
-    ok setOnClickListener onButtonTap(attempt)
-  }
-
   // Reactions to menu
   def goBitcoin(top: View) = {
     me goTo classOf[BtcActivity]
@@ -354,56 +403,8 @@ with ListUpdater with SearchBar { me =>
     fab close true
   }
 
-  def makePaymentRequest = {
-    val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
-    val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
-    val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-
-    val (canReceiveMsat, _) = receiveSendStatus
-    val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
-    val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
-    val rateManager = new RateManager(hint, content)
-
-    def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
-      val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage),
-        nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 24)
-
-      val incoming = IncomingPayment(preimage, paymentRequest,
-        MilliSatoshi(0), pathfinder.channel.id.get, HIDDEN)
-
-      PaymentInfoWrap putPaymentInfo incoming
-      app.TransData.value = paymentRequest
-      me goTo classOf[RequestActivity]
-    }
-
-    val go: Option[MilliSatoshi] => Unit = sumOption => {
-      <(proceed(sumOption, bag.newPreimage), onFail)(none)
-      add(me getString ln_pr_make, Informer.LNREQUEST).ui.run
-      timer.schedule(me del Informer.LNREQUEST, 2500)
-    }
-
-    def attempt = rateManager.result match {
-      case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
-      case Success(ms) if maxValue < ms => app toast dialog_sum_big
-      case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
-      case _ => rm(alert)(go apply None)
-    }
-
-    val ok = alert getButton BUTTON_POSITIVE
-    ok setOnClickListener onButtonTap(attempt)
-  }
-
   def goReceive(top: View) = {
-    me delayUI makePaymentRequest
+    me delayUI makePaymentRequest.run
     fab close true
   }
-
-  // MISC
-
-  private def receiveSendStatus: (Long, Long) =
-    Some(pathfinder.channel.data) collect { case norm: NormalData =>
-      val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
-      val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
-      canReceiveAmount -> canSendAmount
-    } getOrElse 0L -> 0L
 }

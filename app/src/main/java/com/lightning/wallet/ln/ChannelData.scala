@@ -27,13 +27,12 @@ case object CMDOnline extends Command
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
                           pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
-sealed trait MemoCommand extends Command
 // These will be memorized in channel sync mode
-case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends MemoCommand
-case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends MemoCommand
-case class CMDFailHtlc(id: Long, reason: BinaryData) extends MemoCommand
+case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends Command
+case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
+case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
-sealed trait CMDAddHtlc extends MemoCommand { val out: OutgoingPayment }
+sealed trait CMDAddHtlc extends Command { val out: OutgoingPayment }
 case class SilentAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
 case class PlainAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
 case class RetryAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
@@ -167,9 +166,9 @@ case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, rem
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
 case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
 
-case class Commitments(localParams: LocalParams, remoteParams: AcceptChannel, localCommit: LocalCommit, remoteCommit: RemoteCommit,
-                       localChanges: Changes, remoteChanges: Changes, localNextHtlcId: Long, remoteNextHtlcId: Long,
-                       remoteNextCommitInfo: Either[WaitingForRevocation, Point], commitInput: InputInfo,
+case class Commitments(localParams: LocalParams, remoteParams: AcceptChannel, localCommit: LocalCommit,
+                       remoteCommit: RemoteCommit, localChanges: Changes, remoteChanges: Changes, localNextHtlcId: Long,
+                       remoteNextHtlcId: Long, remoteNextCommitInfo: Either[WaitingForRevocation, Point], commitInput: InputInfo,
                        remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
 
 object Commitments {

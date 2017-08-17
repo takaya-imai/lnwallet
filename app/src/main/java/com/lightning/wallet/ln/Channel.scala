@@ -386,11 +386,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
-      // Don't accept these while in sync
-      case (_, cmd: MemoCommand, SYNC) =>
-        throw CMDInSyncException(cmd)
-
-
       // SYNC: CONNECT/DISCONNECT
 
 
@@ -446,12 +441,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)
 
 
-      // HANDLE SHUTDOWN
+      // MISC
 
 
       case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => BECOME(some, CLOSING)
       case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
-
+      case (_: NormalData, add: PlainAddHtlc, SYNC) => throw PlainAddInSyncException(add)
 
       case _ =>
         // Let know if received an unhandled message

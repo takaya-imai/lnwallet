@@ -16,15 +16,14 @@ import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
 import rx.lang.scala.schedulers.IOScheduler
 import fr.acinq.bitcoin.Crypto.PublicKey
+import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 
 
-// User can set this one instead of public one
 case class PrivateData(acts: List[LNCloudAct], url: String)
-class PrivatePathfinder(val lnCloud: LNCloud, val channel: Channel)
-extends StateMachine[PrivateData] with Pathfinder { me =>
+class PrivateStorage(lnCloud: LNCloud) extends StateMachine[PrivateData] { me =>
 
   def doProcess(some: Any) = (data, some) match {
     case (PrivateData(actions, _), act: LNCloudAct) =>
@@ -47,24 +46,22 @@ extends StateMachine[PrivateData] with Pathfinder { me =>
   }
 }
 
-// By default a public pathfinder is used but user may provide their own private pathfinder anytime they want
 case class PublicData(info: Option[RequestAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
-class PublicPathfinder(val bag: PaymentInfoBag, val lnCloud: LNCloud, val channel: Channel)
-extends StateMachine[PublicData] with Pathfinder { me =>
+class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[PublicData] { me =>
 
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
-      request ~ blindMemo <- retry(getInfo, pickInc, 2 to 3)
-      Some(pay) <- retry(outPaymentObs(request), pickInc, 2 to 3)
+      request ~ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
+      Some(pay) <- retry(app.ChannelManager outPayment request, pickInc, 2 to 3)
     } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
     case PublicData(None, tokens, _) ~ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
+      for (cn <- app.ChannelManager.alive.headOption) cn process SilentAddHtlc(pay)
       me stayWith data.copy(info = Some(pay.request, memo), tokens = tokens)
-      channel doProcess SilentAddHtlc(pay)
 
     // No matter what the state is: do it if we have acts and tokens
     case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
@@ -110,33 +107,24 @@ extends StateMachine[PublicData] with Pathfinder { me =>
 
   // TALKING TO SERVER
 
-  def getInfo = lnCloud.call("blindtokens/info", identity) flatMap { raw =>
-    val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
-    val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubKeyR)
-    val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubKeyQ)
+  def getRequestAndMemo: Obs[RequestAndMemo] =
+    lnCloud.call("blindtokens/info", identity) flatMap { raw =>
+      val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
+      val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubKeyR)
+      val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubKeyQ)
 
-    // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
-    val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
-    val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
+      // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
+      val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
+      val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
 
-    // Get a request -> memo tuple from server
-    lnCloud.call("blindtokens/buy", PaymentRequestFmt read _.head, "seskey" -> memo.sesPubKeyHex,
-      "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
-  }
+      // Get a request -> memo tuple from server
+      lnCloud.call("blindtokens/buy", PaymentRequestFmt read _.head, "seskey" -> memo.sesPubKeyHex,
+        "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
+    }
 
   def getClearTokens(memo: BlindMemo) =
     lnCloud.call("blindtokens/redeem", _.map(json2String(_).bigInteger),
       "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
-}
-
-trait Pathfinder {
-  val lnCloud: LNCloud
-  val channel: Channel
-
-  def outPaymentObs(request: PaymentRequest) = {
-    val routesObs = lnCloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
-    for (routes <- routesObs) yield channel.outPaymentOpt(routes, request)
-  }
 }
 
 trait LNCloudAct {
@@ -145,7 +133,7 @@ trait LNCloudAct {
   val data: BinaryData
 }
 
-// This is a basic interface to cloud which does not require a channel
+// This is a basic interface for making cloud calls
 // failover invariant will fall back to default in case of failure
 
 class LNCloud(val url: String) {

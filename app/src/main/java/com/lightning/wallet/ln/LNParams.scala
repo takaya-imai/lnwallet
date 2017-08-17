@@ -11,7 +11,7 @@ import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
 
 
-object LNParams {
+object LNParams { me =>
   val maxReserveToFundingRatio = 0.05 // %
   val updateFeeMinDiffRatio = 0.25 // %
   val reserveToFundingRatio = 0.01 // %
@@ -24,6 +24,12 @@ object LNParams {
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val chainHash = Block.RegtestGenesisBlock.blockId
 
+  lazy val bag = PaymentInfoWrap
+  lazy val broadcaster = LocalBroadcaster
+  lazy val publicCloud = new LNCloud("10.0.2.2")
+
+  var cloud: LNCloud = _
+  var storage: StateMachine[_] = _
   var nodePrivateKey: PrivateKey = _
   var cloudPrivateKey: PrivateKey = _
   var extendedNodeKey: ExtendedPrivateKey = _
@@ -35,20 +41,18 @@ object LNParams {
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
     nodePrivateKey = extendedNodeKey.privateKey
+    resetCloudAndStorage
   }
 
-  lazy val bag = PaymentInfoWrap
-  lazy val broadcaster = LocalBroadcaster
-  lazy val publicCloud = new LNCloud("10.0.2.2")
-  lazy val cloud: LNCloud = PrivateDataSaver.tryGetObject map {
-    privateData => new FailoverLNCloud(publicCloud, privateData.url)
-  } getOrElse publicCloud
+  def resetCloudAndStorage = {
+    val privDataTry = PrivateDataSaver.tryGetObject
+    cloud = privDataTry map getFailoverCloud getOrElse publicCloud
+    storage = privDataTry map getPrivateStorage getOrElse getPublicStorage
+  }
 
-  def getPathfinder(channel: Channel): Pathfinder = PrivateDataSaver.tryGetObject map getPrivatePathfinder(channel) getOrElse
-    new PublicPathfinder(bag, publicCloud, channel) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
-
-  def getPrivatePathfinder(channel: Channel)(privateData: PrivateData): PrivatePathfinder =
-    new PrivatePathfinder(new FailoverLNCloud(publicCloud, privateData.url), channel) { data = privateData }
+  def getFailoverCloud(privateData: PrivateData) = new FailoverLNCloud(publicCloud, privateData.url)
+  def getPrivateStorage(privateData: PrivateData) = new PrivateStorage(me getFailoverCloud privateData) { data = privateData }
+  def getPublicStorage = new PublicStorage(publicCloud, bag) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
 
   // FEE RELATED
 
