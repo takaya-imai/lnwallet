@@ -2,6 +2,7 @@ package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
+import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
@@ -27,7 +28,12 @@ case class IncomingPayment(preimage: BinaryData, request: PaymentRequest, receiv
 
 case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
 case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
-                           chanId: BinaryData, status: Long) extends PaymentInfo
+                           chanId: BinaryData, status: Long) extends PaymentInfo {
+
+  def isPending: Boolean = status == TEMP || status == WAITING
+  def isFailed: Boolean = !isFulfilled && status == FAILURE
+  def isFulfilled: Boolean = preimage != NOIMAGE
+}
 
 trait PaymentInfoBag {
   def failPending(status: Long, chanId: BinaryData): Unit
@@ -114,12 +120,8 @@ object PaymentInfo {
           // GUARD: amount is less than what we requested, we won't accept such payment
           failHtlc(sharedSecret, add, IncorrectPaymentAmount)
 
-        case Success(pay) if pay.status == SUCCESS =>
-          // Someone tries to send an already fulfilled payment
-          failHtlc(sharedSecret, add, UnknownPaymentHash)
-
-        case Success(pay: OutgoingPayment) =>
-          // We have a valid *outgoing* payment
+        case Success(pay: IncomingPayment) =>
+          // We have a valid *incoming* payment
           CMDFulfillHtlc(add.id, pay.preimage)
 
         case _ =>

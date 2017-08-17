@@ -141,10 +141,10 @@ with ListUpdater with SearchBar { me =>
       val time = when(System.currentTimeMillis, stamp)
 
       val image = info match {
+        case out: OutgoingPayment if out.isFulfilled => conf1
+        case out: OutgoingPayment if out.isPending => await
         case IncomingPayment(_, _, _, _, SUCCESS) => conf1
-        case IncomingPayment(_, _, _, _, HIDDEN | WAITING) => await
-        case OutgoingPayment(_, NOIMAGE, _, _, _, TEMP | WAITING) => await
-        case out: OutgoingPayment if out.preimage != NOIMAGE => conf1
+        case _: IncomingPayment => await
         case _ => dead
       }
 
@@ -377,8 +377,8 @@ with ListUpdater with SearchBar { me =>
     }
 
     val go: Option[MilliSatoshi] => Unit = sumOption => {
-      add(me getString ln_pr_make, Informer.LNREQUEST).ui.run
       <(proceed(sumOption, bag.newPreimage), onFail)(none)
+      add(me getString ln_pr_make, Informer.LNREQUEST).ui.run
       timer.schedule(me del Informer.LNREQUEST, 2500)
     }
 

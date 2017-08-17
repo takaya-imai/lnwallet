@@ -13,6 +13,7 @@ import concurrent.ExecutionContext.Implicits.global
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
 import scala.concurrent.Future
+import scala.util.Success
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -177,8 +178,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We only can add new HTLCs when mutual shutdown process is not active
       case (norm @ NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
         val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
-        me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
-        doProcess(CMDProceed)
+
+        LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
+          case Success(out: OutgoingPayment) if out.isFulfilled => throw ExtendedException(cmd)
+          case Success(out: OutgoingPayment) if out.isPending => throw ExtendedException(cmd)
+          case Success(_: IncomingPayment) => throw ExtendedException(cmd)
+
+          case _ =>
+            // This may be a failed outgoing payment
+            // which probably means we try to re-use a failed request
+            // this is fine, but such a request should not be stored twice
+            me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
+            doProcess(CMDProceed)
+        }
 
       // We're fulfilling an HTLC we got earlier
       case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>

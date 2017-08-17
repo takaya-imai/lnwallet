@@ -68,9 +68,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
-    val description = info.request.description match { case Right(sha) => sha.toString case Left(text) => text }
-    val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case in: IncomingPayment => null }
     val asStrings = Vector(info.request.paymentHash, info.request, info.status, info.chanId, info.preimage, 0L).map(_.toString)
+    val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case in: IncomingPayment => null }
+    val description = info.request.description match { case Right(sha) => sha.toString case Left(text) => text }
     db.change(newVirtualSql, s"$description ${asStrings.head}", asStrings.head)
     db.change(newSql, asStrings :+ routing:_*)
   }
@@ -95,8 +95,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       me updateRouting retry.out
 
     case (_, _, cmd: CMDAddHtlc) =>
-      // Record new outgoing payment
-      me putPaymentInfo cmd.out
+      // Try to record a new outgoing payment
+      // fails if payment hash is already in db
+      LNParams.db txWrap putPaymentInfo(cmd.out)
       uiNotify
 
     case (_, _, add: UpdateAddHtlc) =>

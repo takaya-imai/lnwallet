@@ -3,13 +3,13 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.LNCloud._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
+import scala.util.{Failure, Success}
 import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import collection.JavaConverters.mapAsJavaMapConverter
@@ -77,12 +77,15 @@ extends StateMachine[PublicData] with Pathfinder { me =>
         case _ => me stayWith data
       }
 
-    // Start request while payment is in progress
-    // Payment may be finished already so we ask the bag
+    // Start a new request while payment is in progress
     case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
-      bag.getPaymentInfo(invoice.paymentHash) getOrElse null match {
-        case out: OutgoingPayment if out.preimage != NOIMAGE => me resolveSuccess memo
-        case OutgoingPayment(_, NOIMAGE, _, _, _, FAILURE) | null => resetPayment
+
+      // Payment may be finished already, check it
+      bag.getPaymentInfo(invoice.paymentHash) match {
+        case Success(out: OutgoingPayment) if out.isFulfilled => me resolveSuccess memo
+        case Success(out: OutgoingPayment) if out.isFailed => resetPayment
+        case Success(in: IncomingPayment) => resetPayment
+        case Failure(notFound) => resetPayment
         case _ => me stayWith data
       }
 
