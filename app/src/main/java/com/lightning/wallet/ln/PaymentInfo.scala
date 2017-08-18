@@ -30,6 +30,7 @@ case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, am
 case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
                            chanId: BinaryData, status: Long) extends PaymentInfo {
 
+  def spent: MilliSatoshi = MilliSatoshi(-request.msat)
   def isPending: Boolean = status == TEMP || status == WAITING
   def isFailed: Boolean = !isFulfilled && status == FAILURE
   def isFulfilled: Boolean = preimage != NOIMAGE

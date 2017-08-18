@@ -1,42 +1,38 @@
 package com.lightning.wallet
 
-import java.util.Date
 
-import com.lightning.wallet.R.string._
-import com.lightning.wallet.Utils._
-import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
-import android.content.DialogInterface.BUTTON_POSITIVE
-import com.lightning.wallet.lncloud.ImplicitConversions._
-import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
-import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import android.widget._
-import android.view.{Menu, MenuItem, View, ViewGroup}
-import org.ndeftools.Message
+import com.lightning.wallet.ln._
+import com.lightning.wallet.Utils._
+import com.lightning.wallet.ln.MSat._
+import com.lightning.wallet.lncloud._
+import com.lightning.wallet.R.string._
+import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
-import org.ndeftools.util.activity.NfcReaderActivity
-import android.os.Bundle
-import Utils.app
-import android.app.AlertDialog
 import com.lightning.wallet.ln.PaymentInfo._
+import com.lightning.wallet.lncloud.ImplicitConversions._
+
+import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
+import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
+import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import android.view.{Menu, MenuItem, View, ViewGroup}
+import com.lightning.wallet.ln.Tools.{none, random}
+import com.lightning.wallet.ln.Tools.{runAnd, wrap}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import scala.util.{Failure, Success}
+
+import android.support.v7.widget.SearchView.OnQueryTextListener
+import android.content.DialogInterface.BUTTON_POSITIVE
+import org.ndeftools.util.activity.NfcReaderActivity
 import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
-import android.support.v7.widget.SearchView.OnQueryTextListener
-import android.webkit.URLUtil
-import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
-import com.lightning.wallet.ln.MSat._
-import com.lightning.wallet.ln.Channel._
-import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.Tools.{none, random}
-import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
-
-import scala.concurrent.duration._
-import com.lightning.wallet.lncloud._
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
 import fr.acinq.bitcoin.Crypto.sha256
-import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
-
-import scala.util.{Failure, Success}
+import org.bitcoinj.core.Address
+import org.ndeftools.Message
+import android.os.Bundle
+import java.util.Date
+import Utils.app
 
 
 trait SearchBar { me =>
@@ -167,9 +163,9 @@ with ListUpdater with SearchBar { me =>
     } getOrElse Vector(0L, 0L)
 
     def setTitle = {
-      val msat = MilliSatoshi(receiveSendStatus.last)
-      val text = lnTitle format withSign(msat: Satoshi)
-      getSupportActionBar.setTitle(text.html)
+      val canSendMsat = MilliSatoshi(receiveSendStatus.last)
+      val balance = lnTitle.format(canSendMsat: String)
+      getSupportActionBar setTitle balance.html
     }
 
     val chanListener = new ChannelListener {
@@ -352,7 +348,7 @@ with ListUpdater with SearchBar { me =>
     def fillView(info: PaymentInfo) = {
       val paymentMarking: String = info match {
         case in: IncomingPayment => sumIn format withSign(in.received)
-        case out: OutgoingPayment => sumOut format withSign(out.request.negMSat)
+        case out: OutgoingPayment => sumOut format withSign(out.spent)
       }
 
       val image = info match {

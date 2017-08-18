@@ -11,18 +11,6 @@ import java.math.BigInteger
 import scala.util.Try
 
 
-/**
-  * Lightning Payment Request
-  * see https://github.com/lightningnetwork/lightning-rfc/pull/183
-  *
-  * @param prefix    currency prefix; lnbc for bitcoin, lntb for bitcoin testnet
-  * @param amount    amount to pay (empty string means no amount is specified)
-  * @param timestamp request timestamp (UNIX format)
-  * @param nodeId    id of the node emitting the payment request
-  * @param tags      payment tags; must include a single PaymentHash tag
-  * @param signature request signature that will be checked against node id
-  */
-
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[PaymentRequest.Tag], signature: BinaryData) {
 
@@ -36,9 +24,8 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   // Incoming payment request may not initially have an amount
   // but at some point some amount should be added
-  def msat: Long = amount.get.amount
-  def negMSat = MilliSatoshi(-msat)
 
+  def msat: Long = amount.get.amount
   def description = tags.collectFirst {
     case DescriptionHashTag(hash) => "hash " + hash.toString
     case DescriptionTag(textDescription) => textDescription

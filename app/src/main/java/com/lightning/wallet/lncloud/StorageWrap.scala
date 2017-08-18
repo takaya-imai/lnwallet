@@ -62,15 +62,16 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     val pr = to[PaymentRequest](rc string request)
     Option(rc string routing) map to[RoutingData] match {
       case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, actual, rc string chanId, rc long status)
-      case None => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
+      case _ => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
     }
   }
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
-    val asStrings = Vector(info.request.paymentHash, info.request, info.status, info.chanId, info.preimage, 0L).map(_.toString)
-    val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case in: IncomingPayment => null }
-    db.change(newVirtualSql, s"${info.request.description} ${asStrings.head}", asStrings.head)
-    db.change(newSql, asStrings :+ routing:_*)
+    val paymentHashString = info.request.paymentHash.toString
+    val routing = info match { case o: OutgoingPayment => o.routing.toJson.toString case _ => null }
+    db.change(newVirtualSql, s"${info.request.description} $paymentHashString", paymentHashString)
+    db.change(newSql, paymentHashString, PaymentRequest write info.request, info.status.toString,
+      info.chanId.toString, info.preimage.toString, 0L.toString, routing)
   }
 
   def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
