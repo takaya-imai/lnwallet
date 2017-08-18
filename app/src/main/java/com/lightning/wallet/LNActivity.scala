@@ -172,8 +172,8 @@ with ListUpdater with SearchBar { me =>
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
-        case (_, _: NormalData, SYNC, NORMAL) => me runOnUiThread update(me getString ln_notify_operational, Informer.LNSTATE).ui
-        case (_, _: NormalData, NORMAL, SYNC) => me runOnUiThread update(me getString ln_notify_connecting, Informer.LNSTATE).ui
+        case (_, _: NormalData, _, NORMAL) => me runOnUiThread update(me getString ln_notify_operational, Informer.LNSTATE).ui
+        case (_, _: NormalData, _, SYNC) => me runOnUiThread update(me getString ln_notify_connecting, Informer.LNSTATE).ui
         case (_, norm: NormalData, _, _) if norm.isClosing => me exitTo classOf[LNOpsActivity]
         case (_, _: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
         case (_, _: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]

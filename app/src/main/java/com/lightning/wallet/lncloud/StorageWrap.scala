@@ -70,7 +70,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     val paymentHashString = info.request.paymentHash.toString
     val routing = info match { case o: OutgoingPayment => o.routing.toJson.toString case _ => null }
     db.change(newVirtualSql, s"${info.request.description} $paymentHashString", paymentHashString)
-    db.change(newSql, paymentHashString, PaymentRequest write info.request, info.status.toString,
+    db.change(newSql, paymentHashString, info.request.toJson.toString, info.status.toString,
       info.chanId.toString, info.preimage.toString, 0L.toString, routing)
   }
 

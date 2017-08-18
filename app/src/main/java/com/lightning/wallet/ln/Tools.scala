@@ -77,8 +77,8 @@ case class PlainAddInSyncException(add: PlainAddHtlc) extends LightningException
 
 // STATE MACHINE
 
-abstract class StateMachine[T] { grounding =>
-  def process(change: Any) = grounding synchronized doProcess(change = change)
+abstract class StateMachine[T] { me =>
+  def process(change: Any) = me synchronized doProcess(change = change)
   def become(data1: T, state1: String) = wrap { data = data1 } { state = state1 }
   def stayWith(data1: T) = become(data1, state)
   def doProcess(change: Any)
