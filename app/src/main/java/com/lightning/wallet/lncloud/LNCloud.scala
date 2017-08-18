@@ -60,7 +60,7 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
     case PublicData(None, tokens, _) ~ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
-      for (cn <- app.ChannelManager.alive.headOption) cn process SilentAddHtlc(pay)
+      for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
       me stayWith data.copy(info = Some(pay.request, memo), tokens = tokens)
 
     // No matter what the state is: do it if we have acts and tokens

@@ -110,8 +110,8 @@ object ImplicitJsonFormats { me =>
   }
 
   implicit object PaymentRequestFmt extends JsonFormat[PaymentRequest] {
-    def read(rawJson: JsValue) = PaymentRequest read json2String(rawJson)
-    def write(req: PaymentRequest) = PaymentRequest.write(req).toJson
+    def read(rawJson: JsValue) = PaymentRequest.read(json2String(rawJson), checkSig = false)
+    def write(paymentRequest: PaymentRequest) = PaymentRequest.write(paymentRequest).toJson
   }
 
   implicit object Uint64exFmt extends JsonFormat[UInt64] {

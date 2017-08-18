@@ -84,8 +84,8 @@ class WalletApp extends Application { me =>
 
     def recordValue(rawText: String) = value = rawText match {
       case raw if raw startsWith "bitcoin" => new BitcoinURI(params, raw)
-      case raw if raw startsWith "lnbc" => PaymentRequest read raw
-      case raw if raw startsWith "lntb" => PaymentRequest read raw
+      case raw if raw startsWith "lnbc" => PaymentRequest.read(raw, checkSig = true)
+      case raw if raw startsWith "lntb" => PaymentRequest.read(raw, checkSig = true)
       case raw => getTo(raw)
     }
   }
@@ -138,11 +138,11 @@ class WalletApp extends Application { me =>
     // Finding routes if channel is in correct state
 
     def outPayment(request: PaymentRequest): Obs[OutPaymentOption] =
-      if (alive.isEmpty) Obs just None else outPayment(request, alive.head)
+      alive.headOption map completeOutPayment(request) getOrElse Obs.just(None)
 
-    def outPayment(request: PaymentRequest, channel: Channel): Obs[OutPaymentOption] = {
-      val routesObs = LNParams.cloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
-      for (routes <- routesObs) yield channel.outPaymentOpt(routes, request)
+    private def completeOutPayment(request: PaymentRequest)(channel: Channel) = {
+      val obs = LNParams.cloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
+      for (routes <- obs) yield channel.outPaymentOpt(routes, request)
     }
   }
 

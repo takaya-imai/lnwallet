@@ -261,7 +261,7 @@ object PaymentRequest {
       toInt5s(stream1, acc :+ value)
     }
 
-  def read(input: String): PaymentRequest = {
+  def read(input: String, checkSig: Boolean): PaymentRequest = {
     def loop(data: Int5Seq, tags: Seq[Int5Seq] = Nil): Seq[Int5Seq] =
 
       if (data.isEmpty) tags else {
@@ -290,7 +290,7 @@ object PaymentRequest {
     val prefix = hrp take 4
     val amountOpt = Amount decode hrp.drop(4)
     val pr = PaymentRequest(prefix, amountOpt, Timestamp decode data0, pub, tags.toVector, signature)
-    require(Crypto.verifySignature(messageHash, r -> s, pub), "Invalid signature")
+    if (checkSig) require(Crypto.verifySignature(messageHash, r -> s, pub), "Invalid signature")
     pr
   }
 

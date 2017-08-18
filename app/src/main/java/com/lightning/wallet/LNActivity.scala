@@ -341,7 +341,7 @@ with ListUpdater with SearchBar { me =>
 
       def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
         val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage),
-          nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 24)
+          nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 6)
 
         PaymentInfoWrap putPaymentInfo IncomingPayment(preimage,
           paymentRequest, MilliSatoshi(0), chan.id.get, HIDDEN)
