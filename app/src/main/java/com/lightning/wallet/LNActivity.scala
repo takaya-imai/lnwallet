@@ -31,7 +31,7 @@ import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud._
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
 import fr.acinq.bitcoin.Crypto.sha256
 import org.bitcoinj.core.Address
 import org.bitcoinj.uri.BitcoinURI
@@ -166,7 +166,11 @@ with ListUpdater with SearchBar { me =>
       Vector(canReceiveAmount, canSendAmount)
     } getOrElse Vector(0L, 0L)
 
-
+    def setTitle = {
+      val msat = MilliSatoshi(receiveSendStatus.last)
+      val text = lnTitle format withSign(msat: Satoshi)
+      getSupportActionBar.setTitle(text.html)
+    }
 
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
@@ -189,17 +193,17 @@ with ListUpdater with SearchBar { me =>
       }
 
       override def onProcess = {
-        case (_, _, _: RevokeAndAck) =>
-        case (_, _, _: CommitSig) =>
+        case (_, _, _: RevokeAndAck) => me runOnUiThread setTitle
+        case (_, _, _: CommitSig) => me runOnUiThread setTitle
       }
     }
 
     sendPayment = pr => {
       val title = getString(ln_send_title).format(pr.description)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-      val maxValue = MilliSatoshi apply math.min(receiveSendStatus.last, maxHtlcValue.amount)
+      val maxMsat = MilliSatoshi apply math.min(receiveSendStatus.last, maxHtlcValue.amount)
       val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title.html, content)
-      val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
+      val hint = getString(satoshi_hint_max_amount) format withSign(maxMsat)
       val rateManager = new RateManager(hint, content)
 
       def attempt = rateManager.result match {
@@ -207,7 +211,7 @@ with ListUpdater with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
-        case Success(ms) if maxValue < ms => app toast dialog_sum_big
+        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
 
         case Success(ms) =>
           timer.schedule(me del Informer.LNPAYMENT, 5000)
@@ -233,8 +237,8 @@ with ListUpdater with SearchBar { me =>
       val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-      val maxValue = MilliSatoshi apply math.min(receiveSendStatus.head, maxHtlcValue.amount)
-      val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
+      val maxMast = MilliSatoshi apply math.min(receiveSendStatus.head, maxHtlcValue.amount)
+      val hint = getString(satoshi_hint_max_amount) format withSign(maxMast)
       val rateManager = new RateManager(hint, content)
 
       def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
@@ -256,7 +260,7 @@ with ListUpdater with SearchBar { me =>
 
       def attempt = rateManager.result match {
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
-        case Success(ms) if maxValue < ms => app toast dialog_sum_big
+        case Success(ms) if maxMast < ms => app toast dialog_sum_big
         case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
         case _ => rm(alert)(go apply None)
       }
@@ -273,6 +277,7 @@ with ListUpdater with SearchBar { me =>
     chan.listeners += chanListener
     chanListener reloadOnBecome chan
     checkTransData
+    setTitle
   }
 
   // DATA READING AND BUTTON ACTIONS
