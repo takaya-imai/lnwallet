@@ -93,67 +93,6 @@ with ListUpdater with SearchBar { me =>
   private[this] var whenStop = anyToRunnable(super.onStop)
   override def onStop = whenStop.run
 
-  // Payment history and search results loader
-  // Remembers last search term in case of reload
-  class PaymentsViewProvider extends ReactCallback(me) { self =>
-    def onCreateLoader(id: Int, bundle: Bundle) = if (lastQuery.isEmpty) recent else search
-    def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
-    val observeTablePath = db sqlPath PaymentInfoTable.table
-    private var lastQuery = new String
-
-    def reload(txt: String) = runAnd(lastQuery = txt) {
-      getSupportLoaderManager.restartLoader(1, null, self).forceLoad
-    }
-
-    abstract class ExtendedPaymentInfoLoader extends ReactLoader[PaymentInfo](me) {
-      val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
-      def updatePaymentList(ps: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = ps)
-      def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
-      type InfoVec = Vector[PaymentInfo]
-    }
-  }
-
-  class LNAdapter extends BaseAdapter {
-    def getView(position: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
-      val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
-      hold fillView getItem(position)
-      view
-    }
-
-    var payments = Vector.empty[PaymentInfo]
-    def getItem(position: Int) = payments(position)
-    def getItemId(position: Int) = position
-    def getCount = payments.size
-  }
-
-  class LNView(view: View) extends TxViewHolder(view) {
-    // Display payment details with respect to it's direction
-
-    def fillView(info: PaymentInfo) = {
-      val stamp = new Date(info.request.timestamp * 1000)
-      val time = when(System.currentTimeMillis, stamp)
-
-      val image = info match {
-        case out: OutgoingPayment if out.isFulfilled => conf1
-        case out: OutgoingPayment if out.isPending => await
-        case IncomingPayment(_, _, _, _, SUCCESS) => conf1
-        case _: IncomingPayment => await
-        case _ => dead
-      }
-
-      val paymentMarking = info match {
-        case in: IncomingPayment => sumIn format withSign(in.received)
-        case out: OutgoingPayment => sumOut format withSign(out.request.negMSat)
-      }
-
-      transactWhen setText time.html
-      transactSum setText paymentMarking.html
-      transactCircle setImageResource image
-    }
-  }
-
   // INTERFACE IMPLEMENTING METHODS
 
   def react(query: String) = paymentsViewProvider reload query
@@ -212,44 +151,6 @@ with ListUpdater with SearchBar { me =>
     else if (m.getItemId == R.id.actionCloseChannel) closeChannel
   }
 
-  class SetBackupServer { self =>
-    val (view, field) = str2Tuple(cloudPrivateKey.publicKey.toString)
-    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
-    field setTextIsSelectable true
-
-    def proceed: Unit = rm(alert) {
-      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
-      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
-      PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
-      mkForm(dialog, me getString ln_backup, view1)
-    }
-
-    def trySave(url: String) = delayUI {
-      if (url.isEmpty) PrivateDataSaver.remove
-      else self check PrivateData(Nil, url)
-    }
-
-    def check(data: PrivateData) = {
-      val failover = LNParams getFailoverCloud data
-      val params = new PrivateStorage(failover).signedParams(random getBytes 32)
-      failover.call("check", none, params:_*).subscribe(_ => self save data, onUIError)
-    }
-
-    def save(privateData: PrivateData) = {
-      PrivateDataSaver saveObject privateData
-      LNParams.resetCloudAndStorage
-      app toast ln_backup_success
-    }
-
-    def onUIError(e: Throwable) = me runOnUiThread onError(e)
-    def onError(error: Throwable): Unit = error.getMessage match {
-      case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
-      case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
-      case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
-    }
-  }
-
   def closeChannel = checkPass(me getString ln_close) { pass =>
     // Close all of the channels just in case we have more than one
     for (chan <- app.ChannelManager.alive) chan async CMDShutdown
@@ -258,18 +159,21 @@ with ListUpdater with SearchBar { me =>
   // WHEN ACTIVE CHAN IS PRESENT
 
   def manageActive(chan: Channel) = {
-    def receiveSendStatus: (Long, Long) =
+    def receiveSendStatus: Vector[Long] =
     Some(chan.data) collect { case norm: NormalData =>
       val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
       val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
-      canReceiveAmount -> canSendAmount
-    } getOrElse 0L -> 0L
+      Vector(canReceiveAmount, canSendAmount)
+    } getOrElse Vector(0L, 0L)
+
+
 
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
-        case (_, norm: NormalData, SYNC, NORMAL) =>
+        case (_, _: NormalData, SYNC, NORMAL) => me runOnUiThread update(me getString ln_notify_operational, Informer.LNSTATE).ui
+        case (_, _: NormalData, NORMAL, SYNC) => me runOnUiThread update(me getString ln_notify_connecting, Informer.LNSTATE).ui
         case (_, norm: NormalData, _, _) if norm.isClosing => me exitTo classOf[LNOpsActivity]
         case (_, _: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
         case (_, _: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]
@@ -287,18 +191,14 @@ with ListUpdater with SearchBar { me =>
       override def onProcess = {
         case (_, _, _: RevokeAndAck) =>
         case (_, _, _: CommitSig) =>
-        case (_, _, CMDOffline) =>
-        case (_, _, CMDOnline) =>
       }
     }
 
     sendPayment = pr => {
+      val title = getString(ln_send_title).format(pr.description)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-      val info = pr.description match { case Right(hash) => humanPubkey(hash.toString) case Left(text) => text }
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_send_title).format(info).html, content)
-
-      val (_, canSendMsat) = receiveSendStatus
-      val maxValue = MilliSatoshi apply math.min(canSendMsat, maxHtlcValue.amount)
+      val maxValue = MilliSatoshi apply math.min(receiveSendStatus.last, maxHtlcValue.amount)
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title.html, content)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
       val rateManager = new RateManager(hint, content)
 
@@ -315,7 +215,7 @@ with ListUpdater with SearchBar { me =>
 
           app.ChannelManager.outPayment(pr).foreach(_ match {
             case Some(payment) => chan process PlainAddHtlc(payment)
-            case None => onFail(me getString err_general)
+            case _ => onFail(me getString err_general)
           }, onFailDetailed)
       }
 
@@ -333,9 +233,7 @@ with ListUpdater with SearchBar { me =>
       val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
-
-      val (canReceiveMsat, _) = receiveSendStatus
-      val maxValue = MilliSatoshi apply math.min(canReceiveMsat, maxHtlcValue.amount)
+      val maxValue = MilliSatoshi apply math.min(receiveSendStatus.head, maxHtlcValue.amount)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxValue)
       val rateManager = new RateManager(hint, content)
 
@@ -406,5 +304,102 @@ with ListUpdater with SearchBar { me =>
   def goReceive(top: View) = {
     me delayUI makePaymentRequest.run
     fab close true
+  }
+
+  // Payment history and search results loader
+  // Remembers last search term in case of reload
+  class PaymentsViewProvider extends ReactCallback(me) { self =>
+    def onCreateLoader(id: Int, bundle: Bundle) = if (lastQuery.isEmpty) recent else search
+    def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
+    val observeTablePath = db sqlPath PaymentInfoTable.table
+    private var lastQuery = new String
+
+    def reload(txt: String) = runAnd(lastQuery = txt) {
+      getSupportLoaderManager.restartLoader(1, null, self).forceLoad
+    }
+
+    abstract class ExtendedPaymentInfoLoader extends ReactLoader[PaymentInfo](me) {
+      val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
+      def updatePaymentList(ps: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = ps)
+      def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
+      type InfoVec = Vector[PaymentInfo]
+    }
+  }
+
+  class LNAdapter extends BaseAdapter {
+    def getView(position: Int, cv: View, parent: ViewGroup) = {
+      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
+      val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
+      hold fillView getItem(position)
+      view
+    }
+
+    var payments = Vector.empty[PaymentInfo]
+    def getItem(position: Int) = payments(position)
+    def getItemId(position: Int) = position
+    def getCount = payments.size
+  }
+
+  class LNView(view: View) extends TxViewHolder(view) {
+    // Display payment details with respect to it's direction
+
+    def fillView(info: PaymentInfo) = {
+      val paymentMarking: String = info match {
+        case in: IncomingPayment => sumIn format withSign(in.received)
+        case out: OutgoingPayment => sumOut format withSign(out.request.negMSat)
+      }
+
+      val image = info match {
+        case out: OutgoingPayment if out.isFulfilled => conf1
+        case out: OutgoingPayment if out.isPending => await
+        case IncomingPayment(_, _, _, _, SUCCESS) => conf1
+        case _: IncomingPayment => await
+        case _ => dead
+      }
+
+      val stamp = new Date(info.request.timestamp * 1000)
+      transactWhen setText when(System.currentTimeMillis, stamp).html
+      transactSum setText s"$paymentMarking\u00A0${info.request.description}".html
+      transactCircle setImageResource image
+    }
+  }
+
+  class SetBackupServer { self =>
+    val (view, field) = str2Tuple(cloudPrivateKey.publicKey.toString)
+    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
+    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
+    field setTextIsSelectable true
+
+    def proceed: Unit = rm(alert) {
+      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
+      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
+      PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
+      mkForm(dialog, me getString ln_backup, view1)
+    }
+
+    def trySave(url: String) = delayUI {
+      if (url.isEmpty) PrivateDataSaver.remove
+      else self check PrivateData(Nil, url)
+    }
+
+    def check(data: PrivateData) = {
+      val failover = LNParams getFailoverCloud data
+      val params = new PrivateStorage(failover).signedParams(random getBytes 32)
+      failover.call("check", none, params:_*).subscribe(_ => self save data, onUIError)
+    }
+
+    def save(privateData: PrivateData) = {
+      PrivateDataSaver saveObject privateData
+      LNParams.resetCloudAndStorage
+      app toast ln_backup_success
+    }
+
+    def onUIError(e: Throwable) = me runOnUiThread onError(e)
+    def onError(error: Throwable): Unit = error.getMessage match {
+      case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
+      case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
+      case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
+    }
   }
 }

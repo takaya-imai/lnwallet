@@ -47,7 +47,6 @@ object ChannelWrap extends ChannelListener {
   }
 }
 
-
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by a presence of routing info
   // Incoming payments have null instead of routing info in a database
@@ -70,8 +69,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
     val asStrings = Vector(info.request.paymentHash, info.request, info.status, info.chanId, info.preimage, 0L).map(_.toString)
     val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case in: IncomingPayment => null }
-    val description = info.request.description match { case Right(sha) => sha.toString case Left(text) => text }
-    db.change(newVirtualSql, s"$description ${asStrings.head}", asStrings.head)
+    db.change(newVirtualSql, s"${info.request.description} ${asStrings.head}", asStrings.head)
     db.change(newSql, asStrings :+ routing:_*)
   }
 

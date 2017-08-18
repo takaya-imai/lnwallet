@@ -39,9 +39,9 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
   def msat: Long = amount.get.amount
   def negMSat = MilliSatoshi(-msat)
 
-  def description: Either[String, BinaryData] = tags.collectFirst {
-    case DescriptionHashTag(descriptionHash) => Right(descriptionHash)
-    case DescriptionTag(description) => Left(description)
+  def description = tags.collectFirst {
+    case DescriptionHashTag(hash) => "hash " + hash.toString
+    case DescriptionTag(textDescription) => textDescription
   }.get
 
   def fallbackAddress: Option[String] = tags.collectFirst {
