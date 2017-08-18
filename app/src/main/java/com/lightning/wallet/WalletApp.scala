@@ -84,8 +84,8 @@ class WalletApp extends Application { me =>
 
     def recordValue(rawText: String) = value = rawText match {
       case raw if raw startsWith "bitcoin" => new BitcoinURI(params, raw)
-      case raw if raw startsWith "lnbc" => PaymentRequest.read(raw, checkSig = true)
-      case raw if raw startsWith "lntb" => PaymentRequest.read(raw, checkSig = true)
+      case raw if raw startsWith "lnbc" => PaymentRequest read raw
+      case raw if raw startsWith "lntb" => PaymentRequest read raw
       case raw => getTo(raw)
     }
   }

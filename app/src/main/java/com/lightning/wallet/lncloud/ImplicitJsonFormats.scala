@@ -14,6 +14,7 @@ import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transactio
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
+import com.lightning.wallet.ln.PaymentRequest.Int5Seq
 import com.lightning.wallet.ln.crypto.ShaChain.Index
 import org.bitcoinj.core.ECKey.CURVE.getCurve
 import org.spongycastle.math.ec.ECPoint
@@ -109,11 +110,6 @@ object ImplicitJsonFormats { me =>
     def write(lock: FundingLocked) = fundingLockedCodec.encode(lock).require.toHex.toJson
   }
 
-  implicit object PaymentRequestFmt extends JsonFormat[PaymentRequest] {
-    def read(rawJson: JsValue) = PaymentRequest.read(json2String(rawJson), checkSig = false)
-    def write(paymentRequest: PaymentRequest) = PaymentRequest.write(paymentRequest).toJson
-  }
-
   implicit object Uint64exFmt extends JsonFormat[UInt64] {
     def read(rawJson: JsValue) = uint64ex.decode(json2BitVec(rawJson).get).require.value
     def write(uInt64ex: UInt64) = uint64ex.encode(uInt64ex).require.toHex.toJson
@@ -148,6 +144,12 @@ object ImplicitJsonFormats { me =>
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
+  implicit val outPointFmt = jsonFormat[BinaryData, Long,
+    OutPoint](OutPoint.apply, "hash", "index")
+
+  implicit val paymentRequestFmt = jsonFormat[String, Option[MilliSatoshi], Long, PublicKey, Vector[Int5Seq], BinaryData,
+    PaymentRequest](PaymentRequest.apply, "prefix", "amount", "timestamp", "nodeId", "rawTags", "signature")
+
   implicit val publicDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[LNCloudAct],
     PublicData](PublicData.apply, "info", "tokens", "acts")
 
@@ -155,9 +157,6 @@ object ImplicitJsonFormats { me =>
     PrivateData](PrivateData.apply, "acts", "url")
 
   // Channel data
-
-  implicit val outPointFmt = jsonFormat[BinaryData, Long,
-    OutPoint](OutPoint.apply, "hash", "index")
 
   implicit val txOutFmt = jsonFormat[Satoshi, BinaryData,
     TxOut](TxOut.apply, "amount", "publicKeyScript")

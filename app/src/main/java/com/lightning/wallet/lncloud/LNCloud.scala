@@ -116,9 +116,7 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
       // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
       val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
       val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
-
-      // Get a request -> memo tuple from server
-      lnCloud.call("blindtokens/buy", PaymentRequestFmt read _.head, "seskey" -> memo.sesPubKeyHex,
+      lnCloud.call("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
         "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
     }
 
