@@ -110,19 +110,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We have not yet sent a FundingLocked but just got one from them so we save it and keep waiting
-      case (wait @ WaitFundingDoneData(_, None, _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
+      case (wait @ WaitFundingDoneData(_, None, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
         if their.channelId == wait.commitments.channelId =>
         me UPDATE wait.copy(their = Some apply their)
 
 
       // We have already sent them a FundingLocked and now we got one from them so we can enter normal state now
-      case (wait @ WaitFundingDoneData(_, Some(our), _, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
+      case (wait @ WaitFundingDoneData(_, Some(our), _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
         if their.channelId == wait.commitments.channelId =>
         BECOMENormal(wait, their)
 
 
       // We got our lock but their is not yet present so we save ours and just keep waiting for their
-      case (wait @ WaitFundingDoneData(_, _, None, _, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
+      case (wait @ WaitFundingDoneData(_, _, None, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
@@ -131,7 +131,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We got our lock when their is already present so we can safely enter normal state now
-      case (wait @ WaitFundingDoneData(_, _, Some(their), _, _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
+      case (wait @ WaitFundingDoneData(_, _, Some(their), _, _), CMDConfirmed(tx), WAIT_FUNDING_DONE)
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
@@ -142,7 +142,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // TODO: remove this
-      case (norm @ NormalData(_, commitments, None, None, _), remote: AnnouncementSignatures, NORMAL) =>
+      case (norm @ NormalData(_, commitments, None, None), remote: AnnouncementSignatures, NORMAL) =>
         val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(remote.shortChannelId,
           LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey,
           commitments.remoteParams.fundingPubkey, LNParams.globalFeatures)
@@ -176,7 +176,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We only can add new HTLCs when mutual shutdown process is not active
-      case (norm @ NormalData(_, commitments, None, None, _), cmd: CMDAddHtlc, NORMAL) =>
+      case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL) =>
         val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
 
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
@@ -222,7 +222,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // GUARD: serves as a trigger to enter negotiations when shutdown mode is active
-      case (norm @ NormalData(_, commitments, Some(local), Some(remote), _), CMDProceed, NORMAL)
+      case (norm @ NormalData(_, commitments, Some(local), Some(remote)), CMDProceed, NORMAL)
         if Commitments.pendingHtlcs(commitments).isEmpty =>
 
         // Send a message and enter negotiations mode right away
@@ -272,7 +272,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // Sending CMDShutdown when mutual shutdown is already in progress means we want uncooperative close
       case (norm: NormalData, CMDShutdown, NORMAL) if norm.localShutdown.isDefined => startLocalCurrentClose(norm)
       case (norm: NormalData, CMDShutdown, NORMAL) if norm.remoteShutdown.isDefined => startLocalCurrentClose(norm)
-      case (norm @ NormalData(_, _, None, None, _), CMDShutdown, NORMAL) => me startShutdown norm
+      case (norm @ NormalData(_, _, None, None), CMDShutdown, NORMAL) => me startShutdown norm
 
 
       // They try to shutdown with uncommited changes
@@ -285,7 +285,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We have not yet sent or received a shutdown so send one and re-call again
-      case (norm @ NormalData(_, commitments, None, None, _), remote: Shutdown, NORMAL)
+      case (norm @ NormalData(_, commitments, None, None), remote: Shutdown, NORMAL)
         if remote.channelId == commitments.channelId =>
 
         me startShutdown norm
@@ -293,7 +293,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We have already sent a shutdown (initially or in response to their shutdown above)
-      case (norm @ NormalData(announce, commitments, Some(local), None, _), remote: Shutdown, NORMAL)
+      case (norm @ NormalData(announce, commitments, Some(local), None), remote: Shutdown, NORMAL)
         if remote.channelId == commitments.channelId =>
 
         // We can start negotiations if there are no in-flight HTLCs, otherwise wait until they are cleared

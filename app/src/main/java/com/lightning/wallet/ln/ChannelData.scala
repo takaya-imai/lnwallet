@@ -52,24 +52,27 @@ case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalP
 
 // All the data below will be stored
 
-case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLocked], their: Option[FundingLocked],
-                               fundingTx: Transaction, commitments: Commitments, kind: String = "WaitFundingDoneData") extends HasCommitments
+case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLocked],
+                               their: Option[FundingLocked], fundingTx: Transaction,
+                               commitments: Commitments) extends HasCommitments
 
-case class NormalData(announce: NodeAnnouncement, commitments: Commitments, localShutdown: Option[Shutdown],
-                      remoteShutdown: Option[Shutdown] = None, kind: String = "NormalData") extends HasCommitments {
+case class NormalData(announce: NodeAnnouncement,
+                      commitments: Commitments, localShutdown: Option[Shutdown] = None,
+                      remoteShutdown: Option[Shutdown] = None) extends HasCommitments {
 
   def isClosing = localShutdown.isDefined || remoteShutdown.isDefined
 }
 
-case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
-                            localShutdown: Shutdown, remoteShutdown: Shutdown, kind: String = "NegotiationsData") extends HasCommitments
+case class NegotiationsData(announce: NodeAnnouncement,
+                            commitments: Commitments, localClosingSigned: ClosingSigned,
+                            localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis, kind: String = "ClosingData") extends HasCommitments {
+                       startedAt: Long = System.currentTimeMillis) extends HasCommitments {
 
-  def isOutdated: Boolean = startedAt + 1000 * 3600 * 24 * 7 * 2 < System.currentTimeMillis
+  def isOutdated: Boolean = startedAt + 1000 * 3600 * 24 * 14 < System.currentTimeMillis
 }
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)

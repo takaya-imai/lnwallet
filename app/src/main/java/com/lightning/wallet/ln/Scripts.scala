@@ -137,18 +137,18 @@ object Scripts { me =>
     */
 
   case class InputInfo(outPoint: OutPoint, txOut: TxOut, redeemScript: BinaryData)
-  case class CommitTx(input: InputInfo, tx: Transaction, kind: String = "CommitTx") extends TransactionWithInputInfo
-  case class HtlcSuccessTx(input: InputInfo, tx: Transaction, paymentHash: BinaryData, kind: String = "HtlcSuccessTx")
+  case class CommitTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class HtlcSuccessTx(input: InputInfo, tx: Transaction, paymentHash: BinaryData)
     extends TransactionWithInputInfo
 
-  case class HtlcTimeoutTx(input: InputInfo, tx: Transaction, kind: String = "HtlcTimeoutTx") extends TransactionWithInputInfo
-  case class ClaimHtlcSuccessTx(input: InputInfo, tx: Transaction, kind: String = "ClaimHtlcSuccessTx") extends TransactionWithInputInfo
-  case class ClaimHtlcTimeoutTx(input: InputInfo, tx: Transaction, kind: String = "ClaimHtlcTimeoutTx") extends TransactionWithInputInfo
-  case class ClaimP2WPKHOutputTx(input: InputInfo, tx: Transaction, kind: String = "ClaimP2WPKHOutputTx") extends TransactionWithInputInfo
-  case class ClaimDelayedOutputTx(input: InputInfo, tx: Transaction, kind: String = "ClaimDelayedOutputTx") extends TransactionWithInputInfo
-  case class MainPenaltyTx(input: InputInfo, tx: Transaction, kind: String = "MainPenaltyTx") extends TransactionWithInputInfo
-  case class HtlcPenaltyTx(input: InputInfo, tx: Transaction, kind: String = "HtlcPenaltyTx") extends TransactionWithInputInfo
-  case class ClosingTx(input: InputInfo, tx: Transaction, kind: String = "ClosingTx") extends TransactionWithInputInfo
+  case class HtlcTimeoutTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class ClaimHtlcSuccessTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class ClaimHtlcTimeoutTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class ClaimP2WPKHOutputTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class ClaimDelayedOutputTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class MainPenaltyTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class HtlcPenaltyTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class ClosingTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
 
   val commitWeight = 724
   val htlcTimeoutWeight = 663

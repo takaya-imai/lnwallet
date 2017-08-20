@@ -8,10 +8,9 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
-import scala.util.{Failure, Success}
-import rx.lang.scala.{Observable => Obs}
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
+import rx.lang.scala.{Observable => Obs}
+
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
 import rx.lang.scala.schedulers.IOScheduler
@@ -65,8 +64,9 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
 
     // No matter what the state is: do it if we have acts and tokens
     case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
-      val params = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature, body -> action.data.toString)
-      action.run(params, lnCloud).doOnCompleted(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = ts, acts = rest), onError)
+      action.run(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature,
+        body -> action.data.toString), lnCloud).doOnCompleted(me doProcess CMDStart)
+        .foreach(_ => me stayWith data.copy(tokens = ts, acts = rest), onError)
 
       // 'data' may change while request is on so we always copy it
       def onError(serverError: Throwable) = serverError.getMessage match {
@@ -75,14 +75,12 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
       }
 
     // Start a new request while payment is in progress
-    case PublicData(Some(invoice ~ memo), _, _) ~ CMDStart =>
-
-      // Payment may be finished already, check it
-      bag.getPaymentInfo(invoice.paymentHash) match {
-        case Success(out: OutgoingPayment) if out.isFulfilled => me resolveSuccess memo
-        case Success(out: OutgoingPayment) if out.isFailed => resetPayment
-        case Success(in: IncomingPayment) => resetPayment
-        case Failure(notFound) => resetPayment
+    case PublicData(Some(request ~ memo), _, _) ~ CMDStart =>
+      bag getPaymentInfo request.paymentHash getOrElse null match {
+        case out: OutgoingPayment if out.isFulfilled => me resolveSuccess memo
+        case out: OutgoingPayment if out.isFailed => resetPaymentData
+        case in: IncomingPayment => resetPaymentData
+        case null => resetPaymentData
         case _ => me stayWith data
       }
 
@@ -99,11 +97,11 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
 
   // ADDING NEW TOKENS
 
-  def resetPayment = me stayWith data.copy(info = None)
+  def resetPaymentData = me stayWith data.copy(info = None)
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .foreach(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
-      serverError => if (serverError.getMessage == "notfound") resetPayment)
+      serverError => if (serverError.getMessage == "notfound") resetPaymentData)
 
   // TALKING TO SERVER
 
