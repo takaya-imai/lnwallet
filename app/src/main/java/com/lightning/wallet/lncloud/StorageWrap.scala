@@ -36,9 +36,16 @@ object ChannelWrap extends ChannelListener {
     db.change(ChannelTable.updSql, params = content, chanIdString)
   }
 
-  def get: Vector[HasCommitments] =
-    RichCursor(db select ChannelTable.selectAllSql)
+  def get: Vector[HasCommitments] = {
+    val a = System.currentTimeMillis()
+    val x= RichCursor(db select ChannelTable.selectAllSql)
       .vec(_ string ChannelTable.data) map to[HasCommitments]
+
+    println(System.currentTimeMillis() - a)
+    println(x.size)
+    x
+  }
+
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) if close.isOutdated =>

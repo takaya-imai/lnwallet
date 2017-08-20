@@ -60,19 +60,9 @@ object ImplicitJsonFormats { me =>
     def write(internal: Transaction): JsValue = Transaction.write(internal).toString.toJson
   }
 
-  implicit object ECPointFmt extends JsonFormat[ECPoint] {
-    def read(json: JsValue): ECPoint = (json2String andThen HEX.decode andThen getCurve.decodePoint)(json)
-    def write(internal: ECPoint): JsValue = HEX.encode(internal getEncoded true).toJson
-  }
-
   implicit object LNCloudActFmt extends JsonFormat[LNCloudAct] {
     def write(internal: LNCloudAct): JsValue = ???
     def read(json: JsValue): LNCloudAct = ???
-  }
-
-  implicit object CoinFmt extends JsonFormat[Coin] {
-    def read(json: JsValue): Coin = Coin valueOf json.convertTo[Long]
-    def write(coin: Coin): JsValue = coin.value.toJson
   }
 
   implicit val lightningMessageFmt = sCodecJsonFmt(lightningMessageCodec)

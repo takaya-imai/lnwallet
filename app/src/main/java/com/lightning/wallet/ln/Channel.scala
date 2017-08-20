@@ -464,7 +464,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   private def BECOMENormal(wait: HasCommitments, their: FundingLocked) = {
     val c1 = wait.commitments.copy(remoteNextCommitInfo = Right apply their.nextPerCommitmentPoint)
-    BECOME(me STORE NormalData(wait.announce, c1, localShutdown = None, remoteShutdown = None), NORMAL)
+    BECOME(me STORE NormalData(wait.announce, c1), NORMAL)
   }
 
   private def startShutdown(norm: NormalData) = {
