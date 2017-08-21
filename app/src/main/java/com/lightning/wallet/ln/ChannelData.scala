@@ -72,7 +72,7 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
                        startedAt: Long = System.currentTimeMillis) extends HasCommitments {
 
-  def isOutdated: Boolean = startedAt + 1000 * 3600 * 24 * 14 < System.currentTimeMillis
+  def isOutdated: Boolean = startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
 }
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
@@ -248,21 +248,15 @@ object Commitments {
 
   def sendFulfill(c: Commitments, cmd: CMDFulfillHtlc) = {
     val fulfill = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
-    getHtlcCrossSigned(c, incomingRelativeToLocal = true, cmd.id) match {
-      case Some(add) if fulfill.paymentHash == add.paymentHash =>
-        addLocalProposal(c, fulfill) -> fulfill
-
-      case Some(add) => throw new LightningException
+    getHtlcCrossSigned(commitments = c, incomingRelativeToLocal = true, cmd.id) match {
+      case Some(add) if fulfill.paymentHash == add.paymentHash => addLocalProposal(c, fulfill) -> fulfill
       case _ => throw new LightningException
     }
   }
 
   def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
-    getHtlcCrossSigned(c, incomingRelativeToLocal = false, fulfill.id) match {
-      case Some(add) if fulfill.paymentHash == add.paymentHash =>
-        addRemoteProposal(c, fulfill)
-
-      case Some(add) => throw new LightningException
+    getHtlcCrossSigned(commitments = c, incomingRelativeToLocal = false, fulfill.id) match {
+      case Some(add) if fulfill.paymentHash == add.paymentHash => addRemoteProposal(c, fulfill)
       case _ => throw new LightningException
     }
 
