@@ -3,6 +3,7 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core._
+
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
@@ -23,10 +24,12 @@ import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
 import Context.CLIPBOARD_SERVICE
-import com.lightning.wallet.ln.wire.{Init, LightningMessage}
+import com.lightning.wallet.ln.PaymentInfo._
+import com.lightning.wallet.ln.wire.{Hop, Init, LightningMessage}
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.ln._
-import fr.acinq.bitcoin.BinaryData
+import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.core.listeners.{NewBestBlockListener, PeerConnectedEventListener}
 import org.bitcoinj.net.discovery.DnsDiscovery
@@ -135,15 +138,19 @@ class WalletApp extends Application { me =>
       process(bootstrap)
     }
 
-    // Finding routes if channel is in correct state
+    // Here and in the rest of an app we use first alive channel
+    def outPaymentObs(request: PaymentRequest) = alive.headOption map { chan =>
+      val rsObs = LNParams.cloud.findRoutes(chan.data.announce.nodeId, request.nodeId)
+      for (rs <- rsObs) yield outPaymentOpt(rs, request, chan)
+    } getOrElse Obs.just(None)
 
-    def outPayment(request: PaymentRequest): Obs[OutPaymentOption] =
-      alive.headOption map completeOutPayment(request) getOrElse Obs.just(None)
-
-    private def completeOutPayment(request: PaymentRequest)(channel: Channel) = {
-      val obs = LNParams.cloud.findRoutes(channel.data.announce.nodeId, request.nodeId)
-      for (routes <- obs) yield channel.outPaymentOpt(routes, request)
-    }
+    // Build payment if we actually have routes and channel has an id
+    def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =
+      Some(rs, chan.id) collectFirst { case (firstRoute +: emergencyRoutes) ~ Some(chanId) =>
+        val (payloads, total, expiry) = buildPayloads(request.amount.get.amount, LNParams.expiry, firstRoute)
+        val onion = buildOnion(chan.data.announce.nodeId +: firstRoute.map(_.nextNodeId), payloads, request.paymentHash)
+        OutgoingPayment(RoutingData(emergencyRoutes, onion, total, expiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
+      }
   }
 
   abstract class WalletKit extends AbstractKit { self =>

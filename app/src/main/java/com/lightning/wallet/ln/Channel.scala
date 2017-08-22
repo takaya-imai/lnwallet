@@ -4,16 +4,16 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.ln.Tools.{none, runAnd}
-import com.lightning.wallet.ln.Helpers.{Closing, Funding}
-import fr.acinq.bitcoin.{MilliSatoshi, Satoshi, Transaction}
-import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import concurrent.ExecutionContext.Implicits.global
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.Success
+
+import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
+import com.lightning.wallet.ln.Helpers.{Closing, Funding}
+import com.lightning.wallet.ln.Tools.{none, runAnd}
+import fr.acinq.bitcoin.{Satoshi, Transaction}
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -37,17 +37,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     super.become(data1, state1)
     events onBecome trans
   }
-
-  def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
-    Some(rs, id) collect { case (route +: restOfReservedRoutes) ~ Some(chanId) =>
-      val startConditions = (Vector.empty, request.amount.get.amount, LNParams.expiry)
-      val (payloads, firstAmount, firstExpiry) = buildRoute(startConditions, route)
-
-      val keyChain = data.announce.nodeId +: route.map(_.nextNodeId)
-      val onion = buildOnion(keyChain, payloads, request.paymentHash)
-      val routing = RoutingData(restOfReservedRoutes, onion, firstAmount, firstExpiry)
-      OutgoingPayment(routing, NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
-    }
 
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {

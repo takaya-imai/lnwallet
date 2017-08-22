@@ -31,7 +31,6 @@ import org.bitcoinj.core.Address
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
-
 import Utils.app
 
 
@@ -185,9 +184,6 @@ with ListUpdater with SearchBar { me =>
         case ExtendedException(cmd: SilentAddHtlc) => Tools log s"Silent payment rejected $cmd"
         case ExtendedException(cmd: PlainAddHtlc) => onFail(me getString err_general)
         case PlainAddInSyncException(add) => onFail(me getString err_ln_add_sync)
-        case _: Throwable =>
-
-          //chan process CMDShutdown
       }
 
       override def onProcess = {
@@ -200,7 +196,7 @@ with ListUpdater with SearchBar { me =>
       val title = getString(ln_send_title).format(request.description)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
       val maxMsat = MilliSatoshi apply math.min(receiveSendStatus.last, maxHtlcValue.amount)
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title.html, content)
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, content)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxMsat)
       val rateManager = new RateManager(hint, content)
 
@@ -214,8 +210,8 @@ with ListUpdater with SearchBar { me =>
         case Success(ms) => rm(alert) {
           timer.schedule(me del Informer.LNPAYMENT, 5000)
           add(me getString ln_send, Informer.LNPAYMENT).ui.run
-          app.ChannelManager.outPayment(request).foreach(_ match {
-            case Some(payment) => chan process PlainAddHtlc(payment)
+          app.ChannelManager.outPaymentObs(request).foreach(_ match {
+            case Some(outPayment) => chan process PlainAddHtlc(outPayment)
             case _ => onFail(me getString err_general)
           }, onError)
         }
@@ -235,7 +231,7 @@ with ListUpdater with SearchBar { me =>
     makePaymentRequest = anyToRunnable {
       val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString ln_receive_title, content)
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive_title, content)
       val maxMast = MilliSatoshi apply math.min(receiveSendStatus.head, maxHtlcValue.amount)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxMast)
       val rateManager = new RateManager(hint, content)

@@ -57,22 +57,23 @@ object PaymentInfo {
   // Used for unresolved outgoing payment infos
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
 
-  // The fee (in milliSatoshi) that a node should be paid to forward an HTLC of 'amount' milliSatoshis
-  def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000
+  def nodeFee(baseMsat: Long, proportional: Long, msat: Long) =
+    baseMsat + (proportional * msat) / 1000000L
 
-  // Payloads, final receiver amount, final expiry
-  type PaymentParams = (Vector[PerHopPayload], Long, Int)
-  def buildRoute(paymentParams: PaymentParams, hops: PaymentRoute) =
-    (paymentParams /: hops.reverse) { case (payloads, msat, expiry) ~ hop =>
-      val feeMsat = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
-      val perHopPayload = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: payloads
-      (perHopPayload, msat + feeMsat, expiry + hop.lastUpdate.cltvExpiryDelta)
+  def buildPayloads(finalAmountMsat: Long, finalExpiry: Int, hops: PaymentRoute) = {
+    val paymentPayloads = Vector apply PerHopPayload(0L, finalAmountMsat, finalExpiry)
+    val startValues = (paymentPayloads, finalAmountMsat, finalExpiry)
+
+    (startValues /: hops.reverse) { case (loads, msat, expiry) ~ hop =>
+      val nextFee = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
+      val perHopPayloads = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: loads
+      (perHopPayloads, msat + nextFee, expiry + hop.lastUpdate.cltvExpiryDelta)
     }
+  }
 
   def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): SecretsAndPacket = {
-    require(nodes.size == payloads.size + 1, "Payload mismatch: there should be one less payload than " + nodes.size)
-    val payloadsBin = payloads.map(perHopPayloadCodec.encode).map(serialize) :+ BinaryData("00" * PayloadLength)
-    makePacket(PrivateKey(random getBytes 32), nodes, payloadsBin.map(_.toArray), assocData)
+    require(nodes.size == payloads.size, "Payload count mismatch: there should be exactly as much payloads as node pubkeys")
+    makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(perHopPayloadCodec.encode).map(serialize(_).toArray), assocData)
   }
 
   private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)

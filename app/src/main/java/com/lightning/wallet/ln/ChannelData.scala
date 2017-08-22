@@ -5,8 +5,9 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 
-import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
+import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
+import com.lightning.wallet.ln.CommitmentSpec.HtlcUpdateFail
 import com.lightning.wallet.ln.Tools.LightningMessages
 import com.lightning.wallet.ln.MSat.satFactor
 import fr.acinq.eclair.UInt64
@@ -90,10 +91,11 @@ case class RevokedCommitPublished(claimMainOutputTx: Seq[Transaction], mainPenal
 // COMMITMENTS
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Map[Htlc, UpdateFailHtlc],
+case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[HtlcUpdateFail],
                           feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
+  type HtlcUpdateFail = (Htlc, UpdateFailHtlc)
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
@@ -118,11 +120,11 @@ object CommitmentSpec {
     findHtlcById(cs, u.id, in) match {
       case Some(htlc) if htlc.incoming =>
         cs.copy(toRemoteMsat = cs.toRemoteMsat + htlc.add.amountMsat,
-          failed = cs.failed.updated(htlc, u), htlcs = cs.htlcs - htlc)
+          failed = cs.failed + Tuple2(htlc, u), htlcs = cs.htlcs - htlc)
 
       case Some(htlc) =>
         cs.copy(toLocalMsat = cs.toLocalMsat + htlc.add.amountMsat,
-          failed = cs.failed.updated(htlc, u), htlcs = cs.htlcs - htlc)
+          failed = cs.failed + Tuple2(htlc, u), htlcs = cs.htlcs - htlc)
 
       case None => cs
     }
@@ -138,7 +140,7 @@ object CommitmentSpec {
   def reduce(cs: CommitmentSpec, localChanges: LightningMessages, remoteChanges: LightningMessages) = {
     // Before starting to reduce fresh changes we need to get rid of previous fulfilled and failed information
 
-    val spec1 = cs.copy(fulfilled = Set.empty, failed = Map.empty)
+    val spec1 = cs.copy(fulfilled = Set.empty, failed = Set.empty)
     val spec2 = (spec1 /: localChanges) { case (s, add: UpdateAddHtlc) => plusOutgoing(add, s) case (s, _) => s }
     val spec3 = (spec2 /: remoteChanges) { case (s, add: UpdateAddHtlc) => plusIncoming(add, s) case (s, _) => s }
 
@@ -250,14 +252,14 @@ object Commitments {
     val fulfill = UpdateFulfillHtlc(c.channelId, cmd.id, cmd.preimage)
     getHtlcCrossSigned(commitments = c, incomingRelativeToLocal = true, cmd.id) match {
       case Some(add) if fulfill.paymentHash == add.paymentHash => addLocalProposal(c, fulfill) -> fulfill
-      case _ => throw new LightningException
+      case None => throw new LightningException
     }
   }
 
   def receiveFulfill(c: Commitments, fulfill: UpdateFulfillHtlc) =
     getHtlcCrossSigned(commitments = c, incomingRelativeToLocal = false, fulfill.id) match {
       case Some(add) if fulfill.paymentHash == add.paymentHash => addRemoteProposal(c, fulfill)
-      case _ => throw new LightningException
+      case None => throw new LightningException
     }
 
   def sendFail(c: Commitments, cmd: CMDFailHtlc) = {

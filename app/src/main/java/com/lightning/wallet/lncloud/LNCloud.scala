@@ -30,7 +30,7 @@ class PrivateStorage(lnCloud: LNCloud) extends StateMachine[PrivateData] { me =>
       me doProcess CMDStart
 
     case (PrivateData(action :: rest, _), CMDStart) =>
-      // Private server should use a public key based authorization so we add a signature
+      // Private server should use a public key based authorization so we add a signature to params
       action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
         .foreach(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
 
@@ -53,7 +53,7 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
   def doProcess(some: Any) = (data, some) match {
     case PublicData(None, Nil, _) ~ CMDStart => for {
       request ~ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
-      Some(pay) <- retry(app.ChannelManager outPayment request, pickInc, 2 to 3)
+      Some(pay) <- retry(app.ChannelManager outPaymentObs request, pickInc, 2 to 3)
     } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,

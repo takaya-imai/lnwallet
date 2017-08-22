@@ -12,6 +12,7 @@ import com.lightning.wallet.lncloud.LNCloud.{ClearToken, RequestAndMemo}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+import com.lightning.wallet.ln.CommitmentSpec.HtlcUpdateFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.ln.crypto.ShaChain.Index
@@ -35,26 +36,8 @@ object ImplicitJsonFormats { me =>
         base read serialized
 
       def write(internal: T) = {
-
-        internal match {
-          case _: NormalData =>
-            println("===================")
-            println(internal)
-
-          case _ =>
-        }
-
         val extension = "tag" -> JsString(tag)
         val core = base.write(internal).asJsObject
-
-        internal match {
-          case _: NormalData =>
-            println("===================")
-            println(core)
-
-          case _ =>
-        }
-
         JsObject(core.fields + extension)
       }
   }
@@ -269,7 +252,7 @@ object ImplicitJsonFormats { me =>
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")
 
-  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Map[Htlc, UpdateFailHtlc], Long, Long, Long,
+  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcUpdateFail], Long, Long, Long,
     CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
 
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,

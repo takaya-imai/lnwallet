@@ -54,7 +54,7 @@ class TransactionsSpec {
         Htlc(true, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(7000000).amount, Hash.Zeroes, 550, BinaryData(""))),
         Htlc(true, UpdateAddHtlc("00" * 32, 0, MilliSatoshi(800000).amount, Hash.Zeroes, 551, BinaryData("")))
       )
-      val spec = CommitmentSpec(htlcs, Set.empty, Map.empty, feeratePerKw = 5000, toLocalMsat = 0, toRemoteMsat = 0)
+      val spec = CommitmentSpec(htlcs, Set.empty, Set.empty, feeratePerKw = 5000, toLocalMsat = 0, toRemoteMsat = 0)
       val fee = Scripts.commitTxFee(Satoshi(546), spec)
       println(fee == Satoshi(5340))
     }
@@ -154,7 +154,7 @@ class TransactionsSpec {
           Htlc(true, htlc2)
         ),
         Set.empty,
-        Map.empty,
+        Set.empty,
         feeratePerKw = feeratePerKw,
         toLocalMsat = millibtc2satoshi(MilliBtc(400)).amount * 1000,
         toRemoteMsat = millibtc2satoshi(MilliBtc(300)).amount * 1000)
@@ -306,7 +306,7 @@ class TransactionsSpec {
             case "received" => htlc(true, Satoshi(amount.toLong))
           }
         }).toSet
-        TestSetup(name, dustLimit, CommitmentSpec(htlcs = htlcs, Set.empty, Map.empty,
+        TestSetup(name, dustLimit, CommitmentSpec(htlcs = htlcs, Set.empty, Set.empty,
           feeratePerKw = feerate_per_kw.toLong, toLocalMsat = to_local_msat.toLong, toRemoteMsat = to_remote_msat.toLong), Satoshi(fee.toLong))
       })
 
