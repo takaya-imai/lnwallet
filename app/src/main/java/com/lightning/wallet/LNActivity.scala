@@ -11,7 +11,6 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
@@ -19,8 +18,8 @@ import android.view.{Menu, MenuItem, View, ViewGroup}
 import com.lightning.wallet.ln.Tools.{none, random}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import scala.util.{Failure, Success}
 
+import scala.util.{Failure, Success, Try}
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -32,6 +31,7 @@ import org.bitcoinj.core.Address
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
+
 import Utils.app
 
 
@@ -185,7 +185,9 @@ with ListUpdater with SearchBar { me =>
         case ExtendedException(cmd: SilentAddHtlc) => Tools log s"Silent payment rejected $cmd"
         case ExtendedException(cmd: PlainAddHtlc) => onFail(me getString err_general)
         case PlainAddInSyncException(add) => onFail(me getString err_ln_add_sync)
-        case _: Throwable => chan process CMDShutdown
+        case _: Throwable =>
+
+          //chan process CMDShutdown
       }
 
       override def onProcess = {
@@ -194,39 +196,40 @@ with ListUpdater with SearchBar { me =>
       }
     }
 
-    sendPayment = pr => {
-      val title = getString(ln_send_title).format(pr.description)
+    sendPayment = request => {
+      val title = getString(ln_send_title).format(request.description)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
       val maxMsat = MilliSatoshi apply math.min(receiveSendStatus.last, maxHtlcValue.amount)
       val alert = mkForm(negPosBld(dialog_cancel, dialog_next), title.html, content)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def attempt = rateManager.result match {
+      def sendAttempt = rateManager.result match {
         case Failure(_) => app toast dialog_sum_empty
-        case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
-        case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
+        case Success(ms) if request.amount.exists(_ > ms) => app toast dialog_sum_small
+        case Success(ms) if request.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
 
-        case Success(ms) =>
+        case Success(ms) => rm(alert) {
           timer.schedule(me del Informer.LNPAYMENT, 5000)
           add(me getString ln_send, Informer.LNPAYMENT).ui.run
-
-          app.ChannelManager.outPayment(pr).foreach(_ match {
+          app.ChannelManager.outPayment(request).foreach(_ match {
             case Some(payment) => chan process PlainAddHtlc(payment)
             case _ => onFail(me getString err_general)
-          }, onFailDetailed)
+          }, onError)
+        }
       }
 
-      def onFailDetailed(e: Throwable) = e.getMessage match {
+      def onError(e: Throwable) = e.getMessage match {
         case "fromblacklisted" => onFail(me getString err_ln_black)
         case "noroutefound" => onFail(me getString err_ln_route)
         case _ => onFail(me getString err_general)
       }
 
       val ok = alert getButton BUTTON_POSITIVE
-      ok setOnClickListener onButtonTap(attempt)
+      ok setOnClickListener onButtonTap(sendAttempt)
+      for (sum <- request.amount) rateManager setSum Try(sum)
     }
 
     makePaymentRequest = anyToRunnable {
@@ -254,7 +257,7 @@ with ListUpdater with SearchBar { me =>
         timer.schedule(me del Informer.LNREQUEST, 2500)
       }
 
-      def attempt = rateManager.result match {
+      def receiveAttempt = rateManager.result match {
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if maxMast < ms => app toast dialog_sum_big
         case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
@@ -262,7 +265,7 @@ with ListUpdater with SearchBar { me =>
       }
 
       val ok = alert getButton BUTTON_POSITIVE
-      ok setOnClickListener onButtonTap(attempt)
+      ok setOnClickListener onButtonTap(receiveAttempt)
     }
 
     whenStop = anyToRunnable {
@@ -284,7 +287,8 @@ with ListUpdater with SearchBar { me =>
 
     case pr: PaymentRequest =>
       app.TransData.value = null
-      sendPayment(pr)
+      if (pr.isFresh) sendPayment(pr)
+      else onFail(me getString err_ln_old)
 
     case unusable =>
       app.TransData.value = null
@@ -308,7 +312,6 @@ with ListUpdater with SearchBar { me =>
   }
 
   // Payment history and search results loader
-  // Remembers last search term in case of reload
   class PaymentsViewProvider extends ReactCallback(me) { self =>
     def onCreateLoader(id: Int, bundle: Bundle) = if (lastQuery.isEmpty) recent else search
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
@@ -317,6 +320,7 @@ with ListUpdater with SearchBar { me =>
     private var lastQuery = new String
 
     def reload(txt: String) = runAnd(lastQuery = txt) {
+      // Remember last search term to handle possible reload
       getSupportLoaderManager.restartLoader(1, null, self).forceLoad
     }
 
@@ -346,9 +350,9 @@ with ListUpdater with SearchBar { me =>
     // Display payment details with respect to it's direction
 
     def fillView(info: PaymentInfo) = {
-      val paymentMarking: String = info match {
-        case in: IncomingPayment => sumIn format withSign(in.received)
-        case out: OutgoingPayment => sumOut format withSign(out.spent)
+      val marking: String = info match {
+        case in: IncomingPayment => sumIn format milliSatoshi2String(in.received)
+        case out: OutgoingPayment => sumOut format milliSatoshi2String(out.received)
       }
 
       val image = info match {
@@ -360,8 +364,11 @@ with ListUpdater with SearchBar { me =>
       }
 
       val stamp = new Date(info.request.timestamp * 1000)
-      transactWhen setText when(System.currentTimeMillis, stamp).html
-      transactSum setText s"$paymentMarking\u00A0${info.request.description}".html
+      val humanTime = when(System.currentTimeMillis, stamp)
+      val sum = s"$marking\u00A0${info.request.description}"
+
+      transactSum setText sum.html
+      transactWhen setText humanTime.html
       transactCircle setImageResource image
     }
   }
@@ -387,7 +394,7 @@ with ListUpdater with SearchBar { me =>
     def check(data: PrivateData) = {
       val failover = LNParams getFailoverCloud data
       val params = new PrivateStorage(failover).signedParams(random getBytes 32)
-      failover.call("check", none, params:_*).subscribe(_ => self save data, onUIError)
+      failover.call("check", none, params:_*).subscribe(_ => self save data, onError)
     }
 
     def save(privateData: PrivateData) = {
@@ -396,11 +403,10 @@ with ListUpdater with SearchBar { me =>
       app toast ln_backup_success
     }
 
-    def onUIError(e: Throwable) = me runOnUiThread onError(e)
-    def onError(error: Throwable): Unit = error.getMessage match {
-      case "keynotfound" => mkForm(me negBld dialog_ok, null, me getString ln_backup_key_error)
-      case "siginvalid" => mkForm(me negBld dialog_ok, null, me getString ln_backup_sig_error)
-      case _ => mkForm(me negBld dialog_ok, null, me getString ln_backup_net_error)
+    def onError(error: Throwable) = error.getMessage match {
+      case "keynotfound" => onFail(me getString ln_backup_key_error)
+      case "siginvalid" => onFail(me getString ln_backup_sig_error)
+      case _ => onFail(me getString ln_backup_net_error)
     }
   }
 }

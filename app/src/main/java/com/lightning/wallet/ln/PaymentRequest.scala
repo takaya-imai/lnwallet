@@ -80,10 +80,6 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
   def routingInfo: Vector[RoutingInfoTag] = tags.collect { case t: RoutingInfoTag => t }
   def paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
 
-  // Incoming payment request may not initially have an amount
-  // but at some point some amount should be added
-  
-  def msat: Long = amount.get.amount
   def description = tags.collectFirst {
     case DescriptionHashTag(hash) => "hash " + hash.toString
     case DescriptionTag(textDescription) => textDescription

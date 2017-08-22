@@ -88,6 +88,17 @@ class ShaChainSpec {
       }
       println("receiveHashes final: " + ShaChain.getHash(receiver.hashes, ShaChain moves ShaChain.largestIndex - i - 1).isEmpty)
     }
+
+    import spray.json._
+    import spray.json.DefaultJsonProtocol._
+    import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+    import com.lightning.wallet.lncloud.JsonHttpUtils._
+
+    val a= System.currentTimeMillis()
+    val string = receiver.toJson.toString
+    val object1 = to[ShaHashesWithIndex](string)
+    println(System.currentTimeMillis() - a)
+    println(object1)
   }
 
   def allTests = {

@@ -15,10 +15,6 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.ln.crypto.ShaChain.Index
-import org.bitcoinj.core.ECKey.CURVE.getCurve
-import org.spongycastle.math.ec.ECPoint
-import org.bitcoinj.core.Utils.HEX
-import org.bitcoinj.core.Coin
 import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
 import java.math.BigInteger
@@ -39,8 +35,26 @@ object ImplicitJsonFormats { me =>
         base read serialized
 
       def write(internal: T) = {
+
+        internal match {
+          case _: NormalData =>
+            println("===================")
+            println(internal)
+
+          case _ =>
+        }
+
         val extension = "tag" -> JsString(tag)
         val core = base.write(internal).asJsObject
+
+        internal match {
+          case _: NormalData =>
+            println("===================")
+            println(core)
+
+          case _ =>
+        }
+
         JsObject(core.fields + extension)
       }
   }
@@ -58,6 +72,25 @@ object ImplicitJsonFormats { me =>
   implicit object TransactionFmt extends JsonFormat[Transaction] {
     def read(json: JsValue): Transaction = Transaction.read(me json2String json)
     def write(internal: Transaction): JsValue = Transaction.write(internal).toString.toJson
+  }
+
+  implicit object ShaHashesWithIndexFmt
+    extends JsonFormat[ShaHashesWithIndex] {
+
+    def read(json: JsValue): ShaHashesWithIndex = json match {
+      case JsArray(hashesIndexBytesSeq +: lastIndexOption +: _) =>
+        val lastIndexLongOption = lastIndexOption.convertTo[LongOption]
+        val hashesIndexBytesMap = hashesIndexBytesSeq.convertTo[IndexBytesSeq]
+        ShaHashesWithIndex(hashesIndexBytesMap.toMap, lastIndexLongOption)
+      case _ => throw new RuntimeException
+    }
+
+    def write(internal: ShaHashesWithIndex): JsValue =
+      JsArray(internal.hashes.toSeq.toJson, internal.lastIndex.toJson)
+
+    type LongOption = Option[Long]
+    type IndexBytes = (Index, Bytes)
+    type IndexBytesSeq = Seq[IndexBytes]
   }
 
   implicit object LNCloudActFmt extends JsonFormat[LNCloudAct] {
@@ -254,9 +287,6 @@ object ImplicitJsonFormats { me =>
 
   implicit val changesFmt = jsonFormat[LightningMessages, LightningMessages, LightningMessages,
     Changes](Changes.apply, "proposed", "signed", "acked")
-
-  implicit val shaHashesWithIndexFmt = jsonFormat[Map[Index, Bytes], Option[Long],
-    ShaHashesWithIndex](ShaHashesWithIndex.apply, "hashes", "lastIndex")
 
   implicit val commitmentsFmt = jsonFormat[LocalParams, AcceptChannel, LocalCommit, RemoteCommit,
     Changes, Changes, Long, Long, Either[WaitingForRevocation, Point], InputInfo, ShaHashesWithIndex, BinaryData,

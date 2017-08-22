@@ -30,7 +30,6 @@ case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, am
 case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
                            chanId: BinaryData, status: Long) extends PaymentInfo {
 
-  def spent: MilliSatoshi = MilliSatoshi(-request.msat)
   def isPending: Boolean = status == TEMP || status == WAITING
   def isFailed: Boolean = !isFulfilled && status == FAILURE
   def isFulfilled: Boolean = preimage != NOIMAGE
@@ -55,8 +54,8 @@ object PaymentInfo {
   final val SUCCESS = 3L
   final val FAILURE = 4L
 
-  // Used for unresolved outgoing
-  val NOIMAGE = BinaryData("0x00")
+  // Used for unresolved outgoing payment infos
+  val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
 
   // The fee (in milliSatoshi) that a node should be paid to forward an HTLC of 'amount' milliSatoshis
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long): Long = baseMsat + (proportional * msat) / 1000000

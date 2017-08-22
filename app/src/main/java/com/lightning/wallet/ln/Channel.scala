@@ -40,8 +40,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest) =
     Some(rs, id) collect { case (route +: restOfReservedRoutes) ~ Some(chanId) =>
-      val (payloads, firstAmount, firstExpiry) = buildRoute(Tuple3(Vector.empty, request.msat, LNParams.expiry), route)
-      val onion = buildOnion(data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
+      val startConditions = (Vector.empty, request.amount.get.amount, LNParams.expiry)
+      val (payloads, firstAmount, firstExpiry) = buildRoute(startConditions, route)
+
+      val keyChain = data.announce.nodeId +: route.map(_.nextNodeId)
+      val onion = buildOnion(keyChain, payloads, request.paymentHash)
       val routing = RoutingData(restOfReservedRoutes, onion, firstAmount, firstExpiry)
       OutgoingPayment(routing, NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
     }

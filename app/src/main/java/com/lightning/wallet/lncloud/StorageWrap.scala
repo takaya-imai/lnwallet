@@ -36,16 +36,9 @@ object ChannelWrap extends ChannelListener {
     db.change(ChannelTable.updSql, params = content, chanIdString)
   }
 
-  def get: Vector[HasCommitments] = {
-    val a = System.currentTimeMillis()
-    val x= RichCursor(db select ChannelTable.selectAllSql)
+  def get: Vector[HasCommitments] =
+    RichCursor(db select ChannelTable.selectAllSql)
       .vec(_ string ChannelTable.data) map to[HasCommitments]
-
-    println(System.currentTimeMillis() - a)
-    println(x.size)
-    x
-  }
-
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) if close.isOutdated =>
@@ -57,7 +50,6 @@ object ChannelWrap extends ChannelListener {
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by a presence of routing info
   // Incoming payments have null instead of routing info in a database
-  // All payments initially have 0 msat received
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
@@ -75,10 +67,12 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
     val paymentHashString = info.request.paymentHash.toString
+    // OutgoingPayment has received set to negative amount, IncomingPayment is zero, to be updated later
+    val received1 = info match { case o: OutgoingPayment => -o.request.amount.get.amount case _ => 0L }
     val routing = info match { case o: OutgoingPayment => o.routing.toJson.toString case _ => null }
     db.change(newVirtualSql, s"${info.request.description} $paymentHashString", paymentHashString)
     db.change(newSql, paymentHashString, info.request.toJson.toString, info.status.toString,
-      info.chanId.toString, info.preimage.toString, 0L.toString, routing)
+      info.chanId.toString, info.preimage.toString, received1.toString, routing)
   }
 
   def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)

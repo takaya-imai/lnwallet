@@ -129,11 +129,11 @@ object CommitmentSpec {
 
   private def plusOutgoing(data: UpdateAddHtlc, cs: CommitmentSpec) =
     cs.copy(htlcs = cs.htlcs + Htlc(incoming = false, add = data),
-      toRemoteMsat = cs.toRemoteMsat - data.amountMsat)
+      toLocalMsat = cs.toLocalMsat - data.amountMsat)
 
   private def plusIncoming(data: UpdateAddHtlc, cs: CommitmentSpec) =
     cs.copy(htlcs = cs.htlcs + Htlc(incoming = true, add = data),
-      toLocalMsat = cs.toLocalMsat - data.amountMsat)
+      toRemoteMsat = cs.toRemoteMsat - data.amountMsat)
 
   def reduce(cs: CommitmentSpec, localChanges: LightningMessages, remoteChanges: LightningMessages) = {
     // Before starting to reduce fresh changes we need to get rid of previous fulfilled and failed information

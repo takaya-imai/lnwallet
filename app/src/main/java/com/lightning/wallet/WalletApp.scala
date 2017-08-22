@@ -130,7 +130,7 @@ class WalletApp extends Application { me =>
 
     def createChannel(bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = for (work <- ConnectionManager.connections get data.announce.nodeId) work send msg
-      def STORE(content: HasCommitments): HasCommitments = runAnd(result = content)(action = ChannelWrap put content)
+      def STORE(content: HasCommitments): HasCommitments = runAnd(content)(ChannelWrap put content)
       listeners ++= Set(LNParams.broadcaster, LNParams.bag, ChannelWrap)
       process(bootstrap)
     }

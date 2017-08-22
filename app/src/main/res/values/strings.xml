@@ -50,9 +50,9 @@
     <string name="dialog_next">Next</string>
     <string name="dialog_cancel">Cancel</string>
 
-    <string name="satoshi_hint_max_amount"><![CDATA[max amount is %1$s]]></string>
-    <string name="satoshi_hint_wallet"><![CDATA[wallet balance is %1$s]]></string>
-    <string name="satoshi_hint_max_capacity_wallet"><![CDATA[max capacity is %1$s<br>wallet balance is %2$s]]></string>
+    <string name="satoshi_hint_max_amount"><![CDATA[max amount %1$s]]></string>
+    <string name="satoshi_hint_wallet"><![CDATA[wallet balance %1$s]]></string>
+    <string name="satoshi_hint_max_capacity_wallet"><![CDATA[max capacity %1$s<br>wallet balance %2$s]]></string>
     <string name="spend_amount_hint"><![CDATA[Amount in Satoshi<br><small>%1$s</small>]]></string>
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
     <string name="spend_address_hint">Bitcoin address</string>
@@ -117,6 +117,7 @@
     <!-- errors -->
     <string name="err_ln_route">Failed because no route to recipient could be found</string>
     <string name="err_ln_black">Failed because your peer is blacklisted. You may want to create a new payment channel</string>
+    <string name="err_ln_old">Failed because a payment request has expired. Please ask recipient to provide a new one</string>
     <string name="err_ln_add_sync">Failed because channel is not yet operational. Please wait a few seconds and try again</string>
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
