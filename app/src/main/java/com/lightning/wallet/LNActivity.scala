@@ -1,6 +1,5 @@
 package com.lightning.wallet
 
-
 import android.widget._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
@@ -11,6 +10,7 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
@@ -18,8 +18,8 @@ import android.view.{Menu, MenuItem, View, ViewGroup}
 import com.lightning.wallet.ln.Tools.{none, random}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-
 import scala.util.{Failure, Success, Try}
+
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -191,7 +191,10 @@ with ListUpdater with SearchBar { me =>
       override def onError = {
         case ExtendedException(cmd: RetryAddHtlc) => Tools log s"Payment retry rejected $cmd"
         case ExtendedException(cmd: SilentAddHtlc) => Tools log s"Silent payment rejected $cmd"
-        case ExtendedException(cmd: PlainAddHtlc) => onFail(me getString err_general)
+        case ex  @ ExtendedException(cmd: PlainAddHtlc) =>
+
+          ex.printStackTrace()
+          onFail(me getString err_general)
         case PlainAddInSyncException(add) => onFail(me getString err_ln_add_sync)
       }
 
@@ -226,10 +229,10 @@ with ListUpdater with SearchBar { me =>
         }
       }
 
-      def onError(e: Throwable) = e.getMessage match {
+      def onError(err: Throwable) = err.getMessage match {
         case "fromblacklisted" => onFail(me getString err_ln_black)
         case "noroutefound" => onFail(me getString err_ln_route)
-        case _ => onFail(me getString err_general)
+        case details => onFail(details)
       }
 
       val ok = alert getButton BUTTON_POSITIVE

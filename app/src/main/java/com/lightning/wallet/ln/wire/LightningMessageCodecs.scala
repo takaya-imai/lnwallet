@@ -303,6 +303,7 @@ object LightningMessageCodecs { me =>
       (zeropaddedstring withContext "alias") ::
       (varsizebinarydata withContext "features") ::
       (listOfN(uint16, socketaddress) withContext "addresses")
+  // TODO: (variableSizeBytes(value = list(socketaddress), size = uint16) withContext "addresses")
 
   val channelUpdateWitness =
     (int64 withContext "shortChannelId") ::

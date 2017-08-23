@@ -139,10 +139,10 @@ class WalletApp extends Application { me =>
     }
 
     // Here and in the rest of an app we use first alive channel
-    def outPaymentObs(request: PaymentRequest) = alive.headOption map { chan =>
+    def outPaymentObs(request: PaymentRequest) = alive.headOption.map { chan =>
       val rsObs = LNParams.cloud.findRoutes(chan.data.announce.nodeId, request.nodeId)
       for (rs <- rsObs) yield outPaymentOpt(rs, request, chan)
-    } getOrElse Obs.just(None)
+    }.getOrElse(Obs just None)
 
     // Build payment if we actually have routes and channel has an id
     def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =
