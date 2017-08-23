@@ -18,7 +18,6 @@ import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
 import android.graphics.Typeface
-import scala.collection.mutable
 import android.content.Intent
 import android.os.Bundle
 import android.net.Uri
@@ -64,12 +63,12 @@ trait HumanTimeDisplay { me: TimerActivity =>
 }
 
 trait ListUpdater { me: TimerActivity =>
+  private[this] var state = SCROLL_STATE_IDLE
   lazy val allTxsButton = getLayoutInflater.inflate(R.layout.frag_txs_all, null)
   lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
-  lazy val minLinesNum = if (scrHeight < 4.8) 3 else 5
-  private[this] var state = SCROLL_STATE_IDLE
-  val maxLinesNum = 50
+  lazy val minLinesNum = 4
+  val maxLinesNum = 25
 
   def startListUpdates(adapter: BaseAdapter) =
     list setOnScrollListener new OnScrollListener {
@@ -77,7 +76,31 @@ trait ListUpdater { me: TimerActivity =>
       def onScrollStateChanged(v: AbsListView, newState: Int) = state = newState
       def maybeUpdate = if (SCROLL_STATE_IDLE == state) adapter.notifyDataSetChanged
       timer.schedule(anyToRunnable(maybeUpdate), 10000, 10000)
+      allTxsButton setVisibility View.GONE
+      list addFooterView allTxsButton
     }
+
+  abstract class CutAdapter[T] extends BaseAdapter {
+    // Automatically manages switching list view from short to long and back
+    def switch = cut = if (cut == minLinesNum) maxLinesNum else minLinesNum
+    def getCount = visibleItems.size
+    def getItemId(pos: Int) = pos
+
+    var cut: Int = minLinesNum
+    var visibleItems = Vector.empty[T]
+    var availableItems = Vector.empty[T]
+
+    val set: Vector[T] => Unit = items1 => {
+      val visibility = if (items1.size > minLinesNum) View.VISIBLE else View.GONE
+      val resource = if (cut == minLinesNum) R.drawable.ic_expand_more_black_24dp
+        else R.drawable.ic_expand_less_black_24dp
+
+      allTxsButton setVisibility visibility
+      toggler setImageResource resource
+      visibleItems = items1 take cut
+      availableItems = items1
+    }
+  }
 }
 
 abstract class TxViewHolder(view: View) {
@@ -101,7 +124,16 @@ with ListUpdater { me =>
   lazy val feeAbsent = getString(txs_fee_absent)
   lazy val walletEmpty = getString(wallet_empty)
   lazy val btcTitle = getString(btc_title)
-  lazy val adapter = new BtcAdapter
+
+  lazy val adapter = new CutAdapter[TxWrap] {
+    def getItem(position: Int) = visibleItems(position)
+    def getView(position: Int, cv: View, parent: ViewGroup) = {
+      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
+      val hold = if (null == view.getTag) new BtcView(view) else view.getTag.asInstanceOf[BtcView]
+      hold fillView getItem(position)
+      view
+    }
+  }
 
   private[this] val txsTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = me runOnUiThread tell(tx)
@@ -115,24 +147,9 @@ with ListUpdater { me =>
       // and ESTIMATED_SPENDABLE takes care of correct balance
 
       mnemonicWarn setVisibility View.GONE
-      adapter.transactions prepend wrap
+      adapter.set(wrap +: adapter.availableItems)
       adapter.notifyDataSetChanged
     }
-  }
-
-  // Adapter for btc tx list
-  class BtcAdapter extends BaseAdapter {
-    def getView(position: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
-      val hold = if (null == view.getTag) new BtcView(view) else view.getTag.asInstanceOf[BtcView]
-      hold fillView getItem(position)
-      view
-    }
-
-    var transactions = mutable.Buffer.empty[TxWrap]
-    def getItem(position: Int) = transactions(position)
-    def getItemId(position: Int) = position
-    def getCount = transactions.size
   }
 
   def updateTitleAndSub(sub: String, infoType: Int) =
@@ -159,6 +176,10 @@ with ListUpdater { me =>
       super.onCreate(savedInstanceState)
       wrap(initToolbar)(me setContentView R.layout.activity_btc)
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
+
+      list setAdapter adapter
+      list setFooterDividersEnabled false
+      me startListUpdates adapter
       me setDetecting true
 
       list setOnItemClickListener onTap { pos =>
@@ -189,18 +210,12 @@ with ListUpdater { me =>
       }
 
       // Wait for transactions list
-      <(nativeTransactions, onFail) { result =>
-        app.kit.wallet addTransactionConfidenceEventListener txsTracker
-        app.kit.wallet addCoinsReceivedEventListener txsTracker
+      <(nativeTransactions, onFail) { txs =>
         app.kit.wallet addCoinsSentEventListener txsTracker
-
-        // Show limited txs list
-        me startListUpdates adapter
-        if (result.size > minLinesNum) list addFooterView allTxsButton
-        else if (result.isEmpty) mnemonicWarn setVisibility View.VISIBLE
-        adapter.transactions = result take minLinesNum
-        list setFooterDividersEnabled false
-        list setAdapter adapter
+        app.kit.wallet addCoinsReceivedEventListener txsTracker
+        app.kit.wallet addTransactionConfidenceEventListener txsTracker
+        if (txs.isEmpty) mnemonicWarn setVisibility View.VISIBLE
+        adapter set txs
       }
 
       // Wire up general listeners
@@ -243,7 +258,7 @@ with ListUpdater { me =>
 
   def checkTransData =
     app.TransData.value match {
-      case invoice: PaymentRequest =>
+      case pr: PaymentRequest =>
         me goTo classOf[LNActivity]
 
       case uri: BitcoinURI =>
@@ -266,26 +281,13 @@ with ListUpdater { me =>
     mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
   }
 
-  // Expand all txs
   def toggle(v: View) = {
-    allTxsButton setVisibility View.GONE
-    <(nativeTransactions, onFail) { result =>
-      val contracted = adapter.getCount <= minLinesNum
-      if (contracted) showMore(result) else showLess(result)
-      allTxsButton setVisibility View.VISIBLE
-      adapter.notifyDataSetChanged
-    }
-  }
+    // Expand or collapse all txs
+    // adapter contains all history
 
-  type TransactionBuffer = mutable.Buffer[TxWrap]
-  private val showMore = (result: TransactionBuffer) => {
-    toggler.setImageResource(R.drawable.ic_expand_less_black_24dp)
-    adapter.transactions = result take maxLinesNum
-  }
-
-  private val showLess = (result: TransactionBuffer) => {
-    toggler.setImageResource(R.drawable.ic_expand_more_black_24dp)
-    adapter.transactions = result take minLinesNum
+    adapter.switch
+    adapter set adapter.availableItems
+    adapter.notifyDataSetChanged
   }
 
   // Reactions to menu buttons
@@ -346,8 +348,8 @@ with ListUpdater { me =>
   }
 
   def viewMnemonic(top: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
-  private def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala
-    .take(maxLinesNum).map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
+  def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala.take(maxLinesNum)
+    .toVector.map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 
   class BtcView(view: View) extends TxViewHolder(view) {
     // Display given Bitcoin transaction properties to user

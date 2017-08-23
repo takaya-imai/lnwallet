@@ -80,8 +80,17 @@ with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
-  lazy val lnTitle = me getString ln_title
-  lazy val adapter = new LNAdapter
+  lazy val lnTitle = getString(ln_title)
+
+  lazy val adapter = new CutAdapter[PaymentInfo] {
+    def getItem(position: Int) = visibleItems(position)
+    def getView(position: Int, cv: View, parent: ViewGroup) = {
+      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
+      val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
+      hold fillView getItem(position)
+      view
+    }
+  }
 
   private[this] var sendPayment: PaymentRequest => Unit = none
   private[this] var makePaymentRequest = anyToRunnable(none)
@@ -307,13 +316,22 @@ with ListUpdater with SearchBar { me =>
     fab close true
   }
 
+  def toggle(v: View) = {
+    // Expand or collapse all txs
+    // adapter contains all history
+
+    adapter.switch
+    adapter set adapter.availableItems
+    adapter.notifyDataSetChanged
+  }
+
   // Payment history and search results loader
   class PaymentsViewProvider extends ReactCallback(me) { self =>
     def onCreateLoader(id: Int, bundle: Bundle) = if (lastQuery.isEmpty) recent else search
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
     def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
     val observeTablePath = db sqlPath PaymentInfoTable.table
-    private var lastQuery = new String
+    var lastQuery = new String
 
     def reload(txt: String) = runAnd(lastQuery = txt) {
       // Remember last search term to handle possible reload
@@ -322,24 +340,10 @@ with ListUpdater with SearchBar { me =>
 
     abstract class ExtendedPaymentInfoLoader extends ReactLoader[PaymentInfo](me) {
       val consume: InfoVec => Unit = payments => me runOnUiThread updatePaymentList(payments)
-      def updatePaymentList(ps: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter.payments = ps)
+      def updatePaymentList(pays: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter set pays)
       def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
       type InfoVec = Vector[PaymentInfo]
     }
-  }
-
-  class LNAdapter extends BaseAdapter {
-    def getView(position: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
-      val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
-      hold fillView getItem(position)
-      view
-    }
-
-    var payments = Vector.empty[PaymentInfo]
-    def getItem(position: Int) = payments(position)
-    def getItemId(position: Int) = position
-    def getCount = payments.size
   }
 
   class LNView(view: View) extends TxViewHolder(view) {

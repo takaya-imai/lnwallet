@@ -58,7 +58,7 @@ object ImplicitJsonFormats { me =>
   }
 
   implicit object ShaHashesWithIndexFmt
-    extends JsonFormat[ShaHashesWithIndex] {
+  extends JsonFormat[ShaHashesWithIndex] {
 
     def read(json: JsValue): ShaHashesWithIndex = json match {
       case JsArray(hashesIndexBytesSeq +: lastIndexOption +: _) =>
@@ -292,7 +292,7 @@ object ImplicitJsonFormats { me =>
     "claimHtlcTimeoutTxs", "htlcTimeoutTxs", "htlcPenaltyTxs", "commitTx")
 
   implicit object HasCommitmentsFmt
-    extends JsonFormat[HasCommitments] {
+  extends JsonFormat[HasCommitments] {
 
     def read(json: JsValue) = json.asJsObject fields "tag" match {
       case JsString("WaitFundingDoneData") => json.convertTo[WaitFundingDoneData]

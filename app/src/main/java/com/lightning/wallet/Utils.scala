@@ -48,7 +48,6 @@ import android.os.Bundle
 import ViewGroup.LayoutParams.WRAP_CONTENT
 import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
-import com.lightning.wallet.ln.PaymentRequest
 
 
 object Utils { me =>
@@ -295,7 +294,6 @@ trait TimerActivity extends AppCompatActivity { me =>
   // Screen size in inches and prefs reference
   lazy val maxDialog = metrics.densityDpi * 2.1
   lazy val scrWidth = metrics.widthPixels.toDouble / metrics.densityDpi
-  lazy val scrHeight = metrics.heightPixels.toDouble / metrics.densityDpi
   lazy val metrics = new DisplayMetrics match { case metrix =>
     getWindowManager.getDefaultDisplay getMetrics metrix
     metrix

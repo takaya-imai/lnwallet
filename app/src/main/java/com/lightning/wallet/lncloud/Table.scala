@@ -45,8 +45,8 @@ object PaymentInfoTable extends Table {
 
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
   def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $received, $routing) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 50) AND $status <> $HIDDEN"
-  def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 50"
+  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 20) AND $status <> $HIDDEN"
+  def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 20"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
