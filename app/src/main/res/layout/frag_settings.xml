@@ -17,6 +17,11 @@
         android:id="@+id/rescanWallet"
         android:text="@string/sets_rescan"/>
 
+    <Button
+        style="@style/TransButton"
+        android:id="@+id/setBackupServer"
+        android:text="@string/ln_backup"/>
+
     <View style="@style/GrayDivider"/>
 
 </LinearLayout>

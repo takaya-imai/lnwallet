@@ -163,6 +163,7 @@
     <string name="ln_backup_net_error">Could not set a Backup Server because it is not reachable</string>
 
     <!-- activity_ln_ops, activity_ln_start -->
+    <string name="ln_search_nodes">Find nodes</string>
     <string name="ln_ops_btc">Go to Bitcoin wallet</string>
     <string name="ln_ops_chan_none"><a href='https://lightning-wallet.com'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='https://lightning-wallet.com'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
     <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Channel capacity is %1$s<br><font color=#999999>Funding transaction is sent</font><br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br>Current status<br>%3$s]]></string>

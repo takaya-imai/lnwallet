@@ -8,14 +8,14 @@
         android:id="@+id/actionCloseChannel"/>
 
     <item
-        app:showAsAction="never"
-        android:title="@string/ln_backup"
-        android:id="@+id/actionSetBackupServer"/>
-
-    <item
         android:id="@+id/action_search"
         android:title="@string/ln_search"
         app:showAsAction="never|collapseActionView"
         app:actionViewClass="android.support.v7.widget.SearchView"/>
+
+    <item
+        app:showAsAction="never"
+        android:title="@string/action_settings"
+        android:id="@+id/actionSettings"/>
 
 </menu>

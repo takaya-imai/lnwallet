@@ -10,12 +10,10 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import android.view.{Menu, MenuItem, View, ViewGroup}
-import com.lightning.wallet.ln.Tools.{none, random}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import scala.util.{Failure, Success, Try}
@@ -25,6 +23,7 @@ import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
 import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
+import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.sha256
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
@@ -80,7 +79,6 @@ with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
-
   lazy val adapter = new CutAdapter[PaymentInfo] {
     def getItem(position: Int) = visibleItems(position)
     def getView(position: Int, cv: View, parent: ViewGroup) = {
@@ -150,13 +148,13 @@ with ListUpdater with SearchBar { me =>
 
   // APP MENU
 
-  override def onOptionsItemSelected(m: MenuItem) = runAnd(true) {
-    if (m.getItemId == R.id.actionSetBackupServer) new SetBackupServer
-    else if (m.getItemId == R.id.actionCloseChannel) closeChannel
+  override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
+    if (menu.getItemId == R.id.actionCloseChannel) closeAllActiveChannels
+    else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  def closeChannel = checkPass(me getString ln_close) { pass =>
-    // Close all of the channels just in case we have more than one
+  def closeAllActiveChannels = checkPass(me getString ln_close) { pass =>
+    // Close all of the channels just in case we have more than one active
     for (chan <- app.ChannelManager.alive) chan async CMDShutdown
   }
 
@@ -170,10 +168,9 @@ with ListUpdater with SearchBar { me =>
       Vector(canReceiveAmount, canSendAmount)
     } getOrElse Vector(0L, 0L)
 
-    def setTitle = {
+    def setTitle = getSupportActionBar setTitle {
       val humanSum = withSign(MilliSatoshi apply receiveSendStatus.last)
-      val title = s"<font color=#777777><strong>&#9735;</strong></font> $humanSum"
-      getSupportActionBar setTitle title.html
+      s"<font color=#777777><strong>&#9735;</strong></font>\u00A0$humanSum".html
     }
 
     val chanListener = new ChannelListener {
@@ -372,43 +369,6 @@ with ListUpdater with SearchBar { me =>
       transactSum setText sum.html
       transactWhen setText humanTime.html
       transactCircle setImageResource image
-    }
-  }
-
-  class SetBackupServer { self =>
-    val (view, field) = str2Tuple(cloudPrivateKey.publicKey.toString)
-    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
-    field setTextIsSelectable true
-
-    def proceed: Unit = rm(alert) {
-      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
-      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
-      PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
-      mkForm(dialog, me getString ln_backup, view1)
-    }
-
-    def trySave(url: String) = delayUI {
-      if (url.isEmpty) PrivateDataSaver.remove
-      else self check PrivateData(Nil, url)
-    }
-
-    def check(data: PrivateData) = {
-      val failover = LNParams getFailoverCloud data
-      val params = new PrivateStorage(failover).signedParams(random getBytes 32)
-      failover.call("check", none, params:_*).subscribe(_ => self save data, onError)
-    }
-
-    def save(privateData: PrivateData) = {
-      PrivateDataSaver saveObject privateData
-      LNParams.resetCloudAndStorage
-      app toast ln_backup_success
-    }
-
-    def onError(error: Throwable) = error.getMessage match {
-      case "keynotfound" => onFail(me getString ln_backup_key_error)
-      case "siginvalid" => onFail(me getString ln_backup_sig_error)
-      case _ => onFail(me getString ln_backup_net_error)
     }
   }
 }

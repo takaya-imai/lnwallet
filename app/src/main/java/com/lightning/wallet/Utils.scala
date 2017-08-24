@@ -7,9 +7,9 @@ import android.view._
 import org.bitcoinj.core._
 import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
+import com.lightning.wallet.lncloud._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
@@ -29,10 +29,11 @@ import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
-import com.lightning.wallet.lncloud.RatesSaver
 import android.text.method.LinkMovementMethod
+import com.lightning.wallet.ln.Tools.random
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
+import com.lightning.wallet.ln.LNParams
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import fr.acinq.bitcoin.MilliSatoshi
@@ -87,7 +88,7 @@ trait ToolbarActivity extends TimerActivity { me =>
   def initToolbar = me setSupportActionBar findViewById(R.id.toolbar).asInstanceOf[Toolbar]
   def tellWrongPass: Unit = wrap(app toast password_wrong)(mkSetsForm)
   def tellGenError: Unit = wrap(app toast err_general)(mkSetsForm)
-  private[this] var currentAnimation = Option.empty[Runnable]
+  private[this] var currentAnimation = Option.empty[TimerTask]
   protected[this] var infos = List.empty[Informer]
 
   def animate = new Runnable { self =>
@@ -97,7 +98,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     for (an <- currentAnimation) an.cancel
     currentAnimation = Some apply uiTask(self)
-    timer.schedule(currentAnimation.get, 0, 100)
+    timer.schedule(currentAnimation.get, 0, 50)
 
     private[this] var index = 1
     override def run = getSupportActionBar match { case bar =>
@@ -181,9 +182,15 @@ trait ToolbarActivity extends TimerActivity { me =>
   def mkSetsForm: Unit = {
     val form = getLayoutInflater.inflate(R.layout.frag_settings, null)
     val menu = mkForm(me negBld dialog_cancel, getString(read_settings).html, form)
+    val setBackupServer = form.findViewById(R.id.setBackupServer).asInstanceOf[Button]
     val rescanWallet = form.findViewById(R.id.rescanWallet).asInstanceOf[Button]
     val viewMnemonic = form.findViewById(R.id.viewMnemonic).asInstanceOf[Button]
     val changePass = form.findViewById(R.id.changePass).asInstanceOf[Button]
+
+    setBackupServer setOnClickListener onButtonTap {
+      // Power users may provide their own backup servers
+      rm(menu)(new SetBackupServer)
+    }
 
     rescanWallet setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_rescan) { _ =>
@@ -199,6 +206,12 @@ trait ToolbarActivity extends TimerActivity { me =>
         app.kit.wallet saveToFile app.walletFile
       } catch none finally System exit 0
 
+      rm(menu)(openForm)
+    }
+
+    viewMnemonic setOnClickListener onButtonTap {
+      // Provided as an external function because may be accessed from main page
+      def openForm = checkPass(me getString sets_mnemonic)(doViewMnemonic)
       rm(menu)(openForm)
     }
 
@@ -224,11 +237,42 @@ trait ToolbarActivity extends TimerActivity { me =>
 
       rm(menu)(openForm)
     }
+  }
 
-    viewMnemonic setOnClickListener onButtonTap {
-      // Provided as an external function because may be accessed from main page
-      def openForm = checkPass(me getString sets_mnemonic)(doViewMnemonic)
-      rm(menu)(openForm)
+  class SetBackupServer { self =>
+    val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
+    val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
+    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
+    field setTextIsSelectable true
+
+    def proceed: Unit = rm(alert) {
+      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
+      val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
+      PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
+      mkForm(dialog, me getString ln_backup, view1)
+    }
+
+    def trySave(url: String) = delayUI {
+      if (url.isEmpty) PrivateDataSaver.remove
+      else self check PrivateData(Nil, url)
+    }
+
+    def check(data: PrivateData) = {
+      val failover = LNParams getFailoverCloud data
+      val params = new PrivateStorage(failover).signedParams(random getBytes 32)
+      failover.call("check", none, params:_*).subscribe(_ => self save data, onError)
+    }
+
+    def save(privateData: PrivateData) = {
+      PrivateDataSaver saveObject privateData
+      LNParams.resetCloudAndStorage
+      app toast ln_backup_success
+    }
+
+    def onError(error: Throwable) = error.getMessage match {
+      case "keynotfound" => onFail(me getString ln_backup_key_error)
+      case "siginvalid" => onFail(me getString ln_backup_sig_error)
+      case _ => onFail(me getString ln_backup_net_error)
     }
   }
 
@@ -248,8 +292,8 @@ trait ToolbarActivity extends TimerActivity { me =>
         val liveFeePretty = sumOut format withSign(liveFinalFee)
 
         // Show formatted fees in satoshis as well as in current fiat value
-        val feeRiskyComplete = getString(fee_risky) format humanFiat(riskyFeePretty, rates.feeRisky, " ")
-        val feeLiveComplete = getString(fee_live) format humanFiat(liveFeePretty, rates.feeLive, " ")
+        val feeRiskyComplete = getString(fee_risky) format humanFiat(riskyFeePretty, riskyFinalFee, " ")
+        val feeLiveComplete = getString(fee_live) format humanFiat(liveFeePretty, liveFinalFee, " ")
         val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
 
         val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)

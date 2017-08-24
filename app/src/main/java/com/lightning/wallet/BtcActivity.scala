@@ -152,7 +152,7 @@ with ListUpdater { me =>
   def updateTitleAndSub(sub: String, infoType: Int) =
     app.kit.currentBalance match { case balance: Coin =>
       val humanSum = if (balance.isZero) walletEmpty else withSign(balance)
-      val title = s"<font color=#777777>&#579;</font> $humanSum"
+      val title = s"<font color=#777777>&#579;</font>\u00A0$humanSum"
       runOnUiThread(getSupportActionBar setTitle title.html)
       add(sub, infoType).animate
     }
