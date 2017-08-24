@@ -123,7 +123,6 @@ with ListUpdater { me =>
   lazy val feeDetails = getString(txs_fee_details)
   lazy val feeAbsent = getString(txs_fee_absent)
   lazy val walletEmpty = getString(wallet_empty)
-  lazy val btcTitle = getString(btc_title)
 
   lazy val adapter = new CutAdapter[TxWrap] {
     def getItem(position: Int) = visibleItems(position)
@@ -137,10 +136,8 @@ with ListUpdater { me =>
 
   private[this] val txsTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = me runOnUiThread tell(tx)
-    override def coinsReceived(tx: Transaction) = me runOnUiThread tell(tx)
-
-    override def txConfirmed(tx: Transaction) =
-      me runOnUiThread adapter.notifyDataSetChanged
+    override def coinsReceived(tx: Transaction): Unit = me runOnUiThread tell(tx)
+    override def txConfirmed(tx: Transaction) = me runOnUiThread adapter.notifyDataSetChanged
 
     def tell(wrap: TxWrap) = if (!wrap.nativeValue.isZero) {
       // Only update interface if this is not a watched transaction
@@ -153,20 +150,17 @@ with ListUpdater { me =>
   }
 
   def updateTitleAndSub(sub: String, infoType: Int) =
-    app.kit.currentBalance match { case balance =>
-      // Tell wallet is empty or show exact sum
-
-      val exactValue = btcTitle.format(balance: String)
-      val title = if (balance.isZero) walletEmpty else exactValue
-      me runOnUiThread getSupportActionBar.setTitle(title.html)
-      me runOnUiThread add(sub, infoType).ui
+    app.kit.currentBalance match { case balance: Coin =>
+      val humanSum = if (balance.isZero) walletEmpty else withSign(balance)
+      val title = s"<font color=#777777>&#579;</font> $humanSum"
+      runOnUiThread(getSupportActionBar setTitle title.html)
+      add(sub, infoType).animate
     }
 
   def notifySubTitle(sub: String, infoType: Int) = {
     // Here we update not just subtitle but also a title
-
     me.updateTitleAndSub(sub, infoType)
-    timer.schedule(me del infoType, 25000)
+    delAndAnimate(infoType, 20000)
   }
 
   // Initialize this activity, method is run once
@@ -293,18 +287,21 @@ with ListUpdater { me =>
   // Reactions to menu buttons
 
   def goQR(top: View) = {
-    me goTo classOf[ScanActivity]
+    val activity = classOf[ScanActivity]
+    delayUI(me goTo activity)
     fab close true
   }
 
   def goLN(top: View) = {
-    me goTo classOf[LNActivity]
+    val activity = classOf[LNActivity]
+    delayUI(me goTo activity)
     fab close true
   }
 
   def goReceiveBtcAddress(top: View) = {
     app.TransData.value = app.kit.currentAddress
-    me goTo classOf[RequestActivity]
+    val activity = classOf[RequestActivity]
+    delayUI(me goTo activity)
     fab close true
   }
 
@@ -322,10 +319,9 @@ with ListUpdater { me =>
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
-            add(me getString tx_announce, Informer.BTCEVENT).ui.run
+            add(getString(tx_announce), Informer.BTCEVENT).animate
           }
 
           override def onTxFail(exception: Throwable) =
@@ -343,7 +339,7 @@ with ListUpdater { me =>
   }
 
   def goPay(top: View) = {
-    me delayUI sendBtcTxPopup
+    delayUI(sendBtcTxPopup)
     fab close true
   }
 

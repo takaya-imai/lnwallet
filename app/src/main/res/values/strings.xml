@@ -103,7 +103,6 @@
     <string name="restore_wallet">Restore Wallet</string>
 
     <!-- activity_btc -->
-    <string name="btc_title"><![CDATA[<font color=#FF9900>ⓢ</font> %1$s]]></string>
     <string name="txs_fee_incoming"><![CDATA[<strong>Incoming transaction</strong><br>%1$s]]></string>
     <string name="txs_fee_details"><![CDATA[<strong>Outgoing transaction</strong><br>%2$s<br><strong>%1$s</strong> fee]]></string>
     <string name="txs_fee_absent"><![CDATA[<strong>Outgoing transaction</strong><br>%1$s<br><strong>No fee</strong>]]></string>
@@ -144,7 +143,6 @@
 
     <!-- SPECIFIC TO LIGHTNING NETWORK -->
 
-    <string name="ln_title"><![CDATA[<font color=#0099FE>ⓢ</font> %1$s]]></string>
     <string name="ln_send_title"><![CDATA[Send Lightning Payment<br><br><small>%1$s</small>]]></string>
     <string name="ln_receive_title">Receive Lightning Payment</string>
 

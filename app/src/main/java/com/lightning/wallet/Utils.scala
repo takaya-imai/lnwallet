@@ -9,12 +9,12 @@ import org.bitcoinj.core.listeners._
 import com.lightning.wallet.ln.MSat._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
 import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
 import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
-
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -24,7 +24,6 @@ import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
 import info.hoang8f.android.segmented.SegmentedGroup
-
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
@@ -37,14 +36,13 @@ import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import fr.acinq.bitcoin.MilliSatoshi
-
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.script.Script
-
 import scala.concurrent.Future
 import android.os.Bundle
+
 import ViewGroup.LayoutParams.WRAP_CONTENT
 import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
@@ -85,17 +83,36 @@ object Utils { me =>
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
 }
 
-trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
-  lazy val ui = anyToRunnable(getSupportActionBar setSubtitle infos.head.value)
-  private[this] var infos = List.empty[Informer]
+trait ToolbarActivity extends TimerActivity { me =>
+  def initToolbar = me setSupportActionBar findViewById(R.id.toolbar).asInstanceOf[Toolbar]
+  def tellWrongPass: Unit = wrap(app toast password_wrong)(mkSetsForm)
+  def tellGenError: Unit = wrap(app toast err_general)(mkSetsForm)
+  private[this] var currentAnimation = Option.empty[Runnable]
+  protected[this] var infos = List.empty[Informer]
+
+  def animate = new Runnable { self =>
+    private[this] val nextText = infos.head.value
+    private[this] val currentText = getSupportActionBar.getSubtitle.toString
+    private[this] val maxLength = math.max(nextText.length, currentText.length)
+
+    for (an <- currentAnimation) an.cancel
+    currentAnimation = Some apply uiTask(self)
+    timer.schedule(currentAnimation.get, 0, 100)
+
+    private[this] var index = 1
+    override def run = getSupportActionBar match { case bar =>
+      bar setSubtitle s"${nextText take index}${currentText drop index}".trim
+      if (index < maxLength) index += 1 else for (an <- currentAnimation) an.cancel
+    }
+  }
 
   val catchListener = new BlocksListener {
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
       def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
         if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.CHAINSYNC)
-        if (blocksLeft < 1) add(me getString info_progress_done, Informer.CHAINSYNC).timer.schedule(me del Informer.CHAINSYNC, 5000)
+        if (blocksLeft < 1) add(getString(info_progress_done), Informer.CHAINSYNC).delAndAnimate(Informer.CHAINSYNC, 3000)
         if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener this
-        runOnUiThread(ui)
+        animate
       }
 
       // We only add a SYNC item if we have a large enough
@@ -111,12 +128,13 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
     }
   }
 
-  val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
-    def onPeerDisconnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
-    def onPeerConnected(p: Peer, pc: Int) = me runOnUiThread update(mkTxt, Informer.PEER).ui
-    def mkTxt = app.plurOrZero(peersInfoOpts, app.kit.peerGroup.numConnectedPeers)
-    lazy val peersInfoOpts = getResources getStringArray R.array.info_peers
-  }
+  val constListener =
+    new PeerConnectedEventListener with PeerDisconnectedEventListener {
+      def onPeerConnected(p: Peer, pc: Int) = update(mkTxt, Informer.PEER).animate
+      def onPeerDisconnected(p: Peer, pc: Int) = update(mkTxt, Informer.PEER).animate
+      def mkTxt = app.plurOrZero(peersInfoOpts, app.kit.peerGroup.numConnectedPeers)
+      lazy val peersInfoOpts = getResources getStringArray R.array.info_peers
+    }
 
   val txTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = notifySubTitle(me getString tx_sent, Informer.BTCEVENT)
@@ -124,22 +142,14 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
     override def txConfirmed(tx: Transaction) = notifySubTitle(me getString tx_confirmed, Informer.TXCONFIRMED)
   }
 
-  // Settings and helper functions
-  def tellGenError: Unit = wrap(app toast err_general)(mkSetsForm)
-  def tellWrongPass: Unit = wrap(app toast password_wrong)(mkSetsForm)
-
-  def initToolbar = setSupportActionBar {
-    findViewById(R.id.toolbar).asInstanceOf[Toolbar]
-  }
-
   // Informer CRUD
-  def del(delTag: Int) = uiTask {
-    infos = infos.filterNot(_.tag == delTag)
-    ui
+  def delAndAnimate(tag: Int, delay: Int) = {
+    infos = infos.filterNot(_.tag == tag)
+    timer.schedule(animate, delay)
   }
 
-  def add(text: String, addTag: Int) = runAnd(me) {
-    infos = new Informer(text, addTag) :: infos
+  def add(text: String, tag: Int) = runAnd(me) {
+    infos = new Informer(text, tag) :: infos
   }
 
   def update(text: String, tag: Int) = runAnd(me) {
@@ -152,8 +162,8 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
     mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
 
     def infoAndNext = {
-      add(app getString pass_checking, Informer.CODECHECK).ui.run
-      timer.schedule(me del Informer.CODECHECK, 2500)
+      add(app getString pass_checking, Informer.CODECHECK).animate
+      delAndAnimate(Informer.CODECHECK, delay = 3000)
       next(secret.getText.toString)
     }
   }
@@ -201,8 +211,8 @@ trait ToolbarActivity extends TimerActivity { me: ToolbarActivity =>
 
         def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
-          add(app getString pass_changing, Informer.CODECHECK).ui.run
-          timer.schedule(me del Informer.CODECHECK, 5000)
+          add(app getString pass_changing, Informer.CODECHECK).animate
+          delAndAnimate(Informer.CODECHECK, 3000)
         }
 
         def rotatePass = {
@@ -422,7 +432,7 @@ class BtcManager(val man: RateManager) { me =>
 
   addressPaste setOnClickListener new OnClickListener {
     def onClick(button: View) = try setAddress(app getTo app.getBuffer)
-    catch { case _: Throwable => app toast dialog_address_absent }
+      catch { case _: Throwable => app toast dialog_address_absent }
   }
 
   def setAddress(adr: Address) = {

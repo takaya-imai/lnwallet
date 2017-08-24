@@ -80,7 +80,6 @@ with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
-  lazy val lnTitle = getString(ln_title)
 
   lazy val adapter = new CutAdapter[PaymentInfo] {
     def getItem(position: Int) = visibleItems(position)
@@ -99,10 +98,11 @@ with ListUpdater with SearchBar { me =>
 
   // INTERFACE IMPLEMENTING METHODS
 
-  def react(query: String) = paymentsViewProvider reload query
-  def notifySubTitle(subtitle: String, infoType: Int): Unit = {
-    add(subtitle, infoType).timer.schedule(me del infoType, 25000)
-    me runOnUiThread ui
+  def react(ask: String) = paymentsViewProvider reload ask
+  def notifySubTitle(subtitle: String, infoType: Int) = {
+    // Title will updated separately so just subtitle
+    add(subtitle, infoType).animate
+    delAndAnimate(infoType, 20000)
   }
 
   // Initialize this activity, method is run once
@@ -111,7 +111,7 @@ with ListUpdater with SearchBar { me =>
     if (app.isAlive) {
       super.onCreate(savedState)
       wrap(initToolbar)(me setContentView R.layout.activity_ln)
-      add(me getString ln_notify_connecting, Informer.LNSTATE).ui.run
+      add(getString(ln_notify_connecting), Informer.LNSTATE).animate
 
       list setAdapter adapter
       list setFooterDividersEnabled false
@@ -171,17 +171,17 @@ with ListUpdater with SearchBar { me =>
     } getOrElse Vector(0L, 0L)
 
     def setTitle = {
-      val canSendMsat = MilliSatoshi(receiveSendStatus.last)
-      val balance = lnTitle.format(canSendMsat: String)
-      getSupportActionBar setTitle balance.html
+      val humanSum = withSign(MilliSatoshi apply receiveSendStatus.last)
+      val title = s"<font color=#777777><strong>&#9735;</strong></font> $humanSum"
+      getSupportActionBar setTitle title.html
     }
 
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
-        case (_, _: NormalData, _, NORMAL) => me runOnUiThread update(me getString ln_notify_operational, Informer.LNSTATE).ui
-        case (_, _: NormalData, _, SYNC) => me runOnUiThread update(me getString ln_notify_connecting, Informer.LNSTATE).ui
+        case (_, _: NormalData, _, NORMAL) => update(getString(ln_notify_operational), Informer.LNSTATE).animate
+        case (_, _: NormalData, _, SYNC) => update(getString(ln_notify_connecting), Informer.LNSTATE).animate
         case (_, norm: NormalData, _, _) if norm.isClosing => me exitTo classOf[LNOpsActivity]
         case (_, _: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
         case (_, _: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]
@@ -191,11 +191,8 @@ with ListUpdater with SearchBar { me =>
       override def onError = {
         case ExtendedException(cmd: RetryAddHtlc) => Tools log s"Payment retry rejected $cmd"
         case ExtendedException(cmd: SilentAddHtlc) => Tools log s"Silent payment rejected $cmd"
-        case ex  @ ExtendedException(cmd: PlainAddHtlc) =>
-
-          ex.printStackTrace()
-          onFail(me getString err_general)
-        case PlainAddInSyncException(add) => onFail(me getString err_ln_add_sync)
+        case ExtendedException(_: PlainAddHtlc) => onFail(me getString err_general)
+        case _: PlainAddInSyncException => onFail(me getString err_ln_add_sync)
       }
 
       override def onProcess = {
@@ -220,8 +217,8 @@ with ListUpdater with SearchBar { me =>
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
 
         case Success(ms) => rm(alert) {
-          timer.schedule(me del Informer.LNPAYMENT, 5000)
-          add(me getString ln_send, Informer.LNPAYMENT).ui.run
+          delAndAnimate(Informer.LNPAYMENT, 3000)
+          add(getString(ln_send), Informer.LNPAYMENT).animate
           app.ChannelManager.outPaymentObs(request).foreach(_ match {
             case Some(outPayment) => chan process PlainAddHtlc(outPayment)
             case _ => onFail(me getString err_general)
@@ -261,8 +258,8 @@ with ListUpdater with SearchBar { me =>
 
       val go: Option[MilliSatoshi] => Unit = sumOption => {
         <(proceed(sumOption, bag.newPreimage), onFail)(none)
-        add(me getString ln_pr_make, Informer.LNREQUEST).ui.run
-        timer.schedule(me del Informer.LNREQUEST, 2500)
+        add(getString(ln_pr_make), Informer.LNREQUEST).animate
+        delAndAnimate(Informer.LNREQUEST, 3000)
       }
 
       def receiveAttempt = rateManager.result match {
@@ -305,17 +302,19 @@ with ListUpdater with SearchBar { me =>
 
   // Reactions to menu
   def goBitcoin(top: View) = {
-    me goTo classOf[BtcActivity]
+    val activity = classOf[BtcActivity]
+    delayUI(me goTo activity)
     fab close true
   }
 
   def goQR(top: View) = {
-    me goTo classOf[ScanActivity]
+    val activity = classOf[ScanActivity]
+    delayUI(me goTo activity)
     fab close true
   }
 
   def goReceive(top: View) = {
-    me delayUI makePaymentRequest.run
+    delayUI(makePaymentRequest.run)
     fab close true
   }
 

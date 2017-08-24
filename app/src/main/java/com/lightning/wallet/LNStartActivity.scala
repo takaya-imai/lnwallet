@@ -10,10 +10,8 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
 import scala.util.{Failure, Success}
 import android.view.{Menu, View, ViewGroup}
-import com.lightning.wallet.Utils.{app, sumIn}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
-
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
@@ -22,6 +20,7 @@ import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
+import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
@@ -48,9 +47,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   override def onBackPressed: Unit = whenBackPressed.run
 
   def react(query: String) = worker onNewQuery query
-  def notifySubTitle(subtitle: String, infoType: Int) = {
-    add(subtitle, infoType).timer.schedule(me del infoType, 25000)
-    me runOnUiThread ui
+  def notifySubTitle(sub: String, infoType: Int) = {
+    // Title will never be updated so just subtitle
+    delAndAnimate(infoType, 20000)
+    add(sub, infoType).animate
   }
 
   // Adapter for btc tx list
@@ -74,10 +74,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     if (app.isAlive) {
       super.onCreate(savedState)
       wrap(initToolbar)(me setContentView R.layout.activity_ln_start)
-      add(me getString ln_select_peer, Informer.LNSTATE).ui.run
+      add(getString(ln_select_peer), Informer.LNSTATE).animate
       getSupportActionBar setTitle ln_ops_start
 
-      // Initialize nodes list view
+      // Initialize nodes list view and search with empty query
       lnStartNodesList setOnItemClickListener onTap(onPeerSelected)
       lnStartNodesList setAdapter adapter
       react(new String)
@@ -158,7 +158,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def setListView = {
     whenBackPressed = anyToRunnable(super.onBackPressed)
-    update(selectPeer, Informer.LNSTATE).ui.run
+    update(selectPeer, Informer.LNSTATE).animate
     setVis(View.VISIBLE, View.GONE)
     app toast ln_ops_start_abort
   }
@@ -166,7 +166,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   private def setPeerView(pos: Int) = {
     MenuItemCompat collapseActionView searchItem
     lnStartDetails setText mkNodeView(adapter getItem pos)
-    update(notifyWorking, Informer.LNSTATE).ui.run
+    update(notifyWorking, Informer.LNSTATE).animate
     setVis(View.GONE, View.VISIBLE)
   }
 
