@@ -45,7 +45,7 @@ class LNCloudSpec {
 
   val chan = new Channel {
 
-    data = InitData(NodeAnnouncement(null, 1, e, null, null, null, null))
+    data = InitData(NodeAnnouncement(null, null, 1, e, null, null, null))
 
     override def doProcess(change: Any) = change match {
       case SilentAddHtlc(spec) =>

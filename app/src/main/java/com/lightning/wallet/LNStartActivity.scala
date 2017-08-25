@@ -47,10 +47,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   override def onBackPressed: Unit = whenBackPressed.run
 
   def react(query: String) = worker onNewQuery query
-  def notifySubTitle(sub: String, infoType: Int) = {
-    // Title will never be updated so just subtitle
-    delAndAnimate(infoType, 20000)
-    add(sub, infoType).animate
+  def notifySubTitle(subtitle: String, infoType: Int) = {
+    // Title will never be updated so just update subtitle
+    timer.schedule(delete(infoType).animate, 20000)
+    add(subtitle, infoType).animate
   }
 
   // Adapter for btc tx list

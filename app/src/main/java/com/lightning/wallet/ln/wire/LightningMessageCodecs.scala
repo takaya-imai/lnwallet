@@ -282,12 +282,12 @@ object LightningMessageCodecs { me =>
       (signature withContext "bitcoinSignature")
 
   val channelAnnouncementWitness =
-    (int64 withContext "shortChannelId") ::
+    (varsizebinarydata withContext "features") ::
+      (int64 withContext "shortChannelId") ::
       (publicKey withContext "nodeId1") ::
       (publicKey withContext "nodeId2") ::
       (publicKey withContext "bitcoinKey1") ::
-      (publicKey withContext "bitcoinKey2") ::
-      (varsizebinarydata withContext "features")
+      (publicKey withContext "bitcoinKey2")
 
   private val channelAnnouncement =
     (signature withContext "nodeSignature1") ::
@@ -297,13 +297,12 @@ object LightningMessageCodecs { me =>
       channelAnnouncementWitness
 
   val nodeAnnouncementWitness =
-    (uint32 withContext "timestamp") ::
+    (varsizebinarydata withContext "features") ::
+      (uint32 withContext "timestamp") ::
       (publicKey withContext "nodeId") ::
       (rgb withContext "rgbColor") ::
       (zeropaddedstring withContext "alias") ::
-      (varsizebinarydata withContext "features") ::
-      (listOfN(uint16, socketaddress) withContext "addresses")
-  // TODO: (variableSizeBytes(value = list(socketaddress), size = uint16) withContext "addresses")
+      (variableSizeBytes(value = list(socketaddress), size = uint16) withContext "addresses")
 
   val channelUpdateWitness =
     (int64 withContext "shortChannelId") ::

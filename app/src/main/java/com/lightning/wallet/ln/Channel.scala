@@ -38,6 +38,18 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     events onBecome trans
   }
 
+  def receiveSendStatus = data match {
+    case NormalData(_, commitments, None, None) =>
+      val canReceiveAmount = commitments.localCommit.spec.toRemoteMsat
+      val canSendAmount = commitments.localCommit.spec.toLocalMsat
+      Vector(canReceiveAmount, canSendAmount)
+
+    case _ =>
+      Vector(0L, 0L)
+  }
+
+  var i = 0
+
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
       case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempId,
@@ -146,7 +158,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
         if add.channelId == norm.commitments.channelId =>
 
-        // Should check if we have enough blocks to fulfill this HTLC
+        // Should check if we have enough blocktime left to fulfill this HTLC
         val c1 = Commitments.receiveAdd(norm.commitments, add, LNParams.expiry)
         me UPDATE norm.copy(commitments = c1)
 
@@ -213,12 +225,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE d1 SEND commitSig
 
 
-      // GUARD: serves as a trigger to enter negotiations when shutdown mode is active
-      case (norm @ NormalData(_, commitments, Some(local), Some(remote)), CMDProceed, NORMAL)
+      // GUARD: serves as a trigger to enter negotiations when mutual shutdown state is reached
+      case (NormalData(announce, commitments, Some(local), Some(remote) /* mutual */), CMDProceed, NORMAL)
         if Commitments.pendingHtlcs(commitments).isEmpty =>
 
         // Send a message and enter negotiations mode right away
-        startNegotiations(norm.announce, commitments, local, remote)
+        startNegotiations(announce, commitments, local, remote)
 
 
       case (norm: NormalData, sig: CommitSig, NORMAL)
@@ -226,9 +238,17 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         // We received a commit sig from them, now we can update our local commit
         val c1 ~ revokeAndAck = Commitments.receiveCommit(norm.commitments, sig)
+
         val d1 = me STORE norm.copy(commitments = c1)
         me UPDATE d1 SEND revokeAndAck
-        doProcess(CMDProceed)
+
+        if (i > 0) {
+          doProcess(CMDProceed)
+        }
+
+
+        for ((_, work) <- ConnectionManager.connections) try work.socket.close catch none
+        i +=1
 
 
       case (norm: NormalData, rev: RevokeAndAck, NORMAL)
@@ -351,7 +371,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         c1.remoteNextCommitInfo match {
           // We had sent a new sig and were waiting for their revocation
-          // they didn't receive the new sig because of the disconnection
+          // they didn't receive the new sig because disconnection happened
           // we resend the same updates and sig, also be careful about revocation
           case Left(wait) if wait.nextRemoteCommit.index == cr.nextLocalCommitmentNumber =>
             val revocationWasSentLast = c1.localCommit.index > wait.localCommitIndexSnapshot

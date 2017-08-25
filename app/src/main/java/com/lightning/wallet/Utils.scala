@@ -111,7 +111,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
       def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
         if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.CHAINSYNC)
-        if (blocksLeft < 1) add(getString(info_progress_done), Informer.CHAINSYNC).delAndAnimate(Informer.CHAINSYNC, 3000)
+        if (blocksLeft < 1) add(getString(info_progress_done), Informer.CHAINSYNC).timer.schedule(delete(Informer.CHAINSYNC).animate, 3000)
         if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener this
         animate
       }
@@ -144,9 +144,8 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   // Informer CRUD
-  def delAndAnimate(tag: Int, delay: Int) = {
+  def delete(tag: Int) = runAnd(me) {
     infos = infos.filterNot(_.tag == tag)
-    timer.schedule(animate, delay)
   }
 
   def add(text: String, tag: Int) = runAnd(me) {
@@ -164,7 +163,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     def infoAndNext = {
       add(app getString pass_checking, Informer.CODECHECK).animate
-      delAndAnimate(Informer.CODECHECK, delay = 3000)
+      timer.schedule(delete(Informer.CODECHECK).animate, 3000)
       next(secret.getText.toString)
     }
   }
@@ -225,7 +224,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
           add(app getString pass_changing, Informer.CODECHECK).animate
-          delAndAnimate(Informer.CODECHECK, 3000)
+          timer.schedule(delete(Informer.CODECHECK).animate, 3000)
         }
 
         def rotatePass = {

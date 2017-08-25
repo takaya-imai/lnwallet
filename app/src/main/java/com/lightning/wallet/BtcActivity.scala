@@ -80,11 +80,19 @@ trait ListUpdater { me: TimerActivity =>
       list addFooterView allTxsButton
     }
 
+  abstract class TxViewHolder(view: View) {
+    val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
+    val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
+    val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
+    transactSum setTypeface Typeface.MONOSPACE
+    view setTag this
+  }
+
   abstract class CutAdapter[T] extends BaseAdapter {
     // Automatically manages switching list view from short to long and back
     def switch = cut = if (cut == minLinesNum) maxLinesNum else minLinesNum
-    def getCount = visibleItems.size
-    def getItemId(pos: Int) = pos
+    def getItemId(position: Int): Long = position
+    def getCount: Int = visibleItems.size
 
     var cut: Int = minLinesNum
     var visibleItems = Vector.empty[T]
@@ -101,14 +109,6 @@ trait ListUpdater { me: TimerActivity =>
       availableItems = items1
     }
   }
-}
-
-abstract class TxViewHolder(view: View) {
-  val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
-  val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
-  val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
-  transactSum setTypeface Typeface.MONOSPACE
-  view setTag this
 }
 
 class BtcActivity extends DataReader
@@ -159,8 +159,8 @@ with ListUpdater { me =>
 
   def notifySubTitle(sub: String, infoType: Int) = {
     // Here we update not just subtitle but also a title
+    timer.schedule(delete(infoType).animate, 20000)
     me.updateTitleAndSub(sub, infoType)
-    delAndAnimate(infoType, 20000)
   }
 
   // Initialize this activity, method is run once

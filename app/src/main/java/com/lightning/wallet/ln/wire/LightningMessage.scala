@@ -66,14 +66,14 @@ case class AnnouncementSignatures(channelId: BinaryData,
                                   bitcoinSignature: BinaryData) extends RoutingMessage
 
 case class ChannelAnnouncement(nodeSignature1: BinaryData, nodeSignature2: BinaryData, bitcoinSignature1: BinaryData,
-                               bitcoinSignature2: BinaryData, shortChannelId: Long, nodeId1: PublicKey, nodeId2: PublicKey,
-                               bitcoinKey1: PublicKey, bitcoinKey2: PublicKey, features: BinaryData) extends RoutingMessage {
+                               bitcoinSignature2: BinaryData, features: BinaryData, shortChannelId: Long, nodeId1: PublicKey,
+                               nodeId2: PublicKey, bitcoinKey1: PublicKey, bitcoinKey2: PublicKey) extends RoutingMessage {
 
   val (blockHeight, txIndex, outputIndex) = fromShortId(shortChannelId)
 }
 
-case class NodeAnnouncement(signature: BinaryData, timestamp: Long, nodeId: PublicKey, rgbColor: RGB, alias: String,
-                            features: BinaryData, addresses: InetSocketAddressList) extends RoutingMessage {
+case class NodeAnnouncement(signature: BinaryData, features: BinaryData, timestamp: Long, nodeId: PublicKey,
+                            rgbColor: RGB, alias: String, addresses: InetSocketAddressList) extends RoutingMessage {
 
   val identifier = (alias + nodeId.toString).toLowerCase
 }

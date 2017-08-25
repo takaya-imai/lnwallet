@@ -79,6 +79,7 @@ with ListUpdater with SearchBar { me =>
 
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
+
   lazy val adapter = new CutAdapter[PaymentInfo] {
     def getItem(position: Int) = visibleItems(position)
     def getView(position: Int, cv: View, parent: ViewGroup) = {
@@ -96,11 +97,11 @@ with ListUpdater with SearchBar { me =>
 
   // INTERFACE IMPLEMENTING METHODS
 
-  def react(ask: String) = paymentsViewProvider reload ask
+  def react(qs: String) = paymentsViewProvider reload qs
   def notifySubTitle(subtitle: String, infoType: Int) = {
-    // Title will updated separately so just subtitle
+    // Title will updated separately so just update subtitle
+    timer.schedule(delete(infoType).animate, 20000)
     add(subtitle, infoType).animate
-    delAndAnimate(infoType, 20000)
   }
 
   // Initialize this activity, method is run once
@@ -109,7 +110,7 @@ with ListUpdater with SearchBar { me =>
     if (app.isAlive) {
       super.onCreate(savedState)
       wrap(initToolbar)(me setContentView R.layout.activity_ln)
-      add(getString(ln_notify_connecting), Informer.LNSTATE).animate
+      add(getString(ln_notify_connecting), Informer.LNSTATE)
 
       list setAdapter adapter
       list setFooterDividersEnabled false
@@ -161,15 +162,8 @@ with ListUpdater with SearchBar { me =>
   // WHEN ACTIVE CHAN IS PRESENT
 
   def manageActive(chan: Channel) = {
-    def receiveSendStatus: Vector[Long] =
-    Some(chan.data) collect { case norm: NormalData =>
-      val canReceiveAmount = norm.commitments.localCommit.spec.toRemoteMsat
-      val canSendAmount = norm.commitments.localCommit.spec.toLocalMsat
-      Vector(canReceiveAmount, canSendAmount)
-    } getOrElse Vector(0L, 0L)
-
     def setTitle = getSupportActionBar setTitle {
-      val humanSum = withSign(MilliSatoshi apply receiveSendStatus.last)
+      val humanSum = withSign(MilliSatoshi apply chan.receiveSendStatus.last)
       s"<font color=#777777><strong>&#9735;</strong></font>\u00A0$humanSum".html
     }
 
@@ -201,7 +195,7 @@ with ListUpdater with SearchBar { me =>
     sendPayment = request => {
       val title = getString(ln_send_title).format(request.description)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-      val maxMsat = MilliSatoshi apply math.min(receiveSendStatus.last, maxHtlcValue.amount)
+      val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.last, maxHtlcValue.amount)
       val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, content)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxMsat)
       val rateManager = new RateManager(hint, content)
@@ -214,8 +208,8 @@ with ListUpdater with SearchBar { me =>
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
 
         case Success(ms) => rm(alert) {
-          delAndAnimate(Informer.LNPAYMENT, 3000)
           add(getString(ln_send), Informer.LNPAYMENT).animate
+          timer.schedule(delete(Informer.LNPAYMENT).animate, 3000)
           app.ChannelManager.outPaymentObs(request).foreach(_ match {
             case Some(outPayment) => chan process PlainAddHtlc(outPayment)
             case _ => onFail(me getString err_general)
@@ -238,7 +232,7 @@ with ListUpdater with SearchBar { me =>
       val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive_title, content)
-      val maxMast = MilliSatoshi apply math.min(receiveSendStatus.head, maxHtlcValue.amount)
+      val maxMast = MilliSatoshi apply math.min(chan.receiveSendStatus.head, maxHtlcValue.amount)
       val hint = getString(satoshi_hint_max_amount) format withSign(maxMast)
       val rateManager = new RateManager(hint, content)
 
@@ -256,7 +250,7 @@ with ListUpdater with SearchBar { me =>
       val go: Option[MilliSatoshi] => Unit = sumOption => {
         <(proceed(sumOption, bag.newPreimage), onFail)(none)
         add(getString(ln_pr_make), Informer.LNREQUEST).animate
-        delAndAnimate(Informer.LNREQUEST, 3000)
+        timer.schedule(delete(Informer.LNREQUEST).animate, 3000)
       }
 
       def receiveAttempt = rateManager.result match {
