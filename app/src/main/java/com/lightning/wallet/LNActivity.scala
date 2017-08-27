@@ -109,8 +109,8 @@ with ListUpdater with SearchBar { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedState)
-      wrap(initToolbar)(me setContentView R.layout.activity_ln)
-      add(getString(ln_notify_connecting), Informer.LNSTATE)
+      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
+      add(me getString ln_notify_connecting, Informer.LNSTATE)
 
       list setAdapter adapter
       list setFooterDividersEnabled false
@@ -209,7 +209,7 @@ with ListUpdater with SearchBar { me =>
 
         case Success(ms) => rm(alert) {
           add(getString(ln_send), Informer.LNPAYMENT).animate
-          timer.schedule(delete(Informer.LNPAYMENT).animate, 3000)
+          timer.schedule(delete(Informer.LNPAYMENT).animate, 5000)
           app.ChannelManager.outPaymentObs(request).foreach(_ match {
             case Some(outPayment) => chan process PlainAddHtlc(outPayment)
             case _ => onFail(me getString err_general)
@@ -250,7 +250,7 @@ with ListUpdater with SearchBar { me =>
       val go: Option[MilliSatoshi] => Unit = sumOption => {
         <(proceed(sumOption, bag.newPreimage), onFail)(none)
         add(getString(ln_pr_make), Informer.LNREQUEST).animate
-        timer.schedule(delete(Informer.LNREQUEST).animate, 3000)
+        timer.schedule(delete(Informer.LNREQUEST).animate, 5000)
       }
 
       def receiveAttempt = rateManager.result match {

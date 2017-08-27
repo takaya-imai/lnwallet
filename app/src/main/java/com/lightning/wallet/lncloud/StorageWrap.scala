@@ -41,8 +41,8 @@ object ChannelWrap extends ChannelListener {
       .vec(_ string ChannelTable.data) map to[HasCommitments]
 
   override def onProcess = {
+    // This channel is outdated, remove it from database
     case (_, close: ClosingData, _: Command) if close.isOutdated =>
-      // This channel is outdated, remove it so we don't have it on next launch
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
   }
 }

@@ -168,7 +168,7 @@ with ListUpdater { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
-      wrap(initToolbar)(me setContentView R.layout.activity_btc)
+      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
 
       list setAdapter adapter

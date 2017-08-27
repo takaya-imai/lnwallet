@@ -73,8 +73,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   {
     if (app.isAlive) {
       super.onCreate(savedState)
-      wrap(initToolbar)(me setContentView R.layout.activity_ln_start)
-      add(getString(ln_select_peer), Informer.LNSTATE).animate
+      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
+      add(me getString ln_select_peer, Informer.LNSTATE).animate
       getSupportActionBar setTitle ln_ops_start
 
       // Initialize nodes list view and search with empty query

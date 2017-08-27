@@ -2,25 +2,20 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
-
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import org.ndeftools.util.activity.NfcReaderActivity
-
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
-
 import scala.concurrent.Future
 import java.io.FileInputStream
-
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.view.View
-import com.lightning.wallet.test.WireSpec
 
 
 trait ViewSwitch {
@@ -54,7 +49,7 @@ with TimerActivity with ViewSwitch { me =>
 
       def startUp = {
         setupAndStartDownload
-        exitTo apply classOf[LNActivity]
+        me exitTo classOf[LNActivity]
       }
     }
   }
@@ -65,7 +60,6 @@ with TimerActivity with ViewSwitch { me =>
     app.TransData.value = null
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
-    (new WireSpec).allTests
   }
 
   // NFC AND SHARE

@@ -15,8 +15,8 @@ class EmergencyActivity extends ToolbarActivity { me =>
   override def onCreate(savedInstanceState: Bundle) =
   {
     super.onCreate(savedInstanceState)
-    wrap(initToolbar)(me setContentView R.layout.activity_emergency)
-    add(getString(emerge_subtitle), Informer.EMERGENCY).animate
+    wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_emergency)
+    add(me getString emerge_subtitle, Informer.EMERGENCY).animate
     getSupportActionBar setTitle getString(emerge_title)
     <(prepareWallet, _ => app toast err_general)(none)
   }
