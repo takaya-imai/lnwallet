@@ -62,7 +62,13 @@ class WalletApp extends Application { me =>
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
   def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
-  override def onCreate = wrap(super.onCreate) { startupAppReference = me }
+
+  appReference = me
+  override def onCreate = wrap(super.onCreate) {
+    // These cannot just be lazy vals because their values may change
+    denom = denoms apply prefs.getInt(AbstractKit.DENOMINATION, 0)
+    fiatName = prefs.getString(AbstractKit.FIAT, strDollar)
+  }
 
   def setBuffer(text: String) = wrap(me toast copied_to_clipboard) {
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
@@ -139,10 +145,10 @@ class WalletApp extends Application { me =>
     }
 
     // Here and in the rest of an app we use first alive channel
-    def outPaymentObs(request: PaymentRequest) = alive.headOption.map { chan =>
+    def outPaymentObs(request: PaymentRequest) = alive.headOption map { chan =>
       val rsObs = LNParams.cloud.findRoutes(chan.data.announce.nodeId, request.nodeId)
-      for (rs <- rsObs) yield outPaymentOpt(rs, request, chan)
-    }.getOrElse(Obs just None)
+      for (routes <- rsObs) yield outPaymentOpt(routes, request, chan)
+    } getOrElse Obs.just(None)
 
     // Build payment if we actually have routes and channel has an id
     def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =

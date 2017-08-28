@@ -1,12 +1,13 @@
 package com.lightning.wallet
 
 import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
+import com.lightning.wallet.Utils.{app, sumIn, denom}
 import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
-import com.lightning.wallet.Utils.{app, sumIn}
+
 import com.lightning.wallet.ln.Tools.none
 import android.widget.Button
 import android.os.Bundle
@@ -37,11 +38,11 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   private def prettyTxAmount(tx: Transaction) =
-    sumIn format withSign(tx.txOut.head.amount)
+    sumIn.format(denom withSign tx.txOut.head.amount)
 
   private def manageFirst(chan: Channel) = {
     def manageOpening(c: Commitments, open: Transaction) = {
-      val channelCapacity = sumIn format withSign(c.commitInput.txOut.amount)
+      val channelCapacity = sumIn.format(denom withSign c.commitInput.txOut.amount)
       val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfirmations(open.txid).getOrElse(0).toLong)
       val confirmationThreshold = app.plurOrZero(number = math.max(c.remoteParams.minimumDepth, LNParams.minDepth), opts = txsConfs)
       lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity, confirmationThreshold, currentState).html
@@ -50,9 +51,10 @@ class LNOpsActivity extends TimerActivity { me =>
     }
 
     def manageNegotiations(c: Commitments) = {
-      val remainder = sumIn format withSign(MilliSatoshi apply c.localCommit.spec.toLocalMsat)
-      lnOpsDescription setText getString(ln_ops_chan_bilateral_negotiations).format(remainder).html
+      val withSign = denom withSign MilliSatoshi(c.localCommit.spec.toLocalMsat)
+      val description = getString(ln_ops_chan_bilateral_negotiations).format(sumIn format withSign)
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+      lnOpsDescription setText description.html
       lnOpsAction setText ln_force_close
     }
 

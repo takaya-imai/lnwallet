@@ -5,10 +5,9 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.crypto.ShaChain._
 
-import scala.util.{Success, Try}
-import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import com.lightning.wallet.ln.crypto.Generators
-import com.lightning.wallet.ln.MSat.satFactor
+import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
+import scala.util.{Success, Try}
 
 
 object Helpers { me =>
@@ -98,8 +97,8 @@ object Helpers { me =>
                             dustLimit: Satoshi, closingFee: Satoshi, spec: CommitmentSpec): ClosingTx = {
 
       require(spec.htlcs.isEmpty, "No HTLCs allowed")
-      val toRemoteAmount = Satoshi(spec.toRemoteMsat / satFactor)
-      val toLocalAmount = Satoshi(spec.toLocalMsat / satFactor) - closingFee
+      val toRemoteAmount = Satoshi(spec.toRemoteMsat / 1000L)
+      val toLocalAmount = Satoshi(spec.toLocalMsat / 1000L) - closingFee
       val toLocalOutput = if (toLocalAmount >= dustLimit) TxOut(toLocalAmount, localScriptPubKey) :: Nil else Nil
       val toRemoteOutput = if (toRemoteAmount >= dustLimit) TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil else Nil
       val input = TxIn(commitTxInput.outPoint, Array.emptyByteArray, sequence = 0xffffffffL) :: Nil
@@ -256,7 +255,7 @@ object Helpers { me =>
                                  fundingTxHash: BinaryData, fundingTxOutputIndex: Int,
                                  remoteFirstPoint: Point) = {
 
-      val toLocalMsat = cmd.fundingAmountSat * satFactor - cmd.pushMsat
+      val toLocalMsat = cmd.fundingAmountSat * 1000L - cmd.pushMsat
       val commitmentInput = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex,
         Satoshi(cmd.fundingAmountSat), cmd.localParams.fundingPrivKey.publicKey,
         remoteParams.fundingPubkey)

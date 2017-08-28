@@ -2,25 +2,25 @@ package com.lightning.wallet
 
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.wire._
-import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
+import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
 import scala.util.{Failure, Success}
 import android.view.{Menu, View, ViewGroup}
+import com.lightning.wallet.Utils.{app, denom}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
+
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
-import com.lightning.wallet.Utils.humanPubkey
 import android.support.v4.view.MenuItemCompat
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
-import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
@@ -150,10 +150,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   // UI utilities
 
   private def mkNodeView(info: AnnounceChansNum) = {
-    val (announce: NodeAnnouncement, quantity) = info
-    val humanId = humanPubkey(announce.nodeId.toString)
-    val humanChansNumber = app.plurOrZero(chansNumber, quantity)
-    nodeView.format(announce.alias, humanChansNumber, humanId).html
+    val (announce: NodeAnnouncement, connections) = info
+    val humanConnections = app.plurOrZero(chansNumber, connections)
+    val humanId = announce.nodeId.toString grouped 3 mkString "\u0020"
+    nodeView.format(announce.alias, humanConnections, humanId).html
   }
 
   private def setListView = {
@@ -171,11 +171,11 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFunding(chan: Channel, their: Init) = {
-    val walletBalance = withSign(app.kit.currentBalance)
-    val maxCapacity = withSign(LNParams.maxChannelCapacity)
+    val walletBalance = denom withSign app.kit.currentBalance
+    val maxCapacity = denom withSign LNParams.maxChannelCapacity
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
-    val rateManager = new RateManager(getString(satoshi_hint_max_capacity_wallet).format(maxCapacity, walletBalance), content)
+    val rateManager = new RateManager(getString(amount_hint_newchan).format(maxCapacity, walletBalance), content)
 
     def attempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
@@ -183,7 +183,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_small
 
       case Success(ms) => rm(alert) {
-        val amountSat = ms.amount / satFactor
+        val amountSat = ms.amount / sat2msatFactor
         val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
         val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)

@@ -14,7 +14,8 @@ import javax.annotation.Nullable;
 
 
 public abstract class AbstractKit extends AbstractIdleService {
-    public static final String CURRENCY = "fiatCurrencyOfChoice";
+    public static final String DENOMINATION = "bitcoinDenomination";
+    public static final String FIAT = "fiatCurrencyOfChoice";
     public static final String ERROR_REPORT = "errorReport";
 
     // Bitcoin wallet core pieces

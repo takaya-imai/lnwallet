@@ -2,12 +2,9 @@ package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
-import java.text.{DecimalFormat, DecimalFormatSymbols}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
-import com.lightning.wallet.ln.crypto.RandomGenerator
 import language.implicitConversions
-import org.bitcoinj.core.Coin
-import java.util.Locale
+import fr.acinq.bitcoin.BinaryData
+import crypto.RandomGenerator
 
 
 object ~ {
@@ -39,27 +36,6 @@ object Tools {
     if (fundingOutputIndex >= 65536 | fundingHash.size != 32) throw new LightningException
     else fundingHash.take(30) :+ fundingHash.data(30).^(fundingOutputIndex >> 8).toByte :+
       fundingHash.data(31).^(fundingOutputIndex).toByte
-}
-
-object MSat {
-  val satFactor = 1000L
-  val btcFactor = 100000000000L
-  val locale = new Locale("en", "US")
-  val baseFiat = new DecimalFormat("#,###,###.##")
-  val baseSat = new DecimalFormat("###,###,###.###")
-  val symbols = new DecimalFormatSymbols(locale)
-  baseFiat setDecimalFormatSymbols symbols
-  baseSat setDecimalFormatSymbols symbols
-
-  def withSign(sum: String): String = s"ⓢ\u00A0$sum"
-  def btcBigDecimal2MilliSatoshi(btc: BigDecimal): MilliSatoshi = MilliSatoshi(amount = (btc * btcFactor).toLong)
-  def satString2MilliSatoshi(sat: String): MilliSatoshi = MilliSatoshi(amount = (BigDecimal(sat) * satFactor).toLong)
-  implicit def milliSatoshi2String(msat: MilliSatoshi): String = baseSat format BigDecimal(msat.amount) / satFactor
-  implicit def satoshi2String(msat: Satoshi): String = baseSat format msat.amount
-  implicit def coin2String(coin: Coin): String = baseSat format coin.value
-
-  implicit def milliSatoshi2Coin(msat: MilliSatoshi): Coin = Coin.valueOf(msat.amount / satFactor)
-  implicit def coin2MilliSatoshi(coin: Coin): MilliSatoshi = MilliSatoshi(coin.value * satFactor)
 }
 
 object Features {

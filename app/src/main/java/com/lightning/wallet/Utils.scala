@@ -1,17 +1,16 @@
 package com.lightning.wallet
 
-import Utils._
 import R.string._
 import android.text._
 import android.view._
+import android.widget._
 import org.bitcoinj.core._
+import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
-import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.lncloud._
 import org.bitcoinj.wallet.listeners._
+import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import android.widget.{ArrayAdapter, LinearLayout, ListView, TextView}
-import android.widget.{AdapterView, Button, EditText, RadioGroup}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
@@ -49,39 +48,41 @@ import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
 
 
-object Utils { me =>
+object Utils {
   type TryMSat = Try[MilliSatoshi]
-  // Cannot have lazy var so use this
-  var startupAppReference: WalletApp = _
-  lazy val app = startupAppReference
+  var appReference: WalletApp = _
+  var denom: Denomination = _
+  var fiatName: String = _
 
-  val passType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+  lazy val app = appReference
+  lazy val sumIn = app getString txs_sum_in
+  lazy val sumOut = app getString txs_sum_out
+  lazy val denoms = List(SatDenomination, BitDenomination, MBtcDenomination, BtcDenomination)
   val textType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+  val passType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
 
   // Mapping from text to Android id integer
   val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")
   val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeCNY -> strYuan)
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYuan -> typeCNY)
-
-  val appName = "Bitcoin"
   val nullFail = Failure(null)
-  lazy val sumIn = app getString txs_sum_in
-  lazy val sumOut = app getString txs_sum_out
+  val appName = "Bitcoin"
 
-  def humanPubkey(key: String) = key grouped 3 mkString "\u0020"
-  def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
-  def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = inFiat(ms) match {
-    case Success(amt) if currentFiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} CNY</font>"
-    case Success(amt) if currentFiatName == strEuro => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} EUR</font>"
-    case Success(amt) => s"$prefix$div<font color=#999999>≈ ${baseFiat format amt} USD</font>"
-    case _ => prefix
+  def changeDenom = {
+    val index1 = (denoms.indexOf(denom) + 1) % denoms.size
+    app.prefs.edit.putInt(AbstractKit.DENOMINATION, index1).commit
+    denom = denoms(index1)
   }
 
-  // Fiat rates related functions, all transform a Try monad
-  // Rate is fiat per BTC so we need to divide by btc factor in the end
-  def currentFiatName: String = app.prefs.getString(AbstractKit.CURRENCY, strDollar)
-  def inFiat(ms: MilliSatoshi) = currentRate.map(perBtc => ms.amount * perBtc / btcFactor)
-  def currentRate: Try[Double] = Try(RatesSaver.rates exchange currentFiatName)
+  def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
+  def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
+  def msatInFiat(msat: MilliSatoshi) = currentRate.map(perBtc => msat.amount * perBtc / btc2msatFactor)
+  def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = msatInFiat(ms) match {
+    case Success(amt) if fiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} CNY</font>"
+    case Success(amt) if fiatName == strEuro => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} EUR</font>"
+    case Success(amt) => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} USD</font>"
+    case _ => prefix
+  }
 }
 
 trait ToolbarActivity extends TimerActivity { me =>
@@ -283,19 +284,16 @@ trait ToolbarActivity extends TimerActivity { me =>
     import RatesSaver.rates
     def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
       <(makeTx(password, rates.feeRisky), onTxFail) { feeEstimate: Transaction =>
-        val riskyFinalFee = rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
-        val liveFinalFee = rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val riskyFinalFee: MilliSatoshi = rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val liveFinalFee: MilliSatoshi = rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val riskyFeePretty = sumOut format denom.withSign(riskyFinalFee)
+        val liveFeePretty = sumOut format denom.withSign(liveFinalFee)
 
-        // Mark fees as red because we are the ones who always pay them
-        val riskyFeePretty = sumOut format withSign(riskyFinalFee)
-        val liveFeePretty = sumOut format withSign(liveFinalFee)
-
-        // Show formatted fees in satoshis as well as in current fiat value
+        // Show formatted fees as well as in current fiat value
         val feeRiskyComplete = getString(fee_risky) format humanFiat(riskyFeePretty, riskyFinalFee, " ")
         val feeLiveComplete = getString(fee_live) format humanFiat(liveFeePretty, liveFinalFee, " ")
-        val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
-
         val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
+        val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
         val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
         val slot = android.R.layout.select_dialog_singlechoice
         lst setAdapter new ArrayAdapter(me, slot, feesOptions)
@@ -321,9 +319,9 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     def errorWhenMakingTx: PartialFunction[Throwable, String] = {
       case insufficientMoneyException: InsufficientMoneyException =>
-        val missing = withSign(insufficientMoneyException.missing)
-        val balance = withSign(app.kit.currentBalance)
-        val sending = withSign(pay.cn)
+        val missing = denom withSign insufficientMoneyException.missing
+        val balance = denom withSign app.kit.currentBalance
+        val sending = denom withSign pay.cn
 
         val template = app getString err_not_enough_funds
         template.format(balance, sending, missing)
@@ -433,37 +431,39 @@ trait TimerActivity extends AppCompatActivity { me =>
 }
 
 class RateManager(extra: String, val content: View) { me =>
+  val hintDenom = content.findViewById(R.id.hintDenom).asInstanceOf[TextView]
   val satInput = content.findViewById(R.id.inputAmount).asInstanceOf[EditText]
   val fiatType = content.findViewById(R.id.fiatType).asInstanceOf[SegmentedGroup]
   val fiatInput = content.findViewById(R.id.fiatInputAmount).asInstanceOf[EditText]
-  def setSum(res: TryMSat) = satInput.setText(res map milliSatoshi2String getOrElse null)
-  def result: TryMSat = Try apply satString2MilliSatoshi(satInput.getText.toString.noCommas)
+  def result: TryMSat = Try(denom rawString2MSat satInput.getText.toString.noCommas)
+  def setSum(res: TryMSat) = satInput.setText(res map denom.formatted getOrElse null)
+  def fiatDecimal = BigDecimal(fiatInput.getText.toString.noCommas)
 
   val fiatListener = new TextChangedWatcher {
-    def fiatDecimal = BigDecimal(fiatInput.getText.toString.noCommas)
-    def upd = setSum(currentRate.map(perBtc => fiatDecimal / perBtc) map btcBigDecimal2MilliSatoshi)
+    def upd = setSum(currentRate.map(perBtc => fiatDecimal / perBtc) map btcBigDecimal2MSat)
     def onTextChanged(s: CharSequence, start: Int, b: Int, c: Int) = if (fiatInput.hasFocus) upd
   }
 
   val bitListener = new TextChangedWatcher {
-    def upd = fiatInput.setText(result flatMap inFiat map baseFiat.format getOrElse null)
+    def upd = fiatInput.setText(result flatMap msatInFiat map formatFiat.format getOrElse null)
     def onTextChanged(s: CharSequence, start: Int, b: Int, c: Int) = if (satInput.hasFocus) upd
   }
 
   fiatType setOnCheckedChangeListener new OnCheckedChangeListener {
     def onCheckedChanged(radioGroupView: RadioGroup, newFiatName: Int) = {
-      app.prefs.edit.putString(AbstractKit.CURRENCY, fiatMap apply newFiatName).commit
+      // We update both runtime variable and saved value for future launches
+
+      fiatName = fiatMap apply newFiatName
+      app.prefs.edit.putString(AbstractKit.FIAT, fiatName).commit
       if (fiatInput.hasFocus) fiatListener.upd else bitListener.upd
-      fiatInput setHint currentFiatName
+      fiatInput setHint fiatName
     }
   }
 
-  val hintMsat = content.findViewById(R.id.hintMsat).asInstanceOf[TextView]
-  hintMsat setText app.getString(spend_amount_hint).format(extra).html
-
   satInput addTextChangedListener bitListener
   fiatInput addTextChangedListener fiatListener
-  fiatType check revFiatMap(currentFiatName)
+  hintDenom setText denom.txt.format(extra).html
+  fiatType check revFiatMap(fiatName)
   satInput.requestFocus
 }
 
@@ -488,39 +488,35 @@ class BtcManager(val man: RateManager) { me =>
 
 
 trait PayData {
-  def destination: String
   def sendRequest: SendRequest
+  def destination: String
   def cn: Coin
 
-  def cute(direction: String) = {
-    val colored = direction format destination
-    val top = colored + "<br><br>" + withSign(cn)
-    humanFiat(top, cn)
+  def cute(direction: String): String = coin2MSat(cn) match { case msat =>
+    val top = direction.format(destination) + "<br><br>" + denom.withSign(msat)
+    humanFiat(top, msat)
   }
 }
 
-case class AddrData(cn: Coin, adr: Address) extends PayData {
-  def link = BitcoinURI.convertToBitcoinURI(adr, cn, null, null)
-  def sendRequest = SendRequest.to(adr, cn)
-  def destination = humanAddr(adr)
+case class AddrData(cn: Coin, address: Address) extends PayData {
+  def link = BitcoinURI.convertToBitcoinURI(address, cn, null, null)
+  def sendRequest = SendRequest.to(address, cn)
+  def destination = humanAddr(address)
 }
 
-case class EmptyAddrData(adr: Address) extends PayData {
-  def link = BitcoinURI.convertToBitcoinURI(adr, cn, null, null)
-  def sendRequest = SendRequest emptyWallet adr
-  def destination = humanAddr(adr)
+case class EmptyAddrData(address: Address) extends PayData {
+  // A special case for explicitly emptying our bitcoin wallet
+  def sendRequest = SendRequest emptyWallet address
+  def destination = humanAddr(address)
   def cn = app.kit.currentBalance
 }
 
 case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {
-  // For now this will be exlusively used for funding payment channels
+  // This will be exlusively used for funding LN payment channels
+  private[this] val funding = new Transaction(app.params)
+  def sendRequest = SendRequest forTx funding
   def destination = app getString txs_p2wsh
-
-  def sendRequest = {
-    val funding = new Transaction(app.params)
-    funding.addOutput(cn, pay2wsh)
-    SendRequest forTx funding
-  }
+  funding.addOutput(cn, pay2wsh)
 }
 
 

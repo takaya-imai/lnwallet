@@ -3,13 +3,13 @@ package com.lightning.wallet
 import android.widget._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
-import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.lncloud._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
@@ -159,12 +159,15 @@ with ListUpdater with SearchBar { me =>
     for (chan <- app.ChannelManager.alive) chan async CMDShutdown
   }
 
-  // WHEN ACTIVE CHAN IS PRESENT
-
   def manageActive(chan: Channel) = {
-    def setTitle = getSupportActionBar setTitle {
-      val humanSum = withSign(MilliSatoshi apply chan.receiveSendStatus.last)
-      s"<font color=#777777><strong>&#9735;</strong></font>\u00A0$humanSum".html
+    toolbar setOnClickListener onButtonTap {
+      // User may change denomination on the fly
+      wrap(adapter.notifyDataSetChanged)(changeDenom)
+    }
+
+    def setTitle = {
+      val msat = MilliSatoshi(chan.receiveSendStatus.last)
+      getSupportActionBar.setTitle(denom withSign msat)
     }
 
     val chanListener = new ChannelListener {
@@ -193,12 +196,10 @@ with ListUpdater with SearchBar { me =>
     }
 
     sendPayment = request => {
-      val title = getString(ln_send_title).format(request.description)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
       val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.last, maxHtlcValue.amount)
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, content)
-      val hint = getString(satoshi_hint_max_amount) format withSign(maxMsat)
-      val rateManager = new RateManager(hint, content)
+      val rateManager = new RateManager(getString(amount_hint_maxamount).format(denom withSign maxMsat), content)
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), getString(ln_send_title).format(request.description).html, content)
 
       def sendAttempt = rateManager.result match {
         case Failure(_) => app toast dialog_sum_empty
@@ -233,7 +234,7 @@ with ListUpdater with SearchBar { me =>
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive_title, content)
       val maxMast = MilliSatoshi apply math.min(chan.receiveSendStatus.head, maxHtlcValue.amount)
-      val hint = getString(satoshi_hint_max_amount) format withSign(maxMast)
+      val hint = getString(amount_hint_maxamount).format(denom withSign maxMast)
       val rateManager = new RateManager(hint, content)
 
       def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
@@ -344,8 +345,8 @@ with ListUpdater with SearchBar { me =>
 
     def fillView(info: PaymentInfo) = {
       val marking: String = info match {
-        case in: IncomingPayment => sumIn format milliSatoshi2String(in.received)
-        case out: OutgoingPayment => sumOut format milliSatoshi2String(out.received)
+        case in: IncomingPayment => sumIn.format(denom formatted in.received)
+        case out: OutgoingPayment => sumOut.format(denom formatted out.received)
       }
 
       val image = info match {

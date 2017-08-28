@@ -3,9 +3,17 @@ package com.lightning.wallet
 import android.widget._
 import org.bitcoinj.core._
 import collection.JavaConverters._
-import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
+import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
+import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
+import android.provider.Settings.{System => FontSystem}
+import android.view.{Menu, MenuItem, View, ViewGroup}
+import com.lightning.wallet.Utils._
+import scala.util.{Failure, Success, Try}
+
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import android.text.format.DateUtils.getRelativeTimeSpanString
@@ -15,19 +23,13 @@ import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import com.lightning.wallet.ln.PaymentRequest
 import android.text.format.DateFormat
+import fr.acinq.bitcoin.MilliSatoshi
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
 import android.graphics.Typeface
 import android.content.Intent
 import android.os.Bundle
 import android.net.Uri
-
-import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
-import android.provider.Settings.{System => FontSystem}
-import android.view.{Menu, MenuItem, View, ViewGroup}
-import com.lightning.wallet.Utils.{TryMSat, app}
-import scala.util.{Failure, Success, Try}
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -67,7 +69,7 @@ trait ListUpdater { me: TimerActivity =>
   lazy val allTxsButton = getLayoutInflater.inflate(R.layout.frag_txs_all, null)
   lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
-  lazy val minLinesNum = 4
+  lazy val minLinesNum = 5
   val maxLinesNum = 25
 
   def startListUpdates(adapter: BaseAdapter) =
@@ -150,10 +152,9 @@ with ListUpdater { me =>
   }
 
   def updateTitleAndSub(sub: String, infoType: Int) =
-    app.kit.currentBalance match { case balance: Coin =>
-      val humanSum = if (balance.isZero) walletEmpty else withSign(balance)
-      val title = s"<font color=#777777>&#579;</font>\u00A0$humanSum"
-      runOnUiThread(getSupportActionBar setTitle title.html)
+    coin2MSat(app.kit.currentBalance) match { case msat =>
+      val title = if (msat.amount < 1) walletEmpty else denom withSign msat
+      runOnUiThread(getSupportActionBar setTitle title)
       add(sub, infoType).animate
     }
 
@@ -176,13 +177,19 @@ with ListUpdater { me =>
       me startListUpdates adapter
       me setDetecting true
 
+      toolbar setOnClickListener onButtonTap {
+        wrap(adapter.notifyDataSetChanged)(changeDenom)
+        notifySubTitle(constListener.mkTxt, Informer.PEER)
+      }
+
       list setOnItemClickListener onTap { pos =>
         val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
         val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_transaction_details, null)
-        val confNumber = detailsWrapper.findViewById(R.id.confNumber).asInstanceOf[TextView]
         val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
 
         val wrap = adapter getItem pos
+        val stamp = time(wrap.tx.getUpdateTime)
+        val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
         val objects = wrap.payDatas.flatMap(_.toOption).map(_.cute(wrap.marking).html).toArray
         lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, objects)
         lst setHeaderDividersEnabled false
@@ -193,14 +200,11 @@ with ListUpdater { me =>
           me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
         }
 
-        val stamp = time(wrap.tx.getUpdateTime).html
-        val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
-        val humanFee = if (wrap.nativeValue.isPositive) feeIncoming format confirms else wrap.fee match {
-          case Some(fee) => feeDetails.format(withSign(fee), confirms) case None => feeAbsent format confirms
+        wrap.fee match {
+          case _ if wrap.nativeValue.isPositive => mkForm(me negBld dialog_ok, feeIncoming.format(stamp, confirms).html, lst)
+          case Some(fee) => mkForm(me negBld dialog_ok, feeDetails.format(stamp, confirms, denom withSign fee).html, lst)
+          case None => mkForm(me negBld dialog_ok, feeAbsent.format(stamp, confirms).html, lst)
         }
-
-        mkForm(me negBld dialog_ok, stamp, lst)
-        confNumber setText humanFee.html
       }
 
       // Wait for transactions list
@@ -257,7 +261,7 @@ with ListUpdater { me =>
 
       case uri: BitcoinURI =>
         app.TransData.value = null
-        val tryAmount: TryMSat = Try(uri.getAmount)
+        val tryAmount = Try(uri.getAmount: MilliSatoshi)
         sendBtcTxPopup.set(tryAmount, uri.getAddress)
 
       case adr: Address =>
@@ -308,7 +312,7 @@ with ListUpdater { me =>
   def sendBtcTxPopup: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_btc, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), me getString action_bitcoin_send, content)
-    val rateManager = new RateManager(getString(satoshi_hint_wallet) format withSign(app.kit.currentBalance), content)
+    val rateManager = new RateManager(getString(amount_hint_wallet).format(denom withSign app.kit.currentBalance), content)
     val spendManager = new BtcManager(rateManager)
 
     def attempt = rateManager.result match {
@@ -319,13 +323,14 @@ with ListUpdater { me =>
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
+
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
             add(getString(tx_announce), Informer.BTCEVENT).animate
           }
 
           override def onTxFail(exception: Throwable) =
-            mkForm(mkChoiceDialog(me delayUI sendBtcTxPopup.set(ok, pay.adr), none,
+            mkForm(mkChoiceDialog(me delayUI sendBtcTxPopup.set(ok, pay.address), none,
               dialog_ok, dialog_cancel), null, errorWhenMakingTx apply exception)
         }
 
@@ -356,7 +361,7 @@ with ListUpdater { me =>
         else await
 
       transactWhen setText when(System.currentTimeMillis, wrap.tx.getUpdateTime).html
-      transactSum setText  wrap.marking.format(wrap.nativeValueWithoutFee: String).html
+      transactSum setText wrap.marking.format(denom formatted wrap.nativeValueWithoutFee).html
       transactCircle setImageResource statusImage
     }
   }

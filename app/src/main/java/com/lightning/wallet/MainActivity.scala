@@ -57,7 +57,6 @@ with TimerActivity with ViewSwitch { me =>
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
   {
-    app.TransData.value = null
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
   }

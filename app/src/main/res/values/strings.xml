@@ -50,12 +50,14 @@
     <string name="dialog_next">Next</string>
     <string name="dialog_cancel">Cancel</string>
 
-    <string name="satoshi_hint_max_amount"><![CDATA[max amount %1$s]]></string>
-    <string name="satoshi_hint_wallet"><![CDATA[wallet balance %1$s]]></string>
-    <string name="satoshi_hint_max_capacity_wallet"><![CDATA[max capacity %1$s<br>wallet balance %2$s]]></string>
-    <string name="spend_amount_hint"><![CDATA[Amount in Satoshi<br><small>%1$s</small>]]></string>
+    <string name="amount_hint_maxamount"><![CDATA[max amount %1$s]]></string>
+    <string name="amount_hint_wallet"><![CDATA[wallet balance %1$s]]></string>
+    <string name="amount_hint_newchan"><![CDATA[max capacity %1$s<br>wallet balance %2$s]]></string>
+    <string name="amount_hint_sat"><![CDATA[Amount in Satoshi<br><small>%1$s</small>]]></string>
+    <string name="amount_hint_btc"><![CDATA[Amount in Bitcoin<br><small>%1$s</small>]]></string>
+    <string name="amount_hint_mbtc"><![CDATA[Amount in mBTC<br><small>%1$s</small>]]></string>
+    <string name="amount_hint_bit"><![CDATA[Amount in Bits<br><small>%1$s</small>]]></string>
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
-    <string name="spend_address_hint">Bitcoin address</string>
 
     <string name="dialog_address_absent">No valid address found in clipboard</string>
     <string name="dialog_address_wrong">Bitcoin address is required</string>
@@ -103,9 +105,9 @@
     <string name="restore_wallet">Restore Wallet</string>
 
     <!-- activity_btc -->
-    <string name="txs_fee_incoming"><![CDATA[<strong>Incoming transaction</strong><br>%1$s]]></string>
-    <string name="txs_fee_details"><![CDATA[<strong>Outgoing transaction</strong><br>%2$s<br><strong>%1$s</strong> fee]]></string>
-    <string name="txs_fee_absent"><![CDATA[<strong>Outgoing transaction</strong><br>%1$s<br><strong>No fee</strong>]]></string>
+    <string name="txs_fee_incoming"><![CDATA[%1$s<br><strong>Incoming transaction</strong><br>%2$s]]></string>
+    <string name="txs_fee_details"><![CDATA[%1$s<br><strong>Outgoing transaction</strong><br>%2$s<br><strong>%3$s</strong> fee]]></string>
+    <string name="txs_fee_absent"><![CDATA[%1$s<br><strong>Outgoing transaction</strong><br>%2$s<br><strong>No fee</strong>]]></string>
 
     <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
@@ -138,7 +140,7 @@
     <string name="nfc_settings">Enable NFC</string>
     <string name="nfc_got">Got an NFC payment request, would you like to proceed?</string>
     <string name="nfc_error">Could not process an NFC message\nbecause it is malformed or empty</string>
-    <string name="ln_qr_warning"><![CDATA[<small>Disposable payment request</small><br>Do not reuse this QR code]]></string>
+    <string name="ln_qr_warning"><![CDATA[Disposable payment request<br>Do not reuse this QR code]]></string>
     <string name="nfc_payee_tip">This payment request can be sent by touching two devices back-to-back if the other device also supports NFC technology</string>
 
     <!-- SPECIFIC TO LIGHTNING NETWORK -->

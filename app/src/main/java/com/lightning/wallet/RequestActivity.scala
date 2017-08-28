@@ -2,8 +2,8 @@ package com.lightning.wallet
 
 import android.graphics._
 import com.lightning.wallet.Utils._
-import com.lightning.wallet.ln.MSat._
 import com.lightning.wallet.R.string._
+import com.lightning.wallet.Denomination._
 
 import java.io.{File, FileOutputStream}
 import android.os.{Bundle, Environment}
@@ -71,7 +71,6 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   lazy val bottomSize = getResources getDimensionPixelSize R.dimen.bitmap_bottom_size
   lazy val topSize = getResources getDimensionPixelSize R.dimen.bitmap_top_size
   lazy val qrSize = getResources getDimensionPixelSize R.dimen.bitmap_qr_size
-  lazy val btcAddressHint = me getString spend_address_hint
   lazy val lnWarning = me getString ln_qr_warning
 
   case class NFCData(data: String) {
@@ -92,12 +91,12 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
 
     app.TransData.value match {
       case request: PaymentRequest if request.amount.isDefined =>
-        showInfo(drawAll(withSign(request.amount.get), lnWarning.html),
+        showInfo(drawAll(denom withSign request.amount.get, lnWarning.html),
           PaymentRequest write request)
 
       case request: PaymentRequest => showInfo(drawBottom(lnWarning.html), PaymentRequest write request)
-      case address: Address => showInfo(drawAll(btcAddressHint, Utils humanAddr address), address.toString)
-      case pay: AddrData => showInfo(drawAll(withSign(pay.cn), Utils humanAddr pay.adr), pay.link)
+      case pay: AddrData => showInfo(drawAll(denom withSign pay.cn, Utils humanAddr pay.address), pay.link)
+      case address: Address => showInfo(drawBottom(Utils humanAddr address), address.toString)
       case _ => finish
     }
   }
@@ -195,6 +194,7 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   def onNdefPushCompleted = none
   def onNfcStateEnabled = none
 
+  // When NFC is available we show a tip so users would know how to use it
   def showTip(v: View) = showForm(negBld(dialog_ok).setMessage(me getString nfc_payee_tip).create)
   def goSettings(v: View) = startNfcSharingSettingsActivity
 }
