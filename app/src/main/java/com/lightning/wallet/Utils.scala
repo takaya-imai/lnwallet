@@ -14,10 +14,10 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
+import java.util.{Date, Timer, TimerTask}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
-import java.util.{Timer, TimerTask}
 
 import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
@@ -39,6 +39,7 @@ import fr.acinq.bitcoin.MilliSatoshi
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
+import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.script.Script
 import scala.concurrent.Future
 import android.os.Bundle
@@ -99,7 +100,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     for (an <- currentAnimation) an.cancel
     currentAnimation = Some apply uiTask(self)
-    timer.schedule(currentAnimation.get, 0, 100)
+    timer.schedule(currentAnimation.get, 0, 75)
 
     private[this] var index = 2
     override def run = getSupportActionBar match { case bar =>
@@ -175,8 +176,24 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   def doViewMnemonic(password: String) =
     <(Mnemonic decrypt password, _ => tellGenError) { seed =>
-      // This method is used by both button on btc activity and settings menu
-      mkForm(me negBld dialog_ok, me getString sets_noscreen, Mnemonic text seed)
+      lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
+      lazy val alert: AlertDialog = mkForm(dialog, me getString sets_noscreen, Mnemonic text seed)
+      alert
+
+      def warnUser: Unit = rm(alert) {
+        lazy val dialog1 = mkChoiceDialog(rm(alert1)(encryptAndExport), none, dialog_ok, dialog_cancel)
+        lazy val alert1: AlertDialog = mkForm(dialog1, null, getString(mnemonic_export_details).html)
+        alert1
+      }
+
+      def encryptAndExport: Unit = {
+        val (crypter, key) = app getCrypter password
+        val cipher = crypter.encrypt(Mnemonic text seed getBytes "UTF-8", key)
+        val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
+        share.putExtra(android.content.Intent.EXTRA_SUBJECT, s"Encrypted mnemonic ${new Date}")
+        share.putExtra(android.content.Intent.EXTRA_TEXT, HEX encode cipher.encryptedBytes)
+        me startActivity share.putExtra(Intent.EXTRA_STREAM, cipher.encryptedBytes)
+      }
     }
 
   def mkSetsForm: Unit = {
@@ -394,8 +411,7 @@ trait TimerActivity extends AppCompatActivity { me =>
 
   // Show an emergency page in case of a fatal error
   override def onCreate(savedInstanceState: Bundle): Unit = {
-    // TODO: remove in production
-    //Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
+    Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
     super.onCreate(savedInstanceState)
   }
 

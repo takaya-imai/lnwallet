@@ -34,6 +34,7 @@
 
     <!-- headers with links -->
     <string name="mnemonic_info">Mnemonic code is super important!\n<a href='https://lightning-wallet.com/#mnemonic-code'>Read about it</a> and be sure to save it\n\nWith mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins</string>
+    <string name="mnemonic_export_details"><![CDATA[Mnemonic code will be encrypted and exported using <strong>your current wallet password</strong><br><br>You are strongly advised to read a <a href=https://lightning-wallet.com/#mnemonic-code>related section</a> of wallet manual before proceeding with this]]></string>
     <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
     <string name="read_settings"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read a short app manual</a><br><br></small>Wallet settings]]></string>
 
@@ -49,6 +50,7 @@
     <string name="dialog_pay">Pay</string>
     <string name="dialog_next">Next</string>
     <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_export">Export</string>
 
     <string name="amount_hint_maxamount"><![CDATA[max amount %1$s]]></string>
     <string name="amount_hint_wallet"><![CDATA[wallet balance %1$s]]></string>

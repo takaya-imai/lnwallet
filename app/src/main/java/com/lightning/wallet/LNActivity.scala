@@ -111,14 +111,12 @@ with ListUpdater with SearchBar { me =>
       super.onCreate(savedState)
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
+      me startListUpdates adapter
+      me setDetecting true
 
       list setAdapter adapter
       list setFooterDividersEnabled false
       paymentsViewProvider reload new String
-      me startListUpdates adapter
-      me setDetecting true
-
-      // Wire up general listeners
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
       app.kit.wallet addTransactionConfidenceEventListener txTracker

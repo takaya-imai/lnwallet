@@ -18,6 +18,7 @@
 
     <application
         android:name="WalletApp"
+        android:fullBackupContent="true"
         android:label="@string/app_name"
         android:icon="@drawable/ic_launcher">
 

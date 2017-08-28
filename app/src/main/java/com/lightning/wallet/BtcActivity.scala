@@ -3,6 +3,7 @@ package com.lightning.wallet
 import android.widget._
 import org.bitcoinj.core._
 import collection.JavaConverters._
+import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -11,7 +12,6 @@ import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
 import android.view.{Menu, MenuItem, View, ViewGroup}
-import com.lightning.wallet.Utils._
 import scala.util.{Failure, Success, Try}
 
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
@@ -171,9 +171,6 @@ with ListUpdater { me =>
       super.onCreate(savedInstanceState)
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
-
-      list setAdapter adapter
-      list setFooterDividersEnabled false
       me startListUpdates adapter
       me setDetecting true
 
@@ -182,6 +179,8 @@ with ListUpdater { me =>
         notifySubTitle(constListener.mkTxt, Informer.PEER)
       }
 
+      list setAdapter adapter
+      list setFooterDividersEnabled false
       list setOnItemClickListener onTap { pos =>
         val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
         val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_transaction_details, null)
