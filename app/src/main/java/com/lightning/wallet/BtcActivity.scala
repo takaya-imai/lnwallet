@@ -187,7 +187,6 @@ with ListUpdater { me =>
         val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
 
         val wrap = adapter getItem pos
-        val stamp = time(wrap.tx.getUpdateTime)
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
         val objects = wrap.payDatas.flatMap(_.toOption).map(_.cute(wrap.marking).html).toArray
         lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, objects)
@@ -200,9 +199,10 @@ with ListUpdater { me =>
         }
 
         wrap.fee match {
-          case _ if wrap.nativeValue.isPositive => mkForm(me negBld dialog_ok, feeIncoming.format(stamp, confirms).html, lst)
-          case Some(fee) => mkForm(me negBld dialog_ok, feeDetails.format(stamp, confirms, denom withSign fee).html, lst)
-          case None => mkForm(me negBld dialog_ok, feeAbsent.format(stamp, confirms).html, lst)
+          case _ if wrap.tx.getConfidence.getConfidenceType == DEAD => mkForm(me negBld dialog_ok, sumOut.format("x").html, lst)
+          case _ if wrap.nativeValue.isPositive => mkForm(me negBld dialog_ok, feeIncoming.format(confirms).html, lst)
+          case Some(fee) => mkForm(me negBld dialog_ok, feeDetails.format(confirms, denom withSign fee).html, lst)
+          case None => mkForm(me negBld dialog_ok, feeAbsent.format(confirms).html, lst)
         }
       }
 
@@ -328,9 +328,9 @@ with ListUpdater { me =>
             add(getString(tx_announce), Informer.BTCEVENT).animate
           }
 
-          override def onTxFail(exception: Throwable) =
+          override def onTxFail(err: Throwable) =
             mkForm(mkChoiceDialog(me delayUI sendBtcTxPopup.set(ok, pay.address), none,
-              dialog_ok, dialog_cancel), null, errorWhenMakingTx apply exception)
+              dialog_ok, dialog_cancel), null, messageWhenMakingTx apply err)
         }
 
         // Initiate the spending sequence

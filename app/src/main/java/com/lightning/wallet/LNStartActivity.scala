@@ -210,9 +210,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         fundingTransaction -> outIndex
       }
 
-      def onTxFail(exc: Throwable) =
+      def onTxFail(err: Throwable) =
         mkForm(mkChoiceDialog(me delayUI askForFeerate(chan, cmd, accept),
-          none, dialog_ok, dialog_cancel), null, errorWhenMakingTx apply exc)
+          none, dialog_ok, dialog_cancel), null, messageWhenMakingTx apply err)
     }
   }
 }

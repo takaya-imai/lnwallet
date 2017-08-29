@@ -165,7 +165,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     def infoAndNext = {
       add(app getString pass_checking, Informer.CODECHECK).animate
-      timer.schedule(delete(Informer.CODECHECK).animate, 5000)
+      timer.schedule(delete(Informer.CODECHECK).animate, 2500)
       next(secret.getText.toString)
     }
   }
@@ -334,7 +334,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       request.tx
     }
 
-    def errorWhenMakingTx: PartialFunction[Throwable, CharSequence] = {
+    def messageWhenMakingTx: PartialFunction[Throwable, CharSequence] = {
       case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
       case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
 
@@ -519,19 +519,15 @@ case class AddrData(cn: Coin, address: Address) extends PayData {
   def destination = humanAddr(address)
 }
 
-case class EmptyAddrData(address: Address) extends PayData {
-  // A special case for explicitly emptying our bitcoin wallet
-  def sendRequest = SendRequest emptyWallet address
-  def destination = humanAddr(address)
-  def cn = app.kit.currentBalance
-}
-
 case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {
-  // This will be exlusively used for funding LN payment channels
-  private[this] val funding = new Transaction(app.params)
-  def sendRequest = SendRequest forTx funding
+  // This will only be used for funding lightning payment channels
   def destination = app getString txs_p2wsh
-  funding.addOutput(cn, pay2wsh)
+
+  def sendRequest = {
+    val funding = new Transaction(app.params)
+    funding.addOutput(cn, pay2wsh)
+    SendRequest forTx funding
+  }
 }
 
 

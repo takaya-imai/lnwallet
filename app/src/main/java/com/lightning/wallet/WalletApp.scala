@@ -2,7 +2,7 @@ package com.lightning.wallet
 
 import Utils._
 import R.string._
-import org.bitcoinj.core._
+import org.bitcoinj.core.{Address, Transaction, Peer, PeerAddress, Block, FilteredBlock}
 
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -84,8 +84,8 @@ class WalletApp extends Application { me =>
   object TransData {
     var value: Any = _
     def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
-      case _: WrongNetworkException => err(err_different_net)
-      case _: AddressFormatException => err(err_address)
+      case _: org.bitcoinj.core.WrongNetworkException => err(err_different_net)
+      case _: org.bitcoinj.core.AddressFormatException => err(err_address)
       case _: BitcoinURIParseException => err(err_uri)
       case _: ArithmeticException => err(err_neg)
       case _: Throwable => err(err_general)
@@ -133,7 +133,7 @@ class WalletApp extends Application { me =>
     val reconnectListener = new ConnectionListener {
       override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket at node $id is operational"
       override def onDisconnect(id: PublicKey) = Obs.just(Tools log s"Reconnecting a socket at node $id")
-        .delay(5.seconds).subscribe(_ => ChannelManager reconnect from(alive, id), _.printStackTrace)
+        .delay(5.seconds).subscribe(_ => ChannelManager reconnect from(alive, id), Tools.errlog)
     }
 
     def createChannel(bootstrap: ChannelData) = new Channel {

@@ -18,6 +18,7 @@ object Tools {
   val random = new RandomGenerator
 
   def runAnd[T](result: T)(action: Any): T = result
+  def errlog(error: Throwable): Unit = error.printStackTrace
   def log(message: String): Unit = android.util.Log.d("LN", message)
   def wrap(run: => Unit)(go: => Unit) = try go catch none finally run
   def none: PartialFunction[Any, Unit] = { case _ => }

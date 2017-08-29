@@ -89,6 +89,12 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     }
 
   override def onProcess = {
+    case (_, _, add: UpdateAddHtlc) =>
+      // Payment request may not contain an amount
+      // or an actual amount paid may differ so
+      // we need to record how much was paid
+      me updateReceived add
+
     case (_, _, retry: RetryAddHtlc) =>
       // Update outgoing payment routing data
       // Fee is not shown so no need for UI changes
@@ -99,12 +105,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // fails if payment hash is already in db
       me putPaymentInfo cmd.out
       uiNotify
-
-    case (_, _, add: UpdateAddHtlc) =>
-      // Payment request may not contain an amount
-      // or an actual amount paid may differ so
-      // we need to record how much was paid
-      me updateReceived add
 
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away

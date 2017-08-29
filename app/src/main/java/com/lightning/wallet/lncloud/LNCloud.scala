@@ -32,7 +32,7 @@ class PrivateStorage(lnCloud: LNCloud) extends StateMachine[PrivateData] { me =>
     case (PrivateData(action :: rest, _), CMDStart) =>
       // Private server should use a public key based authorization so we add a signature
       action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
-        .foreach(_ => me stayWith data.copy(acts = rest), _.printStackTrace)
+        .foreach(_ => me stayWith data.copy(acts = rest), Tools.errlog)
 
     case _ =>
       // Let know if received an unhandled message in some state
