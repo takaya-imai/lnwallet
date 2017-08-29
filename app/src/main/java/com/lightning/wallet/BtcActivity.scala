@@ -176,7 +176,7 @@ with ListUpdater { me =>
 
       toolbar setOnClickListener onButtonTap {
         wrap(adapter.notifyDataSetChanged)(changeDenom)
-        notifySubTitle(constListener.mkTxt, Informer.PEER)
+        updateTitleAndSub(constListener.mkTxt, Informer.PEER)
       }
 
       list setAdapter adapter

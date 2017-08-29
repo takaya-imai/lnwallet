@@ -2,8 +2,10 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
+
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
+
 import org.ndeftools.util.activity.NfcReaderActivity
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
@@ -111,9 +113,8 @@ with TimerActivity with ViewSwitch { me =>
         System exit 0
     }
 
-  private def setup(some: Any) = {
-    val pass = mainPassData.getText.toString
-    LNParams setup Mnemonic.decrypt(pass).getSeedBytes
+  private def setup(some: Any) = LNParams setup {
+    Mnemonic.decrypt(mainPassData.getText.toString).getSeedBytes
   }
 
   private def wrongPass(err: Throwable) = {
@@ -121,9 +122,10 @@ with TimerActivity with ViewSwitch { me =>
     app toast password_wrong
   }
 
-  private def inform(messageCode: Int): Unit =
-    showForm(mkChoiceDialog(next, finish, dialog_ok,
-      dialog_cancel).setMessage(messageCode).create)
+  private def inform(messageCode: Int): Unit = {
+    val dialog = mkChoiceDialog(next, finish, dialog_ok, dialog_cancel)
+    showForm(dialog.setMessage(messageCode).create)
+  }
 
   def goRestoreWallet(view: View) = me exitTo classOf[WalletRestoreActivity]
   def goCreateWallet(view: View) = me exitTo classOf[WalletCreateActivity]

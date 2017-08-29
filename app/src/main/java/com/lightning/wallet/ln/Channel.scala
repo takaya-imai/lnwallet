@@ -147,9 +147,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // TODO: remove this
       case (norm @ NormalData(_, commitments, None, None), remote: AnnouncementSignatures, NORMAL) =>
-        val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(remote.shortChannelId,
-          LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey,
-          commitments.remoteParams.fundingPubkey, LNParams.globalFeatures)
+        val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(LNParams.chainHash, remote.shortChannelId,
+          LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey, commitments.remoteParams.fundingPubkey,
+          LNParams.globalFeatures)
 
         me SEND AnnouncementSignatures(commitments.channelId,
           remote.shortChannelId, localNodeSig, localBitcoinSig)

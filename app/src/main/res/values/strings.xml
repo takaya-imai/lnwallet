@@ -129,7 +129,7 @@
     <string name="err_ln_add_sync">Failed because channel is not yet operational. Please wait a few seconds and try again</string>
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
-    <string name="err_not_enough_funds">Not enough bitcoins\n\nbalance %1$s\nsending %2$s\nmissing %3$s\n\nPlease note that incoming transactions need to get at least one confirmation to become spendable</string>
+    <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that incoming transactions need to get at least one confirmation to become spendable]]></string>
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
     <string name="err_uri">Failed because request contains a malformed URI which could not be parsed</string>

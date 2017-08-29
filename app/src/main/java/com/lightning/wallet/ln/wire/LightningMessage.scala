@@ -66,8 +66,9 @@ case class AnnouncementSignatures(channelId: BinaryData,
                                   bitcoinSignature: BinaryData) extends RoutingMessage
 
 case class ChannelAnnouncement(nodeSignature1: BinaryData, nodeSignature2: BinaryData, bitcoinSignature1: BinaryData,
-                               bitcoinSignature2: BinaryData, features: BinaryData, shortChannelId: Long, nodeId1: PublicKey,
-                               nodeId2: PublicKey, bitcoinKey1: PublicKey, bitcoinKey2: PublicKey) extends RoutingMessage {
+                               bitcoinSignature2: BinaryData, features: BinaryData, chainHash: BinaryData, shortChannelId: Long,
+                               nodeId1: PublicKey, nodeId2: PublicKey, bitcoinKey1: PublicKey,
+                               bitcoinKey2: PublicKey) extends RoutingMessage {
 
   val (blockHeight, txIndex, outputIndex) = fromShortId(shortChannelId)
 }
@@ -78,8 +79,8 @@ case class NodeAnnouncement(signature: BinaryData, features: BinaryData, timesta
   val identifier = (alias + nodeId.toString).toLowerCase
 }
 
-case class ChannelUpdate(signature: BinaryData, shortChannelId: Long, timestamp: Long, flags: BinaryData,
-                         cltvExpiryDelta: Int, htlcMinimumMsat: Long, feeBaseMsat: Long,
+case class ChannelUpdate(signature: BinaryData, chainHash: BinaryData, shortChannelId: Long, timestamp: Long,
+                         flags: BinaryData, cltvExpiryDelta: Int, htlcMinimumMsat: Long, feeBaseMsat: Long,
                          feeProportionalMillionths: Long) extends RoutingMessage {
 
   val lastSeen = System.currentTimeMillis

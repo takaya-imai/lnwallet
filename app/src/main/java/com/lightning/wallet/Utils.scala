@@ -334,17 +334,16 @@ trait ToolbarActivity extends TimerActivity { me =>
       request.tx
     }
 
-    def errorWhenMakingTx: PartialFunction[Throwable, String] = {
-      case insufficientMoneyException: InsufficientMoneyException =>
-        val missing = denom withSign insufficientMoneyException.missing
-        val balance = denom withSign app.kit.currentBalance
-        val sending = denom withSign pay.cn
-
-        val template = app getString err_not_enough_funds
-        template.format(balance, sending, missing)
-
+    def errorWhenMakingTx: PartialFunction[Throwable, CharSequence] = {
       case _: ExceededMaxTransactionSize => app getString err_transaction_too_large
       case _: CouldNotAdjustDownwards => app getString err_empty_shrunk
+
+      case notEnough: InsufficientMoneyException =>
+        val sending = sumOut.format(denom withSign pay.cn)
+        val missing = sumOut.format(denom withSign notEnough.missing)
+        val balance = sumIn.format(denom withSign app.kit.currentBalance)
+        getString(err_not_enough_funds).format(balance, sending, missing).html
+
       case _: KeyCrypterException => app getString err_pass
       case _: Throwable => app getString err_general
     }
