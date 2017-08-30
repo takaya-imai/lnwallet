@@ -18,6 +18,10 @@ public abstract class AbstractKit extends AbstractIdleService {
     public static final String FIAT = "fiatCurrencyOfChoice";
     public static final String ERROR_REPORT = "errorReport";
 
+    public static final String LANDING = "landing";
+    public static final String BITCOIN = "bitcoin";
+    public static final String LIGHTNING = "lightning";
+
     // Bitcoin wallet core pieces
     public volatile BlockChain blockChain;
     public volatile PeerGroup peerGroup;

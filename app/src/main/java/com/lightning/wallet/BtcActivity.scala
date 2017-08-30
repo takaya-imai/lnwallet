@@ -169,6 +169,7 @@ with ListUpdater { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
+      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.BITCOIN).commit
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
       me startListUpdates adapter

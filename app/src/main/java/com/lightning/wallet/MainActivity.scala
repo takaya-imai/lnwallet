@@ -49,9 +49,9 @@ with TimerActivity with ViewSwitch { me =>
       blockChain = new BlockChain(app.params, wallet, store)
       peerGroup = new PeerGroup(app.params, blockChain)
 
-      def startUp = {
+      def startUp: Unit = {
         setupAndStartDownload
-        me exitTo classOf[LNActivity]
+        next
       }
     }
   }
@@ -91,10 +91,14 @@ with TimerActivity with ViewSwitch { me =>
 
   // STARTUP LOGIC
 
-  private def next =
+  private def next: Unit =
     (app.walletFile.exists, app.isAlive, LNParams.isSetUp) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
-      case (true, true, true) => exitTo apply classOf[LNActivity]
+
+      case (true, true, true) =>
+        val landing = app.prefs.getString(AbstractKit.LANDING, AbstractKit.BITCOIN)
+        val target = if (landing == AbstractKit.BITCOIN) classOf[BtcActivity] else classOf[LNActivity]
+        me exitTo target
 
       case (true, false, _) =>
         // Launch of a previously closed app
@@ -113,8 +117,10 @@ with TimerActivity with ViewSwitch { me =>
         System exit 0
     }
 
-  private def setup(some: Any) = LNParams setup {
-    Mnemonic.decrypt(mainPassData.getText.toString).getSeedBytes
+  private def setup(some: Any) = {
+    val password = mainPassData.getText.toString
+    val bytes = Mnemonic.decrypt(password).getSeedBytes
+    LNParams setup bytes
   }
 
   private def wrongPass(err: Throwable) = {
@@ -122,10 +128,9 @@ with TimerActivity with ViewSwitch { me =>
     app toast password_wrong
   }
 
-  private def inform(messageCode: Int): Unit = {
-    val dialog = mkChoiceDialog(next, finish, dialog_ok, dialog_cancel)
-    showForm(dialog.setMessage(messageCode).create)
-  }
+  private def inform(messageCode: Int): Unit =
+    showForm(mkChoiceDialog(next, finish, dialog_ok,
+      dialog_cancel).setMessage(messageCode).create)
 
   def goRestoreWallet(view: View) = me exitTo classOf[WalletRestoreActivity]
   def goCreateWallet(view: View) = me exitTo classOf[WalletCreateActivity]

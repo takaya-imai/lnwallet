@@ -48,8 +48,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       Vector(0L, 0L)
   }
 
-  var i = 0
-
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
       case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempId,
@@ -193,8 +191,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
             // which probably means we try to re-use a failed request
             // this is fine, but such a request should not be stored twice
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
-            if (i >= 3) doProcess(CMDProceed)
-            i += 1
+            doProcess(CMDProceed)
         }
 
       // We're fulfilling an HTLC we got earlier

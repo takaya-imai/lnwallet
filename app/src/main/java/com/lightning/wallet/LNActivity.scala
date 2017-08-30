@@ -109,6 +109,7 @@ with ListUpdater with SearchBar { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedState)
+      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
       me startListUpdates adapter
@@ -232,8 +233,8 @@ with ListUpdater with SearchBar { me =>
       val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive_title, content)
-      val maxMast = MilliSatoshi apply math.min(chan.receiveSendStatus.head, maxHtlcValue.amount)
-      val hint = getString(amount_hint_maxamount).format(denom withSign maxMast)
+      val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.head, maxHtlcValue.amount)
+      val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
       def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
@@ -247,17 +248,15 @@ with ListUpdater with SearchBar { me =>
         me goTo classOf[RequestActivity]
       }
 
-      val go: Option[MilliSatoshi] => Unit = sumOption => {
-        <(proceed(sumOption, bag.newPreimage), onFail)(none)
-        add(getString(ln_pr_make), Informer.LNREQUEST).animate
-        timer.schedule(delete(Informer.LNREQUEST).animate, 5000)
-      }
-
       def receiveAttempt = rateManager.result match {
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
-        case Success(ms) if maxMast < ms => app toast dialog_sum_big
-        case ok @ Success(ms) => rm(alert)(go apply ok.toOption)
-        case _ => rm(alert)(go apply None)
+        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
+
+        case result => rm(alert) {
+          <(proceed(result.toOption, bag.newPreimage), onFail)(none)
+          timer.schedule(delete(Informer.LNREQUEST).animate, 5000)
+          add(getString(ln_pr_make), Informer.LNREQUEST).animate
+        }
       }
 
       val ok = alert getButton BUTTON_POSITIVE
