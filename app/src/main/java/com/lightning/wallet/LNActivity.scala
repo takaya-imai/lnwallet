@@ -161,6 +161,7 @@ with ListUpdater with SearchBar { me =>
     toolbar setOnClickListener onButtonTap {
       // User may change denomination on the fly
       wrap(adapter.notifyDataSetChanged)(changeDenom)
+      setTitle
     }
 
     def setTitle = {

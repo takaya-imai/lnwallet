@@ -50,7 +50,7 @@
     <string name="dialog_pay">Pay</string>
     <string name="dialog_next">Next</string>
     <string name="dialog_cancel">Cancel</string>
-    <string name="dialog_export">Export</string>
+    <string name="dialog_export">Encrypt and export</string>
 
     <string name="amount_hint_maxamount"><![CDATA[max amount %1$s]]></string>
     <string name="amount_hint_wallet"><![CDATA[wallet balance %1$s]]></string>
@@ -108,8 +108,8 @@
 
     <!-- activity_btc -->
     <string name="txs_fee_incoming"><![CDATA[<font color=#1BA2E0>Incoming transaction</font><br>%1$s]]></string>
-    <string name="txs_fee_details"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%1$s<br><strong>%2$s</strong> fee]]></string>
-    <string name="txs_fee_absent"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%2$s<br><strong>No fee</strong>]]></string>
+    <string name="txs_fee_details"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%1$s<br><br>%2$s fee]]></string>
+    <string name="txs_fee_absent"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%2$s<br><br>No fee]]></string>
 
     <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>

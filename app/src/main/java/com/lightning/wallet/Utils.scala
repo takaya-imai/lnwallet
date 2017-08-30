@@ -516,8 +516,13 @@ trait PayData {
 
 case class AddrData(cn: Coin, address: Address) extends PayData {
   def link = BitcoinURI.convertToBitcoinURI(address, cn, null, null)
-  def sendRequest = SendRequest.to(address, cn)
   def destination = humanAddr(address)
+
+  def sendRequest = {
+    val isAll = app.kit.currentBalance equals cn
+    if (isAll) SendRequest.emptyWallet(address)
+    else SendRequest.to(address, cn)
+  }
 }
 
 case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {

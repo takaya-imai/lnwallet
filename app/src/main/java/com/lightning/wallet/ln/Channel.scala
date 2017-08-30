@@ -193,7 +193,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
             // which probably means we try to re-use a failed request
             // this is fine, but such a request should not be stored twice
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
-            doProcess(CMDProceed)
+            if (i >= 3) doProcess(CMDProceed)
+            i += 1
         }
 
       // We're fulfilling an HTLC we got earlier
@@ -238,17 +239,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         // We received a commit sig from them, now we can update our local commit
         val c1 ~ revokeAndAck = Commitments.receiveCommit(norm.commitments, sig)
-
         val d1 = me STORE norm.copy(commitments = c1)
         me UPDATE d1 SEND revokeAndAck
-
-        if (i > 0) {
-          doProcess(CMDProceed)
-        }
-
-
-        for ((_, work) <- ConnectionManager.connections) try work.socket.close catch none
-        i +=1
+        doProcess(CMDProceed)
 
 
       case (norm: NormalData, rev: RevokeAndAck, NORMAL)
