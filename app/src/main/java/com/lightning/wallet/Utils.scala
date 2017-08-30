@@ -331,6 +331,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       request.feePerKb = fee
       request.aesKey = keyParameter
       app.kit.wallet completeTx request
+      request.tx.verify
       request.tx
     }
 

@@ -204,11 +204,11 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val pay = P2WSHData(funding, scriptPubKey)
       chooseFee
 
-      def processTx(password: String, fee: Coin) = chan async {
-        val fundingTransaction: fr.acinq.bitcoin.Transaction = makeTx(password, fee)
-        val outIndex = Scripts.findPubKeyScriptIndex(fundingTransaction, scriptPubKey)
-        fundingTransaction -> outIndex
-      }
+      def processTx(password: String, fee: Coin) =
+        <(makeTx(password, fee), onTxFail) { fundingTransaction =>
+          val outIndex = Scripts.findPubKeyScriptIndex(fundingTransaction, scriptPubKey)
+          chan async Tuple2(fundingTransaction: fr.acinq.bitcoin.Transaction, outIndex)
+        }
 
       def onTxFail(err: Throwable) =
         mkForm(mkChoiceDialog(me delayUI askForFeerate(chan, cmd, accept),
