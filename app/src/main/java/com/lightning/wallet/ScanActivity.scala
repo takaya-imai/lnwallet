@@ -3,8 +3,9 @@ package com.lightning.wallet
 import R.string._
 import com.lightning.wallet.Utils._
 import com.journeyapps.barcodescanner._
-import com.lightning.wallet.ln.Tools.{none,wrap}
 
+import com.lightning.wallet.ln.Tools.{none, wrap}
+import com.lightning.wallet.ln.PaymentRequest
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
 import android.widget.Toast
@@ -33,9 +34,10 @@ class ScanActivity extends TimerActivity with BarcodeCallback { me =>
 
     // Find out where to go
     app.TransData.value match {
+      case _: PaymentRequest => me exitTo classOf[LNActivity]
       case _: BitcoinURI => me exitTo classOf[BtcActivity]
       case _: Address => me exitTo classOf[BtcActivity]
-      case _ => me exitTo classOf[LNActivity]
+      case _ => throw new RuntimeException
     }
 
     // Parsing error may occur
@@ -49,7 +51,7 @@ class ScanActivity extends TimerActivity with BarcodeCallback { me =>
 
   // Only try to decode result if 3 seconds elapsed
   override def barcodeResult(res: BarcodeResult) = Option(res.getText) foreach {
-    rawText => if (System.currentTimeMillis - lastAttempt > 3000) tryParseQR(rawText)
+    rawText => if (System.currentTimeMillis - lastAttempt > 2500) tryParseQR(rawText)
   }
 
   override def possibleResultPoints(pts: Points) = none

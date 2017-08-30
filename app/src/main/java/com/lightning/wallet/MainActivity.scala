@@ -5,15 +5,18 @@ import android.widget._
 
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-
 import org.ndeftools.util.activity.NfcReaderActivity
+
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
+
 import scala.concurrent.Future
 import java.io.FileInputStream
+
+import android.app.AlertDialog.Builder
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
@@ -91,7 +94,7 @@ with TimerActivity with ViewSwitch { me =>
 
   // STARTUP LOGIC
 
-  private def next: Unit =
+  def next: Unit =
     (app.walletFile.exists, app.isAlive, LNParams.isSetUp) match {
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
 
@@ -117,21 +120,31 @@ with TimerActivity with ViewSwitch { me =>
         System exit 0
     }
 
-  private def setup(some: Any) = {
+  // MISC
+
+  def setup(some: Any) = {
     val password = mainPassData.getText.toString
     val bytes = Mnemonic.decrypt(password).getSeedBytes
     LNParams setup bytes
   }
 
-  private def wrongPass(err: Throwable) = {
+  def wrongPass(err: Throwable) = {
     setVis(View.GONE, View.VISIBLE, View.GONE)
     app toast password_wrong
   }
 
-  private def inform(messageCode: Int): Unit =
+  def inform(messageCode: Int): Unit =
     showForm(mkChoiceDialog(next, finish, dialog_ok,
       dialog_cancel).setMessage(messageCode).create)
 
-  def goRestoreWallet(view: View) = me exitTo classOf[WalletRestoreActivity]
-  def goCreateWallet(view: View) = me exitTo classOf[WalletCreateActivity]
+  def goRestoreWallet(view: View) = {
+    val options = getResources getStringArray R.array.restore_mnemonic_options
+    val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
+    lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, options)
+    val alert = mkForm(me negBld dialog_cancel, me getString restore_hint, lst)
+    //me exitTo classOf[WalletRestoreActivity]
+  }
+
+  def goCreateWallet(view: View) =
+    me exitTo classOf[WalletCreateActivity]
 }

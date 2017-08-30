@@ -56,6 +56,7 @@ object Utils {
   var fiatName: String = _
 
   lazy val app = appReference
+  lazy val appName = app getString app_name
   lazy val sumIn = app getString txs_sum_in
   lazy val sumOut = app getString txs_sum_out
   lazy val denoms = List(SatDenomination, BitDenomination, MBtcDenomination, BtcDenomination)
@@ -67,7 +68,6 @@ object Utils {
   val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeCNY -> strYuan)
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYuan -> typeCNY)
   val nullFail = Failure(null)
-  val appName = "Bitcoin"
 
   def changeDenom = {
     val index1 = (denoms.indexOf(denom) + 1) % denoms.size
@@ -100,7 +100,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     for (an <- currentAnimation) an.cancel
     currentAnimation = Some apply uiTask(self)
-    timer.schedule(currentAnimation.get, 0, 75)
+    timer.schedule(currentAnimation.get, 0, 50)
 
     private[this] var index = 2
     override def run = getSupportActionBar match { case bar =>
@@ -266,7 +266,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
       PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
-      mkForm(dialog, me getString ln_backup, view1)
+      mkForm(dialog, me getString sets_backup, view1)
     }
 
     def trySave(url: String) = delayUI {

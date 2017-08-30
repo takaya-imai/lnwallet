@@ -193,6 +193,7 @@ with ListUpdater { me =>
         lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, objects)
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
+        lst setClickable false
 
         outside setOnClickListener onButtonTap {
           val uri = "https://blockexplorer.com/tx/" + wrap.tx.getHashAsString

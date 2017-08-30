@@ -13,8 +13,8 @@
         android:layout_height="wrap_content"
         android:layout_width="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="10dp"
-        android:id="@+id/fiatType">
+        android:id="@+id/fiatType"
+        android:paddingTop="10dp">
 
         <RadioButton
             android:text="$"
@@ -45,7 +45,7 @@
     <TextView
         android:text="="
         style="@style/StdText"
-        android:layout_marginTop="15dp"
+        android:paddingTop="15dp"
         android:layout_width="wrap_content"/>
 
     <EditText
@@ -59,7 +59,7 @@
     <TextView
         style="@style/StdText"
         android:id="@+id/hintDenom"
-        android:layout_marginBottom="25dp"
+        android:paddingBottom="25dp"
         android:layout_width="wrap_content"/>
 
     <View style="@style/GrayDivider"/>

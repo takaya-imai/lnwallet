@@ -47,8 +47,6 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
   {
     super.onCreate(savedState)
     setContentView(R.layout.activity_restore)
-    restoreWhen setText datePicker.human
-
     val changeListener = new TextChangedWatcher {
       override def onTextChanged(s: CharSequence, x: Int, y: Int, z: Int) = {
         val mnemonicWordsAreOk = restoreCode.getText.toString.split("\\s+").length > 11
@@ -61,6 +59,13 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
       }
     }
 
+    if (app.TransData.value != null) {
+      // This should be an unencrypted mnemonic code
+      restoreCode setText app.TransData.value.toString
+      app.TransData.value = null
+    }
+
+    restoreWhen setText datePicker.human
     password addTextChangedListener changeListener
     restoreCode addTextChangedListener changeListener
   }

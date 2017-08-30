@@ -20,7 +20,7 @@
     <Button
         style="@style/TransButton"
         android:id="@+id/setBackupServer"
-        android:text="@string/ln_backup"/>
+        android:text="@string/sets_backup"/>
 
     <View style="@style/GrayDivider"/>
 

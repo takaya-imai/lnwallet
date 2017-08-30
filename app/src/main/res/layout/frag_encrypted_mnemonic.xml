@@ -1,0 +1,32 @@
+<LinearLayout
+    style="@style/StandardLinearLayout"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditText
+        style="@style/Info"
+        android:minWidth="230dp"
+        android:paddingTop="20dp"
+        android:inputType="textMultiLine"
+        android:id="@+id/encryptedMnemonic"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        style="@style/StdText"
+        android:layout_width="wrap_content"
+        android:text="@string/restore_encrypted"/>
+
+    <EditText
+        style="@style/Info"
+        android:minWidth="100dp"
+        android:paddingTop="40dp"
+        android:inputType="textPassword"
+        android:id="@+id/oldWalletPassword"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        style="@style/StdText"
+        android:paddingBottom="25dp"
+        android:layout_width="wrap_content"
+        android:text="@string/restore_pass"/>
+
+</LinearLayout>
