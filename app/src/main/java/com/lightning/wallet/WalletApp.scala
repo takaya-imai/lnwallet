@@ -58,11 +58,11 @@ class WalletApp extends Application { me =>
 
   // Various utilities
   def getTo(base58: String) = Address.fromBase58(params, base58)
-  def toast(message: Int) = Toast.makeText(me, message, Toast.LENGTH_LONG).show
   def isAlive = if (null == kit) false else kit.state match { case STARTING | RUNNING => true case _ => false }
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
   def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
+  def toast(message: Int) = Toast.makeText(me, message, Toast.LENGTH_LONG).show
 
   appReference = me
   override def onCreate = wrap(super.onCreate) {
@@ -112,16 +112,8 @@ class WalletApp extends Application { me =>
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
       def tellHeight = for (chan <- all) chan process CMDBestHeight(LNParams.broadcaster.currentHeight)
-      def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) connect.run
-      override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) connect.run
-
-      private var connect: Runnable = anyToRunnable {
-        ConnectionManager.listeners += socketEventsListener
-        ConnectionManager.listeners += reconnectListener
-        connect = anyToRunnable(tellHeight)
-        reconnect(alive)
-        tellHeight
-      }
+      def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) tellHeight
+      override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) tellHeight
     }
 
     val socketEventsListener = new ConnectionListener {
@@ -197,7 +189,10 @@ class WalletApp extends Application { me =>
 
       wallet setAcceptRiskyTransactions true
       wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
+      ConnectionManager.listeners += ChannelManager.socketEventsListener
+      ConnectionManager.listeners += ChannelManager.reconnectListener
       startDownload(ChannelManager.chainEventsListener)
+      ChannelManager reconnect ChannelManager.alive
       RatesSaver.process
     }
   }

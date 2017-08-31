@@ -8,12 +8,12 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.ln.LNParams.db
 import com.lightning.wallet.Utils.app
 import net.sqlcipher.Cursor
-
-import scala.util.{Success, Try}
+import scala.util.Try
 
 
 object StorageWrap {
@@ -90,6 +90,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // we need to record how much was paid
       me updateReceived add
 
+    case (_, _, fulfill: UpdateFulfillHtlc) =>
+      // We need to save a preimage right away
+      me updatePreimage fulfill
+      uiNotify
+
     case (_, _, retry: RetryAddHtlc) =>
       // Update outgoing payment routing data
       // Fee is not shown so no need for UI changes
@@ -99,11 +104,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // Try to record a new outgoing payment
       // fails if payment hash is already in db
       me putPaymentInfo cmd.out
-      uiNotify
-
-    case (_, _, fulfill: UpdateFulfillHtlc) =>
-      // We need to save a preimage right away
-      me updatePreimage fulfill
       uiNotify
 
     // We need to update states for all active HTLCs

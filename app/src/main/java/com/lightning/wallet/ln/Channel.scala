@@ -4,16 +4,17 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
-import concurrent.ExecutionContext.Implicits.global
-import fr.acinq.bitcoin.Crypto.PrivateKey
-import scala.collection.mutable
-import scala.concurrent.Future
-import scala.util.Success
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+
+import concurrent.ExecutionContext.Implicits.global
+import fr.acinq.bitcoin.Crypto.PrivateKey
+import scala.collection.mutable
+import scala.concurrent.Future
+import scala.util.Success
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -224,11 +225,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // GUARD: serves as a trigger to enter negotiations when mutual shutdown state is reached
-      case (NormalData(announce, commitments, Some(local), Some(remote) /* mutual */), CMDProceed, NORMAL)
-        if Commitments.pendingHtlcs(commitments).isEmpty =>
-
-        // Send a message and enter negotiations mode right away
-        startNegotiations(announce, commitments, local, remote)
+      case (NormalData(announce, commitments, Some(local), remoteOpt), CMDProceed, NORMAL)
+        if Commitments.pendingHtlcs(commitments).isEmpty && remoteOpt.isDefined =>
+        startNegotiations(announce, commitments, local, remoteOpt.get)
 
 
       case (norm: NormalData, sig: CommitSig, NORMAL)
