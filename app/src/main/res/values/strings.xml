@@ -166,6 +166,7 @@
     <string name="ln_proof">Recipient: %1$s\nSigned payment request: %2$s\nPayment hash: %3$s\nPayment preimage: %4$s</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_copy_proof">Copy Payment Details</string>
+    <string name="ln_retry">Retrying payment&#8230;</string>
 
     <!-- see PaymentInfo.scala -->
     <array name="ln_payment_states">

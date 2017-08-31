@@ -95,11 +95,11 @@ object PaymentInfo {
         withoutChannel(payment.routing.routes, message.update.shortChannelId)
 
       case _ =>
-        // Just try another route
-        payment.routing.routes drop 1
+        // Nothing to cut
+        payment.routing.routes
 
-      // Could not parse, try another route
-    } getOrElse payment.routing.routes drop 1
+      // Could not parse, try the rest of routes
+    } getOrElse payment.routing.routes
 
   private def failHtlc(sharedSecret: BinaryData, add: UpdateAddHtlc, failure: FailureMessage) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)

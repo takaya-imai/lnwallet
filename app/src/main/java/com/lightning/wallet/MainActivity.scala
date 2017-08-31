@@ -10,17 +10,14 @@ import org.ndeftools.util.activity.NfcReaderActivity
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
-import org.bitcoinj.crypto.EncryptedData
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
-import org.bitcoinj.core.Utils.HEX
 import scala.concurrent.Future
 import java.io.FileInputStream
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.view.View
-
 
 
 trait ViewSwitch {
@@ -151,11 +148,11 @@ with TimerActivity with ViewSwitch { me =>
       val form = getLayoutInflater.inflate(R.layout.frag_encrypted_mnemonic, null)
       val encryptedMnemonic = form.findViewById(R.id.encryptedMnemonic).asInstanceOf[EditText]
       val oldWalletPassword = form.findViewById(R.id.oldWalletPassword).asInstanceOf[EditText]
-      lazy val dialog = mkChoiceDialog(decrypt, none, dialog_ok, dialog_cancel)
+      lazy val dialog = mkChoiceDialog(decryptAndImport, none, dialog_ok, dialog_cancel)
       lazy val alert1 = mkForm(dialog, me getString restore_wallet, form)
       alert1
 
-      def decrypt: Unit = rm(alert1) {
+      def decryptAndImport: Unit = rm(alert1) {
         val (seed, pass) = (encryptedMnemonic.getText.toString, oldWalletPassword.getText.toString)
         <(app.TransData.value = Mnemonic.importSeed(seed, pass), wrongSomething)(_ => exitToRestore)
         setVis(View.GONE, View.GONE, View.VISIBLE)

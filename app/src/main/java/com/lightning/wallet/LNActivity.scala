@@ -190,16 +190,18 @@ with ListUpdater with SearchBar { me =>
       }
 
       override def onProcess = {
+        case (_, _, _: RetryAddHtlc) => runOnUiThread(app toast ln_retry)
         case (_, _, _: RevokeAndAck) => me runOnUiThread setTitle
         case (_, _, _: CommitSig) => me runOnUiThread setTitle
       }
     }
 
     sendPayment = request => {
+      val info = getDescription(request)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
       val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.last, maxHtlcValue.amount)
       val rateManager = new RateManager(getString(amount_hint_maxamount).format(denom withSign maxMsat), content)
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), getString(ln_send_title).format(request.description).html, content)
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), getString(ln_send_title).format(info).html, content)
 
       def sendAttempt = rateManager.result match {
         case Failure(_) => app toast dialog_sum_empty
@@ -338,12 +340,13 @@ with ListUpdater with SearchBar { me =>
     }
   }
 
+  def getDescription(pr: PaymentRequest) = pr.description match {
+    case Left(requestHash) => "<i>" + requestHash.toString + "</i>"
+    case Right(description) if description.nonEmpty => description
+    case _ => "<i>" + getString(ln_no_description) + "</i>"
+  }
+
   class LNView(view: View) extends TxViewHolder(view) {
-    def getDescription(pr: PaymentRequest) = pr.description match {
-      case Left(requestHash) => "<i>" + requestHash.toString + "</i>"
-      case Right(description) if description.nonEmpty => description
-      case _ => "<i>" + getString(ln_no_description) + "</i>"
-    }
 
     def fillView(info: PaymentInfo) = {
       val marking: String = info match {
@@ -359,8 +362,8 @@ with ListUpdater with SearchBar { me =>
         case _ => dead
       }
 
-      val purpose = getDescription(info.request)
       val timestamp = new Date(info.request.timestamp * 1000)
+      val purpose = info.request.description.right getOrElse new String
       transactWhen setText when(System.currentTimeMillis, timestamp).html
       transactSum setText s"$marking\u00A0$purpose".html
       transactCircle setImageResource image

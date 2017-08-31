@@ -7,13 +7,13 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.ln.LNParams.db
 import com.lightning.wallet.Utils.app
 import net.sqlcipher.Cursor
-import scala.util.Try
+
+import scala.util.{Success, Try}
 
 
 object StorageWrap {
@@ -83,12 +83,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
   def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
-  def retry(chan: Channel, fail: UpdateFailHtlc, out: OutgoingPayment) =
-    app.ChannelManager.outPaymentOpt(rs = cutRoutes(fail, out), out.request, chan) match {
-      case Some(updatedOutgoingPayment) => chan process RetryAddHtlc(updatedOutgoingPayment)
-      case None => updateStatus(FAILURE, out.request.paymentHash)
-    }
-
   override def onProcess = {
     case (_, _, add: UpdateAddHtlc) =>
       // Payment request may not contain an amount
@@ -112,26 +106,27 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       me updatePreimage fulfill
       uiNotify
 
-    case (chan, norm: NormalData, sig: CommitSig) => LNParams.db txWrap {
-      for (htlc ~ fail <- norm.commitments.localCommit.spec.failed) getPaymentInfo(htlc.add.paymentHash) foreach {
-        case outgoingPayment: OutgoingPayment if outgoingPayment.request.isFresh => retry(chan, fail, outgoingPayment)
-        case _ => updateStatus(FAILURE, htlc.add.paymentHash)
+    // We need to update states for all active HTLCs
+    case (chan, norm: NormalData, sig: CommitSig) =>
+
+      LNParams.db txWrap {
+        // First we update status for failed, fulfilled and in-flight HTLCs
+        for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
+        for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
+        for (htlc ~ _ <- norm.commitments.localCommit.spec.failed) updateStatus(FAILURE, htlc.add.paymentHash)
+        uiNotify
       }
 
-      for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
-      for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
-      uiNotify
-    }
+      for {
+        // Then we retry payments with routes left
+        htlc ~ fail <- norm.commitments.localCommit.spec.failed
+        out @ OutgoingPayment(_, _, request, _, _, _) <- getPaymentInfo(htlc.add.paymentHash)
+        out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
+      } chan process RetryAddHtlc(out1)
 
+    // This channel is outdated, fail all the unfinished HTLCs
     case (_, close: ClosingData, _: Command) if close.isOutdated =>
-      // This channel is outdated, fail all unfinished HTLCs
       failPending(WAITING, close.commitments.channelId)
-      uiNotify
-  }
-
-  override def onError = {
-    case ExtendedException(cmd: RetryAddHtlc) =>
-      updateStatus(FAILURE, cmd.out.request.paymentHash)
       uiNotify
   }
 
