@@ -2,7 +2,7 @@ package com.lightning.wallet
 
 import Utils._
 import R.string._
-import org.bitcoinj.core.{Address, Transaction, Peer, PeerAddress, Block, FilteredBlock}
+import org.bitcoinj.core.{Address, Block, FilteredBlock, Peer, PeerAddress, Transaction}
 
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -33,6 +33,7 @@ import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.core.listeners.{NewBestBlockListener, PeerConnectedEventListener}
 import org.bitcoinj.net.discovery.DnsDiscovery
+import org.spongycastle.crypto.params.KeyParameter
 
 
 class WalletApp extends Application { me =>
@@ -74,10 +75,10 @@ class WalletApp extends Application { me =>
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
   }
 
-  def getCrypter(pass: CharSequence) = {
-    val randSalt = ByteString copyFrom KeyCrypterScrypt.randomSalt
-    val scryptBuilder = Protos.ScryptParameters.newBuilder setSalt randSalt
-    val crypter = new KeyCrypterScrypt(scryptBuilder.setN(65536).build)
+  def newCrypter(pass: CharSequence) = getCrypterScrypt(KeyCrypterScrypt.randomSalt, pass)
+  def getCrypterScrypt(salt: Bytes, pass: CharSequence): (KeyCrypterScrypt, KeyParameter) = {
+    val crypterScryptBuilder = Protos.ScryptParameters.newBuilder.setSalt(ByteString copyFrom salt)
+    val crypter = new KeyCrypterScrypt(crypterScryptBuilder.setN(65536).build)
     Tuple2(crypter, crypter deriveKey pass)
   }
 

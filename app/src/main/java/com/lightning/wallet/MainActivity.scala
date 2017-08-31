@@ -5,22 +5,22 @@ import android.widget._
 
 import scala.util.{Failure, Success, Try}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-import org.ndeftools.util.activity.NfcReaderActivity
 
+import org.ndeftools.util.activity.NfcReaderActivity
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
+import org.bitcoinj.crypto.EncryptedData
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
-
+import org.bitcoinj.core.Utils.HEX
 import scala.concurrent.Future
 import java.io.FileInputStream
-
-import android.app.AlertDialog.Builder
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
 import android.view.View
+
 
 
 trait ViewSwitch {
@@ -99,6 +99,7 @@ with TimerActivity with ViewSwitch { me =>
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
 
       case (true, true, true) =>
+        // We go to a last visited activity by default
         val landing = app.prefs.getString(AbstractKit.LANDING, AbstractKit.BITCOIN)
         val target = if (landing == AbstractKit.BITCOIN) classOf[BtcActivity] else classOf[LNActivity]
         me exitTo target
@@ -138,11 +139,33 @@ with TimerActivity with ViewSwitch { me =>
       dialog_cancel).setMessage(messageCode).create)
 
   def goRestoreWallet(view: View) = {
-    val options = getResources getStringArray R.array.restore_mnemonic_options
+    val options: Array[String] = getResources getStringArray R.array.restore_mnemonic_options
     val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
-    lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, options)
     val alert = mkForm(me negBld dialog_cancel, me getString restore_hint, lst)
-    //me exitTo classOf[WalletRestoreActivity]
+
+    def exitToRestore = me exitTo classOf[WalletRestoreActivity]
+    lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, options)
+    lst setOnItemClickListener onTap { pos => if (pos == 1) rm(alert)(exitToRestore) else proceed }
+
+    def proceed = rm(alert) {
+      val form = getLayoutInflater.inflate(R.layout.frag_encrypted_mnemonic, null)
+      val encryptedMnemonic = form.findViewById(R.id.encryptedMnemonic).asInstanceOf[EditText]
+      val oldWalletPassword = form.findViewById(R.id.oldWalletPassword).asInstanceOf[EditText]
+      lazy val dialog = mkChoiceDialog(decrypt, none, dialog_ok, dialog_cancel)
+      lazy val alert1 = mkForm(dialog, me getString restore_wallet, form)
+      alert1
+
+      def decrypt: Unit = rm(alert1) {
+        val (seed, pass) = (encryptedMnemonic.getText.toString, oldWalletPassword.getText.toString)
+        <(app.TransData.value = Mnemonic.importSeed(seed, pass), wrongSomething)(_ => exitToRestore)
+        setVis(View.GONE, View.GONE, View.VISIBLE)
+      }
+
+      def wrongSomething(err: Throwable) = {
+        setVis(View.VISIBLE, View.GONE, View.GONE)
+        me onFail err
+      }
+    }
   }
 
   def goCreateWallet(view: View) =

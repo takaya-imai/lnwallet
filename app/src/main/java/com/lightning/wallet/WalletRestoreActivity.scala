@@ -80,7 +80,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         val mnemonic = restoreCode.getText.toString.toLowerCase.trim
         val seed = new DeterministicSeed(mnemonic, null, "", whenTime)
         val keyChainGroup = new KeyChainGroup(app.params, seed)
-        val (crypter, key) = app getCrypter password.getText
+        val (crypter, key) = app newCrypter password.getText
         LNParams setup seed.getSeedBytes
 
         // Recreate encrypted wallet and use checkpoints

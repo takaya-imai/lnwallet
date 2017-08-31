@@ -1,10 +1,10 @@
 package org.bitcoinj.core
 
+import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import scala.collection.JavaConverters._
 import org.bitcoinj.wallet.WalletTransaction.Pool._
 import com.lightning.wallet.{AddrData, P2WSHData}
-import com.lightning.wallet.ln.~
 import scala.util.Try
 
 

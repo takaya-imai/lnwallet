@@ -69,8 +69,8 @@ trait ListUpdater { me: TimerActivity =>
   lazy val allTxsButton = getLayoutInflater.inflate(R.layout.frag_txs_all, null)
   lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
-  lazy val minLinesNum = 5
   val maxLinesNum = 25
+  val minLinesNum = 5
 
   def startListUpdates(adapter: BaseAdapter) =
     list setOnScrollListener new OnScrollListener {
@@ -82,7 +82,7 @@ trait ListUpdater { me: TimerActivity =>
       list addFooterView allTxsButton
     }
 
-  abstract class TxViewHolder(view: View) {
+  class TxViewHolder(view: View) {
     val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
     val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
     val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
@@ -193,7 +193,6 @@ with ListUpdater { me =>
         lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, objects)
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
-        lst setClickable false
 
         outside setOnClickListener onButtonTap {
           val uri = "https://blockexplorer.com/tx/" + wrap.tx.getHashAsString

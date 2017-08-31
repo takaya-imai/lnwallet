@@ -339,7 +339,11 @@ with ListUpdater with SearchBar { me =>
   }
 
   class LNView(view: View) extends TxViewHolder(view) {
-    // Display payment details with respect to it's direction
+    def getDescription(pr: PaymentRequest) = pr.description match {
+      case Left(requestHash) => "<i>" + requestHash.toString + "</i>"
+      case Right(description) if description.nonEmpty => description
+      case _ => "<i>" + getString(ln_no_description) + "</i>"
+    }
 
     def fillView(info: PaymentInfo) = {
       val marking: String = info match {
@@ -355,12 +359,10 @@ with ListUpdater with SearchBar { me =>
         case _ => dead
       }
 
-      val stamp = new Date(info.request.timestamp * 1000)
-      val humanTime = when(System.currentTimeMillis, stamp)
-      val sum = s"$marking\u00A0${info.request.description}"
-
-      transactSum setText sum.html
-      transactWhen setText humanTime.html
+      val purpose = getDescription(info.request)
+      val timestamp = new Date(info.request.timestamp * 1000)
+      transactWhen setText when(System.currentTimeMillis, timestamp).html
+      transactSum setText s"$marking\u00A0$purpose".html
       transactCircle setImageResource image
     }
   }

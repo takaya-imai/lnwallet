@@ -11,13 +11,14 @@ import com.lightning.wallet.lncloud._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
-import java.util.{Date, Timer, TimerTask}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
+import java.util.{Timer, TimerTask}
 
 import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
@@ -39,7 +40,6 @@ import fr.acinq.bitcoin.MilliSatoshi
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
-import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.script.Script
 import scala.concurrent.Future
 import android.os.Bundle
@@ -181,18 +181,15 @@ trait ToolbarActivity extends TimerActivity { me =>
       alert
 
       def warnUser: Unit = rm(alert) {
-        lazy val dialog1 = mkChoiceDialog(rm(alert1)(encryptAndExport), none, dialog_ok, dialog_cancel)
+        lazy val dialog1 = mkChoiceDialog(encryptAndExport, none, dialog_ok, dialog_cancel)
         lazy val alert1: AlertDialog = mkForm(dialog1, null, getString(mnemonic_export_details).html)
         alert1
-      }
 
-      def encryptAndExport: Unit = {
-        val (crypter, key) = app getCrypter password
-        val cipher = crypter.encrypt(Mnemonic text seed getBytes "UTF-8", key)
-        val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
-        share.putExtra(android.content.Intent.EXTRA_SUBJECT, s"Encrypted mnemonic ${new Date}")
-        share.putExtra(android.content.Intent.EXTRA_TEXT, HEX encode cipher.encryptedBytes)
-        me startActivity share.putExtra(Intent.EXTRA_STREAM, cipher.encryptedBytes)
+        def encryptAndExport: Unit = rm(alert1) {
+          val exported = Mnemonic.exportSeed(seed, password)
+          val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
+          me startActivity share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
+        }
       }
     }
 
@@ -247,7 +244,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
         def rotatePass = {
           app.kit.wallet decrypt oldPass
-          val (crypter, key) = app getCrypter newPass
+          val (crypter, key) = app newCrypter newPass
           app.kit.wallet.encrypt(crypter, key)
         }
       }
