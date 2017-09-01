@@ -49,8 +49,7 @@ object Features {
 }
 
 class LightningException extends RuntimeException
-case class ExtendedException[T](details: T) extends LightningException
-case class PlainAddInSyncException(add: PlainAddHtlc) extends LightningException
+case class AddException[T](details: T, code: Int) extends LightningException
 
 // STATE MACHINE
 

@@ -1,9 +1,11 @@
 package com.lightning.wallet.ln
 
+
 import fr.acinq.bitcoin.Crypto._
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
+import com.lightning.wallet.ln.Channel._
 
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
@@ -201,9 +203,9 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw ExtendedException(cmd)
-    else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw ExtendedException(cmd)
-    else if (cmd.out.request.paymentHash.size != 32) throw ExtendedException(cmd)
+    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_LOCAL_FEE_OVERFLOW)
+    else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
+    else if (cmd.out.request.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
 
       // Let's compute the current commitment
@@ -219,9 +221,9 @@ object Commitments {
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
       // The rest of the guards
-      if (htlcValueInFlightOverflow) throw ExtendedException(cmd)
-      else if (acceptedHtlcsOverflow) throw ExtendedException(cmd)
-      else if (feesOverflow) throw ExtendedException(cmd)
+      if (htlcValueInFlightOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      else if (acceptedHtlcsOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      else if (feesOverflow) throw AddException(cmd, ERR_REMOTE_FEE)
       else c1 -> add
     }
 

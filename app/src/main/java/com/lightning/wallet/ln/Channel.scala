@@ -183,9 +183,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
 
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
-          case Success(out: OutgoingPayment) if out.isFulfilled => throw ExtendedException(cmd)
-          case Success(out: OutgoingPayment) if out.isPending => throw ExtendedException(cmd)
-          case Success(_: IncomingPayment) => throw ExtendedException(cmd)
+          case Success(out: OutgoingPayment) if out.isFulfilled => throw AddException(cmd, ERR_FULFILLED)
+          case Success(out: OutgoingPayment) if out.isPending => throw AddException(cmd, ERR_STILL_PENDING)
+          case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
             // This may be a failed outgoing payment
@@ -356,7 +356,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           val localPerCommitmentSecret = Generators.perCommitSecret(c1.localParams.shaSeed, c1.localCommit.index - 1)
           val localNextPerCommitmentPoint = Generators.perCommitPoint(c1.localParams.shaSeed, c1.localCommit.index + 1)
           me SEND RevokeAndAck(channelId = c1.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
-        } else if (c1.localCommit.index != cr.nextRemoteRevocationNumber) throw ExtendedException(norm)
+        } else if (c1.localCommit.index != cr.nextRemoteRevocationNumber) throw new LightningException
 
         c1.remoteNextCommitInfo match {
           // We had sent a new sig and were waiting for their revocation
@@ -373,7 +373,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           // the new sig but their revocation was lost during the disconnection, they'll resend us the revocation
           case Left(wait) if wait.nextRemoteCommit.index + 1 == cr.nextLocalCommitmentNumber => maybeResendRevocation
           case Right(_) if c1.remoteCommit.index + 1 == cr.nextLocalCommitmentNumber => maybeResendRevocation
-          case _ => throw ExtendedException(norm)
+          case _ => throw new LightningException
         }
 
         BECOME(norm.copy(commitments = c1), NORMAL)
@@ -419,7 +419,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           case Some(closeTx) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closeTx)
           case Some(closeTx) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closeTx)
           case Some(_) => me UPDATE neg.copy(localClosingSigned = nextMessage) SEND nextMessage
-          case _ => throw ExtendedException(neg)
+          case _ => throw new LightningException
         }
 
 
@@ -447,7 +447,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => BECOME(some, CLOSING)
       case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
-      case (_: NormalData, add: PlainAddHtlc, SYNC) => throw PlainAddInSyncException(add)
+      case (_: NormalData, add: PlainAddHtlc, SYNC) => throw AddException(add, ERR_STILL_IN_SYNC)
 
       case _ =>
         // Let know if received an unhandled message
@@ -536,6 +536,16 @@ object Channel {
 
   // Makes chan inactive
   val CLOSING = "Closing"
+
+  // Error messages
+  val ERR_FULFILLED = 0
+  val ERR_STILL_PENDING = 1
+  val ERR_STILL_IN_SYNC = 2
+  val ERR_LOCAL_FEE_OVERFLOW = 3
+  val ERR_AMOUNT_OVERFLOW = 4
+  val ERR_TOO_MANY_HTLC = 5
+  val ERR_REMOTE_FEE = 6
+  val ERR_FAILED = 7
 }
 
 trait ChannelListener {

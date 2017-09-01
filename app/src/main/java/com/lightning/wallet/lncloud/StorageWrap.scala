@@ -60,6 +60,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def toPaymentInfo(rc: RichCursor) = {
     val actual = MilliSatoshi(rc long received)
     val pr = to[PaymentRequest](rc string request)
+
     Option(rc string routing) map to[RoutingData] match {
       case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, actual, rc string chanId, rc long status)
       case _ => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
@@ -127,7 +128,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     // This channel is outdated, fail all the unfinished HTLCs
     case (_, close: ClosingData, _: Command) if close.isOutdated =>
       failPending(WAITING, close.commitments.channelId)
-      uiNotify
   }
 
   override def onBecome = {

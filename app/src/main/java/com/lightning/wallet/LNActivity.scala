@@ -183,10 +183,9 @@ with ListUpdater with SearchBar { me =>
       }
 
       override def onError = {
-        case ExtendedException(cmd: RetryAddHtlc) => Tools log s"Payment retry rejected $cmd"
-        case ExtendedException(cmd: SilentAddHtlc) => Tools log s"Silent payment rejected $cmd"
-        case ExtendedException(_: PlainAddHtlc) => onFail(me getString err_general)
-        case _: PlainAddInSyncException => onFail(me getString err_ln_add_sync)
+        case AddException(cmd: RetryAddHtlc, _) => Tools log s"Retry payment rejected $cmd"
+        case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
+        case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
       }
 
       override def onProcess = {
@@ -222,7 +221,7 @@ with ListUpdater with SearchBar { me =>
 
       def onError(err: Throwable) = err.getMessage match {
         case "fromblacklisted" => onFail(me getString err_ln_black)
-        case "noroutefound" => onFail(me getString err_ln_route)
+        case "noroutefound" => onFail(me getString err_ln_no_route)
         case details => onFail(details)
       }
 
@@ -251,8 +250,8 @@ with ListUpdater with SearchBar { me =>
       }
 
       def receiveAttempt = rateManager.result match {
-        case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
+        case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
 
         case result => rm(alert) {
           <(proceed(result.toOption, bag.newPreimage), onFail)(none)

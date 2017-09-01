@@ -325,5 +325,5 @@ object ImplicitJsonFormats { me =>
   implicit val waitFundingDoneDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement,
     Option[FundingLocked], Option[FundingLocked], Transaction, Commitments,
     WaitFundingDoneData](WaitFundingDoneData.apply, "announce", "our",
-    "their", "fundingTx", "commitments"), tag = "FundingLocked")
+    "their", "fundingTx", "commitments"), tag = "WaitFundingDoneData")
 }

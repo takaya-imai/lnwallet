@@ -124,8 +124,7 @@ class WalletApp extends Application { me =>
     }
 
     val reconnectListener = new ConnectionListener {
-      override def onOperational(id: PublicKey, their: Init) = Tools log s"Socket at node $id is operational"
-      override def onDisconnect(id: PublicKey) = Obs.just(Tools log s"Reconnecting a socket at node $id")
+      override def onDisconnect(id: PublicKey) = Obs.just(Tools log s"Reconnecting socket $id")
         .delay(5.seconds).subscribe(_ => ChannelManager reconnect from(alive, id), Tools.errlog)
     }
 
@@ -144,10 +143,10 @@ class WalletApp extends Application { me =>
 
     // Build payment if we actually have routes and channel has an id
     def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =
-      Some(rs, chan.id) collectFirst { case (firstRoute +: emergencyRoutes) ~ Some(chanId) =>
+      Some(rs, chan.id) collectFirst { case (firstRoute +: restOfTheRoutes) ~ Some(chanId) =>
         val (payloads, total, expiry) = buildPayloads(request.amount.get.amount, LNParams.expiry, firstRoute)
         val onion = buildOnion(chan.data.announce.nodeId +: firstRoute.map(_.nextNodeId), payloads, request.paymentHash)
-        OutgoingPayment(RoutingData(emergencyRoutes, onion, total, expiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
+        OutgoingPayment(RoutingData(restOfTheRoutes, onion, total, expiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
       }
   }
 
