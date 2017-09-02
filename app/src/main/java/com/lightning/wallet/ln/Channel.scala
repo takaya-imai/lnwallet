@@ -18,9 +18,8 @@ import scala.util.Success
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
-  override def process(change: Any) = try super.process(change) catch events.onError
   def id = Some(data) collect { case some: HasCommitments => some.commitments.channelId }
-  def async(change: Any) = Future apply process(change)
+  def process(change: Any) = Future apply synchronized(me doProcess change) onFailure events.onError
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -224,12 +223,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE d1 SEND commitSig
 
 
-      // GUARD: serves as a trigger to enter negotiations when mutual shutdown state is reached
-      case (NormalData(announce, commitments, Some(local), remoteOpt), CMDProceed, NORMAL)
-        if Commitments.pendingHtlcs(commitments).isEmpty && remoteOpt.isDefined =>
-        startNegotiations(announce, commitments, local, remoteOpt.get)
-
-
       case (norm: NormalData, sig: CommitSig, NORMAL)
         if sig.channelId == norm.commitments.channelId =>
 
@@ -285,21 +278,31 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(norm)
 
 
-      // We have not yet sent or received a shutdown so send one and re-call again
-      case (norm @ NormalData(_, commitments, None, None), remote: Shutdown, NORMAL)
-        if remote.channelId == commitments.channelId =>
+      // They initiate shutdown or respond to ours
+      case (norm: NormalData, remote: Shutdown, NORMAL)
+        if remote.channelId == norm.commitments.channelId &&
+          norm.remoteShutdown.isEmpty =>
+
+        // We got their first shutdown so save it and proceed
+        me UPDATE norm.copy(remoteShutdown = Some apply remote)
+        doProcess(CMDProceed)
+
+
+      // GUARD: we can't send our shutdown untill all HTLCs are resolved
+      case (norm @ NormalData(_, commitments, None, their), CMDProceed, NORMAL)
+        if Commitments.pendingHtlcs(commitments).isEmpty && their.isDefined =>
 
         me startShutdown norm
-        doProcess(remote)
+        doProcess(CMDProceed)
 
+      // This is the final stage: both Shutdown messages are present and no pending HTLCs are left
+      case (NormalData(announce, commitments, Some(local), Some(remote) /* both present */), CMDProceed, NORMAL)
+        if Commitments.pendingHtlcs(commitments).isEmpty =>
 
-      // We have already sent a shutdown (initially or in response to their shutdown above)
-      case (norm @ NormalData(announce, commitments, Some(local), None), remote: Shutdown, NORMAL)
-        if remote.channelId == commitments.channelId =>
-
-        // We can start negotiations if there are no in-flight HTLCs, otherwise wait until they are cleared
-        if (Commitments.pendingHtlcs(commitments).isEmpty) startNegotiations(announce, commitments, local, remote)
-        else me UPDATE norm.copy(remoteShutdown = Some apply remote)
+        val feerate = commitments.localCommit.spec.feeratePerKw
+        val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, remote.scriptPubKey, feerate)
+        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, remote)
+        BECOME(me STORE neg, NEGOTIATIONS) SEND sig
 
 
       case (norm: NormalData, CMDBestHeight(height), NORMAL | SYNC)
@@ -471,11 +474,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def startShutdown(norm: NormalData) = {
     val localShutdown = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
     me UPDATE norm.copy(localShutdown = Some apply localShutdown) SEND localShutdown
-  }
-
-  private def startNegotiations(announce: NodeAnnouncement, cs: Commitments, local: Shutdown, remote: Shutdown) = {
-    val firstSigned = Closing.makeFirstClosing(cs, local.scriptPubKey, remote.scriptPubKey, cs.localCommit.spec.feeratePerKw)
-    BECOME(me STORE NegotiationsData(announce, cs, firstSigned, local, remote), NEGOTIATIONS) SEND firstSigned
   }
 
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction) =

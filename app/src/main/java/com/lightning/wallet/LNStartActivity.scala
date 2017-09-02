@@ -106,8 +106,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(msg: LightningMessage) = chan process msg
-      override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan async CMDShutdown
-      override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan async CMDShutdown
+      override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan process CMDShutdown
+      override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan process CMDShutdown
       override def onOperational(id: PublicKey, their: Init) = if (id == announce.nodeId)
         me runOnUiThread askForFunding(chan, their)
     }
@@ -142,7 +142,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     ConnectionManager.listeners += socketOpenListener
-    whenBackPressed = anyToRunnable(chan async CMDShutdown)
+    whenBackPressed = anyToRunnable(chan process CMDShutdown)
     ConnectionManager requestConnection announce
     me setPeerView position
   }
@@ -187,7 +187,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
         val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-        chan async CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
+        chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
       }
     }
 
@@ -207,7 +207,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       def processTx(password: String, fee: Coin) =
         <(makeTx(password, fee), onTxFail) { fundingTransaction =>
           val outIndex = Scripts.findPubKeyScriptIndex(fundingTransaction, scriptPubKey)
-          chan async Tuple2(fundingTransaction: fr.acinq.bitcoin.Transaction, outIndex)
+          chan process Tuple2(fundingTransaction: fr.acinq.bitcoin.Transaction, outIndex)
         }
 
       def onTxFail(err: Throwable) =

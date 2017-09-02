@@ -59,7 +59,7 @@ class LNOpsActivity extends TimerActivity { me =>
     }
 
     def warnAboutUnilateralClosing =
-      mkForm(mkChoiceDialog(chan async CMDShutdown, none, ln_force_close,
+      mkForm(mkChoiceDialog(chan process CMDShutdown, none, ln_force_close,
         dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
     val chanOpsListener = new ChannelListener {

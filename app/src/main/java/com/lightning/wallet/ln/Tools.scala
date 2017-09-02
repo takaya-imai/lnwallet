@@ -2,6 +2,7 @@ package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
+
 import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
 import crypto.RandomGenerator
@@ -49,14 +50,16 @@ object Features {
 }
 
 class LightningException extends RuntimeException
-case class AddException[T](details: T, code: Int) extends LightningException
+case class AddException[T](details: T, code: Int)
+  extends LightningException
 
 // STATE MACHINE
 
-abstract class StateMachine[T] { me =>
-  def process(change: Any) = me synchronized doProcess(change = change)
-  def become(data1: T, state1: String) = wrap { data = data1 } { state = state1 }
-  def stayWith(data1: T) = become(data1, state)
+abstract class StateMachine[T] {
+  def stayWith(d1: T) = become(d1, state)
+  def become(freshData: T, freshState: String) =
+    wrap { data = freshData } { state = freshState }
+
   def doProcess(change: Any)
   var state: String = _
   var data: T = _

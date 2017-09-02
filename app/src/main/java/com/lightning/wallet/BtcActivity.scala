@@ -169,7 +169,6 @@ with ListUpdater { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
-      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.BITCOIN).commit
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
       updateTitleAndSub(constListener.mkTxt, Informer.PEER)
       me startListUpdates adapter
@@ -249,8 +248,10 @@ with ListUpdater { me =>
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  override def onResume: Unit =
-    wrap(super.onResume)(checkTransData)
+  override def onResume = wrap(super.onResume) {
+    app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.BITCOIN).commit
+    checkTransData
+  }
 
   // DATA READING AND BUTTON ACTIONS
 
@@ -352,9 +353,8 @@ with ListUpdater { me =>
   def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala.take(maxLinesNum)
     .toVector.map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 
-  class BtcView(view: View) extends TxViewHolder(view) {
-    // Display given Bitcoin transaction properties to user
-
+  class BtcView(view: View)
+  extends TxViewHolder(view) {
     def fillView(wrap: TxWrap) = {
       val statusImage = if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
         else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1

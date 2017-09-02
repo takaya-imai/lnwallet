@@ -77,6 +77,7 @@ class LNActivity extends DataReader
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
+  lazy val addFailures = getResources getStringArray R.array.txs_ln_add_failures
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
 
@@ -95,8 +96,7 @@ with ListUpdater with SearchBar { me =>
   private[this] var whenStop = anyToRunnable(super.onStop)
   override def onStop = whenStop.run
 
-  // INTERFACE IMPLEMENTING METHODS
-
+  def evacuate = me exitTo classOf[LNOpsActivity]
   def react(qs: String) = paymentsViewProvider reload qs
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will updated separately so just update subtitle
@@ -109,7 +109,6 @@ with ListUpdater with SearchBar { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedState)
-      app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
       me startListUpdates adapter
@@ -138,13 +137,10 @@ with ListUpdater with SearchBar { me =>
     true
   }
 
-  override def onResume =
-    wrap(run = super.onResume) {
-      app.ChannelManager.alive.headOption match {
-        case None => me exitTo classOf[LNOpsActivity]
-        case Some(chan) => manageActive(chan)
-      }
-    }
+  override def onResume = wrap(super.onResume) {
+    app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
+    app.ChannelManager.alive.headOption match { case Some(chan) => manageActive(chan) case None => evacuate }
+  }
 
   // APP MENU
 
@@ -155,12 +151,11 @@ with ListUpdater with SearchBar { me =>
 
   def closeAllActiveChannels = checkPass(me getString ln_close) { pass =>
     // Close all of the channels just in case we have more than one active
-    for (chan <- app.ChannelManager.alive) chan async CMDShutdown
+    for (chan <- app.ChannelManager.alive) chan process CMDShutdown
   }
 
   def manageActive(chan: Channel) = {
     toolbar setOnClickListener onButtonTap {
-      // User may change denomination on the fly
       wrap(adapter.notifyDataSetChanged)(changeDenom)
       setTitle
     }
@@ -174,18 +169,16 @@ with ListUpdater with SearchBar { me =>
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
-        case (_, _: NormalData, _, NORMAL) => update(getString(ln_notify_operational), Informer.LNSTATE).animate
+        case (_, norm: NormalData, _, _) if norm.isClosing => evacuate
+        case (_, _: ClosingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
         case (_, _: NormalData, _, SYNC) => update(getString(ln_notify_connecting), Informer.LNSTATE).animate
-        case (_, norm: NormalData, _, _) if norm.isClosing => me exitTo classOf[LNOpsActivity]
-        case (_, _: WaitFundingDoneData, _, _) => me exitTo classOf[LNOpsActivity]
-        case (_, _: NegotiationsData, _, _) => me exitTo classOf[LNOpsActivity]
-        case (_, _: ClosingData, _, _) => me exitTo classOf[LNOpsActivity]
+        case (_, _: NormalData, _, NORMAL) => update(getString(ln_notify_operational), Informer.LNSTATE).animate
       }
 
       override def onError = {
         case AddException(cmd: RetryAddHtlc, _) => Tools log s"Retry payment rejected $cmd"
         case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
-        case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
+        case AddException(_: PlainAddHtlc, code) => onFail(addFailures apply code)
       }
 
       override def onProcess = {
@@ -345,8 +338,8 @@ with ListUpdater with SearchBar { me =>
     case _ => "<i>" + getString(ln_no_description) + "</i>"
   }
 
-  class LNView(view: View) extends TxViewHolder(view) {
-
+  class LNView(view: View)
+  extends TxViewHolder(view) {
     def fillView(info: PaymentInfo) = {
       val marking: String = info match {
         case in: IncomingPayment => sumIn.format(denom formatted in.received)

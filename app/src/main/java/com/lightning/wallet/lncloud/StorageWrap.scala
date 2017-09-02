@@ -131,10 +131,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   override def onBecome = {
-    case (_, norm: NormalData, _, SYNC | CLOSING) =>
+    case (_, some: HasCommitments, _, SYNC | CLOSING) =>
       // At worst these will be marked as FAILURE and
       // then as WAITING once their CommitSig arrives
-      failPending(TEMP, norm.commitments.channelId)
+      failPending(TEMP, some.commitments.channelId)
       uiNotify
   }
 }
