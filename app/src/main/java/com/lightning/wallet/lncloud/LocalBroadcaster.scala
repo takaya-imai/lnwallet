@@ -11,8 +11,11 @@ import com.lightning.wallet.Utils.app
 
 object LocalBroadcaster extends Broadcaster { me =>
   def feeRatePerKw = RatesSaver.rates.feeLive.value / 2
-  def currentHeight = app.kit.peerGroup.getMostCommonChainHeight
   def send(tx: Transaction) = app.kit.blockingSend(tx).toString
+
+  def currentHeight =
+    math.max(app.kit.wallet.getLastBlockSeenHeight,
+      app.kit.peerGroup.getMostCommonChainHeight)
 
   def getConfirmations(txid: BinaryData) =
     Option(app.kit.wallet getTransaction txid)
