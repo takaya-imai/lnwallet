@@ -3,10 +3,11 @@ package com.lightning.wallet.lncloud
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+import collection.JavaConverters.seqAsJavaListConverter
+import com.lightning.wallet.Utils.app
 
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import rx.lang.scala.{Observable => Obs}
-import com.lightning.wallet.Utils.app
 
 
 object LocalBroadcaster extends Broadcaster { me =>
@@ -24,8 +25,9 @@ object LocalBroadcaster extends Broadcaster { me =>
   override def onBecome = {
     case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>
       val script = wait.commitments.commitInput.txOut.publicKeyScript
+      val watchList = List(script: org.bitcoinj.script.Script).asJava
       safeSend(wait.fundingTx).foreach(Tools.log, Tools.errlog)
-      app.kit.wallet.addWatchedScript(script)
+      app.kit.wallet.addWatchedScripts(watchList)
 
     case (chan, _, SYNC, NORMAL) =>
       // Will be sent once on app lauch
