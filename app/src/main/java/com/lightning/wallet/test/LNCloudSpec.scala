@@ -24,9 +24,9 @@ class LNCloudSpec {
   val preimage = BinaryData("9273f6a0a42b82d14c759e3756bd2741d51a0b3ecc5f284dbe222b59ea903942")
 
   object TestPaymentSpecBag extends PaymentInfoBag {
-    def failPending(status: Long, chanId: BinaryData): Unit = ???
+    def failPending(status: Int, chanId: BinaryData): Unit = ???
     def updateRouting(out: OutgoingPayment): Unit = ???
-    def updateStatus(status: Long, hash: BinaryData): Unit = ???
+    def updateStatus(status: Int, hash: BinaryData): Unit = ???
     def updatePreimage(update: UpdateFulfillHtlc): Unit = ???
     def updateReceived(add: UpdateAddHtlc): Unit = ???
 

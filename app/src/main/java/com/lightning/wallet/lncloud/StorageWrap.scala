@@ -53,31 +53,31 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def recentPayments: Cursor = db select selectRecentSql
 
   def toPaymentInfo(rc: RichCursor) = {
-    val actual = MilliSatoshi(rc long received)
+    val delta = MilliSatoshi(rc long received)
     val pr = to[PaymentRequest](rc string request)
 
     Option(rc string routing) map to[RoutingData] match {
-      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, actual, rc string chanId, rc long status)
-      case _ => IncomingPayment(rc string preimage, pr, actual, rc string chanId, rc long status)
+      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, delta, rc string chanId, rc int status)
+      case _ => IncomingPayment(rc string preimage, pr, delta, rc string chanId, rc int status)
     }
   }
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
     val paymentHashString = info.request.paymentHash.toString
-    // OutgoingPayment has received set to negative amount, IncomingPayment is zero, to be updated later
-    val received1 = info match { case out: OutgoingPayment => -out.request.amount.get.amount case _ => 0L }
+    // OutgoingPayment delta is negative amount, IncomingPayment is zero, to be updated later
+    val delta = info match { case out: OutgoingPayment => -out.request.finalSum.amount case _ => 0L }
     val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case _ => null }
     db.change(newVirtualSql, s"${info.request.description} $paymentHashString", paymentHashString)
     db.change(newSql, paymentHashString, info.request.toJson.toString, info.status.toString,
-      info.chanId.toString, info.preimage.toString, received1.toString, routing)
+      info.chanId.toString, info.preimage.toString, delta.toString, routing)
   }
 
-  def updateStatus(status: Long, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
+  def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
-  def failPending(status: Long, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
+  def failPending(status: Int, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
   override def onProcess = {
     case (_, _, add: UpdateAddHtlc) =>

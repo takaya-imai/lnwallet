@@ -77,6 +77,8 @@ class LNActivity extends DataReader
 with ToolbarActivity with HumanTimeDisplay
 with ListUpdater with SearchBar { me =>
 
+  val imgMap = Array(await, await, await, conf1, dead)
+  lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val addFailures = getResources getStringArray R.array.txs_ln_add_failures
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
@@ -341,24 +343,17 @@ with ListUpdater with SearchBar { me =>
   class LNView(view: View)
   extends TxViewHolder(view) {
     def fillView(info: PaymentInfo) = {
-      val marking: String = info match {
+      val timestamp = new Date(info.request.timestamp * 1000)
+      val purpose = info.request.description.right getOrElse new String
+
+      val marking = info match {
         case in: IncomingPayment => sumIn.format(denom formatted in.received)
         case out: OutgoingPayment => sumOut.format(denom formatted out.received)
       }
 
-      val image = info match {
-        case out: OutgoingPayment if out.isFulfilled => conf1
-        case out: OutgoingPayment if out.isPending => await
-        case IncomingPayment(_, _, _, _, SUCCESS) => conf1
-        case _: IncomingPayment => await
-        case _ => dead
-      }
-
-      val timestamp = new Date(info.request.timestamp * 1000)
-      val purpose = info.request.description.right getOrElse new String
       transactWhen setText when(System.currentTimeMillis, timestamp).html
+      transactCircle setImageResource imgMap(info.actualStatus)
       transactSum setText s"$marking\u00A0$purpose".html
-      transactCircle setImageResource image
     }
   }
 }

@@ -73,7 +73,8 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
   def routingInfo: Vector[RoutingInfoTag] = tags.collect { case t: RoutingInfoTag => t }
-  def paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
+  def paymentHash: BinaryData = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
+  def finalSum = amount.get
 
   def isFresh: Boolean = {
     val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }

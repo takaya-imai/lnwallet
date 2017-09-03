@@ -16,28 +16,30 @@ import scala.util.{Success, Try}
 
 
 trait PaymentInfo {
+  def actualStatus: Int
   val preimage: BinaryData
   val request: PaymentRequest
   val received: MilliSatoshi
   val chanId: BinaryData
-  val status: Long
+  val status: Int
 }
 
 case class IncomingPayment(preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
-                           chanId: BinaryData, status: Long) extends PaymentInfo
+                           chanId: BinaryData, status: Int) extends PaymentInfo {
+
+  def actualStatus = status
+}
 
 case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
 case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
-                           chanId: BinaryData, status: Long) extends PaymentInfo {
+                           chanId: BinaryData, status: Int) extends PaymentInfo {
 
-  def isPending: Boolean = status == TEMP || status == WAITING
-  def isFailed: Boolean = !isFulfilled && status == FAILURE
-  def isFulfilled: Boolean = preimage != NOIMAGE
+  def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
 }
 
 trait PaymentInfoBag {
-  def failPending(status: Long, chanId: BinaryData): Unit
-  def updateStatus(status: Long, hash: BinaryData): Unit
+  def failPending(status: Int, chanId: BinaryData): Unit
+  def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
   def updateRouting(out: OutgoingPayment): Unit
   def updateReceived(add: UpdateAddHtlc): Unit
@@ -48,11 +50,11 @@ trait PaymentInfoBag {
 }
 
 object PaymentInfo {
-  final val TEMP = 0L
-  final val HIDDEN = 1L
-  final val WAITING = 2L
-  final val SUCCESS = 3L
-  final val FAILURE = 4L
+  final val FAILURE = 4
+  final val SUCCESS = 3
+  final val WAITING = 2
+  final val HIDDEN = 1
+  final val TEMP = 0
 
   // Used for unresolved outgoing payment infos
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")

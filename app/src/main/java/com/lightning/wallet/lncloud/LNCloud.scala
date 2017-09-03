@@ -3,11 +3,13 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.LNCloud._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
@@ -77,8 +79,8 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
     // Start a new request while payment is in progress
     case PublicData(Some(request ~ memo), _, _) ~ CMDStart =>
       bag getPaymentInfo request.paymentHash getOrElse null match {
-        case out: OutgoingPayment if out.isFulfilled => me resolveSuccess memo
-        case out: OutgoingPayment if out.isFailed => resetPaymentData
+        case out: OutgoingPayment if out.actualStatus == SUCCESS => me resolveSuccess memo
+        case out: OutgoingPayment if out.actualStatus == FAILURE => resetPaymentData
         case in: IncomingPayment => resetPaymentData
         case null => resetPaymentData
         case _ => me stayWith data
