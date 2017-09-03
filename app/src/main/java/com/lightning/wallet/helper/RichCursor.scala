@@ -5,7 +5,6 @@ import com.lightning.wallet.ln.Tools.{none, runAnd}
 import android.support.v4.content.{AsyncTaskLoader, Loader}
 import android.support.v4.app.LoaderManager.LoaderCallbacks
 import android.content.Context
-import java.math.BigInteger
 import android.os.Handler
 import android.net.Uri
 import scala.util.Try
@@ -13,12 +12,9 @@ import scala.util.Try
 
 case class RichCursor(c: Cursor) extends Iterable[RichCursor] { me =>
   def vec[T](trans: RichCursor => T) = try map(trans).toVector finally c.close
-  def headTry[T](trans: RichCursor => T) = try Try(trans apply head) finally c.close
-
-  // Converting column names info specified values
+  def headTry[T](trans: RichCursor => T) = try Try apply trans(head) finally c.close
   def string(stringKey: String) = c.getString(c getColumnIndex stringKey)
   def long(longKey: String) = c.getLong(c getColumnIndex longKey)
-  def bigInt(key: String) = new BigInteger(me string key)
 
   def iterator = new Iterator[RichCursor] {
     def hasNext = c.getPosition < c.getCount - 1

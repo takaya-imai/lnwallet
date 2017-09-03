@@ -101,12 +101,14 @@ class WalletApp extends Application { me =>
   }
 
   object ChannelManager {
+    import ConnectionManager._
     type ChannelVec = Vector[Channel]
     type OutPaymentOption = Option[OutgoingPayment]
+
     var all: ChannelVec = ChannelWrap.get map createChannel
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
-    def reconnect(cv: ChannelVec) = cv.map(_.data.announce) foreach ConnectionManager.requestConnection
+    def reconnect(cv: ChannelVec) = cv.map(_.data.announce) foreach requestConnection
 
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
@@ -129,7 +131,7 @@ class WalletApp extends Application { me =>
     }
 
     def createChannel(bootstrap: ChannelData) = new Channel {
-      def SEND(msg: LightningMessage) = for (work <- ConnectionManager.connections get data.announce.nodeId) work send msg
+      def SEND(msg: LightningMessage) = for (work <- connections get data.announce.nodeId) work send msg
       def STORE(content: HasCommitments): HasCommitments = runAnd(content)(ChannelWrap put content)
       listeners ++= Set(LNParams.broadcaster, LNParams.bag, ChannelWrap)
       process(bootstrap)

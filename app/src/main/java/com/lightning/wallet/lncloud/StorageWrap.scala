@@ -29,21 +29,16 @@ object StorageWrap {
 }
 
 object ChannelWrap extends ChannelListener {
-  def put(data: HasCommitments): Unit = db txWrap {
-    val chanIdString = data.commitments.channelId.toString
-    val content = data.toJson.toString
+  def put(data: HasCommitments) = doPut(data.commitments.channelId.toString, data.toJson.toString)
+  def get = RichCursor(db select ChannelTable.selectAllSql).vec(_ string ChannelTable.data) map to[HasCommitments]
 
-    db.change(ChannelTable.newSql, params = chanIdString, content)
-    db.change(ChannelTable.updSql, params = content, chanIdString)
+  def doPut(chanId: String, data: String) = db txWrap {
+    db.change(ChannelTable.newSql, params = chanId, data)
+    db.change(ChannelTable.updSql, params = data, chanId)
   }
 
-  def get: Vector[HasCommitments] =
-    RichCursor(db select ChannelTable.selectAllSql)
-      .vec(_ string ChannelTable.data) map to[HasCommitments]
-
   override def onProcess = {
-    // This channel is outdated, remove it from database
-    case (_, close: ClosingData, _: Command) if close.isOutdated =>
+    case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
   }
 }
@@ -119,21 +114,20 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       }
 
       for {
-        // Then we retry payments with routes left
+        // Then retry failed payments with routes left
         htlc ~ fail <- norm.commitments.localCommit.spec.failed
         out @ OutgoingPayment(_, _, request, _, _, _) <- getPaymentInfo(htlc.add.paymentHash)
         out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
       } chan process RetryAddHtlc(out1)
 
-    // This channel is outdated, fail all the unfinished HTLCs
     case (_, close: ClosingData, _: Command) if close.isOutdated =>
+      // This channel is outdated, fail all the unfinished HTLCs
       failPending(WAITING, close.commitments.channelId)
   }
 
   override def onBecome = {
-    case (_, some: HasCommitments, _, SYNC | CLOSING) =>
-      // At worst these will be marked as FAILURE and
-      // then as WAITING once their CommitSig arrives
+    case (_, some: HasCommitments, NORMAL | SYNC, SYNC | NEGOTIATIONS | CLOSING) =>
+      // At worst these will be marked as FAILURE and then as WAITING on their CommitSig
       failPending(TEMP, some.commitments.channelId)
       uiNotify
   }

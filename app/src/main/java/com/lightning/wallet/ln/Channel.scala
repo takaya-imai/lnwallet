@@ -120,7 +120,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We have already sent them a FundingLocked and now we got one from them so we can enter normal state now
       case (wait @ WaitFundingDoneData(_, Some(our), _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
         if their.channelId == wait.commitments.channelId =>
-        BECOMENormal(wait, their)
+        startNormalChannelMode(wait, their)
 
 
       // We got our lock but their is not yet present so we save ours and just keep waiting for their
@@ -137,7 +137,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
-        BECOMENormal(wait, their) SEND our
+        startNormalChannelMode(wait, their) SEND our
 
 
       // NORMAL MODE
@@ -195,19 +195,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         }
 
       // We're fulfilling an HTLC we got earlier
-      case (norm: NormalData, cmd: CMDFulfillHtlc, NORMAL) =>
-        val c1 ~ updateFulfillHtlc = Commitments.sendFulfill(norm.commitments, cmd)
+      case (norm @ NormalData(_, commitments, _, _), cmd: CMDFulfillHtlc, NORMAL) =>
+        val c1 ~ updateFulfillHtlc = Commitments.sendFulfill(commitments, cmd)
         me UPDATE norm.copy(commitments = c1) SEND updateFulfillHtlc
 
 
       // Failing an HTLC we got earlier
-      case (norm: NormalData, cmd: CMDFailHtlc, NORMAL) =>
-        val c1 ~ updateFailHtlc = Commitments.sendFail(norm.commitments, cmd)
+      case (norm @ NormalData(_, commitments, _, _), cmd: CMDFailHtlc, NORMAL) =>
+        val c1 ~ updateFailHtlc = Commitments.sendFail(commitments, cmd)
         me UPDATE norm.copy(commitments = c1) SEND updateFailHtlc
 
 
-      case (norm: NormalData, cmd: CMDFailMalformedHtlc, NORMAL) =>
-        val c1 ~ updateFailMalformedHtlс = Commitments.sendFailMalformed(norm.commitments, cmd)
+      case (norm @ NormalData(_, commitments, _, _), cmd: CMDFailMalformedHtlc, NORMAL) =>
+        val c1 ~ updateFailMalformedHtlс = Commitments.sendFailMalformed(commitments, cmd)
         me UPDATE norm.copy(commitments = c1) SEND updateFailMalformedHtlс
 
 
@@ -240,6 +240,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val c1 = Commitments.receiveRevocation(norm.commitments, rev)
         me UPDATE norm.copy(commitments = c1)
         doProcess(CMDHTLCProcess)
+
 
       // Fail or fulfill incoming HTLCs
       case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
@@ -294,6 +295,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         me startShutdown norm
         doProcess(CMDProceed)
+
 
       // This is the final stage: both Shutdown messages are present and no pending HTLCs are left
       case (NormalData(announce, commitments, Some(local), Some(remote) /* both present */), CMDProceed, NORMAL)
@@ -457,7 +459,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         Tools log s"Channel: unhandled $state : $change"
     }
 
-    // After this change has been processed
+    // Change has been successfully processed
     events onProcess Tuple3(me, data, change)
   }
 
@@ -466,7 +468,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     FundingLocked(cs.channelId, nextPerCommitmentPoint = point)
   }
 
-  private def BECOMENormal(wait: HasCommitments, their: FundingLocked) = {
+  private def startNormalChannelMode(wait: HasCommitments, their: FundingLocked) = {
     val c1 = wait.commitments.copy(remoteNextCommitInfo = Right apply their.nextPerCommitmentPoint)
     BECOME(me STORE NormalData(wait.announce, c1), NORMAL)
   }

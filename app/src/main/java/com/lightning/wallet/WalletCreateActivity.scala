@@ -35,7 +35,7 @@ object Mnemonic {
   }
 
   def importSeed(seed: String, pass: String) = {
-    val Array(initVector, mnemonic, salt) = seed split ':'
+    val Array(initVector, mnemonic, salt) = seed split ":"
     val (crypter, key) = app.getCrypterScrypt(HEX decode salt, pass)
     val data = new EncryptedData(HEX decode initVector, HEX decode mnemonic)
     new String(crypter.decrypt(data, key), "UTF-8")
