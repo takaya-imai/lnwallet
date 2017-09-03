@@ -224,7 +224,7 @@ with ListUpdater with SearchBar { me =>
     }
 
     makePaymentRequest = anyToRunnable {
-      val content = getLayoutInflater.inflate(R.layout.frag_input_receive_ln, null, false)
+      val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive_title, content)
       val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.head, maxHtlcValue.amount)

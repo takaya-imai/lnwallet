@@ -18,7 +18,7 @@
     <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Minimal transaction fee</small></small>]]></string>
     <string name="title_fee"><![CDATA[Select transaction fee<br><br>%1$s]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
-    <string name="wallet_create">Create New Wallet</string>
+    <string name="wallet_create">Create New Bitcoin Wallet</string>
     <string name="wallet_restore">Restore Wallet</string>
     <string name="wallet_empty">Wallet is empty</string>
     <string name="unlock">Unlock Wallet</string>
@@ -174,7 +174,7 @@
     <string name="ln_outgoing"><![CDATA[<font color=#E31300>Outgoing payment</font><br>%1$s<br><br>%2$s fee]]></string>
     <string name="ln_proof">Recipient: %1$s\nSigned payment request: %2$s\nPayment hash: %3$s\nPayment preimage: %4$s</string>
     <string name="ln_no_description">No description provided</string>
-    <string name="ln_copy_proof">Copy Payment Details</string>
+    <string name="ln_copy_proof">Copy Proof of Payment</string>
     <string name="ln_retry">Retrying payment&#8230;</string>
 
     <!-- see PaymentInfo.scala -->
@@ -204,8 +204,8 @@
     <string name="ln_ops_chan_bilateral_closing"><![CDATA[Finalizing Payment Channel&#8230;<br><font color=#999999>Closing transaction is sent</font><br><br>Remaining channel balance was refunded to your Bitcoin wallet. Please wait until closing transaction reaches %1$s before proceeding<br><br>Current status<br>%2$s]]></string>
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[Finalizing Payment Channel&#8230;<br><font color=#999999>Using <a href=https://lightning-wallet.com>forced channel closing</a></font><br><br>Remaining channel balance will be refunded to your Bitcoin wallet via series of delayed Bitcoin transactions<br><br>%1$s]]></string>
     <string name="ln_ops_chan_unilateral_warn"><![CDATA[<a href=https://lightning-wallet.com>Forced channel closing</a> is much more expensive and time consuming than a mutually agreed one]]></string>
-    <string name="ln_ops_chan_unilateral_status_wait">%1$s is in queue</string>
-    <string name="ln_ops_chan_unilateral_status_done">%1$s is received</string>
+    <string name="ln_ops_chan_unilateral_status_wait">%1$s in queue</string>
+    <string name="ln_ops_chan_unilateral_status_done">%1$s received</string>
 
     <array name="ln_ops_chan_unilateral_blocks_left">
         <item><![CDATA[sending&#8230;]]></item>

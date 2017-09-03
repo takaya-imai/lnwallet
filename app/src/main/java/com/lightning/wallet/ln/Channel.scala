@@ -321,7 +321,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
-        me UPDATE wait.copy(our = Some apply our)
+        val wait1 = me STORE wait.copy(our = Some apply our)
+        me UPDATE wait1
 
 
       // We're exiting a sync state but don't have enough locks so we keep waiting
