@@ -163,17 +163,15 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     }
   }
 
-  def updateTitleAndSub(sub: String, infoType: Int) =
-    coin2MSat(app.kit.currentBalance) match { case msat =>
-      val title = if (msat.amount < 1) walletEmpty else denom withSign msat
-      runOnUiThread(getSupportActionBar setTitle title)
-      add(sub, infoType).animate
-    }
+  def updateTitle = coin2MSat(app.kit.currentBalance) match { case msat =>
+    val title = if (msat.amount < 1) walletEmpty else denom withSign msat
+    runOnUiThread(getSupportActionBar setTitle title)
+  }
 
   def notifySubTitle(sub: String, infoType: Int) = {
     // Here we update not just subtitle but also a title
     timer.schedule(delete(infoType).animate, 20000)
-    me.updateTitleAndSub(sub, infoType)
+    wrap(updateTitle)(add(sub, infoType).animate)
   }
 
   // Initialize this activity, method is run once
@@ -182,13 +180,13 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
-      updateTitleAndSub(constListener.mkTxt, Informer.PEER)
+      wrap(updateTitle)(add(me getString constListener.status, Informer.PEER).animate)
       me startListUpdates adapter
       me setDetecting true
 
       toolbar setOnClickListener onButtonTap {
         wrap(adapter.notifyDataSetChanged)(changeDenom)
-        updateTitleAndSub(constListener.mkTxt, Informer.PEER)
+        updateTitle
       }
 
       list setAdapter adapter

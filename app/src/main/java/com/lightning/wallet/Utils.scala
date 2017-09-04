@@ -133,10 +133,9 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   val constListener =
     new PeerConnectedEventListener with PeerDisconnectedEventListener {
-      def onPeerConnected(p: Peer, pc: Int) = update(mkTxt, Informer.PEER).animate
-      def onPeerDisconnected(p: Peer, pc: Int) = update(mkTxt, Informer.PEER).animate
-      def mkTxt = app.plurOrZero(peersInfoOpts, app.kit.peerGroup.numConnectedPeers)
-      lazy val peersInfoOpts = getResources getStringArray R.array.info_peers
+      def onPeerConnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).animate
+      def onPeerDisconnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).animate
+      def status = if (app.kit.peerGroup.numConnectedPeers < 1) btc_notify_connecting else btc_notify_operational
     }
 
   val txTracker = new TxTracker {

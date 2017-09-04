@@ -13,9 +13,9 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import android.view.{Menu, MenuItem, View, ViewGroup}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import android.view.{Menu, MenuItem, View}
 import scala.util.{Failure, Success, Try}
 
 import android.support.v7.widget.SearchView.OnQueryTextListener
@@ -261,9 +261,9 @@ with SearchBar { me =>
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
 
         case result => rm(alert) {
-          <(proceed(result.toOption, bag.newPreimage), onFail)(none)
-          timer.schedule(delete(Informer.LNREQUEST).animate, 5000)
           add(getString(ln_pr_make), Informer.LNREQUEST).animate
+          timer.schedule(delete(Informer.LNREQUEST).animate, 5000)
+          <(proceed(result.toOption, bag.newPreimage), onFail)(none)
         }
       }
 
@@ -347,7 +347,7 @@ with SearchBar { me =>
   }
 
   def getDescription(pr: PaymentRequest) = pr.description match {
-    case Left(requestHash) => "<i>" + requestHash.toString + "</i>"
+    case Left(descriptionHash) => "<i>" + descriptionHash.toString + "</i>"
     case Right(description) if description.nonEmpty => description
     case _ => "<i>" + getString(ln_no_description) + "</i>"
   }

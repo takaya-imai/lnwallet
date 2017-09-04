@@ -76,6 +76,8 @@
     <string name="tx_received">Bitcoin transaction received</string>
     <string name="tx_sent">Bitcoin transaction sent</string>
 
+    <string name="btc_notify_connecting">Looking for Bitcoin nodes&#8230;</string>
+    <string name="btc_notify_operational">Bitcoin wallet is online</string>
     <string name="info_progress_done">Blockchain is up to date</string>
     <string name="pass_changing">Changing wallet password&#8230;</string>
     <string name="pass_checking">Checking password&#8230;</string>
@@ -91,12 +93,6 @@
         <item>Blockchain sync is complete</item>
         <item>Sync: %1$d day behind</item>
         <item>Sync: %1$d days behind</item>
-    </array>
-
-    <array name="info_peers">
-        <item>Searching for Bitcoin nodes&#8230;</item>
-        <item>Connected to %1$s Bitcoin node</item>
-        <item>Connected to %1$s Bitcoin nodes</item>
     </array>
 
     <!-- wallet creation and restoring -->
