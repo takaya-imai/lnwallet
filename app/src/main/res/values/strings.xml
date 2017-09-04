@@ -147,7 +147,7 @@
     <string name="err_ln_old">Failed because a payment request has expired. Please ask recipient to provide a new one</string>
 
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
-    <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Please try breaking it into a number of smaller transactions</string>
+    <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>
     <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that incoming transactions need to get at least one confirmation to become spendable]]></string>
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
@@ -175,6 +175,7 @@
     <string name="ln_proof">Recipient: %1$s\nSigned payment request: %2$s\nPayment hash: %3$s\nPayment preimage: %4$s</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_copy_proof">Copy Proof of Payment</string>
+    <string name="ln_retry_again">Retry this payment</string>
     <string name="ln_retry">Retrying payment&#8230;</string>
 
     <!-- see PaymentInfo.scala -->
@@ -196,7 +197,7 @@
 
     <!-- activity_ln_ops, activity_ln_start -->
     <string name="ln_search_nodes">Find peers</string>
-    <string name="ln_ops_btc">Go to Bitcoin wallet</string>
+    <string name="ln_ops_btc">Back to Bitcoin wallet</string>
     <string name="ln_force_close">Force close channel</string>
     <string name="ln_ops_chan_none"><a href='https://lightning-wallet.com'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='https://lightning-wallet.com'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
     <string name="ln_ops_chan_opening"><![CDATA[Opening Payment Channel&#8230;<br>Channel capacity is %1$s<br><font color=#999999>Funding transaction is sent</font><br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br>Current status<br>%3$s]]></string>

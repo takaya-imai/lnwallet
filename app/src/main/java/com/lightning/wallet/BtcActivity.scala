@@ -64,11 +64,11 @@ trait HumanTimeDisplay { me: TimerActivity =>
   }
 }
 
-trait ListUpdater { me: TimerActivity =>
-  private[this] var state = SCROLL_STATE_IDLE
+trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
   lazy val allTxsButton = getLayoutInflater.inflate(R.layout.frag_txs_all, null)
   lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
+  private[this] var state = SCROLL_STATE_IDLE
   val maxLinesNum = 25
   val minLinesNum = 5
 
@@ -81,14 +81,6 @@ trait ListUpdater { me: TimerActivity =>
       allTxsButton setVisibility View.GONE
       list addFooterView allTxsButton
     }
-
-  class TxViewHolder(view: View) {
-    val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
-    val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
-    val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
-    transactSum setTypeface Typeface.MONOSPACE
-    view setTag this
-  }
 
   abstract class CutAdapter[T] extends BaseAdapter {
     // Automatically manages switching list view from short to long and back
@@ -110,13 +102,27 @@ trait ListUpdater { me: TimerActivity =>
       visibleItems = items1 take cut
       availableItems = items1
     }
+
+    def getView(position: Int, cv: View, parent: ViewGroup) = {
+      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
+      val hold = if (null == view.getTag) getHolder(view) else view.getTag.asInstanceOf[TxViewHolder]
+      hold fillView visibleItems(position)
+      view
+    }
+
+    def getHolder(view: View): TxViewHolder
+    abstract class TxViewHolder(view: View) {
+      val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
+      val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
+      val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
+      transactSum setTypeface Typeface.MONOSPACE
+      def fillView(data: T): Unit
+      view setTag this
+    }
   }
 }
 
-class BtcActivity extends DataReader
-with ToolbarActivity with HumanTimeDisplay
-with ListUpdater { me =>
-
+class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me =>
   lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
   lazy val mnemonicWarn = findViewById(R.id.mnemonicWarn).asInstanceOf[LinearLayout]
   lazy val mnemonicInfo = me clickableTextField findViewById(R.id.mnemonicInfo)
@@ -128,11 +134,17 @@ with ListUpdater { me =>
 
   lazy val adapter = new CutAdapter[TxWrap] {
     def getItem(position: Int) = visibleItems(position)
-    def getView(position: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
-      val hold = if (null == view.getTag) new BtcView(view) else view.getTag.asInstanceOf[BtcView]
-      hold fillView getItem(position)
-      view
+    def getHolder(view: View) = new TxViewHolder(view) {
+
+      def fillView(wrap: TxWrap) = {
+        val statusImage = if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
+        else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
+        else await
+
+        transactWhen setText when(System.currentTimeMillis, wrap.tx.getUpdateTime).html
+        transactSum setText wrap.marking.format(denom formatted wrap.nativeValueWithoutFee).html
+        transactCircle setImageResource statusImage
+      }
     }
   }
 
@@ -324,7 +336,6 @@ with ListUpdater { me =>
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
             add(getString(tx_announce), Informer.BTCEVENT).animate
@@ -352,17 +363,4 @@ with ListUpdater { me =>
   def viewMnemonic(top: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
   def nativeTransactions = app.kit.wallet.getTransactionsByTime.asScala.take(maxLinesNum)
     .toVector.map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
-
-  class BtcView(view: View)
-  extends TxViewHolder(view) {
-    def fillView(wrap: TxWrap) = {
-      val statusImage = if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
-        else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
-        else await
-
-      transactWhen setText when(System.currentTimeMillis, wrap.tx.getUpdateTime).html
-      transactSum setText wrap.marking.format(denom formatted wrap.nativeValueWithoutFee).html
-      transactCircle setImageResource statusImage
-    }
-  }
 }

@@ -74,8 +74,8 @@ trait DataReader extends NfcReaderActivity {
 }
 
 class LNActivity extends DataReader
-with ToolbarActivity with HumanTimeDisplay
-with ListUpdater with SearchBar { me =>
+with ToolbarActivity with ListUpdater
+with SearchBar { me =>
 
   val imgMap = Array(await, await, await, conf1, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
@@ -85,11 +85,21 @@ with ListUpdater with SearchBar { me =>
 
   lazy val adapter = new CutAdapter[PaymentInfo] {
     def getItem(position: Int) = visibleItems(position)
-    def getView(position: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
-      val hold = if (null == view.getTag) new LNView(view) else view.getTag.asInstanceOf[LNView]
-      hold fillView getItem(position)
-      view
+    def getHolder(view: View) = new TxViewHolder(view) {
+
+      def fillView(info: PaymentInfo) = {
+        val timestamp = new Date(info.request.timestamp * 1000)
+        val purpose = info.request.description.right getOrElse new String
+
+        val marking = info match {
+          case in: IncomingPayment => sumIn.format(denom formatted in.received)
+          case out: OutgoingPayment => sumOut.format(denom formatted out.received)
+        }
+
+        transactWhen setText when(System.currentTimeMillis, timestamp).html
+        transactCircle setImageResource imgMap(info.actualStatus)
+        transactSum setText s"$marking\u00A0$purpose".html
+      }
     }
   }
 
@@ -167,6 +177,12 @@ with ListUpdater with SearchBar { me =>
       getSupportActionBar.setTitle(denom withSign msat)
     }
 
+    def onRouteError(err: Throwable) = err.getMessage match {
+      case "fromblacklisted" => onFail(me getString err_ln_black)
+      case "noroutefound" => onFail(me getString err_ln_no_route)
+      case techDetails => onFail(techDetails)
+    }
+
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
 
@@ -207,17 +223,13 @@ with ListUpdater with SearchBar { me =>
         case Success(ms) => rm(alert) {
           add(getString(ln_send), Informer.LNPAYMENT).animate
           timer.schedule(delete(Informer.LNPAYMENT).animate, 5000)
+
+          // Ask for routes, then send a plain command to a channel
           app.ChannelManager.outPaymentObs(request).foreach(_ match {
             case Some(outPayment) => chan process PlainAddHtlc(outPayment)
             case _ => onFail(me getString err_general)
-          }, onError)
+          }, onRouteError)
         }
-      }
-
-      def onError(err: Throwable) = err.getMessage match {
-        case "fromblacklisted" => onFail(me getString err_ln_black)
-        case "noroutefound" => onFail(me getString err_ln_no_route)
-        case details => onFail(details)
       }
 
       val ok = alert getButton BUTTON_POSITIVE
@@ -338,22 +350,5 @@ with ListUpdater with SearchBar { me =>
     case Left(requestHash) => "<i>" + requestHash.toString + "</i>"
     case Right(description) if description.nonEmpty => description
     case _ => "<i>" + getString(ln_no_description) + "</i>"
-  }
-
-  class LNView(view: View)
-  extends TxViewHolder(view) {
-    def fillView(info: PaymentInfo) = {
-      val timestamp = new Date(info.request.timestamp * 1000)
-      val purpose = info.request.description.right getOrElse new String
-
-      val marking = info match {
-        case in: IncomingPayment => sumIn.format(denom formatted in.received)
-        case out: OutgoingPayment => sumOut.format(denom formatted out.received)
-      }
-
-      transactWhen setText when(System.currentTimeMillis, timestamp).html
-      transactCircle setImageResource imgMap(info.actualStatus)
-      transactSum setText s"$marking\u00A0$purpose".html
-    }
   }
 }
