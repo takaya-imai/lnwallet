@@ -154,7 +154,7 @@ with SearchBar { me =>
 
   override def onResume = wrap(super.onResume) {
     app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
-    app.ChannelManager.alive.headOption match { case Some(chan) => manageActive(chan) case None => evacuate }
+    app.ChannelManager.alive.headOption map manageActive getOrElse evacuate
   }
 
   // APP MENU
@@ -204,8 +204,7 @@ with SearchBar { me =>
 
       override def onProcess = {
         case (_, _, _: RetryAddHtlc) => runOnUiThread(app toast ln_retry)
-        case (_, _, _: RevokeAndAck) => me runOnUiThread updTitle
-        case (_, _, _: CommitSig) => me runOnUiThread updTitle
+        case (_, _, _: RevokeAndAck | _: CommitSig) => updTitle
       }
     }
 
