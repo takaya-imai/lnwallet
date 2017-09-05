@@ -112,7 +112,7 @@ with SearchBar { me =>
   def react(qs: String) = paymentsViewProvider reload qs
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will updated separately so just update subtitle
-    timer.schedule(delete(infoType).flash, 20000)
+    timer.schedule(delete(infoType), 20000)
     add(subtitle, infoType).flash.run
   }
 
@@ -223,7 +223,7 @@ with SearchBar { me =>
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
 
         case Success(ms) => rm(alert) {
-          timer.schedule(delete(Informer.LNPAYMENT).flash, 5000)
+          timer.schedule(delete(Informer.LNPAYMENT), 5000)
           add(me getString ln_send, Informer.LNPAYMENT).flash.run
 
           // Ask for routes, then send a plain command to a channel
@@ -263,7 +263,7 @@ with SearchBar { me =>
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
 
         case result => rm(alert) {
-          timer.schedule(delete(Informer.LNREQUEST).flash, 5000)
+          timer.schedule(delete(Informer.LNREQUEST), 5000)
           add(me getString ln_pr_make, Informer.LNREQUEST).flash.run
           <(proceed(result.toOption, bag.newPreimage), onFail)(none)
         }

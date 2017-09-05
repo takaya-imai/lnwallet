@@ -49,7 +49,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   def react(query: String) = worker onNewQuery query
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will never be updated so just update subtitle
-    timer.schedule(delete(infoType).flash, 20000)
+    timer.schedule(delete(infoType), 20000)
     add(subtitle, infoType).flash.run
   }
 

@@ -169,8 +169,8 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
   def notifySubTitle(sub: String, infoType: Int) = {
     // Here we update not just subtitle but also a title
-    timer.schedule(delete(infoType).flash, 20000)
     wrap(updTitle)(add(sub, infoType).flash.run)
+    timer.schedule(delete(infoType), 20000)
   }
 
   // Initialize this activity, method is run once

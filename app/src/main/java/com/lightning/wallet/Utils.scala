@@ -96,8 +96,9 @@ trait ToolbarActivity extends TimerActivity { me =>
   lazy val flash = uiTask(getSupportActionBar setSubtitle infos.head.value)
 
   // Informer CRUD
-  def delete(tag: Int) = runAnd(me) {
+  def delete(tag: Int) = uiTask {
     infos = infos.filterNot(_.tag == tag)
+    getSupportActionBar setSubtitle infos.head.value
   }
 
   def add(text: String, tag: Int) = runAnd(me) {
@@ -127,7 +128,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
       def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
         if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.CHAINSYNC)
-        if (blocksLeft < 1) add(me getString info_progress_done, Informer.CHAINSYNC).timer.schedule(delete(Informer.CHAINSYNC).flash, 5000)
+        if (blocksLeft < 1) add(me getString info_progress_done, Informer.CHAINSYNC).timer.schedule(delete(Informer.CHAINSYNC), 5000)
         if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener this
         flash.run
       }
@@ -165,7 +166,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     def infoAndNext = {
       add(app getString pass_checking, Informer.CODECHECK).flash.run
-      timer.schedule(delete(Informer.CODECHECK).flash, 2500)
+      timer.schedule(delete(Informer.CODECHECK), 2500)
       next(secret.getText.toString)
     }
   }
@@ -239,7 +240,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
           add(app getString pass_changing, Informer.CODECHECK).flash.run
-          timer.schedule(delete(Informer.CODECHECK).flash, 5000)
+          timer.schedule(delete(Informer.CODECHECK), 5000)
         }
 
         def rotatePass = {
