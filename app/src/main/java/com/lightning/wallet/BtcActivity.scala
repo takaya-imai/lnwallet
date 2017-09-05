@@ -259,7 +259,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  override def onResume = wrap(super.onResume) {
+  override def onResume: Unit = wrap(super.onResume) {
     app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.BITCOIN).commit
     checkTransData
   }
@@ -327,7 +327,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     val rateManager = new RateManager(getString(amount_hint_wallet).format(denom withSign app.kit.currentBalance), content)
     val spendManager = new BtcManager(rateManager)
 
-    def attempt = rateManager.result match {
+    def sendAttempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
       case _ if spendManager.getAddress == null => app toast dialog_address_wrong
       case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_small
@@ -351,7 +351,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     }
 
     val ok = alert getButton BUTTON_POSITIVE
-    ok setOnClickListener onButtonTap(attempt)
+    ok setOnClickListener onButtonTap(sendAttempt)
     spendManager
   }
 

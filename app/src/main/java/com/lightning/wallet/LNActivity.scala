@@ -131,7 +131,6 @@ with SearchBar { me =>
       list setAdapter adapter
       list setFooterDividersEnabled false
       paymentsViewProvider reload new String
-
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
       app.kit.wallet addTransactionConfidenceEventListener txTracker
@@ -152,7 +151,7 @@ with SearchBar { me =>
     true
   }
 
-  override def onResume = wrap(super.onResume) {
+  override def onResume: Unit = wrap(super.onResume) {
     app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
     app.ChannelManager.alive.headOption map manageActive getOrElse evacuate
   }
@@ -175,9 +174,26 @@ with SearchBar { me =>
       updTitle
     }
 
-    def updTitle = animateTitle {
-      val canSendMsat = chan.receiveSendStatus.last
-      denom withSign MilliSatoshi(canSendMsat)
+    list setOnItemClickListener onTap { pos =>
+      val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
+      val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
+      val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
+      val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
+      val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
+
+      val payment = adapter getItem pos
+      val info = me getDescription payment.request
+      val humanHash = payment.request.paymentHash.toString
+
+      payment match {
+        case out: OutgoingPayment =>
+        case in: IncomingPayment =>
+      }
+    }
+
+    def updTitle = {
+      val canSend = MilliSatoshi(chan.receiveSendStatus.last)
+      animateTitle(denom withSign canSend)
     }
 
     def onRouteError(err: Throwable) = err.getMessage match {
@@ -209,7 +225,7 @@ with SearchBar { me =>
     }
 
     sendPayment = request => {
-      val info = getDescription(request)
+      val info = me getDescription request
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
       val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.last, maxHtlcValue.amount)
       val rateManager = new RateManager(getString(amount_hint_maxamount).format(denom withSign maxMsat), content)
@@ -349,8 +365,8 @@ with SearchBar { me =>
   }
 
   def getDescription(pr: PaymentRequest) = pr.description match {
-    case Left(descriptionHash) => "<i>" + descriptionHash.toString + "</i>"
+    case Left(descriptionHash) => s"<i>${descriptionHash.toString}</i>"
     case Right(description) if description.nonEmpty => description
-    case _ => "<i>" + getString(ln_no_description) + "</i>"
+    case _ => s"<i>${me getString ln_no_description}</i>"
   }
 }

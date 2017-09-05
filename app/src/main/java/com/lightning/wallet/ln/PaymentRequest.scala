@@ -83,7 +83,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   def description = tags.collectFirst {
     case DescriptionHashTag(hash) => Left(hash)
-    case DescriptionTag(text) => Right(text)
+    case DescriptionTag(text) => Right(text take 140)
   }.get
 
   def fallbackAddress: Option[String] = tags.collectFirst {

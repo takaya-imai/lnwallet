@@ -7,7 +7,6 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import com.lightning.wallet.Utils.{app, sumIn, denom}
 import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
-
 import com.lightning.wallet.ln.Tools.none
 import android.widget.Button
 import android.os.Bundle

@@ -138,7 +138,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       override def onError = {
         case error: Throwable =>
-          // Aborts channel, updates UI
           chan process CMDShutdown
       }
     }
@@ -179,7 +178,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
     val rateManager = new RateManager(getString(amount_hint_newchan).format(maxCapacity, walletBalance), content)
 
-    def attempt = rateManager.result match {
+    def askAttempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
       case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_sum_big
       case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_small
@@ -194,7 +193,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     val ok = alert getButton BUTTON_POSITIVE
-    ok setOnClickListener onButtonTap(attempt)
+    ok setOnClickListener onButtonTap(askAttempt)
   }
 
   def askForFeerate(chan: Channel, cmd: CMDOpenChannel, accept: AcceptChannel): Unit = {
