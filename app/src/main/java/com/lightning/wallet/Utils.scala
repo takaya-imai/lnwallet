@@ -89,23 +89,37 @@ object Utils {
 trait ToolbarActivity extends TimerActivity { me =>
   def tellGenError = wrap(app toast err_general)(mkSetsForm)
   def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
-  lazy val toolbar = findViewById(R.id.toolbar).asInstanceOf[Toolbar]
-  private[this] var currentAnimation = Option.empty[TimerTask]
-  protected[this] var infos = List.empty[Informer]
 
-  def animate = new Runnable { self =>
-    private[this] val nextText = infos.head.value
-    private[this] val currentText = getSupportActionBar.getSubtitle.toString
+  private[this] var infos = List.empty[Informer]
+  private[this] var currentAnimation = Option.empty[TimerTask]
+  lazy val toolbar = findViewById(R.id.toolbar).asInstanceOf[Toolbar]
+  lazy val flash = uiTask(getSupportActionBar setSubtitle infos.head.value)
+
+  // Informer CRUD
+  def delete(tag: Int) = runAnd(me) {
+    infos = infos.filterNot(_.tag == tag)
+  }
+
+  def add(text: String, tag: Int) = runAnd(me) {
+    infos = new Informer(text, tag) :: infos
+  }
+
+  def update(text: String, tag: Int) = runAnd(me) {
+    for (info <- infos if info.tag == tag) info.value = text
+  }
+
+  def animateTitle(nextText: String) = new Runnable { self =>
+    private[this] val currentText = getSupportActionBar.getTitle.toString
     private[this] val maxLength = math.max(nextText.length, currentText.length)
 
     for (an <- currentAnimation) an.cancel
     currentAnimation = Some apply uiTask(self)
-    timer.schedule(currentAnimation.get, 0, 50)
+    timer.schedule(currentAnimation.get, 0, 75)
 
-    private[this] var index = 2
+    private[this] var index = 1
     override def run = getSupportActionBar match { case bar =>
-      bar setSubtitle s"${nextText take index}${currentText drop index}".trim
-      if (index < maxLength) index += 2 else for (an <- currentAnimation) an.cancel
+      bar setTitle s"${nextText take index}${currentText drop index}".trim
+      if (index < maxLength) index += 1 else for (an <- currentAnimation) an.cancel
     }
   }
 
@@ -113,9 +127,9 @@ trait ToolbarActivity extends TimerActivity { me =>
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
       def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
         if (blocksLeft % blocksPerDay == 0) update(app.plurOrZero(syncOps, blocksLeft / blocksPerDay), Informer.CHAINSYNC)
-        if (blocksLeft < 1) add(getString(info_progress_done), Informer.CHAINSYNC).timer.schedule(delete(Informer.CHAINSYNC).animate, 5000)
+        if (blocksLeft < 1) add(me getString info_progress_done, Informer.CHAINSYNC).timer.schedule(delete(Informer.CHAINSYNC).flash, 5000)
         if (blocksLeft < 1) app.kit.peerGroup removeBlocksDownloadedEventListener this
-        animate
+        flash.run
       }
 
       // We only add a SYNC item if we have a large enough
@@ -133,8 +147,8 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   val constListener =
     new PeerConnectedEventListener with PeerDisconnectedEventListener {
-      def onPeerConnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).animate
-      def onPeerDisconnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).animate
+      def onPeerConnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).flash.run
+      def onPeerDisconnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).flash.run
       def status = if (app.kit.peerGroup.numConnectedPeers < 1) btc_notify_connecting else btc_notify_operational
     }
 
@@ -144,27 +158,14 @@ trait ToolbarActivity extends TimerActivity { me =>
     override def txConfirmed(tx: Transaction) = notifySubTitle(me getString tx_confirmed, Informer.TXCONFIRMED)
   }
 
-  // Informer CRUD
-  def delete(tag: Int) = runAnd(me) {
-    infos = infos.filterNot(_.tag == tag)
-  }
-
-  def add(text: String, tag: Int) = runAnd(me) {
-    infos = new Informer(text, tag) :: infos
-  }
-
-  def update(text: String, tag: Int) = runAnd(me) {
-    for (inf <- infos if inf.tag == tag) inf.value = text
-  }
-
   // Password checking popup
   def passPlus(title: CharSequence)(next: String => Unit) = {
     val (passAsk, secret) = generatePasswordPromptView(passType, password_old)
     mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
 
     def infoAndNext = {
-      add(app getString pass_checking, Informer.CODECHECK).animate
-      timer.schedule(delete(Informer.CODECHECK).animate, 2500)
+      add(app getString pass_checking, Informer.CODECHECK).flash.run
+      timer.schedule(delete(Informer.CODECHECK).flash, 2500)
       next(secret.getText.toString)
     }
   }
@@ -237,8 +238,8 @@ trait ToolbarActivity extends TimerActivity { me =>
 
         def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
-          add(app getString pass_changing, Informer.CODECHECK).animate
-          timer.schedule(delete(Informer.CODECHECK).animate, 5000)
+          add(app getString pass_changing, Informer.CODECHECK).flash.run
+          timer.schedule(delete(Informer.CODECHECK).flash, 5000)
         }
 
         def rotatePass = {

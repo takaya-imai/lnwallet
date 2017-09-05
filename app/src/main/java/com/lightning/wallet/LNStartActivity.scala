@@ -49,8 +49,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   def react(query: String) = worker onNewQuery query
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will never be updated so just update subtitle
-    timer.schedule(delete(infoType).animate, 20000)
-    add(subtitle, infoType).animate
+    timer.schedule(delete(infoType).flash, 20000)
+    add(subtitle, infoType).flash.run
   }
 
   // Adapter for btc tx list
@@ -73,11 +73,13 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   {
     if (app.isAlive) {
       super.onCreate(savedState)
-      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
-      add(me getString ln_select_peer, Informer.LNSTATE).animate
-      getSupportActionBar setTitle ln_ops_start
 
-      // Initialize nodes list view and search with empty query
+      // Set action bar, main view content, animate title
+      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
+      add(me getString ln_select_peer, Informer.LNSTATE).flash.run
+      animateTitle(me getString ln_ops_start)
+
+      // Wire up list and load peers with empty query string
       lnStartNodesList setOnItemClickListener onTap(onPeerSelected)
       lnStartNodesList setAdapter adapter
       react(new String)
@@ -158,7 +160,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def setListView = {
     whenBackPressed = anyToRunnable(super.onBackPressed)
-    update(selectPeer, Informer.LNSTATE).animate
+    update(selectPeer, Informer.LNSTATE).flash.run
     setVis(View.VISIBLE, View.GONE)
     app toast ln_ops_start_abort
   }
@@ -166,7 +168,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   private def setPeerView(pos: Int) = {
     MenuItemCompat collapseActionView searchItem
     lnStartDetails setText mkNodeView(adapter getItem pos)
-    update(notifyWorking, Informer.LNSTATE).animate
+    update(notifyWorking, Informer.LNSTATE).flash.run
     setVis(View.GONE, View.VISIBLE)
   }
 

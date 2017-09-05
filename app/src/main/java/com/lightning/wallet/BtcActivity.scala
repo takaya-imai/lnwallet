@@ -163,15 +163,15 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     }
   }
 
-  def updateTitle = coin2MSat(app.kit.currentBalance) match { case msat =>
-    val title = if (msat.amount < 1) walletEmpty else denom withSign msat
-    runOnUiThread(getSupportActionBar setTitle title)
+  def updTitle = coin2MSat(app.kit.currentBalance) match { case msat =>
+    val titleText = if (msat.amount < 1) walletEmpty else denom withSign msat
+    runOnUiThread(me animateTitle titleText)
   }
 
   def notifySubTitle(sub: String, infoType: Int) = {
     // Here we update not just subtitle but also a title
-    timer.schedule(delete(infoType).animate, 20000)
-    wrap(updateTitle)(add(sub, infoType).animate)
+    timer.schedule(delete(infoType).flash, 20000)
+    wrap(updTitle)(add(sub, infoType).flash.run)
   }
 
   // Initialize this activity, method is run once
@@ -179,14 +179,16 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   {
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
+
+      // Set action bar, main view content, animate title, wire up list events
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
-      wrap(updateTitle)(add(me getString constListener.status, Informer.PEER).animate)
+      wrap(updTitle)(add(me getString constListener.status, Informer.PEER).flash.run)
       me startListUpdates adapter
       me setDetecting true
 
       toolbar setOnClickListener onButtonTap {
         wrap(adapter.notifyDataSetChanged)(changeDenom)
-        updateTitle
+        updTitle
       }
 
       list setAdapter adapter
@@ -334,9 +336,10 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
+
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
-            add(getString(tx_announce), Informer.BTCEVENT).animate
+            add(me getString tx_announce, Informer.BTCEVENT).flash.run
           }
 
           override def onTxFail(err: Throwable) =

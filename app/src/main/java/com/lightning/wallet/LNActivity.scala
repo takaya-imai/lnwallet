@@ -112,8 +112,8 @@ with SearchBar { me =>
   def react(qs: String) = paymentsViewProvider reload qs
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will updated separately so just update subtitle
-    timer.schedule(delete(infoType).animate, 20000)
-    add(subtitle, infoType).animate
+    timer.schedule(delete(infoType).flash, 20000)
+    add(subtitle, infoType).flash.run
   }
 
   // Initialize this activity, method is run once
@@ -121,6 +121,8 @@ with SearchBar { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedState)
+
+      // Set action bar, main view content, wire up list events, update title later
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
       me startListUpdates adapter
@@ -129,6 +131,7 @@ with SearchBar { me =>
       list setAdapter adapter
       list setFooterDividersEnabled false
       paymentsViewProvider reload new String
+
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
       app.kit.wallet addTransactionConfidenceEventListener txTracker
@@ -169,12 +172,12 @@ with SearchBar { me =>
   def manageActive(chan: Channel) = {
     toolbar setOnClickListener onButtonTap {
       wrap(adapter.notifyDataSetChanged)(changeDenom)
-      setTitle
+      updTitle
     }
 
-    def setTitle = {
-      val msat = MilliSatoshi(chan.receiveSendStatus.last)
-      getSupportActionBar.setTitle(denom withSign msat)
+    def updTitle = animateTitle {
+      val canSendMsat = chan.receiveSendStatus.last
+      denom withSign MilliSatoshi(canSendMsat)
     }
 
     def onRouteError(err: Throwable) = err.getMessage match {
@@ -189,8 +192,8 @@ with SearchBar { me =>
       override def onBecome = {
         case (_, norm: NormalData, _, _) if norm.isClosing => evacuate
         case (_, _: ClosingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
-        case (_, _: NormalData, _, SYNC) => update(getString(ln_notify_connecting), Informer.LNSTATE).animate
-        case (_, _: NormalData, _, NORMAL) => update(getString(ln_notify_operational), Informer.LNSTATE).animate
+        case (_, _: NormalData, _, SYNC) => update(getString(ln_notify_connecting), Informer.LNSTATE).flash.run
+        case (_, _: NormalData, _, NORMAL) => update(getString(ln_notify_operational), Informer.LNSTATE).flash.run
       }
 
       override def onError = {
@@ -201,8 +204,8 @@ with SearchBar { me =>
 
       override def onProcess = {
         case (_, _, _: RetryAddHtlc) => runOnUiThread(app toast ln_retry)
-        case (_, _, _: RevokeAndAck) => me runOnUiThread setTitle
-        case (_, _, _: CommitSig) => me runOnUiThread setTitle
+        case (_, _, _: RevokeAndAck) => me runOnUiThread updTitle
+        case (_, _, _: CommitSig) => me runOnUiThread updTitle
       }
     }
 
@@ -221,8 +224,8 @@ with SearchBar { me =>
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
 
         case Success(ms) => rm(alert) {
-          add(getString(ln_send), Informer.LNPAYMENT).animate
-          timer.schedule(delete(Informer.LNPAYMENT).animate, 5000)
+          timer.schedule(delete(Informer.LNPAYMENT).flash, 5000)
+          add(me getString ln_send, Informer.LNPAYMENT).flash.run
 
           // Ask for routes, then send a plain command to a channel
           app.ChannelManager.outPaymentObs(request).foreach(_ match {
@@ -261,8 +264,8 @@ with SearchBar { me =>
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
 
         case result => rm(alert) {
-          add(getString(ln_pr_make), Informer.LNREQUEST).animate
-          timer.schedule(delete(Informer.LNREQUEST).animate, 5000)
+          timer.schedule(delete(Informer.LNREQUEST).flash, 5000)
+          add(me getString ln_pr_make, Informer.LNREQUEST).flash.run
           <(proceed(result.toOption, bag.newPreimage), onFail)(none)
         }
       }
@@ -279,7 +282,7 @@ with SearchBar { me =>
     chan.listeners += chanListener
     chanListener reloadOnBecome chan
     checkTransData
-    setTitle
+    updTitle
   }
 
   // DATA READING AND BUTTON ACTIONS

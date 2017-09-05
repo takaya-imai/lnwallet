@@ -10,7 +10,6 @@
     app:subtitleTextColor="#FFFFFF"
     android:layout_height="65dp"
     android:id="@+id/toolbar"
-    app:subtitle=" "
 
     app:contentInsetLeft="@dimen/app_padding"
     app:contentInsetStart="@dimen/app_padding"
