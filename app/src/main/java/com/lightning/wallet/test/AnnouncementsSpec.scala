@@ -34,9 +34,9 @@ class AnnouncementsSpec {
     {
       println("create valid signed channel announcement")
       val (node_a, node_b, bitcoin_a, bitcoin_b) = (randomKey, randomKey, randomKey, randomKey)
-      val (node_a_sig, bitcoin_a_sig) = signChannelAnnouncement(Block.RegtestGenesisBlock.blockId, 42, node_a, node_b.publicKey, bitcoin_a, bitcoin_b.publicKey, "")
-      val (node_b_sig, bitcoin_b_sig) = signChannelAnnouncement(Block.RegtestGenesisBlock.blockId, 42, node_b, node_a.publicKey, bitcoin_b, bitcoin_a.publicKey, "")
-      val ann = makeChannelAnnouncement(Block.RegtestGenesisBlock.blockId, 42, node_a.publicKey, node_b.publicKey, bitcoin_a.publicKey, bitcoin_b.publicKey, node_a_sig, node_b_sig, bitcoin_a_sig, bitcoin_b_sig)
+      val (node_a_sig, bitcoin_a_sig) = signChannelAnnouncement(Block.RegtestGenesisBlock.hash, 42, node_a, node_b.publicKey, bitcoin_a, bitcoin_b.publicKey, "")
+      val (node_b_sig, bitcoin_b_sig) = signChannelAnnouncement(Block.RegtestGenesisBlock.hash, 42, node_b, node_a.publicKey, bitcoin_b, bitcoin_a.publicKey, "")
+      val ann = makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, 42, node_a.publicKey, node_b.publicKey, bitcoin_a.publicKey, bitcoin_b.publicKey, node_a_sig, node_b_sig, bitcoin_a_sig, bitcoin_b_sig)
       assert(checkSigs(ann))
       assert(!checkSigs(ann.copy(nodeId1 = randomKey.publicKey)))
     }
@@ -50,7 +50,7 @@ class AnnouncementsSpec {
 
     {
       println("create valid signed channel update announcement")
-      val ann = makeChannelUpdate(Block.RegtestGenesisBlock.blockId, alicePk, randomKey.publicKey, 45561, 10, 10000, 100, 1, true, System.currentTimeMillis / 1000)
+      val ann = makeChannelUpdate(Block.RegtestGenesisBlock.hash, alicePk, randomKey.publicKey, 45561, 10, 10000, 100, 1, true, System.currentTimeMillis / 1000)
       assert(checkSig(ann, alicePk.publicKey))
       assert(!checkSig(ann, randomKey.publicKey))
     }
@@ -62,10 +62,10 @@ class AnnouncementsSpec {
       // NB: node1 < node2 (public keys)
       println(isNode1(node1_priv.publicKey.toBin, node2_priv.publicKey.toBin))
       println(!isNode1(node2_priv.publicKey.toBin, node1_priv.publicKey.toBin))
-      val channelUpdate1 = makeChannelUpdate(Block.RegtestGenesisBlock.blockId, node1_priv, node2_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = true, System.currentTimeMillis / 1000)
-      val channelUpdate1_disabled = makeChannelUpdate(Block.RegtestGenesisBlock.blockId, node1_priv, node2_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = false, System.currentTimeMillis / 1000)
-      val channelUpdate2 = makeChannelUpdate(Block.RegtestGenesisBlock.blockId, node2_priv, node1_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = true, System.currentTimeMillis / 1000)
-      val channelUpdate2_disabled = makeChannelUpdate(Block.RegtestGenesisBlock.blockId, node2_priv, node1_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = false, System.currentTimeMillis / 1000)
+      val channelUpdate1 = makeChannelUpdate(Block.RegtestGenesisBlock.hash, node1_priv, node2_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = true, System.currentTimeMillis / 1000)
+      val channelUpdate1_disabled = makeChannelUpdate(Block.RegtestGenesisBlock.hash, node1_priv, node2_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = false, System.currentTimeMillis / 1000)
+      val channelUpdate2 = makeChannelUpdate(Block.RegtestGenesisBlock.hash, node2_priv, node1_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = true, System.currentTimeMillis / 1000)
+      val channelUpdate2_disabled = makeChannelUpdate(Block.RegtestGenesisBlock.hash, node2_priv, node1_priv.publicKey, 0, 0, 0, 0, 0, isEnabled = false, System.currentTimeMillis / 1000)
       println(channelUpdate1.flags == BinaryData("0000")) // ....00
       println(channelUpdate1_disabled.flags == BinaryData("0002")) // ....10
       println(channelUpdate2.flags == BinaryData("0001")) // ....01

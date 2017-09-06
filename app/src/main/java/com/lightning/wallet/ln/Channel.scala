@@ -59,7 +59,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
           Generators.perCommitPoint(localParams.shaSeed, index = 0),
-          channelFlags = 0.toByte)
+          channelFlags = 1.toByte) // TODO: remove this
 
 
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
@@ -141,6 +141,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // NORMAL MODE
+
+
+      // TODO: remove this
+      case (norm @ NormalData(_, commitments, None, None), remote: AnnouncementSignatures, NORMAL) =>
+        val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(LNParams.chainHash, remote.shortChannelId,
+          LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey, commitments.remoteParams.fundingPubkey,
+          LNParams.globalFeatures)
+
+        me SEND AnnouncementSignatures(commitments.channelId,
+          remote.shortChannelId, localNodeSig, localBitcoinSig)
 
 
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
@@ -407,15 +417,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val Seq(closeFeeSat, remoteFeeSat) = Seq(neg.localClosingSigned.feeSatoshis, feeSatoshis) map Satoshi
         val Seq(localScript, remoteScript) = Seq(neg.localShutdown.scriptPubKey, neg.remoteShutdown.scriptPubKey)
         val closeTxOpt = Closing.checkClosingSignature(neg.commitments, localScript, remoteScript, remoteFeeSat, remoteSig)
-
+        lazy val (_, nextClosingSigned) = Closing.makeClosing(neg.commitments, localScript, remoteScript, nextCloseFee)
         lazy val nextCloseFee = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
-        lazy val (_, nextMessage) = Closing.makeClosing(neg.commitments,
-          localScript, remoteScript, nextCloseFee)
 
         closeTxOpt match {
           case Some(closeTx) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closeTx)
           case Some(closeTx) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closeTx)
-          case Some(_) => me UPDATE neg.copy(localClosingSigned = nextMessage) SEND nextMessage
+          case Some(_) => me UPDATE neg.copy(localClosingSigned = nextClosingSigned) SEND nextClosingSigned
           case _ => throw new LightningException
         }
 
@@ -423,10 +431,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE FUNDING SPENT
 
 
-      case (norm: HasCommitments, CMDSpent(spendTx), _)
+      case (some: HasCommitments, CMDSpent(spendTx), _)
         // GUARD: something which spends our funding is broadcasted, must react
-        if spendTx.txIn.exists(_.outPoint == norm.commitments.commitInput.outPoint) =>
-        defineClosingAction(norm, spendTx)
+        if spendTx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
+        defineClosingAction(some, spendTx)
 
 
       // HANDLE INITIALIZATION

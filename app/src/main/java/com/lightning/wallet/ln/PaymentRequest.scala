@@ -83,7 +83,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   def description = tags.collectFirst {
     case DescriptionHashTag(hash) => Left(hash)
-    case DescriptionTag(text) => Right(text take 140)
+    case DescriptionTag(text) => Right(text)
   }.get
 
   def fallbackAddress: Option[String] = tags.collectFirst {
@@ -128,9 +128,9 @@ object PaymentRequest {
   }
 
   def getPrefix(chain: BinaryData) = chain match {
-    case Block.RegtestGenesisBlock.blockId => "lntb"
-    case Block.TestnetGenesisBlock.blockId => "lntb"
-    case Block.LivenetGenesisBlock.blockId => "lnbc"
+    case Block.RegtestGenesisBlock.hash => "lntb"
+    case Block.TestnetGenesisBlock.hash => "lntb"
+    case Block.LivenetGenesisBlock.hash => "lnbc"
   }
 
   object Amount {

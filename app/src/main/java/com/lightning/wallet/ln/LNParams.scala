@@ -23,7 +23,7 @@ object LNParams { me =>
   val htlcMinimumMsat = 500
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
-  val chainHash = Block.RegtestGenesisBlock.blockId
+  val chainHash: BinaryData = Block.RegtestGenesisBlock.hash
 
   lazy val bag = PaymentInfoWrap
   lazy val broadcaster = LocalBroadcaster
