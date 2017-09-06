@@ -14,10 +14,6 @@ class TxWrap(val tx: Transaction) {
   // Fee may be null so we use Option to avoid exceptions
   val fee = Option(tx.getFee)
 
-  val (marking, nativeValueWithoutFee) =
-    if (nativeValue.isPositive) (sumIn, nativeValue)
-    else (sumOut, fee map nativeValue.add getOrElse nativeValue)
-
   private def inOuts(input: TransactionInput): Option[TransactionOutput] =
     Stream(UNSPENT, SPENT, PENDING).map(app.kit.wallet.getTransactionPool)
       .map(input.getConnectedOutput).find(_ != null)
@@ -35,9 +31,10 @@ class TxWrap(val tx: Transaction) {
   // Depending on whether this is an incoming or outgoing transaction
   // we collect either outputs which belong to us or the foreign ones
 
-  def payDatas = tx.getOutputs.asScala filter { out =>
-    out.isMine(app.kit.wallet) == nativeValue.isPositive
-  } map outputToPayData
+  def payDatas(incoming: Boolean) =
+    tx.getOutputs.asScala filter { out =>
+      out.isMine(app.kit.wallet) == incoming
+    } map outputToPayData
 
   private def outputToPayData(out: TransactionOutput) = Try(out.getScriptPubKey) map {
     case publicKeyScript if publicKeyScript.isSentToP2WSH => P2WSHData(out.getValue, publicKeyScript)

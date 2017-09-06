@@ -139,6 +139,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onError = {
         case error: Throwable =>
           chan process CMDShutdown
+          Tools errlog error
       }
     }
 

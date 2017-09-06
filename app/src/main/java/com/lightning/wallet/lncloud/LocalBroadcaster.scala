@@ -51,9 +51,4 @@ object LocalBroadcaster extends Broadcaster { me =>
       val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ extractTxs(close)
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, Tools.errlog)
   }
-
-  override def onError = {
-    case chanRelated: Throwable =>
-      Tools errlog chanRelated
-  }
 }

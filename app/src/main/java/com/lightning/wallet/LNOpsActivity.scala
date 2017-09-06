@@ -103,8 +103,8 @@ class LNOpsActivity extends TimerActivity { me =>
 
       override def onError = {
         case error: Throwable =>
-          // Starts uncooperative close
           chan process CMDShutdown
+          Tools errlog error
       }
     }
 

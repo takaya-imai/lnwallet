@@ -117,7 +117,7 @@
     <string name="txs_fee_absent"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%2$s<br><br>No fee]]></string>
     <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
-    <string name="txs_view_outside">View on BlockExplorer.com</string>
+    <string name="txs_view_outside">View on BlockExplorer</string>
     <string name="txs_p2wsh">Payment Channel Funding</string>
 
     <array name="txs_confs">

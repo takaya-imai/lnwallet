@@ -138,11 +138,15 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
       def fillView(wrap: TxWrap) = {
         val statusImage = if (wrap.tx.getConfidence.getConfidenceType == DEAD) dead
-        else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
-        else await
+          else if (wrap.tx.getConfidence.getDepthInBlocks >= minDepth) conf1
+          else await
+
+        val marking = if (wrap.nativeValue.isPositive) sumIn else sumOut
+        val finalSum = if (wrap.nativeValue.isPositive) coin2MSat(wrap.nativeValue)
+          else coin2MSat(wrap.fee map wrap.nativeValue.add getOrElse wrap.nativeValue)
 
         transactWhen setText when(System.currentTimeMillis, wrap.tx.getUpdateTime).html
-        transactSum setText wrap.marking.format(denom formatted wrap.nativeValueWithoutFee).html
+        transactSum setText marking.format(denom formatted finalSum).html
         transactCircle setImageResource statusImage
       }
     }
@@ -198,9 +202,10 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
 
         val wrap = adapter getItem pos
+        val marking = if (wrap.nativeValue.isPositive) sumIn else sumOut
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
-        val objects = wrap.payDatas.flatMap(_.toOption).map(_.cute(wrap.marking).html).toArray
-        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, objects)
+        val outputs = wrap.payDatas(wrap.nativeValue.isPositive).flatMap(_.toOption).map(_ cute marking)
+        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, outputs.map(_.html).toArray)
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
 
