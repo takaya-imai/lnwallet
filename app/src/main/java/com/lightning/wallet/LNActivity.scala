@@ -192,8 +192,9 @@ with SearchBar { me =>
     }
 
     def updTitle = {
-      val canSend = MilliSatoshi(chan.receiveSendStatus.last)
-      animateTitle(denom withSign canSend)
+      val canSend = chan.receiveSendStatus.last
+      val text = denom withSign MilliSatoshi(canSend)
+      me animateTitle text
     }
 
     def onRouteError(err: Throwable) = err.getMessage match {
@@ -267,7 +268,7 @@ with SearchBar { me =>
         val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage),
           nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 6)
 
-        PaymentInfoWrap putPaymentInfo IncomingPayment(preimage,
+        bag putPaymentInfo IncomingPayment(preimage,
           paymentRequest, MilliSatoshi(0), chan.id.get, HIDDEN)
 
         app.TransData.value = paymentRequest
