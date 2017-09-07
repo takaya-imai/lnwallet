@@ -95,7 +95,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // Update outgoing payment routing data
       // Fee is not shown so no need for UI changes
       me updateRouting retry.out
-      uiNotify
 
     case (_, _, cmd: CMDAddHtlc) =>
       // Try to record a new outgoing payment

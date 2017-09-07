@@ -64,7 +64,7 @@ object MBtcDenomination extends Denomination {
 }
 
 object BtcDenomination extends Denomination {
-  val fmt = new DecimalFormat("###.###########")
+  val fmt = new DecimalFormat("###.000########")
   val txt = app getString amount_hint_btc
   val factor = btc2msatFactor
 

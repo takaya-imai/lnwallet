@@ -199,7 +199,6 @@ with SearchBar { me =>
 
         case out: OutgoingPayment =>
           val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
-          if (out.status == FAILURE && out.routing.routes.isEmpty) paymentRetryAgain setVisibility View.VISIBLE
           val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
           val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
           val alert = mkForm(me negBld dialog_ok, humanFiat(title, fee).html, detailsWrapper)
@@ -208,6 +207,10 @@ with SearchBar { me =>
           paymentRetryAgain setOnClickListener onButtonTap {
             collectRoutesAndSend(alert, out.request, RetryAddHtlc)
           }
+
+          // No more routes left to try and request is not expired so we can try to send it again
+          val canRetry = out.status == FAILURE && out.routing.routes.isEmpty && out.request.isFresh
+          if (canRetry) paymentRetryAgain setVisibility View.VISIBLE
       }
     }
 
