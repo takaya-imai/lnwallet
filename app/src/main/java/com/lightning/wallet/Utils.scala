@@ -507,7 +507,7 @@ trait PayData {
   def cn: Coin
 
   def cute(direction: String): String = coin2MSat(cn) match { case msat =>
-    val top = direction.format(destination) + "<br><br>" + denom.withSign(msat)
+    val top = destination + "<br><br>" + direction.format(denom withSign msat)
     humanFiat(top, msat)
   }
 }

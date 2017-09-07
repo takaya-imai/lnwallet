@@ -215,10 +215,16 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         }
 
         wrap.fee match {
-          case _ if wrap.tx.getConfidence.getConfidenceType == DEAD => mkForm(me negBld dialog_ok, title = sumOut.format("x").html, lst)
-          case _ if wrap.nativeValue.isPositive => mkForm(me negBld dialog_ok, title = feeIncoming.format(confirms).html, content = lst)
-          case Some(fee) => mkForm(me negBld dialog_ok, humanFiat(feeDetails.format(confirms, denom withSign fee), fee).html, lst)
-          case None => mkForm(me negBld dialog_ok, feeAbsent.format(confirms).html, lst)
+          case _ if wrap.tx.getConfidence.getConfidenceType == DEAD => mkForm(me negBld dialog_ok, sumOut.format("x").html, lst)
+          case _ if wrap.nativeValue.isPositive => mkForm(me negBld dialog_ok, feeIncoming.format(confirms).html, lst)
+
+          case Some(fee) =>
+            val details = feeDetails.format(marking.format(denom withSign fee), confirms)
+            mkForm(me negBld dialog_ok, humanFiat(details, fee).html, lst)
+
+          case None =>
+            val details = feeAbsent.format(confirms).html
+            mkForm(me negBld dialog_ok, details, lst)
         }
       }
 

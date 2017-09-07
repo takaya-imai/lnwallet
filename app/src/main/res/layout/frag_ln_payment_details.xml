@@ -2,14 +2,13 @@
     style="@style/StandardLinearLayout"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <TextView
-        style="@style/MarginInfo"
-        android:id="@+id/paymentDetails"
-        android:layout_width="wrap_content"/>
-
     <Button
         style="@style/TransButton"
-        android:id="@+id/paymentHash"/>
+        android:textColor="#999999"
+        android:id="@+id/paymentHash"
+        android:textSize="14sp"/>
+
+    <View style="@style/GrayDivider"/>
 
     <Button
         style="@style/TransButton"
@@ -22,6 +21,13 @@
         android:id="@+id/paymentRetryAgain"
         android:text="@string/ln_retry_again"
         android:visibility="gone"/>
+
+    <View style="@style/GrayDivider"/>
+
+    <TextView
+        style="@style/MarginInfo"
+        android:id="@+id/paymentDetails"
+        android:layout_width="wrap_content"/>
 
     <View style="@style/GrayDivider"/>
 

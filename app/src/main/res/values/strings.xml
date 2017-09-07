@@ -113,8 +113,8 @@
 
     <!-- activity_btc -->
     <string name="txs_fee_incoming"><![CDATA[<font color=#1BA2E0>Incoming transaction</font><br>%1$s]]></string>
-    <string name="txs_fee_details"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%1$s<br><br>%2$s fee]]></string>
-    <string name="txs_fee_absent"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%2$s<br><br>No fee]]></string>
+    <string name="txs_fee_details"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%2$s<br><br>%1$s fee]]></string>
+    <string name="txs_fee_absent"><![CDATA[<font color=#E31300>Outgoing transaction</font><br>%1$s<br><br>No fee]]></string>
     <string name="txs_sum_out"><![CDATA[<font color=#E31300>%1$s</font>]]></string>
     <string name="txs_sum_in"><![CDATA[<font color=#1BA2E0>%1$s</font>]]></string>
     <string name="txs_view_outside">View on BlockExplorer</string>
@@ -122,8 +122,8 @@
 
     <array name="txs_confs">
         <item><![CDATA[<strong>Awaiting confirmation</strong>]]></item>
-        <item><![CDATA[<strong>%1$s</strong> confirmation]]></item>
-        <item><![CDATA[<strong>%1$s</strong> confirmations]]></item>
+        <item><![CDATA[<strong>%1$s confirmation</strong>]]></item>
+        <item><![CDATA[<strong>%1$s confirmations</strong>]]></item>
     </array>
 
     <!-- errors -->
@@ -166,9 +166,9 @@
     <string name="ln_description_hint">add some description</string>
     <string name="ln_receive_title">Receive Lightning Payment</string>
     <string name="ln_send_title"><![CDATA[Send Lightning Payment<br><br><small>%1$s</small>]]></string>
-    <string name="ln_incoming"><![CDATA[<font color=#1BA2E0>Incoming payment</font><br>%1$s]]></string>
-    <string name="ln_outgoing"><![CDATA[<font color=#E31300>Outgoing payment</font><br>%1$s<br><br>%2$s fee]]></string>
-    <string name="ln_proof">Recipient: %1$s\nSigned payment request: %2$s\nPayment hash: %3$s\nPayment preimage: %4$s</string>
+    <string name="ln_incoming_title"><![CDATA[<font color=#1BA2E0>Incoming payment</font><br>%1$s]]></string>
+    <string name="ln_outgoing_title"><![CDATA[<font color=#E31300>Outgoing payment</font><br>%2$s<br><br>%1$s fee]]></string>
+    <string name="ln_proof">Recipient: %1$s\nDescription: %2$s\nSigned request: %3$s\nPayment hash: %4$s\nPayment preimage: %5$s</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_copy_proof">Copy Proof of Payment</string>
     <string name="ln_retry_again">Retry this payment</string>

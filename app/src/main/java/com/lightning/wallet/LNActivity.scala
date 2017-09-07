@@ -27,6 +27,7 @@ import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Crypto.sha256
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
+import android.app.AlertDialog
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
@@ -169,26 +170,50 @@ with SearchBar { me =>
   }
 
   def manageActive(chan: Channel) = {
-    toolbar setOnClickListener onButtonTap {
-      wrap(adapter.notifyDataSetChanged)(changeDenom)
-      updTitle
-    }
-
     list setOnItemClickListener onTap { pos =>
+      val payment: PaymentInfo = adapter getItem pos
+      val description = me getDescription payment.request
+      val humanHash = payment.request.paymentHash.toString
+      val humanStatus = s"<strong>${paymentStatesMap apply payment.status}</strong>"
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
       val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
-      val payment = adapter getItem pos
-      val info = me getDescription payment.request
-      val humanHash = payment.request.paymentHash.toString
+      paymentHash.setText(humanHash grouped 8 mkString "\u0020")
+      paymentHash setOnClickListener onButtonTap(app setBuffer humanHash)
+      if (payment.status == SUCCESS) paymentProof setVisibility View.VISIBLE
+
+      paymentProof setOnClickListener onButtonTap {
+        app setBuffer getString(ln_proof).format(payment.request.nodeId.toString, description,
+          PaymentRequest write payment.request, payment.request.paymentHash.toString,
+          payment.preimage.toString)
+      }
 
       payment match {
-        case out: OutgoingPayment =>
         case in: IncomingPayment =>
+          val humanReceived = humanFiat(sumIn.format(denom withSign in.received), in.received)
+          mkForm(me negBld dialog_ok, getString(ln_incoming_title).format(humanStatus).html, detailsWrapper)
+          paymentDetails setText s"$description<br><br>$humanReceived".html
+
+        case out: OutgoingPayment =>
+          val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
+          if (out.status == FAILURE && out.routing.routes.isEmpty) paymentRetryAgain setVisibility View.VISIBLE
+          val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
+          val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
+          val alert = mkForm(me negBld dialog_ok, humanFiat(title, fee).html, detailsWrapper)
+          paymentDetails setText s"$description<br><br>$humanSent".html
+
+          paymentRetryAgain setOnClickListener onButtonTap {
+            collectRoutesAndSend(alert, out.request, RetryAddHtlc)
+          }
       }
+    }
+
+    toolbar setOnClickListener onButtonTap {
+      wrap(adapter.notifyDataSetChanged)(changeDenom)
+      updTitle
     }
 
     def updTitle = {
@@ -196,6 +221,18 @@ with SearchBar { me =>
       val text = denom withSign MilliSatoshi(canSend)
       me animateTitle text
     }
+
+    def collectRoutesAndSend(alert: AlertDialog, request: PaymentRequest,
+                      out2Command: OutgoingPayment => CMDAddHtlc) =
+
+      rm(alert) {
+        timer.schedule(delete(Informer.LNPAYMENT), 5000)
+        add(me getString ln_send, Informer.LNPAYMENT).flash.run
+        app.ChannelManager.outPaymentObs(request).foreach(_ match {
+          case Some(outPayment) => chan process out2Command(outPayment)
+          case _ => onFail(me getString err_general)
+        }, onRouteError)
+      }
 
     def onRouteError(err: Throwable) = err.getMessage match {
       case "fromblacklisted" => onFail(me getString err_ln_black)
@@ -235,21 +272,11 @@ with SearchBar { me =>
 
       def sendAttempt = rateManager.result match {
         case Failure(_) => app toast dialog_sum_empty
+        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if request.amount.exists(_ > ms) => app toast dialog_sum_small
         case Success(ms) if request.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
-        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
-
-        case Success(ms) => rm(alert) {
-          timer.schedule(delete(Informer.LNPAYMENT), 5000)
-          add(me getString ln_send, Informer.LNPAYMENT).flash.run
-
-          // Ask for routes, then send a plain command to a channel
-          app.ChannelManager.outPaymentObs(request).foreach(_ match {
-            case Some(outPayment) => chan process PlainAddHtlc(outPayment)
-            case _ => onFail(me getString err_general)
-          }, onRouteError)
-        }
+        case Success(ms) => collectRoutesAndSend(alert, request, PlainAddHtlc)
       }
 
       val ok = alert getButton BUTTON_POSITIVE
@@ -367,8 +394,8 @@ with SearchBar { me =>
   }
 
   def getDescription(pr: PaymentRequest) = pr.description match {
+    case Right(description) if description.nonEmpty => description take 140
     case Left(descriptionHash) => s"<i>${descriptionHash.toString}</i>"
-    case Right(description) if description.nonEmpty => description
     case _ => s"<i>${me getString ln_no_description}</i>"
   }
 }
