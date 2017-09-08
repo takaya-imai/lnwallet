@@ -169,6 +169,7 @@
     <string name="ln_incoming_title"><![CDATA[<font color=#1BA2E0>Incoming payment</font><br>%1$s]]></string>
     <string name="ln_outgoing_title"><![CDATA[<font color=#E31300>Outgoing payment</font><br>%2$s<br><br>%1$s fee]]></string>
     <string name="ln_proof">Recipient: %1$s\nDescription: %2$s\nSigned request: %3$s\nPayment hash: %4$s\nPayment preimage: %5$s</string>
+    <string name="ln_htlc_notification">You currently have some pending payments, please bring your wallet online to get them resolved</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_copy_proof">Copy Proof of Payment</string>
     <string name="ln_retry_again">Retry this payment</string>

@@ -65,8 +65,7 @@ case class NormalData(announce: NodeAnnouncement,
   def isClosing = localShutdown.isDefined || remoteShutdown.isDefined
 }
 
-case class NegotiationsData(announce: NodeAnnouncement,
-                            commitments: Commitments, localClosingSigned: ClosingSigned,
+case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,

@@ -11,7 +11,7 @@ import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import rx.lang.scala.{Observable => Obs}
-import com.lightning.wallet.lncloud.{ChannelWrap, RatesSaver, Saver}
+import com.lightning.wallet.lncloud.{ChannelWrap, Notificator, RatesSaver, Saver}
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
@@ -133,7 +133,7 @@ class WalletApp extends Application { me =>
     def createChannel(bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = for (work <- connections get data.announce.nodeId) work send msg
       def STORE(content: HasCommitments): HasCommitments = runAnd(content)(ChannelWrap put content)
-      listeners ++= Set(LNParams.broadcaster, LNParams.bag, ChannelWrap)
+      listeners ++= Set(LNParams.broadcaster, LNParams.bag, ChannelWrap, Notificator)
       process(bootstrap)
     }
 
@@ -156,6 +156,7 @@ class WalletApp extends Application { me =>
     def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
+    def shutDown = none
 
     def blockingSend(tx: Transaction) =
       // Wait for at least one peer confirmation or failure
@@ -164,12 +165,6 @@ class WalletApp extends Application { me =>
     def useCheckPoints(time: Long) = {
 //      val pts = getAssets open "checkpoints-testnet.txt"
 //      CheckpointManager.checkpoint(params, pts, store, time)
-    }
-
-    override def shutDown = {
-      ConnectionManager.listeners -= ChannelManager.socketEventsListener
-      ConnectionManager.listeners -= ChannelManager.reconnectListener
-      if (peerGroup.isRunning) peerGroup.stop
     }
 
     def setupAndStartDownload = {

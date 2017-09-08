@@ -10,14 +10,6 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
-import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
-import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
-import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import com.lightning.wallet.ln.Tools.{runAnd, wrap}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import android.view.{Menu, MenuItem, View}
-import scala.util.{Failure, Success, Try}
-
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -32,6 +24,14 @@ import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
 import Utils.app
+
+import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
+import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
+import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import com.lightning.wallet.ln.Tools.{runAnd, wrap}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import android.view.{Menu, MenuItem, View}
+import scala.util.{Failure, Success, Try}
 
 
 trait SearchBar { me =>
@@ -249,8 +249,8 @@ with SearchBar { me =>
       override def onBecome = {
         case (_, norm: NormalData, _, _) if norm.isClosing => evacuate
         case (_, _: ClosingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
-        case (_, _: NormalData, _, SYNC) => update(getString(ln_notify_connecting), Informer.LNSTATE).flash.run
-        case (_, _: NormalData, _, NORMAL) => update(getString(ln_notify_operational), Informer.LNSTATE).flash.run
+        case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
+        case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
       }
 
       override def onError = {
@@ -295,13 +295,10 @@ with SearchBar { me =>
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def proceed(sum: Option[MilliSatoshi], preimage: BinaryData) = {
-        val paymentRequest = PaymentRequest(chainHash, sum, sha256(preimage),
-          nodePrivateKey, inputDescription.getText.toString.trim, None, 3600 * 6)
-
-        bag putPaymentInfo IncomingPayment(preimage,
-          paymentRequest, MilliSatoshi(0), chan.id.get, HIDDEN)
-
+      def proceed(amount: Option[MilliSatoshi], preimage: BinaryData) = {
+        val (description, hash, stamp) = (inputDescription.getText.toString.trim, sha256(preimage), 3600 * 6)
+        val paymentRequest = PaymentRequest(chainHash, amount, hash, nodePrivateKey, description, None, stamp)
+        bag putPaymentInfo IncomingPayment(preimage, paymentRequest, MilliSatoshi(0), chan.id.get, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }
