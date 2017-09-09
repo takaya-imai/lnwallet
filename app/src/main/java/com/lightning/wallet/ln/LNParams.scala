@@ -69,10 +69,11 @@ object LNParams { me =>
 
   def expiry: Int = broadcaster.currentHeight + 6
   def makeLocalParams(reserve: Long, finalScriptPubKey: BinaryData, idx: Long) = {
-    val Seq(fund, revoke, pay, delay, sha) = for (n <- 0L to 4L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil).privateKey
+    val Seq(fund, revoke, pay, delay, sha) = for (n <- 0L to 4L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil)
     LocalParams(dustLimitSatoshis = MIN_NONDUST_OUTPUT.value, maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve,
-      toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = fund, revocationSecret = revoke, paymentKey = pay,
-      delayedPaymentKey = delay, finalScriptPubKey, shaSeed = sha256(sha.toBin), isFunder = true)
+      toSelfDelay = 144, maxAcceptedHtlcs = 20, fundingPrivKey = fund.privateKey, revocationSecret = revoke.privateKey,
+      paymentKey = pay.privateKey, delayedPaymentKey = delay.privateKey, finalScriptPubKey,
+      shaSeed = sha256(sha.privateKey.toBin), isFunder = true)
   }
 }
 

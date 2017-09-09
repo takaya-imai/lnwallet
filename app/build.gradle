@@ -32,6 +32,7 @@ dependencies {
     // Bitcoin and crypto
     compile files('libs/bitcoinj-core-0.15-SNAPSHOT-bundled.jar')
     compile 'net.zetetic:android-database-sqlcipher:3.5.4@aar'
+    compile 'fr.acinq:bitcoin-lib_2.11:0.9.13'
 
     // Working with data formats
     compile 'com.google.zxing:core:3.3.0'
@@ -45,12 +46,12 @@ dependencies {
     compile 'com.github.kevinsawicki:http-request:6.0'
 
     // UI
+    compile 'com.github.ViksaaSkool:AwesomeSplash:v1.0.0'
     compile 'com.android.support:appcompat-v7:23.4.0'
     compile 'info.hoang8f:android-segmented:1.0.6'
     compile 'com.github.clans:fab:1.6.4'
 
     // Misc
-    //compile 'eu.lp0.slf4j:slf4j-android:1.7.25-0'
     compile 'org.scala-lang:scala-library:2.11.11'
     compile 'io.reactivex:rxscala_2.11:0.26.5'
 }

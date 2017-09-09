@@ -145,6 +145,7 @@ class LNCloud(val url: String) {
 
   def getRates = call("rates", identity)
   def getTxs(commit: String) = call("txs", toVec[Transaction], "txid" -> commit)
+  def getData(key: String) = call("data", _.head.convertTo[BinaryData], "key" -> key)
   def findNodes(ask: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> ask)
   def findRoutes(from: PublicKey, to: PublicKey) = if (from == to) Obs just Vector(Vector.empty)
     else call("router/routes", toVec[PaymentRoute], "from" -> from.toString, "to" -> to.toString)
@@ -153,6 +154,7 @@ class LNCloud(val url: String) {
 class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
   override def findNodes(ask: String) = super.findNodes(ask).onErrorResumeNext(_ => failover findNodes ask)
   override def getTxs(commit: String) = super.getTxs(commit).onErrorResumeNext(_ => failover getTxs commit)
+  override def getData(key: String) = super.getData(key).onErrorResumeNext(_ => failover getData key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 

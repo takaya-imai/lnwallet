@@ -219,10 +219,9 @@ with SearchBar { me =>
       updTitle
     }
 
-    def updTitle = {
+    def updTitle = animateTitle {
       val canSend = chan.receiveSendStatus.last
-      val text = denom withSign MilliSatoshi(canSend)
-      me animateTitle text
+      denom withSign MilliSatoshi(canSend)
     }
 
     def collectRoutesAndSend(alert: AlertDialog, request: PaymentRequest,
