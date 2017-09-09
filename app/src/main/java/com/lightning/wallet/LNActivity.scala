@@ -81,6 +81,7 @@ with SearchBar { me =>
   val imgMap = Array(await, await, await, conf1, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val addFailures = getResources getStringArray R.array.txs_ln_add_failures
+  lazy val routesLeft = getResources getStringArray R.array.ln_retry_routes_left
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
 
@@ -171,18 +172,17 @@ with SearchBar { me =>
 
   def manageActive(chan: Channel) = {
     list setOnItemClickListener onTap { pos =>
-      val payment: PaymentInfo = adapter getItem pos
-      val description = me getDescription payment.request
-      val humanHash = payment.request.paymentHash.toString
-      val humanStatus = s"<strong>${paymentStatesMap apply payment.status}</strong>"
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
       val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
-      paymentHash.setText(humanHash grouped 8 mkString "\u0020")
-      paymentHash setOnClickListener onButtonTap(app setBuffer humanHash)
+      val payment = adapter getItem pos
+      val description = me getDescription payment.request
+      val humanStatus = s"<strong>${paymentStatesMap apply payment.status}</strong>"
+      paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
+      paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
       if (payment.status == SUCCESS) paymentProof setVisibility View.VISIBLE
 
       paymentProof setOnClickListener onButtonTap {
@@ -261,8 +261,14 @@ with SearchBar { me =>
       }
 
       override def onProcess = {
-        case (_, _, _: RetryAddHtlc) => runOnUiThread(app toast ln_retry)
-        case (_, _, _: RevokeAndAck | _: CommitSig) => updTitle
+        case (_, _, retry: RetryAddHtlc) =>
+          val humanLeft = app.plurOrZero(routesLeft, retry.out.routing.routes.size)
+          me runOnUiThread Toast.makeText(me, me getString ln_retry format humanLeft,
+            Toast.LENGTH_LONG).show
+
+        // Show updated balance at this checkpoint
+        case (_, _, _: RevokeAndAck | _: CommitSig) =>
+          updTitle
       }
     }
 

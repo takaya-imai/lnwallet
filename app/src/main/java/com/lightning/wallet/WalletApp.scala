@@ -62,7 +62,7 @@ class WalletApp extends Application { me =>
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
   def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
-  def toast(message: Int) = Toast.makeText(me, message, Toast.LENGTH_LONG).show
+  def toast(code: Int) = Toast.makeText(me, code, Toast.LENGTH_LONG).show
 
   appReference = me
   override def onCreate = wrap(super.onCreate) {
