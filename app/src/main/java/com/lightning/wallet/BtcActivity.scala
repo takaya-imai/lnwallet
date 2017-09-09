@@ -69,8 +69,8 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
   lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
   private[this] var state = SCROLL_STATE_IDLE
-  val maxLinesNum = 25
-  val minLinesNum = 5
+  val maxLinesNum = 24
+  val minLinesNum = 4
 
   def startListUpdates(adapter: BaseAdapter) =
     list setOnScrollListener new OnScrollListener {
@@ -103,8 +103,8 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
       availableItems = items1
     }
 
-    def getView(position: Int, cv: View, parent: ViewGroup) = {
-      val view = if (null == cv) getLayoutInflater.inflate(txLineType, null) else cv
+    def getView(position: Int, savedView: View, parent: ViewGroup) = {
+      val view = if (null == savedView) getLayoutInflater.inflate(txLineType, null) else savedView
       val hold = if (null == view.getTag) getHolder(view) else view.getTag.asInstanceOf[TxViewHolder]
       hold fillView visibleItems(position)
       view

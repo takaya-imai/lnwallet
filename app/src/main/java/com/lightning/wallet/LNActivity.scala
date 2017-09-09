@@ -201,7 +201,7 @@ with SearchBar { me =>
           val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
           val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
           val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
-          val alert = mkForm(me negBld dialog_ok, humanFiat(title, fee).html, detailsWrapper)
+          val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanSent".html
 
           paymentRetryAgain setOnClickListener onButtonTap {

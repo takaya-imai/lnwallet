@@ -212,6 +212,15 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE norm.copy(commitments = c1) SEND updateFailMalformedHtlс
 
 
+      // Fail or fulfill incoming HTLCs
+      case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
+        for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
+          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
+
+        // And sign once done
+        doProcess(CMDProceed)
+
+
       // GUARD: We can send a commit sig
       case (norm: NormalData, CMDProceed, NORMAL)
         if Commitments.localHasChanges(norm.commitments) &&
@@ -241,15 +250,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val c1 = Commitments.receiveRevocation(norm.commitments, rev)
         me UPDATE norm.copy(commitments = c1)
         doProcess(CMDHTLCProcess)
-
-
-      // Fail or fulfill incoming HTLCs
-      case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
-        for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
-          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
-
-        // And sign right away
-        doProcess(CMDProceed)
 
 
       case (norm: NormalData, CMDFeerate(rate), NORMAL)
