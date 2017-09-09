@@ -309,8 +309,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       case (norm: NormalData, CMDBestHeight(height), NORMAL | SYNC)
-        // GUARD: we have to always watch for expired HTLCs and close a chan if they exist
-        if Commitments.pendingHtlcs(norm.commitments).exists(_.add.expiry <= height) =>
+        if norm.commitments.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && height >= htlc.add.expiry) ||
+          norm.commitments.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && height >= htlc.add.expiry) =>
+
+        // Outdated HTLCs are present
         startLocalCurrentClose(norm)
 
 
