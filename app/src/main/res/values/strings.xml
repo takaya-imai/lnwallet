@@ -177,7 +177,7 @@
     <string name="ln_resend">Retry this payment</string>
 
     <array name="ln_retry_routes_left">
-        <item>The last attempt&#8230;</item>
+        <item>One last attempt&#8230;</item>
         <item>%1$s route left</item>
         <item>%1$s routes left</item>
     </array>

@@ -1,14 +1,14 @@
 package com.lightning.wallet.lncloud
 
-import android.app.{AlarmManager, Notification, NotificationManager, PendingIntent}
 import com.lightning.wallet.ln.{ChannelListener, Commitments, NormalData}
+import android.app.{AlarmManager, NotificationManager, PendingIntent}
 import android.content.{BroadcastReceiver, Context, Intent}
+import com.lightning.wallet.{MainActivity, R}
 
 import android.support.v4.app.NotificationCompat
 import com.lightning.wallet.ln.wire.CommitSig
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.Utils.app
-import com.lightning.wallet.R
 
 
 object Notificator extends ChannelListener {
@@ -30,10 +30,10 @@ object Notificator extends ChannelListener {
 }
 
 class Notificator extends BroadcastReceiver {
-  def onReceive(context: Context, intent: Intent) = try
-    context.getSystemService(Context.NOTIFICATION_SERVICE).asInstanceOf[NotificationManager]
-      .notify(1, new NotificationCompat.Builder(context).setSmallIcon(R.drawable.await)
-        .setContentTitle(context getString R.string.ln_htlc_notification_title)
-        .setContentText(context getString R.string.ln_htlc_notification)
-        .build) catch none
+  def onReceive(ct: Context, intent: Intent) = classOf[MainActivity] match { case target =>
+    val targetIntent = PendingIntent.getActivity(ct, 0, new Intent(ct, target), PendingIntent.FLAG_UPDATE_CURRENT)
+    try ct.getSystemService(Context.NOTIFICATION_SERVICE).asInstanceOf[NotificationManager].notify(1, new NotificationCompat.Builder(ct)
+      .setContentIntent(targetIntent).setSmallIcon(R.drawable.dead).setContentTitle(ct getString R.string.ln_htlc_notification_title)
+      .setContentText(ct getString R.string.ln_htlc_notification).setAutoCancel(true).build) catch none
+  }
 }

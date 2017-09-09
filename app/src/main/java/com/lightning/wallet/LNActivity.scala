@@ -199,8 +199,8 @@ with SearchBar { me =>
 
         case out: OutgoingPayment =>
           val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
-          val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
           val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
+          val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
           val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanSent".html
 
