@@ -28,6 +28,7 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.wire.{Hop, Init, LightningMessage}
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PublicKey
@@ -111,11 +112,11 @@ class WalletApp extends Application { me =>
     def reconnect(cv: ChannelVec) = cv.map(_.data.announce) foreach requestConnection
 
     val chainEventsListener = new TxTracker with BlocksListener {
+      def height = for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
       override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
-      def tellHeight = for (chan <- all) chan process CMDBestHeight(LNParams.broadcaster.currentHeight)
-      def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) tellHeight
-      override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) tellHeight
+      def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) height
+      override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) height
     }
 
     val socketEventsListener = new ConnectionListener {
@@ -133,22 +134,22 @@ class WalletApp extends Application { me =>
     def createChannel(bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = for (work <- connections get data.announce.nodeId) work send msg
       def STORE(content: HasCommitments): HasCommitments = runAnd(content)(ChannelWrap put content)
-      listeners ++= Set(LNParams.broadcaster, LNParams.bag, ChannelWrap, Notificator)
+      listeners ++= Set(broadcaster, bag, ChannelWrap, Notificator)
       process(bootstrap)
     }
 
     // Here and in the rest of an app we use first alive channel
     def outPaymentObs(request: PaymentRequest) = alive.headOption map { chan =>
-      val rsObs = LNParams.cloud.findRoutes(chan.data.announce.nodeId, request.nodeId)
+      val rsObs = cloud.connector.findRoutes(chan.data.announce.nodeId, request.nodeId)
       for (routes <- rsObs) yield outPaymentOpt(routes, request, chan)
     } getOrElse Obs.just(None)
 
     // Build payment if we actually have routes and channel has an id
     def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =
       Some(rs, chan.id) collectFirst { case (firstRoute +: restOfTheRoutes) ~ Some(chanId) =>
-        val (payloads, total, expiry) = buildPayloads(request.amount.get.amount, LNParams.expiry, firstRoute)
+        val (payloads, withFees, allExpiry) = buildPayloads(request.amount.get.amount, expiry, firstRoute)
         val onion = buildOnion(chan.data.announce.nodeId +: firstRoute.map(_.nextNodeId), payloads, request.paymentHash)
-        OutgoingPayment(RoutingData(restOfTheRoutes, onion, total, expiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
+        OutgoingPayment(RoutingData(restOfTheRoutes, onion, withFees, allExpiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
       }
   }
 
@@ -174,7 +175,7 @@ class WalletApp extends Application { me =>
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addCoinsSentEventListener Vibr.generalTracker
 
-      val address = InetAddresses forString LNParams.cloud.url
+      val address = InetAddresses forString cloud.connector.url
       peerGroup addAddress new PeerAddress(app.params, address, 8333)
       //peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setUserAgent(appName, "0.01")

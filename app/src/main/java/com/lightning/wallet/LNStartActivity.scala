@@ -38,7 +38,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   type AnnounceChansNumVec = Vector[AnnounceChansNum]
   private[this] val worker = new ThrottledWork[AnnounceChansNumVec] {
-    def work(radixNodeAliasOrNodeIdQuery: String) = LNParams.cloud findNodes radixNodeAliasOrNodeIdQuery
+    def work(radixNodeAliasOrNodeIdQuery: String) = LNParams.cloud.connector findNodes radixNodeAliasOrNodeIdQuery
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)
   }
 

@@ -8,6 +8,7 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 
 import org.bitcoinj.core.{Coin, Transaction}
+import com.lightning.wallet.ln.LNParams.{db, cloud}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.helper.Statistics
@@ -52,7 +53,7 @@ object PublicDataSaver extends Saver {
 object PrivateDataSaver extends Saver {
   def tryGetObject: Try[PrivateData] = tryGet map to[PrivateData]
   def saveObject(data: PrivateData): Unit = save(data.toJson)
-  def remove = LNParams.db.change(StorageTable.killSql, KEY)
+  def remove = db.change(StorageTable.killSql, KEY)
   val KEY = "lnCloudPrivate"
 }
 
@@ -66,7 +67,7 @@ object RatesSaver extends Saver {
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
 
   def process = {
-    def getResult = LNParams.cloud.getRates map toVec[Result]
+    def getResult = cloud.connector.getRates map toVec[Result]
     def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
     withDelay(periodically, rates.stamp, updatePeriod.toMillis) foreach { case newFee ~ newFiat +: _ =>
       val feeHistory = for (goodFee <- newFee("6") +: rates.feeHistory if goodFee > 0) yield goodFee

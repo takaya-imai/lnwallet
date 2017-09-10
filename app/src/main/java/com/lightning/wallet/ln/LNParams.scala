@@ -23,18 +23,15 @@ object LNParams { me =>
   val htlcMinimumMsat = 500
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
-  val chainHash: BinaryData = Block.RegtestGenesisBlock.hash
-
-  lazy val bag = PaymentInfoWrap
+  val chainHash = Block.RegtestGenesisBlock.hash
   lazy val broadcaster = LocalBroadcaster
-  lazy val publicCloud = new LNCloud("10.0.2.2")
+  lazy val bag = PaymentInfoWrap
 
-  var cloud: LNCloud = _
-  var storage: StateMachine[_] = _
-  var nodePrivateKey: PrivateKey = _
-  var cloudPrivateKey: PrivateKey = _
   var extendedNodeKey: ExtendedPrivateKey = _
+  var cloudPrivateKey: PrivateKey = _
+  var nodePrivateKey: PrivateKey = _
   var db: CipherOpenHelper = _
+  var cloud: Cloud = _
 
   def isSetUp: Boolean = db != null
   def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
@@ -42,18 +39,25 @@ object LNParams { me =>
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
     nodePrivateKey = extendedNodeKey.privateKey
-    resetCloudAndStorage
+    cloud = getCloud
   }
 
-  def resetCloudAndStorage = {
-    val privDataTry = PrivateDataSaver.tryGetObject
-    cloud = privDataTry map getFailoverCloud getOrElse publicCloud
-    storage = privDataTry map getPrivateStorage getOrElse getPublicStorage
+  // CLOUD
+
+  def getCloud: Cloud = PrivateDataSaver.tryGetObject
+    .map(getPrivateCloud).getOrElse(getPublicCloud)
+
+  def getPrivateCloud(priv: PrivateData) = {
+    val baseConnector = new Connector("10.0.2.2")
+    val failover = new FailoverConnector(baseConnector, priv.url)
+    new PrivateCloud(connector = failover) { data = priv }
   }
 
-  def getFailoverCloud(privateData: PrivateData) = new FailoverLNCloud(publicCloud, privateData.url)
-  def getPrivateStorage(privateData: PrivateData) = new PrivateStorage(me getFailoverCloud privateData) { data = privateData }
-  def getPublicStorage = new PublicStorage(publicCloud, bag) { data = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty }
+  def getPublicCloud = {
+    val baseConnector = new Connector("10.0.2.2")
+    val pub = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty
+    new PublicCloud(connector = baseConnector, bag) { data = pub }
+  }
 
   // FEE RELATED
 

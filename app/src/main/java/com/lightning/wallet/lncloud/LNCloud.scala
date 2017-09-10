@@ -3,13 +3,13 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.lncloud.LNCloud._
+import com.lightning.wallet.lncloud.Connector._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
@@ -23,32 +23,45 @@ import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 
 
-case class PrivateData(acts: List[LNCloudAct], url: String)
-class PrivateStorage(lnCloud: LNCloud) extends StateMachine[PrivateData] { me =>
+trait Cloud {
+  val connector: Connector
+}
+
+// Users may supply their own cloud
+class PrivateCloud(val connector: Connector)
+extends StateMachine[PrivateData] with Cloud { me =>
 
   def doProcess(some: Any) = (data, some) match {
-    case (PrivateData(actions, _), act: LNCloudAct) =>
-      me stayWith data.copy(acts = act :: actions take 500)
-      me doProcess CMDStart
+    case PrivateData(_, (action: BasicCloudAct) :: rest) ~ CMDStart =>
+      val callAndRestart = action.run(me).doAfterTerminate(me doProcess CMDStart)
+      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest), action.onError)
 
-    case (PrivateData(action :: rest, _), CMDStart) =>
-      // Private server should use a public key based authorization so we add a signature
-      action.run(me signedParams action.data, lnCloud).doOnCompleted(me doProcess CMDStart)
-        .foreach(_ => me stayWith data.copy(acts = rest), Tools.errlog)
+    case PrivateData(_, (action: AuthCloudAct) :: rest) ~ CMDStart =>
+      val call = action.authRun(signedParams(action.requestPayload), me)
+      val callAndRestart = call.doAfterTerminate(me doProcess CMDStart)
+      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
+        action.onError)
+
+    case (_, action: CloudAct) =>
+      // We must always record incoming actions
+      val actions1 = action :: data.acts take 100
+      me stayWith data.copy(acts = actions1)
+      me doProcess CMDStart
 
     case _ =>
       // Let know if received an unhandled message in some state
-      Tools log s"PrivatePathfinder: unhandled $some : $data"
+      Tools log s"PrivateCloud: unhandled $some : $data"
   }
 
   def signedParams(data: BinaryData): Seq[HttpParam] = {
-    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, LNParams.cloudPrivateKey)
-    Seq("sig" -> signature.toString, "key" -> LNParams.cloudPrivateKey.publicKey.toString, body -> data.toString)
+    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
+    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, body -> data.toString)
   }
 }
 
-case class PublicData(info: Option[RequestAndMemo], tokens: List[ClearToken], acts: List[LNCloudAct] = Nil)
-class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[PublicData] { me =>
+// Default cloud provided by me the dev
+class PublicCloud(val connector: Connector, bag: PaymentInfoBag)
+extends StateMachine[PublicData] with Cloud { me =>
 
   // STATE MACHINE
 
@@ -64,17 +77,15 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
       for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
       me stayWith data.copy(info = Some(pay.request, memo), tokens = tokens)
 
-    // No matter what the state is: do it if we have acts and tokens
-    case PublicData(_, (blindPoint, clearToken, clearSignature) :: ts, action :: rest) ~ CMDStart =>
-      action.run(Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSignature,
-        body -> action.data.toString), lnCloud).doOnCompleted(me doProcess CMDStart)
-        .foreach(_ => me stayWith data.copy(tokens = ts, acts = rest), onError)
+    case PublicData(_, _, (action: BasicCloudAct) :: rest) ~ CMDStart =>
+      val callAndRestart = action.run(me).doAfterTerminate(me doProcess CMDStart)
+      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest), action.onError)
 
-      // 'data' may change while request is on so we always copy it
-      def onError(serverError: Throwable) = serverError.getMessage match {
-        case "tokeninvalid" | "tokenused" => me stayWith data.copy(tokens = ts)
-        case _ => me stayWith data
-      }
+    // No matter what the state is: do auth based cloud call if we have spare tokens
+    case PublicData(_, (clearPoint, token, sig) :: ts, (action: AuthCloudAct) :: rest) ~ CMDStart =>
+      val params = Seq("point" -> clearPoint, "cleartoken" -> token, "clearsig" -> sig, body -> action.requestPayload.toString)
+      action.authRun(params, me).doAfterTerminate(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = ts, acts = rest),
+        action.onError)
 
     // Start a new request while payment is in progress
     case PublicData(Some(request ~ memo), _, _) ~ CMDStart =>
@@ -86,9 +97,9 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
         case _ => me stayWith data
       }
 
-    case (_, action: LNCloudAct) =>
+    case (_, action: CloudAct) =>
       // We must always record incoming actions
-      val actions1 = action :: data.acts take 500
+      val actions1 = action :: data.acts take 100
       me stayWith data.copy(acts = actions1)
       me doProcess CMDStart
 
@@ -101,14 +112,14 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
 
   def resetPaymentData = me stayWith data.copy(info = None)
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
-  def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
+  def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnTerminate(me doProcess CMDStart)
     .foreach(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
       serverError => if (serverError.getMessage == "notfound") resetPaymentData)
 
   // TALKING TO SERVER
 
   def getRequestAndMemo: Obs[RequestAndMemo] =
-    lnCloud.call("blindtokens/info", identity) flatMap { raw =>
+    connector.call("blindtokens/info", identity) flatMap { raw =>
       val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
       val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubKeyR)
       val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubKeyQ)
@@ -116,25 +127,44 @@ class PublicStorage(lnCloud: LNCloud, bag: PaymentInfoBag) extends StateMachine[
       // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
       val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
       val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
-      lnCloud.call("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
+      connector.call("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
         "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
     }
 
   def getClearTokens(memo: BlindMemo) =
-    lnCloud.call("blindtokens/redeem", _.map(json2String(_).bigInteger),
+    connector.call("blindtokens/redeem", _.map(json2String(_).bigInteger),
       "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
 }
 
-trait LNCloudAct {
-  // Sending data to server using either token or sig auth
-  def run(params: Seq[HttpParam], lnCloud: LNCloud): Obs[Unit]
-  val data: BinaryData
+trait CloudAct {
+  val requestPayload: BinaryData
+  def onError: PartialFunction[Throwable, Unit]
 }
+
+trait BasicCloudAct extends CloudAct {
+  // For calls which may be presisted in case of failure
+  // and do not require token or key based authentication
+  def run(cloud: Cloud): Obs[Unit]
+}
+
+trait AuthCloudAct extends CloudAct {
+  // These also may be presisted in case of failure
+  // and do require token or key based authentication
+  def authRun(params: Seq[HttpParam], cloud: Cloud): Obs[Unit]
+}
+
+trait CloudData {
+  val acts: List[CloudAct]
+}
+
+case class PrivateData(url: String, acts: List[CloudAct] = Nil) extends CloudData
+case class PublicData(info: Option[RequestAndMemo], tokens: List[ClearToken],
+                      acts: List[CloudAct] = Nil) extends CloudData
 
 // This is a basic interface for making cloud calls
 // failover invariant will fall back to default in case of failure
 
-class LNCloud(val url: String) {
+class Connector(val url: String) {
   def http(way: String) = post(s"http://$url:9001/v1/$way", true)
   def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
@@ -151,14 +181,14 @@ class LNCloud(val url: String) {
     else call("router/routes", toVec[PaymentRoute], "from" -> from.toString, "to" -> to.toString)
 }
 
-class FailoverLNCloud(failover: LNCloud, url: String) extends LNCloud(url) {
+class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
   override def findNodes(ask: String) = super.findNodes(ask).onErrorResumeNext(_ => failover findNodes ask)
   override def getTxs(commit: String) = super.getTxs(commit).onErrorResumeNext(_ => failover getTxs commit)
   override def getData(key: String) = super.getData(key).onErrorResumeNext(_ => failover getData key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 
-object LNCloud {
+object Connector {
   type HttpParam = (String, Object)
   type ClearToken = (String, String, String)
   type RequestAndMemo = (PaymentRequest, BlindMemo)

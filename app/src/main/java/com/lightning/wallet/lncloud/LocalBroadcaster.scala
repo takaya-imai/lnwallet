@@ -41,7 +41,7 @@ object LocalBroadcaster extends Broadcaster { me =>
         close.localCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) =>
 
       // We ask server if any HTLC has been pulled to obtain a preimage
-      LNParams.cloud.getTxs(commit = close.commitments.commitInput.outPoint.txid.toString)
+      LNParams.cloud.connector.getTxs(close.commitments.commitInput.outPoint.txid.toString)
         .foreach(_ flatMap Helpers.extractPreimages foreach LNParams.bag.updatePreimage, Tools.errlog)
   }
 

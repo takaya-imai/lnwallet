@@ -269,18 +269,19 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     def trySave(url: String) = delayUI {
       if (url.isEmpty) PrivateDataSaver.remove
-      else self check PrivateData(Nil, url)
+      else self check PrivateData(url, acts = Nil)
     }
 
     def check(data: PrivateData) = {
-      val failover = LNParams getFailoverCloud data
-      val params = new PrivateStorage(failover).signedParams(random getBytes 32)
-      failover.call("check", none, params:_*).subscribe(_ => self save data, onError)
+      val privateCloud = LNParams getPrivateCloud data
+      val params = privateCloud.signedParams(random getBytes 32)
+      privateCloud.connector.call("check", none, params:_*)
+        .subscribe(ok => self save data, onError)
     }
 
     def save(privateData: PrivateData) = {
       PrivateDataSaver saveObject privateData
-      LNParams.resetCloudAndStorage
+      LNParams.cloud = LNParams.getCloud
       app toast ln_backup_success
     }
 

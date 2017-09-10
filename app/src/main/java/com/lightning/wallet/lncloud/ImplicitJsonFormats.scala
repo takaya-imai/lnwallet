@@ -6,11 +6,13 @@ import com.lightning.wallet.ln.wire._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
 import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
-import com.lightning.wallet.lncloud.LNCloud.{ClearToken, RequestAndMemo}
+import com.lightning.wallet.lncloud.Connector.{ClearToken, RequestAndMemo}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
+
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.CommitmentSpec.HtlcUpdateFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
@@ -57,6 +59,11 @@ object ImplicitJsonFormats { me =>
     def write(internal: Transaction): JsValue = Transaction.write(internal).toString.toJson
   }
 
+  implicit object cloudActFmt extends JsonFormat[CloudAct] {
+    def write(internal: CloudAct): JsValue = ???
+    def read(json: JsValue): CloudAct = ???
+  }
+
   implicit object ShaHashesWithIndexFmt
   extends JsonFormat[ShaHashesWithIndex] {
 
@@ -74,11 +81,6 @@ object ImplicitJsonFormats { me =>
     type LongOption = Option[Long]
     type IndexBytes = (Index, Bytes)
     type IndexBytesSeq = Seq[IndexBytes]
-  }
-
-  implicit object LNCloudActFmt extends JsonFormat[LNCloudAct] {
-    def write(internal: LNCloudAct): JsValue = ???
-    def read(json: JsValue): LNCloudAct = ???
   }
 
   implicit val lightningMessageFmt = sCodecJsonFmt(lightningMessageCodec)
@@ -164,11 +166,11 @@ object ImplicitJsonFormats { me =>
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
-  implicit val publicDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[LNCloudAct],
+  implicit val publicDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[CloudAct],
     PublicData](PublicData.apply, "info", "tokens", "acts")
 
-  implicit val privateDataFmt = jsonFormat[List[LNCloudAct], String,
-    PrivateData](PrivateData.apply, "acts", "url")
+  implicit val privateDataFmt = jsonFormat[String, List[CloudAct],
+    PrivateData](PrivateData.apply, "url", "acts")
 
   // Channel data
 
