@@ -228,8 +228,8 @@ with SearchBar { me =>
                       out2Command: OutgoingPayment => CMDAddHtlc) =
 
       rm(alert) {
-        timer.schedule(delete(Informer.LNPAYMENT), 5000)
-        add(me getString ln_send, Informer.LNPAYMENT).flash.run
+        timer.schedule(delete(Informer.LNSENDING), 5000)
+        add(me getString ln_send, Informer.LNSENDING).flash.run
         app.ChannelManager.outPaymentObs(request).foreach(_ match {
           case Some(outPayment) => chan process out2Command(outPayment)
           case _ => onFail(me getString err_general)
@@ -266,8 +266,10 @@ with SearchBar { me =>
             Toast.LENGTH_LONG).show
 
         case (_, norm: NormalData, _: CommitSig)
-          // Show updated balance and vibrate because HTLC is fulfilled
+          // Notify and vibrate because HTLC is fulfilled
           if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+          add(me getString ln_done, Informer.LNSUCCESS).flash.run
+          timer.schedule(delete(Informer.LNSUCCESS), 20000)
           Vibr vibrate Vibr.confirmed
           updTitle
 
