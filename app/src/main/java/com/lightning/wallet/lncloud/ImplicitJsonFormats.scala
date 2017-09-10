@@ -33,6 +33,9 @@ object ImplicitJsonFormats { me =>
   }
 
   def taggedJsonFmt[T](base: JsonFormat[T], tag: String) =
+  // Adds an external tag which can be later used to discern
+  // different children of the same super class
+
     new JsonFormat[T] {
       def read(serialized: JsValue) =
         base read serialized
@@ -42,7 +45,7 @@ object ImplicitJsonFormats { me =>
         val core = base.write(internal).asJsObject
         JsObject(core.fields + extension)
       }
-  }
+    }
 
   implicit object BigIntegerFmt extends JsonFormat[BigInteger] {
     def read(json: JsValue): BigInteger = new BigInteger(me json2String json)
