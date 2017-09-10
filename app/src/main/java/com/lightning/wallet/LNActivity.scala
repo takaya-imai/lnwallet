@@ -265,8 +265,14 @@ with SearchBar { me =>
           me runOnUiThread Toast.makeText(me, me getString ln_retry format humanLeft,
             Toast.LENGTH_LONG).show
 
-        // Show updated balance at this checkpoint
+        case (_, norm: NormalData, _: CommitSig)
+          // Show updated balance and vibrate because HTLC is fulfilled
+          if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+          Vibr vibrate Vibr.confirmed
+          updTitle
+
         case (_, _, _: RevokeAndAck | _: CommitSig) =>
+          // Show updated balance at checkpoints
           updTitle
       }
     }

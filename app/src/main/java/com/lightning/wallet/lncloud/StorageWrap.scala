@@ -103,7 +103,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       uiNotify
 
     // We need to update states for all active HTLCs
-    case (chan, norm: NormalData, sig: CommitSig) =>
+    case (chan, norm: NormalData, _: CommitSig) =>
 
       LNParams.db txWrap {
         // First we update status for failed, fulfilled and in-flight HTLCs
