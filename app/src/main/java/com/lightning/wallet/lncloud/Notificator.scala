@@ -1,5 +1,6 @@
 package com.lightning.wallet.lncloud
 
+import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.{ChannelListener, Commitments, NormalData}
 import android.app.{AlarmManager, NotificationManager, PendingIntent}
 import android.content.{BroadcastReceiver, Context, Intent}
@@ -15,6 +16,12 @@ object Notificator extends ChannelListener {
   private lazy val notificatorClass = classOf[Notificator]
   def getIntent = PendingIntent.getBroadcast(app, 0, new Intent(app, notificatorClass), 0)
   def getAlarmManager = app.getSystemService(Context.ALARM_SERVICE).asInstanceOf[AlarmManager]
+
+  override def onBecome = {
+    case (_, _, _, CLOSING | NEGOTIATIONS) =>
+      // We are closing so this is no longer relevant
+      try getAlarmManager cancel getIntent catch none
+  }
 
   override def onProcess = {
     case (_, norm: NormalData, _: CommitSig)

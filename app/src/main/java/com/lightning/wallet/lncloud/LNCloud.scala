@@ -175,7 +175,7 @@ class Connector(val url: String) {
 
   def getRates = call("rates/get", identity)
   def getDatas(key: String) = call("data/get", toVec[BinaryData], "key" -> key)
-  def getTxs(commit: String) = call("txs/get", toVec[Transaction], "txid" -> commit)
+  def getTxs(txids: String) = call("txs/get", toVec[Transaction], "txids" -> txids)
   def findNodes(ask: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> ask)
   def findRoutes(from: PublicKey, to: PublicKey) = if (from == to) Obs just Vector(Vector.empty)
     else call("router/routes", toVec[PaymentRoute], "from" -> from.toString, "to" -> to.toString)
@@ -183,7 +183,7 @@ class Connector(val url: String) {
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
   override def findNodes(ask: String) = super.findNodes(ask).onErrorResumeNext(_ => failover findNodes ask)
-  override def getTxs(commit: String) = super.getTxs(commit).onErrorResumeNext(_ => failover getTxs commit)
+  override def getTxs(txids: String) = super.getTxs(txids).onErrorResumeNext(_ => failover getTxs txids)
   override def getDatas(key: String) = super.getDatas(key).onErrorResumeNext(_ => failover getDatas key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }

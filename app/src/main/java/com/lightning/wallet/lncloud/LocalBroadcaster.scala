@@ -1,13 +1,14 @@
 package com.lightning.wallet.lncloud
 
+import spray.json._
+import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import collection.JavaConverters.seqAsJavaListConverter
-import com.lightning.wallet.Utils.app
-
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import rx.lang.scala.{Observable => Obs}
+import com.lightning.wallet.Utils.app
 
 
 object LocalBroadcaster extends Broadcaster { me =>
@@ -27,7 +28,7 @@ object LocalBroadcaster extends Broadcaster { me =>
       val script = wait.commitments.commitInput.txOut.publicKeyScript
       val watchList = List(script: org.bitcoinj.script.Script).asJava
       safeSend(wait.fundingTx).foreach(Tools.log, Tools.errlog)
-      app.kit.wallet.addWatchedScripts(watchList)
+      app.kit.wallet addWatchedScripts watchList
 
     case (chan, _, SYNC, NORMAL) =>
       // Will be sent once on app lauch
@@ -35,13 +36,13 @@ object LocalBroadcaster extends Broadcaster { me =>
 
     case (_, close: ClosingData, _, CLOSING)
       // This is an uncooperative close with HTLCs in-flight so we need to ask
-      // server if any delayed HTLC has been spent to extract payment preimages
+      // server if any HTLC output has been spent to extract payment preimages
       if close.nextRemoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) ||
-        close.remoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) ||
-        close.localCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) =>
+        close.remoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty)  =>
 
-      // We ask server if any HTLC has been pulled to obtain a preimage
-      LNParams.cloud.connector.getTxs(close.commitments.commitInput.outPoint.txid.toString)
+      val remoteCommitTxid = close.commitments.remoteCommit.txid.toString
+      val remoteNextCommitTxid = close.commitments.remoteNextCommitInfo.left.toSeq.map(_.nextRemoteCommit.txid.toString)
+      LNParams.cloud.connector.getTxs(txids = (remoteNextCommitTxid :+ remoteCommitTxid).toJson.toString.hex)
         .foreach(_ flatMap Helpers.extractPreimages foreach LNParams.bag.updatePreimage, Tools.errlog)
   }
 

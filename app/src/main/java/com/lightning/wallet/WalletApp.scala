@@ -58,12 +58,14 @@ class WalletApp extends Application { me =>
   }
 
   // Various utilities
-  def getTo(base58: String) = Address.fromBase58(params, base58)
+
+  def toast(code: Int): Unit = toast(app getString code)
+  def toast(msg: CharSequence): Unit = Toast.makeText(me, msg, Toast.LENGTH_LONG).show
   def isAlive = if (null == kit) false else kit.state match { case STARTING | RUNNING => true case _ => false }
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
   def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
-  def toast(code: Int) = Toast.makeText(me, code, Toast.LENGTH_LONG).show
+  def getTo(base58: String) = Address.fromBase58(params, base58)
 
   appReference = me
   override def onCreate = wrap(super.onCreate) {

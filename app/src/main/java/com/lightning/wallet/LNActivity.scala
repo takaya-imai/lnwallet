@@ -114,7 +114,7 @@ with SearchBar { me =>
   def react(qs: String) = paymentsViewProvider reload qs
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will updated separately so just update subtitle
-    timer.schedule(delete(infoType), 20000)
+    timer.schedule(delete(infoType), 10000)
     add(subtitle, infoType).flash.run
   }
 
@@ -228,8 +228,7 @@ with SearchBar { me =>
                       out2Command: OutgoingPayment => CMDAddHtlc) =
 
       rm(alert) {
-        timer.schedule(delete(Informer.LNSENDING), 5000)
-        add(me getString ln_send, Informer.LNSENDING).flash.run
+        notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
         app.ChannelManager.outPaymentObs(request).foreach(_ match {
           case Some(outPayment) => chan process out2Command(outPayment)
           case _ => onFail(me getString err_general)
@@ -247,7 +246,7 @@ with SearchBar { me =>
 
       override def onBecome = {
         case (_, norm: NormalData, _, _) if norm.isClosing => evacuate
-        case (_, _: ClosingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
+        case (_, _, _, CLOSING | NEGOTIATIONS | WAIT_FUNDING_DONE) => evacuate
         case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
         case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
       }
@@ -262,20 +261,17 @@ with SearchBar { me =>
       override def onProcess = {
         case (_, _, retry: RetryAddHtlc) =>
           val humanLeft = app.plurOrZero(routesLeft, retry.out.routing.routes.size)
-          me runOnUiThread Toast.makeText(me, me getString ln_retry format humanLeft,
-            Toast.LENGTH_LONG).show
+          me runOnUiThread app.toast(me getString ln_retry format humanLeft)
 
         case (_, norm: NormalData, _: CommitSig)
-          // Notify and vibrate because HTLC is fulfilled
+          // GUARD: notify and vibrate because HTLC is fulfilled
           if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
-          add(me getString ln_done, Informer.LNSUCCESS).flash.run
-          timer.schedule(delete(Informer.LNSUCCESS), 20000)
+          notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
           Vibr vibrate Vibr.confirmed
           updTitle
 
-        case (_, _, _: RevokeAndAck | _: CommitSig) =>
-          // Show updated balance at checkpoints
-          updTitle
+        case (_, _, cmd: CMDAddHtlc) => Vibr vibrate Vibr.processed
+        case (_, _, _: RevokeAndAck | _: CommitSig) => updTitle
       }
     }
 
@@ -321,8 +317,7 @@ with SearchBar { me =>
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
 
         case result => rm(alert) {
-          timer.schedule(delete(Informer.LNREQUEST), 5000)
-          add(me getString ln_pr_make, Informer.LNREQUEST).flash.run
+          notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
           <(proceed(result.toOption, bag.newPreimage), onFail)(none)
         }
       }
