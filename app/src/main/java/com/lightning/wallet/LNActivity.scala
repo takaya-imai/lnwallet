@@ -9,7 +9,6 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -23,14 +22,15 @@ import android.app.AlertDialog
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
-import Utils.app
 
+import Utils.app
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import android.view.{Menu, MenuItem, View}
+
 import scala.util.{Failure, Success, Try}
 
 
@@ -220,8 +220,8 @@ with SearchBar { me =>
     }
 
     def updTitle = animateTitle {
-      val canSend = chan.receiveSendStatus.last
-      denom withSign MilliSatoshi(canSend)
+      val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
+      denom withSign MilliSatoshi(canSend getOrElse 0L)
     }
 
     def collectRoutesAndSend(alert: AlertDialog, request: PaymentRequest,
@@ -277,8 +277,9 @@ with SearchBar { me =>
 
     sendPayment = request => {
       val info = me getDescription request
+      val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
+      val maxMsat = MilliSatoshi apply math.min(canSend getOrElse 0L, maxHtlcValue.amount)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-      val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.last, maxHtlcValue.amount)
       val rateManager = new RateManager(getString(amount_hint_maxamount).format(denom withSign maxMsat), content)
       val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), getString(ln_send_title).format(info).html, content)
 
@@ -297,17 +298,18 @@ with SearchBar { me =>
     }
 
     makePaymentRequest = anyToRunnable {
+      val canReceive = chan.pull(_.localCommit.spec.toRemoteMsat)
       val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive_title, content)
-      val maxMsat = MilliSatoshi apply math.min(chan.receiveSendStatus.head, maxHtlcValue.amount)
+      val maxMsat = MilliSatoshi apply math.min(canReceive getOrElse 0L, maxHtlcValue.amount)
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def proceed(amount: Option[MilliSatoshi], preimage: BinaryData) = {
-        val (description, hash, stamp) = (inputDescription.getText.toString.trim, sha256(preimage), 3600 * 6)
+      def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { id =>
+        val (description, hash, stamp) = (inputDescription.getText.toString.trim, Crypto sha256 preimg, 3600 * 6)
         val paymentRequest = PaymentRequest(chainHash, amount, hash, nodePrivateKey, description, None, stamp)
-        bag putPaymentInfo IncomingPayment(preimage, paymentRequest, MilliSatoshi(0), chan.id.get, HIDDEN)
+        bag putPaymentInfo IncomingPayment(preimg, paymentRequest, MilliSatoshi(0), id, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }

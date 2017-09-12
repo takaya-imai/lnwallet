@@ -146,13 +146,17 @@ class WalletApp extends Application { me =>
       for (routes <- rsObs) yield outPaymentOpt(routes, request, chan)
     } getOrElse Obs.just(None)
 
-    // Build payment if we actually have routes and channel has an id
-    def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =
-      Some(rs, chan.id) collectFirst { case (firstRoute +: restOfTheRoutes) \ Some(chanId) =>
-        val (payloads, withFees, allExpiry) = buildPayloads(request.amount.get.amount, expiry, firstRoute)
-        val onion = buildOnion(chan.data.announce.nodeId +: firstRoute.map(_.nextNodeId), payloads, request.paymentHash)
-        OutgoingPayment(RoutingData(restOfTheRoutes, onion, withFees, allExpiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
-      }
+    def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) = for {
+      // Build outgoing payment info if we actually have routes and channel has an id and request
+      // has a definite amount to be sent, otherwise fail silently
+
+      route <- rs.headOption
+      id <- chan.pull(_.channelId)
+      MilliSatoshi(amount) <- request.amount
+
+      (payloads, withFees, allExpiry) = buildPayloads(amount, expiry, route)
+      onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
+    } yield OutgoingPayment(RoutingData(rs.tail, onion, withFees, allExpiry), NOIMAGE, request, MilliSatoshi(0), id, TEMP)
   }
 
   abstract class WalletKit extends AbstractKit { self =>

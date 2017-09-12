@@ -18,7 +18,7 @@ import scala.util.Success
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
-  def id = Some(data) collect { case some: HasCommitments => some.commitments.channelId }
+  def pull[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
   def process(change: Any) = Future apply synchronized(me doProcess change) onFailure events.onError
   val listeners = mutable.Set.empty[ChannelListener]
 
@@ -36,16 +36,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     val trans = Tuple4(me, data1, state, state1)
     super.become(data1, state1)
     events onBecome trans
-  }
-
-  def receiveSendStatus = data match {
-    case NormalData(_, commitments, None, None) =>
-      val canReceiveAmount = commitments.localCommit.spec.toRemoteMsat
-      val canSendAmount = commitments.localCommit.spec.toLocalMsat
-      Vector(canReceiveAmount, canSendAmount)
-
-    case _ =>
-      Vector(0L, 0L)
   }
 
   def doProcess(change: Any) = {
