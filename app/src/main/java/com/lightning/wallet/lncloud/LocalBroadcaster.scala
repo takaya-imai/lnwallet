@@ -38,7 +38,7 @@ object LocalBroadcaster extends Broadcaster { me =>
       // This is an uncooperative close with HTLCs in-flight so we need to ask
       // server if any HTLC output has been spent to extract payment preimages
       if close.nextRemoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) ||
-        close.remoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty)  =>
+        close.remoteCommit.exists(_.claimHtlcTimeoutTxs.nonEmpty) =>
 
       val remoteCommitTxid = close.commitments.remoteCommit.txid.toString
       val remoteNextCommitTxid = close.commitments.remoteNextCommitInfo.left.toSeq.map(_.nextRemoteCommit.txid.toString)

@@ -19,13 +19,13 @@ class TxWrap(val tx: Transaction) {
       .map(input.getConnectedOutput).find(_ != null)
 
   private def getValueSentFromMe = tx.getInputs.asScala.flatMap(inOuts).foldLeft(Coin.ZERO) {
-    case accumulator ~ output if output isMine app.kit.wallet => accumulator add output.getValue
-    case accumulator ~ _ => accumulator
+    case accumulator \ output if output isMine app.kit.wallet => accumulator add output.getValue
+    case accumulator \ _ => accumulator
   }
 
   private def getValueSentToMe = tx.getOutputs.asScala.foldLeft(Coin.ZERO) {
-    case accumulator ~ out if out isMine app.kit.wallet => accumulator add out.getValue
-    case accumulator ~ _ => accumulator
+    case accumulator \ out if out isMine app.kit.wallet => accumulator add out.getValue
+    case accumulator \ _ => accumulator
   }
 
   // Depending on whether this is an incoming or outgoing transaction

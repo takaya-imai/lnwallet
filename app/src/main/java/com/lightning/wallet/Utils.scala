@@ -11,7 +11,6 @@ import com.lightning.wallet.lncloud._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
@@ -30,7 +29,6 @@ import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
 import android.text.method.LinkMovementMethod
-import com.lightning.wallet.ln.Tools.random
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import com.lightning.wallet.ln.LNParams
@@ -254,7 +252,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
   }
 
-  class SetBackupServer { self =>
+  class SetBackupServer {
     val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
     val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
     val alert = mkForm(dialog, getString(ln_backup_key).html, view)
@@ -263,26 +261,19 @@ trait ToolbarActivity extends TimerActivity { me =>
     def proceed: Unit = rm(alert) {
       val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
-      PrivateDataSaver.tryGetObject.foreach(field1 setText _.url)
       mkForm(dialog, me getString sets_backup, view1)
+      field1 setText LNParams.cloud.data.url
     }
 
-    def trySave(url: String) = delayUI {
-      if (url.isEmpty) PrivateDataSaver.remove
-      else self check PrivateData(url, acts = Nil)
-    }
+    def trySave(url1: String) = delayUI {
+      val data1 = LNParams.cloud.data.copy(url = url1)
+      val cloud1 = LNParams getCloud Success(data1)
 
-    def check(data: PrivateData) = {
-      val privateCloud = LNParams getPrivateCloud data
-      val params = privateCloud.signedParams(random getBytes 32)
-      privateCloud.connector.call("check", none, params:_*)
-        .subscribe(ok => self save data, onError)
-    }
-
-    def save(privateData: PrivateData) = {
-      PrivateDataSaver saveObject privateData
-      LNParams.cloud = LNParams.getCloud
-      app toast ln_backup_success
+      cloud1.check.subscribe(ok => {
+        CloudDataSaver saveObject data1
+        app toast ln_backup_success
+        LNParams.cloud = cloud1
+      }, onError)
     }
 
     def onError(error: Throwable) = error.getMessage match {

@@ -179,7 +179,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // We only can add new HTLCs when mutual shutdown process is not active
       case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL) =>
-        val c1 ~ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
+        val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
 
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
           case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
@@ -197,18 +197,18 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // We're fulfilling an HTLC we got earlier
       case (norm @ NormalData(_, commitments, _, _), cmd: CMDFulfillHtlc, NORMAL) =>
-        val c1 ~ updateFulfillHtlc = Commitments.sendFulfill(commitments, cmd)
+        val c1 \ updateFulfillHtlc = Commitments.sendFulfill(commitments, cmd)
         me UPDATE norm.copy(commitments = c1) SEND updateFulfillHtlc
 
 
       // Failing an HTLC we got earlier
       case (norm @ NormalData(_, commitments, _, _), cmd: CMDFailHtlc, NORMAL) =>
-        val c1 ~ updateFailHtlc = Commitments.sendFail(commitments, cmd)
+        val c1 \ updateFailHtlc = Commitments.sendFail(commitments, cmd)
         me UPDATE norm.copy(commitments = c1) SEND updateFailHtlc
 
 
       case (norm @ NormalData(_, commitments, _, _), cmd: CMDFailMalformedHtlc, NORMAL) =>
-        val c1 ~ updateFailMalformedHtlс = Commitments.sendFailMalformed(commitments, cmd)
+        val c1 \ updateFailMalformedHtlс = Commitments.sendFailMalformed(commitments, cmd)
         me UPDATE norm.copy(commitments = c1) SEND updateFailMalformedHtlс
 
 
@@ -228,7 +228,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         // Propose new remote commit via commit tx sig
         val nextRemotePoint = norm.commitments.remoteNextCommitInfo.right.get
-        val c1 ~ commitSig = Commitments.sendCommit(norm.commitments, nextRemotePoint)
+        val c1 \ commitSig = Commitments.sendCommit(norm.commitments, nextRemotePoint)
         val d1 = me STORE norm.copy(commitments = c1)
         me UPDATE d1 SEND commitSig
 
@@ -237,7 +237,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if sig.channelId == norm.commitments.channelId =>
 
         // We received a commit sig from them, now we can update our local commit
-        val c1 ~ revokeAndAck = Commitments.receiveCommit(norm.commitments, sig)
+        val c1 \ revokeAndAck = Commitments.receiveCommit(norm.commitments, sig)
         val d1 = me STORE norm.copy(commitments = c1)
         me UPDATE d1 SEND revokeAndAck
         doProcess(CMDProceed)
@@ -257,7 +257,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if LNParams.shouldUpdateFee(norm.commitments.localCommit.spec.feeratePerKw, rate) =>
 
         // Periodic fee updates to ensure commit txs could be confirmed
-        val c1 ~ updateFeeMessage = Commitments.sendFee(norm.commitments, rate)
+        val c1 \ updateFeeMessage = Commitments.sendFee(norm.commitments, rate)
         me UPDATE norm.copy(commitments = c1) SEND updateFeeMessage
         doProcess(CMDProceed)
 

@@ -8,7 +8,7 @@ import fr.acinq.bitcoin.BinaryData
 import crypto.RandomGenerator
 
 
-object ~ {
+object \ {
   // Matching Tuple2 via arrows with much less noise
   def unapply[A, B](t2: (A, B) /* got a tuple */) = Some(t2)
 }

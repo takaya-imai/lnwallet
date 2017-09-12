@@ -10,7 +10,9 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
+import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
 
 import collection.JavaConverters.mapAsJavaMapConverter
@@ -23,24 +25,30 @@ import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 
 
+// Shared by both private and public clouds, empty url means "use public"
+case class CloudData(info: Option[RequestAndMemo], tokens: List[ClearToken],
+                     acts: List[CloudAct], url: String)
+
 trait Cloud {
   val connector: Connector
+  def check: Obs[Any] = Obs just null
 }
 
 // Users may supply their own cloud
 class PrivateCloud(val connector: Connector)
-extends StateMachine[PrivateData] with Cloud { me =>
+extends StateMachine[CloudData] with Cloud { me =>
 
   def doProcess(some: Any) = (data, some) match {
-    case PrivateData(_, (action: BasicCloudAct) :: rest) ~ CMDStart =>
+    case CloudData(_, _, (action: BasicCloudAct) :: rest, _) \ CMDStart =>
       val callAndRestart = action.run(me).doAfterTerminate(me doProcess CMDStart)
-      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest), action.onError)
+      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
+        Tools.errlog)
 
-    case PrivateData(_, (action: AuthCloudAct) :: rest) ~ CMDStart =>
+    case CloudData(_, _, (action: AuthCloudAct) :: rest, _) \ CMDStart =>
       val call = action.authRun(signedParams(action.requestPayload), me)
       val callAndRestart = call.doAfterTerminate(me doProcess CMDStart)
       callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
-        action.onError)
+        Tools.errlog)
 
     case (_, action: CloudAct) =>
       // We must always record incoming actions
@@ -55,40 +63,48 @@ extends StateMachine[PrivateData] with Cloud { me =>
 
   def signedParams(data: BinaryData): Seq[HttpParam] = {
     val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, body -> data.toString)
+    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString,
+      body -> data.toString)
+  }
+
+  override def check = {
+    // Just send random stuff to see if key fits
+    val test = signedParams(random getBytes 32)
+    connector.call("check", none, test:_*)
   }
 }
 
-// Default cloud provided by me the dev
+// Default cloud
 class PublicCloud(val connector: Connector, bag: PaymentInfoBag)
-extends StateMachine[PublicData] with Cloud { me =>
+extends StateMachine[CloudData] with Cloud { me =>
 
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
-    case PublicData(None, Nil, _) ~ CMDStart => for {
-      request ~ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
+    case CloudData(None, Nil, _, _) \ CMDStart => for {
+      request \ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
       Some(pay) <- retry(app.ChannelManager outPaymentObs request, pickInc, 2 to 3)
     } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
-    case PublicData(None, tokens, _) ~ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
+    case CloudData(None, tokens, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
       for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
       me stayWith data.copy(info = Some(pay.request, memo), tokens = tokens)
 
-    case PublicData(_, _, (action: BasicCloudAct) :: rest) ~ CMDStart =>
+    case CloudData(_, _, (action: BasicCloudAct) :: rest, _) \ CMDStart =>
       val callAndRestart = action.run(me).doAfterTerminate(me doProcess CMDStart)
-      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest), action.onError)
+      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
+        Tools.errlog)
 
     // No matter what the state is: do auth based cloud call if we have spare tokens
-    case PublicData(_, (clearPoint, token, sig) :: ts, (action: AuthCloudAct) :: rest) ~ CMDStart =>
+    case CloudData(_, (clearPoint, token, sig) :: ts, (action: AuthCloudAct) :: rest, _) \ CMDStart =>
       val params = Seq("point" -> clearPoint, "cleartoken" -> token, "clearsig" -> sig, body -> action.requestPayload.toString)
       action.authRun(params, me).doAfterTerminate(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = ts, acts = rest),
-        action.onError)
+        Tools.errlog)
 
     // Start a new request while payment is in progress
-    case PublicData(Some(request ~ memo), _, _) ~ CMDStart =>
+    case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
       bag getPaymentInfo request.paymentHash getOrElse null match {
         case out: OutgoingPayment if out.actualStatus == SUCCESS => me resolveSuccess memo
         case out: OutgoingPayment if out.actualStatus == FAILURE => resetPaymentData
@@ -138,7 +154,6 @@ extends StateMachine[PublicData] with Cloud { me =>
 
 trait CloudAct {
   val requestPayload: BinaryData
-  def onError: PartialFunction[Throwable, Unit]
 }
 
 trait BasicCloudAct extends CloudAct {
@@ -152,14 +167,6 @@ trait AuthCloudAct extends CloudAct {
   // and do require token or key based authentication
   def authRun(params: Seq[HttpParam], cloud: Cloud): Obs[Unit]
 }
-
-trait CloudData {
-  val acts: List[CloudAct]
-}
-
-case class PrivateData(url: String, acts: List[CloudAct] = Nil) extends CloudData
-case class PublicData(info: Option[RequestAndMemo], tokens: List[ClearToken],
-                      acts: List[CloudAct] = Nil) extends CloudData
 
 // This is a basic interface for making cloud calls
 // failover invariant will fall back to default in case of failure

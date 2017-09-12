@@ -30,9 +30,8 @@ object Notificator extends ChannelListener {
       try getAlarmManager cancel getIntent catch none
 
     case (_, _: NormalData, _: CommitSig) =>
-      val inFiveMinutes = System.currentTimeMillis + 1000 * 60 * 5
       try getAlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
-        inFiveMinutes, getIntent) catch none
+        System.currentTimeMillis + 1000 * 60 * 5, getIntent) catch none
   }
 }
 

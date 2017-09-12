@@ -148,7 +148,7 @@ class WalletApp extends Application { me =>
 
     // Build payment if we actually have routes and channel has an id
     def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) =
-      Some(rs, chan.id) collectFirst { case (firstRoute +: restOfTheRoutes) ~ Some(chanId) =>
+      Some(rs, chan.id) collectFirst { case (firstRoute +: restOfTheRoutes) \ Some(chanId) =>
         val (payloads, withFees, allExpiry) = buildPayloads(request.amount.get.amount, expiry, firstRoute)
         val onion = buildOnion(chan.data.announce.nodeId +: firstRoute.map(_.nextNodeId), payloads, request.paymentHash)
         OutgoingPayment(RoutingData(restOfTheRoutes, onion, withFees, allExpiry), NOIMAGE, request, MilliSatoshi(0), chanId, TEMP)
@@ -156,7 +156,7 @@ class WalletApp extends Application { me =>
   }
 
   abstract class WalletKit extends AbstractKit { self =>
-    def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
+    def currentBalance = wallet getBalance BalanceType.AVAILABLE_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
     def shutDown = none

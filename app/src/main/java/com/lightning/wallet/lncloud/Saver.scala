@@ -8,7 +8,6 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 
 import org.bitcoinj.core.{Coin, Transaction}
-import com.lightning.wallet.ln.LNParams.{db, cloud}
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.helper.Statistics
@@ -43,18 +42,12 @@ trait Saver {
   def save(snap: JsValue) = StorageWrap.put(snap.toString, KEY)
 }
 
-object PublicDataSaver extends Saver {
-  def tryGetObject: Try[PublicData] = tryGet map to[PublicData]
-  def saveObject(data: PublicData): Unit = save(data.toJson)
-  def empty = PublicData(info = None, tokens = Nil)
-  val KEY = "lnCloudPublic"
-}
-
-object PrivateDataSaver extends Saver {
-  def tryGetObject: Try[PrivateData] = tryGet map to[PrivateData]
-  def saveObject(data: PrivateData): Unit = save(data.toJson)
-  def remove = db.change(StorageTable.killSql, KEY)
-  val KEY = "lnCloudPrivate"
+object CloudDataSaver extends Saver {
+  def tryGetObject: TryCloudData = tryGet map to[CloudData]
+  def saveObject(data: CloudData): Unit = save(data.toJson)
+  def emptyPublic = CloudData(None, Nil, Nil, "")
+  type TryCloudData = Try[CloudData]
+  val KEY = "cloudData"
 }
 
 object RatesSaver extends Saver {
@@ -67,11 +60,10 @@ object RatesSaver extends Saver {
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
 
   def process = {
-    def getResult = cloud.connector.getRates map toVec[Result]
-    def periodically = retry(getResult, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
-    withDelay(periodically, rates.stamp, updatePeriod.toMillis) foreach { case newFee ~ newFiat +: _ =>
-      val feeHistory = for (goodFee <- newFee("6") +: rates.feeHistory if goodFee > 0) yield goodFee
-      rates = Rates(feeHistory take 6, newFiat, System.currentTimeMillis)
+    def result = LNParams.cloud.connector.getRates map toVec[Result]
+    def periodic = retry(result, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
+    withDelay(periodic, rates.stamp, updatePeriod.toMillis) foreach { case newFee \ newFiat +: _ =>
+      rates = Rates(newFee("6") +: rates.feeHistory take 6, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }

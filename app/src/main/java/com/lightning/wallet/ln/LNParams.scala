@@ -6,9 +6,11 @@ import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
 
+import scala.util.{Failure, Success}
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
+import com.lightning.wallet.lncloud.CloudDataSaver.TryCloudData
 import fr.acinq.eclair.UInt64
 
 
@@ -27,36 +29,32 @@ object LNParams { me =>
   lazy val broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
 
+  var cloud: StateMachine[CloudData] with Cloud = _
   var extendedNodeKey: ExtendedPrivateKey = _
   var cloudPrivateKey: PrivateKey = _
   var nodePrivateKey: PrivateKey = _
   var db: CipherOpenHelper = _
-  var cloud: Cloud = _
 
   def isSetUp: Boolean = db != null
   def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
-    cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
+    val cloudExtendedKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
+    cloud = me getCloud CloudDataSaver.tryGetObject
+    cloudPrivateKey = cloudExtendedKey.privateKey
     nodePrivateKey = extendedNodeKey.privateKey
-    cloud = getCloud
   }
 
   // CLOUD
 
-  def getCloud: Cloud = PrivateDataSaver.tryGetObject
-    .map(getPrivateCloud).getOrElse(getPublicCloud)
+  private val con = new Connector("10.0.2.2")
+  def getCloud(tryData: TryCloudData) = tryData match {
+    case Failure(why) => new PublicCloud(con, bag) { data = CloudDataSaver.emptyPublic }
+    case Success(saved) if saved.url.isEmpty => new PublicCloud(con, bag) { data = saved }
 
-  def getPrivateCloud(priv: PrivateData) = {
-    val baseConnector = new Connector("10.0.2.2")
-    val failover = new FailoverConnector(baseConnector, priv.url)
-    new PrivateCloud(connector = failover) { data = priv }
-  }
-
-  def getPublicCloud = {
-    val baseConnector = new Connector("10.0.2.2")
-    val pub = PublicDataSaver.tryGetObject getOrElse PublicDataSaver.empty
-    new PublicCloud(connector = baseConnector, bag) { data = pub }
+    case Success(saved) =>
+      val failover = new FailoverConnector(con, saved.url)
+      new PrivateCloud(failover) { data = saved }
   }
 
   // FEE RELATED

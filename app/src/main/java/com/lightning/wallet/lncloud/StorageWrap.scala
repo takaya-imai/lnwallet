@@ -109,13 +109,13 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
         // First we update status for failed, fulfilled and in-flight HTLCs
         for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
         for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
-        for (htlc ~ _ <- norm.commitments.localCommit.spec.failed) updateStatus(FAILURE, htlc.add.paymentHash)
+        for (htlc \ _ <- norm.commitments.localCommit.spec.failed) updateStatus(FAILURE, htlc.add.paymentHash)
         uiNotify
       }
 
       for {
         // Then retry failed payments with routes left
-        htlc ~ fail <- norm.commitments.localCommit.spec.failed
+        htlc \ fail <- norm.commitments.localCommit.spec.failed
         out @ OutgoingPayment(_, _, request, _, _, _) <- getPaymentInfo(htlc.add.paymentHash)
         out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
       } chan process RetryAddHtlc(out1)

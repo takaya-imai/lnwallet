@@ -66,7 +66,7 @@ object PaymentInfo {
     val paymentPayloads = Vector apply PerHopPayload(0L, finalAmountMsat, finalExpiry)
     val startValues = (paymentPayloads, finalAmountMsat, finalExpiry)
 
-    (startValues /: hops.reverse) { case (loads, msat, expiry) ~ hop =>
+    (startValues /: hops.reverse) { case (loads, msat, expiry) \ hop =>
       val nextFee = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
       val perHopPayloads = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: loads
       (perHopPayloads, msat + nextFee, expiry + hop.lastUpdate.cltvExpiryDelta)
