@@ -49,7 +49,7 @@ object LocalBroadcaster extends Broadcaster { me =>
   override def onProcess = {
     case (_, close: ClosingData, _: Command) =>
       // Each time we get spent/height command we send out all possible commitment spending txs
-      val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ extractTxs(close)
+      val toPublish = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ close.txs
       Obs.from(toPublish map safeSend).concat.foreach(Tools.log, Tools.errlog)
   }
 }

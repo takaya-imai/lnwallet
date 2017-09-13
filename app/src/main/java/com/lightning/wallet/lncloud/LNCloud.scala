@@ -128,7 +128,7 @@ extends StateMachine[CloudData] with Cloud { me =>
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .foreach(plus => me UPDATE data.copy(info = None, tokens = plus ::: data.tokens),
-      serverError => if (serverError.getMessage == "notfound") resetPaymentData)
+      error => if (error.getMessage == "notfound") resetPaymentData)
 
   // TALKING TO SERVER
 
@@ -151,8 +151,8 @@ extends StateMachine[CloudData] with Cloud { me =>
 }
 
 trait CloudAct {
-  // These also may be presisted in case of failure
-  // and do require token or key based authentication
+  // These will be presisted in case of failure
+  // and require token or key based authentication
   def run(params: Seq[HttpParam], cloud: Cloud): Obs[Unit]
   def requestPayload: BinaryData
 }

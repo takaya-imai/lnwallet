@@ -38,7 +38,8 @@ object ChannelWrap extends ChannelListener {
   }
 
   override def onProcess = {
-    case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
+    case (_, close: ClosingData, _: CMDBestHeight)
+      if close.startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
   }
 }
@@ -119,16 +120,19 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
         out @ OutgoingPayment(_, _, request, _, _, _) <- getPaymentInfo(htlc.add.paymentHash)
         out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
       } chan process RetryAddHtlc(out1)
-
-    case (_, close: ClosingData, _: Command) if close.isOutdated =>
-      // This channel is outdated, fail all the unfinished HTLCs
-      failPending(WAITING, close.commitments.channelId)
   }
 
   override def onBecome = {
-    case (_, some: HasCommitments, NORMAL | SYNC, SYNC | NEGOTIATIONS | CLOSING) =>
+    case (_, some: HasCommitments, NORMAL, SYNC | NEGOTIATIONS) =>
+      // Mark possibly unrecieved HTLCs as FAILURE when going offline or shutdown
       // At worst these will be marked as FAILURE and then as WAITING on their CommitSig
       failPending(TEMP, some.commitments.channelId)
       uiNotify
+
+    case (_, some: HasCommitments, NORMAL | SYNC | NEGOTIATIONS, CLOSING) =>
+      // Mark all unsettled HTLCs as FAILURE when closing a channel uncooperatively
+      // At worst WAITING be marked as FAILURE and then as SUCCESS if we get a preimage
+      failPending(WAITING, some.commitments.channelId)
+      failPending(TEMP, some.commitments.channelId)
   }
 }

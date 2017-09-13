@@ -49,10 +49,10 @@ object PaymentInfoTable extends Table {
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
-  def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?"
-  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
-  def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?"
+  def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?" // Show payment progress to user
+  def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?" // Decrease available routes to avoid infinite loop when retrying
+  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?" // Immediately save incoming preimages, do not wait for commit sigs
+  def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?" // Actual received sum may differ from what we have asked
 
   def failPendingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = ? AND $chanId = ?"
   def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"

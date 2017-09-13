@@ -426,7 +426,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (some: HasCommitments, CMDSpent(spendTx), _)
         // GUARD: something which spends our funding is broadcasted, must react
         if spendTx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
-        defineClosingAction(some, spendTx)
+        some.commitments.remoteNextCommitInfo.left.map(wait => wait.nextRemoteCommit) match {
+          case Left(remoteCommit) if remoteCommit.txid == spendTx.txid => startRemoteNextClose(some, remoteCommit)
+          case _ if some.commitments.remoteCommit.txid == spendTx.txid => startRemoteCurrentClose(some)
+          case _ => startOtherClose(some, spendTx)
+        }
 
 
       // HANDLE INITIALIZATION
@@ -478,14 +482,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     Closing.claimCurrentLocalCommitTxOutputs(some.commitments, some.commitments.localCommit.commitTx.tx, LNParams.bag) -> some match {
       case (claim: LocalCommitPublished, closing: ClosingData) => BECOME(data1 = me STORE closing.copy(localCommit = claim :: Nil), CLOSING)
       case (claim, _) => BECOME(data1 = me STORE ClosingData(some.announce, some.commitments, localCommit = claim :: Nil), CLOSING)
-    }
-
-  private def defineClosingAction(some: HasCommitments, tx: Transaction) =
-    // We are not sure what kind of closing transaction this so finding out
-    some.commitments.remoteNextCommitInfo.left.map(_.nextRemoteCommit) match {
-      case Left(remoteCommit) if remoteCommit.txid == tx.txid => startRemoteNextClose(some, remoteCommit)
-      case _ if some.commitments.remoteCommit.txid == tx.txid => startRemoteCurrentClose(some)
-      case _ => startOtherClose(some, tx)
     }
 
   private def startRemoteCurrentClose(some: HasCommitments) =

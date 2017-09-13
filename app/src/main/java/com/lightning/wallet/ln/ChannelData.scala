@@ -1,6 +1,5 @@
 package com.lightning.wallet.ln
 
-
 import fr.acinq.bitcoin.Crypto._
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
@@ -71,9 +70,10 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis) extends HasCommitments {
+                       startedAt: Long = System.currentTimeMillis) extends HasCommitments { me =>
 
-  def isOutdated: Boolean = startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
+  lazy val txs = LNParams.broadcaster extractTxs me
+  lazy val bss = LNParams.broadcaster convertToBroadcastStatus txs
 }
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)

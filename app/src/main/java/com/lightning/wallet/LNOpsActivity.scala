@@ -128,17 +128,16 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   private def manageForcedClosing(data: ClosingData) = {
-    def statusView(status: BroadcastStatus): String = status match {
+    def statusView(status: BroadcastStatus) = status match {
       case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
       case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
       case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
     }
 
-    val txs = LNParams.broadcaster extractTxs data
-    val schedule = LNParams.broadcaster convertToBroadcastStatus txs map statusView mkString "<br>"
-    lnOpsDescription setText getString(ln_ops_chan_unilateral_closing).format(schedule).html
-    lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsAction setText ln_ops_start
+    lnOpsAction setOnClickListener onButtonTap(goStartChannel)
+    lnOpsDescription setText getString(ln_ops_chan_unilateral_closing)
+      .format(data.bss map statusView mkString "<br>").html
   }
 
   // Offer to create a new channel
