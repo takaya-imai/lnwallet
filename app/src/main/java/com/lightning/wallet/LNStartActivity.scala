@@ -130,7 +130,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           me runOnUiThread setListView
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-          // Never forget to remove listeners related to local view
+          // Chaneel has just been saved to db so we can proceed
           app.ChannelManager.all = chan +: app.ChannelManager.all
           ConnectionManager.listeners -= socketOpenListener
           chan.listeners -= chanOpenListener
@@ -207,10 +207,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val pay = P2WSHData(funding, scriptPubKey)
       chooseFee
 
-      def processTx(password: String, fee: Coin) =
-        <(makeTx(password, fee), onTxFail) { fundingTransaction =>
-          val outIndex = Scripts.findPubKeyScriptIndex(fundingTransaction, scriptPubKey)
-          chan process Tuple2(fundingTransaction: fr.acinq.bitcoin.Transaction, outIndex)
+      def processTx(pass: String, fee: Coin) =
+        <(makeTx(pass, fee): fr.acinq.bitcoin.Transaction, onTxFail) { fundTx =>
+          val outIndex = Scripts.findPubKeyScriptIndex(fundTx, scriptPubKey)
+          chan process fundTx -> outIndex
         }
 
       def onTxFail(err: Throwable) =

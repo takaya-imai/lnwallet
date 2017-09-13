@@ -121,7 +121,6 @@ object Helpers { me =>
       val localPerCommitmentPoint = Generators.perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)
       val localRevocationPubkey = Generators.revocationPubKey(commitments.remoteParams.revocationBasepoint, localPerCommitmentPoint)
       val localDelayedPrivkey = Generators.derivePrivKey(commitments.localParams.delayedPaymentKey, localPerCommitmentPoint)
-      val localTxs = commitments.localCommit.htlcTxsAndSigs
 
       def makeClaimDelayedOutput(tx: Transaction): ClaimDelayedOutputTx = {
         val claimDelayed = Scripts.makeClaimDelayedOutputTx(tx, localRevocationPubkey, commitments.localParams.toSelfDelay,
@@ -132,15 +131,15 @@ object Helpers { me =>
       }
 
       val allSuccessTxs = for {
-        HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- localTxs
-        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
+        HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
+        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(hash = info.paymentHash).toOption
         success <- Scripts checkSpendable Scripts.addSigs(info, localSig, remoteSig, preimage)
         successDelayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(success)
       } yield success -> successDelayedClaim
 
       val allTimeoutTxs = for {
-        HtlcTxAndSigs(info: HtlcTimeoutTx, localSig, remoteSig) <- localTxs
-        timeout <- Scripts checkSpendable Scripts.addSigs(info, localSig, remoteSig)
+        HtlcTxAndSigs(info: HtlcTimeoutTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
+        timeout <- Scripts checkSpendable Scripts.addSigs(htlcTimeoutTx = info, localSig, remoteSig)
         timeoutDelayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(timeout)
       } yield timeout -> timeoutDelayedClaim
 

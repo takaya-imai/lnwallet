@@ -72,8 +72,20 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
                        startedAt: Long = System.currentTimeMillis) extends HasCommitments { me =>
 
-  lazy val txs = LNParams.broadcaster extractTxs me
-  lazy val bss = LNParams.broadcaster convertToBroadcastStatus txs
+  def bss = LNParams.broadcaster convertToBroadcastStatus txs
+  lazy val txs = localCommit.flatMap(extractTxs) ++ remoteCommit.flatMap(extractTxs) ++
+    nextRemoteCommit.flatMap(extractTxs) ++ revokedCommits.flatMap(extractTxs)
+
+  private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
+    bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
+
+  private def extractTxs(bag: RevokedCommitPublished): Seq[Transaction] =
+    bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
+      bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
+
+  private def extractTxs(bag: LocalCommitPublished): Seq[Transaction] =
+    bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
+      bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 }
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)

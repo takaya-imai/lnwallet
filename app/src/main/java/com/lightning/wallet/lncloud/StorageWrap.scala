@@ -73,12 +73,12 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       info.chanId.toString, info.preimage.toString, delta.toString, routing)
   }
 
-  def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
+  def updateStatus(pre: Int, post: Int) = db.change(updStatusStatusSql, post.toString, pre.toString)
+  def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusHashSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
-  def failPending(status: Int, chanId: BinaryData) = db.change(failPendingSql, status.toString, chanId.toString)
 
   override def onProcess = {
     case (_, _, add: UpdateAddHtlc) =>
@@ -124,15 +124,13 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onBecome = {
     case (_, some: HasCommitments, NORMAL, SYNC | NEGOTIATIONS) =>
-      // Mark possibly unrecieved HTLCs as FAILURE when going offline or shutdown
-      // At worst these will be marked as FAILURE and then as WAITING on their CommitSig
-      failPending(TEMP, some.commitments.channelId)
+      // At worst will be marked as FAILURE and then as WAITING
+      updateStatus(TEMP, FAILURE)
       uiNotify
 
     case (_, some: HasCommitments, NORMAL | SYNC | NEGOTIATIONS, CLOSING) =>
-      // Mark all unsettled HTLCs as FAILURE when closing a channel uncooperatively
-      // At worst WAITING be marked as FAILURE and then as SUCCESS if we get a preimage
-      failPending(WAITING, some.commitments.channelId)
-      failPending(TEMP, some.commitments.channelId)
+      // At worst WAITING will be REFUND and then SUCCESS if we get a preimage
+      updateStatus(WAITING, REFUND)
+      updateStatus(TEMP, FAILURE)
   }
 }

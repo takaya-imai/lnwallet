@@ -46,7 +46,7 @@ object Sphinx { me =>
   type PublicKeyVec = Vector[PublicKey]
   type BytesAndKey = (Bytes, PublicKey)
 
-  val Version = 1.toByte
+  val Version = 1.toByte // TODO: set to 0
   val PayloadLength = 33
   val MacLength = 32
   val MaxHops = 20

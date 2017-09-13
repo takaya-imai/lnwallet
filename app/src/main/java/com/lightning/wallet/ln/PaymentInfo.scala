@@ -38,7 +38,7 @@ case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: 
 }
 
 trait PaymentInfoBag {
-  def failPending(status: Int, chanId: BinaryData): Unit
+  def updateStatus(pre: Int, post: Int): Unit
   def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
   def updateRouting(out: OutgoingPayment): Unit
@@ -50,14 +50,15 @@ trait PaymentInfoBag {
 }
 
 object PaymentInfo {
-  final val FAILURE = 4
-  final val SUCCESS = 3
-  final val WAITING = 2
-  final val HIDDEN = 1
-  final val TEMP = 0
-
   // Used for unresolved outgoing payment infos
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
+
+  final val TEMP = 0
+  final val HIDDEN = 1
+  final val WAITING = 2
+  final val SUCCESS = 3
+  final val FAILURE = 4
+  final val REFUND = 5
 
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long) =
     baseMsat + (proportional * msat) / 1000000L

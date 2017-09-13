@@ -77,7 +77,7 @@ class LNActivity extends DataReader
 with ToolbarActivity with ListUpdater
 with SearchBar { me =>
 
-  val imgMap = Array(await, await, await, conf1, dead)
+  val imgMap = Array(await, await, await, conf1, dead, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val addFailures = getResources getStringArray R.array.txs_ln_add_failures
   lazy val routesLeft = getResources getStringArray R.array.ln_retry_routes_left
@@ -90,7 +90,7 @@ with SearchBar { me =>
 
       def fillView(info: PaymentInfo) = {
         val timestamp = new Date(info.request.timestamp * 1000)
-        val purpose = info.request.description.right getOrElse new String
+        val purpose = info.request.description.right.toSeq.mkString
 
         val marking = info match {
           case in: IncomingPayment => sumIn.format(denom formatted in.received)

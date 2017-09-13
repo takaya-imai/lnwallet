@@ -298,7 +298,7 @@ object Scripts { me =>
     tx.txOut.indexWhere(_.publicKeyScript == script)
 
   def makeHtlcTx(parent: Transaction, redeemScript: ScriptEltSeq,
-                 pubKeyScript: ScriptEltSeq, amountWithFee: MilliSatoshi,
+                 pubKeyScript: ScriptEltSeq, amount: MilliSatoshi, fee: Satoshi,
                  expiry: Long, sequence: Long): (InputInfo, Transaction) = {
 
     val pay2wsh = Script pay2wsh redeemScript
@@ -308,7 +308,7 @@ object Scripts { me =>
 
     input -> Transaction(version = 2,
       txIn = TxIn(input.outPoint, Array.emptyByteArray, sequence) :: Nil,
-      txOut = TxOut(amountWithFee, pubKeyScript) :: Nil, lockTime = expiry)
+      txOut = TxOut(amount - fee, pubKeyScript) :: Nil, lockTime = expiry)
   }
 
   def makeClaimHtlcTx(parent: Transaction, redeemScript: ScriptEltSeq, pubKeyScript: ScriptEltSeq,
@@ -327,29 +327,24 @@ object Scripts { me =>
 
   // Concrete templates
 
-  def makeHtlcTxs(commitTx: Transaction, localDustLimit: Satoshi, localRevocationPubkey: PublicKey,
+  def makeHtlcTxs(commitTx: Transaction, localDustLimit: Satoshi, localRevPubkey: PublicKey,
                   toLocalDelay: Int, localPubkey: PublicKey, localDelayedPubkey: PublicKey,
                   remotePubkey: PublicKey, spec: CommitmentSpec) = {
 
-    val htlcTimeoutFee = weight2fee(spec.feeratePerKw, htlcTimeoutWeight)
-    val htlcSuccessFee = weight2fee(spec.feeratePerKw, htlcSuccessWeight)
-
     def makeHtlcTimeoutTx(add: UpdateAddHtlc) = {
       val paymentHash160 = Crypto ripemd160 add.paymentHash
-      val amountWithFee = MilliSatoshi(add.amountMsat) - htlcTimeoutFee
-      val pubKeyScript = Script pay2wsh toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
-      val (input, tx) = makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevocationPubkey,
-        paymentHash160), pubKeyScript, amountWithFee, add.expiry, 0x00000000L)
+      val pubKeyScript = Script pay2wsh toLocalDelayed(localRevPubkey, toLocalDelay, localDelayedPubkey)
+      val (input, tx) = makeHtlcTx(commitTx, htlcOffered(localPubkey, remotePubkey, localRevPubkey, paymentHash160),
+        pubKeyScript, MilliSatoshi(add.amountMsat), weight2fee(spec.feeratePerKw, htlcTimeoutWeight), add.expiry, 0x00000000L)
 
       HtlcTimeoutTx(input, tx)
     }
 
     def makeHtlcSuccessTx(add: UpdateAddHtlc) = {
       val paymentHash160 = Crypto ripemd160 add.paymentHash
-      val amountWithFee = MilliSatoshi(add.amountMsat) - htlcSuccessFee
-      val pubKeyScript = Script pay2wsh toLocalDelayed(localRevocationPubkey, toLocalDelay, localDelayedPubkey)
-      val (input, tx) = makeHtlcTx(commitTx, htlcReceived(localPubkey, remotePubkey, localRevocationPubkey,
-        paymentHash160, add.expiry), pubKeyScript, amountWithFee, 0L, 0x00000000L)
+      val pubKeyScript = Script pay2wsh toLocalDelayed(localRevPubkey, toLocalDelay, localDelayedPubkey)
+      val (input, tx) = makeHtlcTx(commitTx, htlcReceived(localPubkey, remotePubkey, localRevPubkey, paymentHash160, add.expiry),
+        pubKeyScript, MilliSatoshi(add.amountMsat), weight2fee(spec.feeratePerKw, htlcSuccessWeight), 0L, 0x00000000L)
 
       HtlcSuccessTx(input, tx, add.paymentHash)
     }

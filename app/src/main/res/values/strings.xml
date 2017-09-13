@@ -186,10 +186,11 @@
     <!-- see PaymentInfo.scala -->
     <array name="ln_payment_states">
         <item>Waiting for peer</item>
-        <item>Not fulfilled yet</item>
+        <item>Waiting for payment</item>
         <item>In progress&#8230;</item>
         <item>Paid and settled</item>
         <item>Rejected</item>
+        <item>Refunded</item>
     </array>
 
     <!-- setting a private backup server -->

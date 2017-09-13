@@ -5,12 +5,12 @@ import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-
 import scala.util.{Failure, Success}
+
+import com.lightning.wallet.lncloud.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
-import com.lightning.wallet.lncloud.CloudDataSaver.TryCloudData
 import fr.acinq.eclair.UInt64
 
 
@@ -101,21 +101,6 @@ trait Broadcaster extends ChannelListener { me =>
   def safeSend(tx: Transaction) =
     obsOn(me send tx, IOScheduler.apply)
       .onErrorReturn(_.getMessage)
-
-  def extractTxs(cd: ClosingData): Seq[Transaction] =
-    cd.localCommit.flatMap(extractTxs) ++ cd.remoteCommit.flatMap(extractTxs) ++
-      cd.nextRemoteCommit.flatMap(extractTxs) ++ cd.revokedCommits.flatMap(extractTxs)
-
-  private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
-    bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
-
-  private def extractTxs(bag: RevokedCommitPublished): Seq[Transaction] =
-    bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
-      bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
-
-  private def extractTxs(bag: LocalCommitPublished): Seq[Transaction] =
-    bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
-      bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 
   // To be defined in concrete implementation
   def getConfirmations(txid: BinaryData): Option[Int]

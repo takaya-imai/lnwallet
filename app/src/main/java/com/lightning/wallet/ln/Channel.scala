@@ -172,9 +172,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
 
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
-          case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(out: OutgoingPayment) if out.actualStatus == TEMP => throw AddException(cmd, ERR_STILL_PENDING)
           case Success(out: OutgoingPayment) if out.actualStatus == WAITING => throw AddException(cmd, ERR_STILL_PENDING)
+          case Success(out: OutgoingPayment) if out.actualStatus == TEMP => throw AddException(cmd, ERR_STILL_PENDING)
+          case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
+          case Success(out: OutgoingPayment) if out.actualStatus == REFUND => throw AddException(cmd, ERR_FAILED)
           case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
