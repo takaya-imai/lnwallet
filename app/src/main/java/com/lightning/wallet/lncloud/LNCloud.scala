@@ -27,11 +27,22 @@ import org.bitcoinj.core.ECKey
 
 // Shared by both private and public clouds, empty url means "use public"
 case class CloudData(info: Option[RequestAndMemo], tokens: List[ClearToken],
-                     acts: List[CloudAct], url: String)
+                     acts: List[CloudAct], needsSave: Boolean, url: String)
 
-trait Cloud {
-  val connector: Connector
+trait Cloud { me: StateMachine[CloudData] =>
   def check: Obs[Any] = Obs just null
+  val connector: Connector
+
+  def UPDATE(d1: CloudData): Unit = {
+    val d2 = d1.copy(needsSave = true)
+    become(d2, state)
+  }
+
+  def SAVE: Unit = {
+    val d1 = data.copy(needsSave = false)
+    CloudDataSaver saveObject d1
+    become(d1, state)
+  }
 }
 
 // Users may supply their own cloud
@@ -39,21 +50,15 @@ class PrivateCloud(val connector: Connector)
 extends StateMachine[CloudData] with Cloud { me =>
 
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(_, _, (action: BasicCloudAct) :: rest, _) \ CMDStart =>
-      val callAndRestart = action.run(me).doAfterTerminate(me doProcess CMDStart)
-      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
-        Tools.errlog)
-
-    case CloudData(_, _, (action: AuthCloudAct) :: rest, _) \ CMDStart =>
-      val call = action.authRun(signedParams(action.requestPayload), me)
-      val callAndRestart = call.doAfterTerminate(me doProcess CMDStart)
-      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
-        Tools.errlog)
+    case CloudData(_, _, (action: CloudAct) :: rest, _, _) \ CMDStart =>
+      // Private server should use a public key based authorization so we add a signature
+      action.run(signedParams(action.requestPayload), me).doOnCompleted(me doProcess CMDStart)
+        .foreach(ok => me UPDATE data.copy(acts = rest), Tools.errlog)
 
     case (_, action: CloudAct) =>
       // We must always record incoming actions
-      val actions1 = action :: data.acts take 100
-      me stayWith data.copy(acts = actions1)
+      val actions1 = action :: data.acts take 50
+      me UPDATE data.copy(acts = actions1)
       me doProcess CMDStart
 
     case _ =>
@@ -63,8 +68,7 @@ extends StateMachine[CloudData] with Cloud { me =>
 
   def signedParams(data: BinaryData): Seq[HttpParam] = {
     val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString,
-      body -> data.toString)
+    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, body -> data.toString)
   }
 
   override def check = {
@@ -81,42 +85,36 @@ extends StateMachine[CloudData] with Cloud { me =>
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(None, Nil, _, _) \ CMDStart => for {
+    case CloudData(None, Nil, _, _, _) \ CMDStart => for {
       request \ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
       Some(pay) <- retry(app.ChannelManager outPaymentObs request, pickInc, 2 to 3)
     } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
-    case CloudData(None, tokens, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
+    case CloudData(None, tokens, _, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
       for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
-      me stayWith data.copy(info = Some(pay.request, memo), tokens = tokens)
-
-    case CloudData(_, _, (action: BasicCloudAct) :: rest, _) \ CMDStart =>
-      val callAndRestart = action.run(me).doAfterTerminate(me doProcess CMDStart)
-      callAndRestart.foreach(ok => me stayWith data.copy(acts = rest),
-        Tools.errlog)
+      me UPDATE data.copy(info = Some(pay.request, memo), tokens = tokens)
 
     // No matter what the state is: do auth based cloud call if we have spare tokens
-    case CloudData(_, (clearPoint, token, sig) :: ts, (action: AuthCloudAct) :: rest, _) \ CMDStart =>
-      val params = Seq("point" -> clearPoint, "cleartoken" -> token, "clearsig" -> sig, body -> action.requestPayload.toString)
-      action.authRun(params, me).doAfterTerminate(me doProcess CMDStart).foreach(_ => me stayWith data.copy(tokens = ts, acts = rest),
-        Tools.errlog)
+    case CloudData(_, (blindPoint, clearToken, clearSig) :: ts, (action: CloudAct) :: rest, _, _) \ CMDStart =>
+      val params = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSig, body -> action.requestPayload.toString)
+      action.run(params, me).doOnCompleted(me doProcess CMDStart).foreach(ok => me UPDATE data.copy(tokens = ts, acts = rest), Tools.errlog)
 
     // Start a new request while payment is in progress
-    case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
+    case CloudData(Some(request \ memo), _, _, _, _) \ CMDStart =>
       bag getPaymentInfo request.paymentHash getOrElse null match {
         case out: OutgoingPayment if out.actualStatus == SUCCESS => me resolveSuccess memo
         case out: OutgoingPayment if out.actualStatus == FAILURE => resetPaymentData
         case in: IncomingPayment => resetPaymentData
         case null => resetPaymentData
-        case _ => me stayWith data
+        case _ => // do nothing
       }
 
     case (_, action: CloudAct) =>
       // We must always record incoming actions
-      val actions1 = action :: data.acts take 100
-      me stayWith data.copy(acts = actions1)
+      val actions1 = action :: data.acts take 50
+      me UPDATE data.copy(acts = actions1)
       me doProcess CMDStart
 
     case _ =>
@@ -126,10 +124,10 @@ extends StateMachine[CloudData] with Cloud { me =>
 
   // ADDING NEW TOKENS
 
-  def resetPaymentData = me stayWith data.copy(info = None)
+  def resetPaymentData = me UPDATE data.copy(info = None)
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
-  def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnTerminate(me doProcess CMDStart)
-    .foreach(plus => me stayWith data.copy(info = None, tokens = plus ::: data.tokens),
+  def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
+    .foreach(plus => me UPDATE data.copy(info = None, tokens = plus ::: data.tokens),
       serverError => if (serverError.getMessage == "notfound") resetPaymentData)
 
   // TALKING TO SERVER
@@ -153,19 +151,10 @@ extends StateMachine[CloudData] with Cloud { me =>
 }
 
 trait CloudAct {
-  val requestPayload: BinaryData
-}
-
-trait BasicCloudAct extends CloudAct {
-  // For calls which may be presisted in case of failure
-  // and do not require token or key based authentication
-  def run(cloud: Cloud): Obs[Unit]
-}
-
-trait AuthCloudAct extends CloudAct {
   // These also may be presisted in case of failure
   // and do require token or key based authentication
-  def authRun(params: Seq[HttpParam], cloud: Cloud): Obs[Unit]
+  def run(params: Seq[HttpParam], cloud: Cloud): Obs[Unit]
+  def requestPayload: BinaryData
 }
 
 // This is a basic interface for making cloud calls

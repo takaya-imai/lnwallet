@@ -43,9 +43,9 @@ trait Saver {
 }
 
 object CloudDataSaver extends Saver {
+  def empty = CloudData(None, Nil, Nil, needsSave = false, "")
   def tryGetObject: TryCloudData = tryGet map to[CloudData]
-  def saveObject(data: CloudData): Unit = save(data.toJson)
-  def emptyPublic = CloudData(None, Nil, Nil, "")
+  def saveObject(data: CloudData) = save(data.toJson)
   type TryCloudData = Try[CloudData]
   val KEY = "cloudData"
 }

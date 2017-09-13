@@ -169,8 +169,8 @@ object ImplicitJsonFormats { me =>
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
-  implicit val cloudDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[CloudAct], String,
-    CloudData](CloudData.apply, "info", "tokens", "acts", "url")
+  implicit val cloudDataFmt = jsonFormat[Option[RequestAndMemo], List[ClearToken], List[CloudAct], Boolean, String,
+    CloudData](CloudData.apply, "info", "tokens", "acts", "needsSave", "url")
 
   // Channel data
 

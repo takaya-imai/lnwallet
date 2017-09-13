@@ -56,7 +56,6 @@ case class AddException[T](details: T, code: Int)
 // STATE MACHINE
 
 abstract class StateMachine[T] {
-  def stayWith(d1: T) = become(d1, state)
   def become(freshData: T, freshState: String) =
     wrap { data = freshData } { state = freshState }
 
