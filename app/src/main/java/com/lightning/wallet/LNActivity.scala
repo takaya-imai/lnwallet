@@ -11,8 +11,8 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
+import com.lightning.wallet.R.drawable.{await, conf1, dead, refund}
 import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
-import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import android.view.{Menu, MenuItem, View}
@@ -77,7 +77,7 @@ class LNActivity extends DataReader
 with ToolbarActivity with ListUpdater
 with SearchBar { me =>
 
-  val imgMap = Array(await, await, await, conf1, dead, dead)
+  val imgMap = Array(await, await, await, conf1, dead, refund)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val addFailures = getResources getStringArray R.array.txs_ln_add_failures
   lazy val routesLeft = getResources getStringArray R.array.ln_retry_routes_left

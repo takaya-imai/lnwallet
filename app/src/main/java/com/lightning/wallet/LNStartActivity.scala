@@ -130,7 +130,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           me runOnUiThread setListView
 
         case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-          // Chaneel has just been saved to db so we can proceed
+          // Channel has just been saved to db so we can proceed
           app.ChannelManager.all = chan +: app.ChannelManager.all
           ConnectionManager.listeners -= socketOpenListener
           chan.listeners -= chanOpenListener
