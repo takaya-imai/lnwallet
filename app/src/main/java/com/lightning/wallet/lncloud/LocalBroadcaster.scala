@@ -23,12 +23,20 @@ object LocalBroadcaster extends Broadcaster { me =>
     Option(app.kit.wallet getTransaction txid)
       .map(_.getConfidence.getDepthInBlocks)
 
+  def watchScript(cs: Commitments) = {
+    val script = cs.commitInput.txOut.publicKeyScript
+    val watch = List(script: org.bitcoinj.script.Script)
+    app.kit.wallet addWatchedScripts watch.asJava
+  }
+
   override def onBecome = {
     case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>
-      val script = wait.commitments.commitInput.txOut.publicKeyScript
-      val watchList = List(script: org.bitcoinj.script.Script).asJava
       safeSend(wait.fundingTx).foreach(Tools.log, Tools.errlog)
-      app.kit.wallet addWatchedScripts watchList
+      watchScript(wait.commitments)
+
+    case (_, recovery: RecoveryData, _, RECOVERY) =>
+      // Will be called multiple times but it's fine
+      watchScript(recovery.commitments)
 
     case (chan, _, SYNC, NORMAL) =>
       // Will be sent once on app lauch

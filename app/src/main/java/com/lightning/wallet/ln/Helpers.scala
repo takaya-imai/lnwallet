@@ -132,14 +132,14 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
-        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(hash = info.paymentHash).toOption
-        success <- Scripts checkSpendable Scripts.addSigs(info, localSig, remoteSig, preimage)
+        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
+        success: Transaction = Scripts.addSigs(info, localSig, remoteSig, preimage).tx
         successDelayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(success)
       } yield success -> successDelayedClaim
 
       val allTimeoutTxs = for {
         HtlcTxAndSigs(info: HtlcTimeoutTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
-        timeout <- Scripts checkSpendable Scripts.addSigs(htlcTimeoutTx = info, localSig, remoteSig)
+        timeout: Transaction = Scripts.addSigs(htlcTimeoutTx = info, localSig, remoteSig).tx
         timeoutDelayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(timeout)
       } yield timeout -> timeoutDelayedClaim
 
@@ -158,39 +158,33 @@ object Helpers { me =>
       val (remoteCommitTx, _, _, remotePubkey, remoteRevPubkey) = makeRemoteTxs(remoteCommit.index, commitments.localParams,
         commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint, remoteCommit.spec)
 
-      def signedSuccess(add: UpdateAddHtlc, preimage: BinaryData) = {
-        val info = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
-          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
-
-        val sig = Scripts.sign(info, localPrivkey)
-        Scripts.addSigs(info, sig, preimage)
-      }
-
-      def signedTimeout(add: UpdateAddHtlc) = {
-        val info = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
-          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
-
-        val sig = Scripts.sign(info, localPrivkey)
-        Scripts.addSigs(info, sig)
-      }
-
       val claimSuccessTxs = for {
         Htlc(false, add) <- remoteCommit.spec.htlcs
         IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
-        claimSuccess <- Scripts checkSpendable signedSuccess(add, preimage)
+        txWithInputInfo = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
+          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
+
+        sig = Scripts.sign(txWithInputInfo, localPrivkey)
+        signed = Scripts.addSigs(txWithInputInfo, sig, preimage)
+        claimSuccess <- Scripts checkSpendable signed
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
         Htlc(true, add) <- remoteCommit.spec.htlcs
-        claimTimeout <- Scripts checkSpendable signedTimeout(add)
+        txWithInputInfo = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
+          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
+
+        sig = Scripts.sign(txWithInputInfo, localPrivkey)
+        signed = Scripts.addSigs(txWithInputInfo, sig)
+        claimTimeout <- Scripts checkSpendable signed
       } yield claimTimeout
 
       val claimMainTx = Scripts checkSpendable {
-        val info = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivkey.publicKey,
+        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivkey.publicKey,
           commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
 
-        val sig = Scripts.sign(info, localPrivkey)
-        Scripts.addSigs(info, localPrivkey.publicKey, sig)
+        val sig = Scripts.sign(txWithInputInfo, localPrivkey)
+        Scripts.addSigs(txWithInputInfo, localPrivkey.publicKey, sig)
       }
 
       RemoteCommitPublished(claimMainTx.toList,

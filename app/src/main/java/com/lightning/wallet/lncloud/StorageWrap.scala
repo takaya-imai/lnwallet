@@ -38,8 +38,7 @@ object ChannelWrap extends ChannelListener {
   }
 
   override def onProcess = {
-    case (_, close: ClosingData, _: CMDBestHeight)
-      if close.startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis =>
+    case (_, close: ClosingPhase, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
   }
 }

@@ -387,6 +387,14 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
+      case (recovery: RecoveryData, cr: ChannelReestablish, RECOVERY)
+        if cr.channelId == recovery.commitments.channelId =>
+
+        val d1 = recovery.modify(_.commitments.remoteCommit.index) setTo cr.nextRemoteRevocationNumber
+        val d2 = d1.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo null
+        me UPDATE d2 SEND Error(cr.channelId, "Balance recovery")
+
+
       // SYNC: CONNECT/DISCONNECT
 
 
@@ -439,6 +447,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
       case (null, closing: ClosingData, null) => BECOME(closing, CLOSING)
+      case (null, recovery: RecoveryData, null) => BECOME(recovery, RECOVERY)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)
@@ -517,9 +526,10 @@ object Channel {
   val WAIT_FOR_FUNDING = "WaitForFunding"
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
 
-  // These states are saved and need sync
+  // These states are saved
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
+  val RECOVERY = "Recovery"
   val NORMAL = "Normal"
   val SYNC = "Sync"
 

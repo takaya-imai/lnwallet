@@ -61,16 +61,26 @@ case class NormalData(announce: NodeAnnouncement,
                       commitments: Commitments, localShutdown: Option[Shutdown] = None,
                       remoteShutdown: Option[Shutdown] = None) extends HasCommitments {
 
-  def isClosing = localShutdown.isDefined || remoteShutdown.isDefined
+  def isShutDown = localShutdown.isDefined || remoteShutdown.isDefined
 }
 
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
+
+trait ClosingPhase extends HasCommitments {
+  def isOutdated = lifespan < System.currentTimeMillis
+  def lifespan = startedAt + 1000 * 3600 * 24 * 7
+  val startedAt: Long
+}
+
+case class RecoveryData(announce: NodeAnnouncement, commitments: Commitments,
+                        startedAt: Long = System.currentTimeMillis) extends ClosingPhase
+
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis) extends HasCommitments { me =>
+                       startedAt: Long = System.currentTimeMillis) extends ClosingPhase { me =>
 
   def bss = LNParams.broadcaster convertToBroadcastStatus txs
   lazy val txs = localCommit.flatMap(extractTxs) ++ remoteCommit.flatMap(extractTxs) ++
@@ -87,6 +97,7 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
     bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
       bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
 }
+
 
 case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
 case class LocalCommitPublished(claimMainDelayedOutputTx: Seq[Transaction], htlcSuccessTxs: Seq[Transaction],

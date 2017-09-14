@@ -70,7 +70,7 @@ class LNOpsActivity extends TimerActivity { me =>
           me runOnUiThread manageOpening(commitments, tx)
 
         // Mutual shutdown initiated
-        case (_, norm: NormalData, _, _) if norm.isClosing =>
+        case (_, norm: NormalData, _, _) if norm.isShutDown =>
           me runOnUiThread manageNegotiations(norm.commitments)
 
         // Normal is managed by main activity
@@ -85,14 +85,15 @@ class LNOpsActivity extends TimerActivity { me =>
         case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
           me runOnUiThread manageMutualClosing(tx)
 
-        // Mutual closing but we have no transactions at all so just drop it
-        case (_, ClosingData(_, _, Nil, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me runOnUiThread manageNoActiveChannel
-
         // Someone has initiated a unilateral channel closing
         case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, remoteNextTxs, revokedTxs, _), _, CLOSING)
           if localTxs.nonEmpty || remoteTxs.nonEmpty || remoteNextTxs.nonEmpty || revokedTxs.nonEmpty =>
           me runOnUiThread manageForcedClosing(close)
+
+        case _ =>
+          // Mutual closing without txs, recovery mode
+          // and any other possibly unaccounted state
+          me runOnUiThread manageNoActiveChannel
       }
 
       override def onProcess = {
