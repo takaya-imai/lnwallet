@@ -108,7 +108,12 @@ class WalletApp extends Application { me =>
     type ChannelVec = Vector[Channel]
     type OutPaymentOption = Option[OutgoingPayment]
 
+    // New NORMAL channels should always be prepended
+    // while new channel in RECOVERY mode should be appended
     var all: ChannelVec = ChannelWrap.get map createChannel
+
+    // Will also select a channel in RECOVERY mode
+    // it's needed for reconnection but be vary of this
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
     def reconnect(cv: ChannelVec) = cv.map(_.data.announce) foreach requestConnection

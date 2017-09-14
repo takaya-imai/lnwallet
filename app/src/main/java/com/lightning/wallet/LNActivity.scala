@@ -245,7 +245,7 @@ with SearchBar { me =>
 
       override def onBecome = {
         case (_, norm: NormalData, _, _) if norm.isShutDown => evacuate
-        case (_, _: ClosingPhase | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
+        case (_, _: EndingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
         case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
         case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
       }

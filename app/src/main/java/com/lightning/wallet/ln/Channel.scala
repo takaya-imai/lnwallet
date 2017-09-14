@@ -387,7 +387,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
-      case (recovery: RecoveryData, cr: ChannelReestablish, RECOVERY)
+      case (recovery: RefundingData, cr: ChannelReestablish, RECOVERY)
         if cr.channelId == recovery.commitments.channelId =>
 
         val d1 = recovery.modify(_.commitments.remoteCommit.index) setTo cr.nextRemoteRevocationNumber
@@ -447,7 +447,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
       case (null, closing: ClosingData, null) => BECOME(closing, CLOSING)
-      case (null, recovery: RecoveryData, null) => BECOME(recovery, RECOVERY)
+      case (null, recovery: RefundingData, null) => BECOME(recovery, RECOVERY)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)

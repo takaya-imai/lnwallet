@@ -38,7 +38,7 @@ object ChannelWrap extends ChannelListener {
   }
 
   override def onProcess = {
-    case (_, close: ClosingPhase, _: CMDBestHeight) if close.isOutdated =>
+    case (_, close: EndingData, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
   }
 }

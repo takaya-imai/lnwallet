@@ -68,19 +68,19 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
 
-trait ClosingPhase extends HasCommitments {
+trait EndingData extends HasCommitments {
   def isOutdated = lifespan < System.currentTimeMillis
   def lifespan = startedAt + 1000 * 3600 * 24 * 7
   val startedAt: Long
 }
 
-case class RecoveryData(announce: NodeAnnouncement, commitments: Commitments,
-                        startedAt: Long = System.currentTimeMillis) extends ClosingPhase
+case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
+                         startedAt: Long = System.currentTimeMillis) extends EndingData
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis) extends ClosingPhase { me =>
+                       startedAt: Long = System.currentTimeMillis) extends EndingData { me =>
 
   def bss = LNParams.broadcaster convertToBroadcastStatus txs
   lazy val txs = localCommit.flatMap(extractTxs) ++ remoteCommit.flatMap(extractTxs) ++

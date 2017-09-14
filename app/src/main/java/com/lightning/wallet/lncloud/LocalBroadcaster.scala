@@ -34,7 +34,7 @@ object LocalBroadcaster extends Broadcaster { me =>
       safeSend(wait.fundingTx).foreach(Tools.log, Tools.errlog)
       watchScript(wait.commitments)
 
-    case (_, recovery: RecoveryData, _, RECOVERY) =>
+    case (_, recovery: RefundingData, _, RECOVERY) =>
       // Will be called multiple times but it's fine
       watchScript(recovery.commitments)
 
