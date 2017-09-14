@@ -79,7 +79,6 @@ with SearchBar { me =>
 
   val imgMap = Array(await, await, await, conf1, dead, refund)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
-  lazy val addFailures = getResources getStringArray R.array.txs_ln_add_failures
   lazy val routesLeft = getResources getStringArray R.array.ln_retry_routes_left
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
@@ -253,7 +252,7 @@ with SearchBar { me =>
       override def onError = {
         case AddException(cmd: RetryAddHtlc, _) => Tools log s"Retry payment rejected $cmd"
         case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
-        case AddException(_: PlainAddHtlc, code) => onFail(addFailures apply code)
+        case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
         case _ => chan process CMDShutdown
       }
 

@@ -141,6 +141,7 @@ class WalletApp extends Application { me =>
     def createChannel(bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = for (work <- connections get data.announce.nodeId) work send msg
       def STORE(content: HasCommitments): HasCommitments = runAnd(content)(ChannelWrap put content)
+      // Listeners should always be added first and only then a process should be called
       listeners ++= Set(broadcaster, bag, ChannelWrap, Notificator)
       process(bootstrap)
     }

@@ -4,6 +4,7 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
+import com.lightning.wallet.ln.AddErrorCodes._
 
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
@@ -172,9 +173,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
 
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
-          case Success(out: OutgoingPayment) if out.actualStatus == WAITING => throw AddException(cmd, ERR_STILL_PENDING)
-          case Success(out: OutgoingPayment) if out.actualStatus == TEMP => throw AddException(cmd, ERR_STILL_PENDING)
+          case Success(out: OutgoingPayment) if out.actualStatus == WAITING => throw AddException(cmd, ERR_IN_FLIGHT)
           case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
+          case Success(out: OutgoingPayment) if out.actualStatus == TEMP => throw AddException(cmd, ERR_IN_FLIGHT)
           case Success(out: OutgoingPayment) if out.actualStatus == REFUND => throw AddException(cmd, ERR_FAILED)
           case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
@@ -387,7 +388,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
-      case (recovery: RefundingData, cr: ChannelReestablish, RECOVERY)
+      case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
         if cr.channelId == recovery.commitments.channelId =>
 
         val d1 = recovery.modify(_.commitments.remoteCommit.index) setTo cr.nextRemoteRevocationNumber
@@ -447,7 +448,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
       case (null, closing: ClosingData, null) => BECOME(closing, CLOSING)
-      case (null, recovery: RefundingData, null) => BECOME(recovery, RECOVERY)
+      case (null, recovery: RefundingData, null) => BECOME(recovery, REFUNDING)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)
@@ -458,7 +459,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => BECOME(some, CLOSING)
       case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
-      case (_: NormalData, add: PlainAddHtlc, SYNC) => throw AddException(add, ERR_STILL_IN_SYNC)
+      case (_: NormalData, add: PlainAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
 
       case _ =>
         // Let know if received an unhandled message
@@ -529,22 +530,12 @@ object Channel {
   // These states are saved
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
-  val RECOVERY = "Recovery"
+  val REFUNDING = "Refunding"
   val NORMAL = "Normal"
   val SYNC = "Sync"
 
   // Makes chan inactive
   val CLOSING = "Closing"
-
-  // Error messages
-  val ERR_FULFILLED = 0
-  val ERR_STILL_PENDING = 1
-  val ERR_STILL_IN_SYNC = 2
-  val ERR_LOCAL_FEE_OVERFLOW = 3
-  val ERR_AMOUNT_OVERFLOW = 4
-  val ERR_TOO_MANY_HTLC = 5
-  val ERR_REMOTE_FEE = 6
-  val ERR_FAILED = 7
 }
 
 trait ChannelListener {

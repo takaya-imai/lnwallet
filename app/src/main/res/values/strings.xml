@@ -128,20 +128,17 @@
     </array>
 
     <!-- errors -->
-    <array name="txs_ln_add_failures">
-        <item>Failed because this payment is already fulfilled</item>
-        <item>Failed because this payment is already in-flight right now</item>
-        <item>Failed because channel is currently offline. Please wait a few seconds and try again</item>
-        <item>Failed because payment sum combined with fee exceeds your current channel balance</item>
-        <item>Failed because payment sum combined with fee exceeds current maximum allowed amount</item>
-        <item>Failed because too many payments are already in-flight. Plase wait for them to be failed or fulfilled first</item>
-        <item>Failed because payment fee exceeds your peer\'s current channel balance</item>
-        <item>Could not proceed with this payment. Please ask recipient to issue another one</item>
-    </array>
-
+    <string name="err_ln_fulfilled">Failed because this payment is already fulfilled</string>
     <string name="err_ln_no_route">Failed because no route to recipient could be found</string>
+    <string name="err_ln_too_many">Failed because too many payments are already in-flight</string>
+    <string name="err_ln_inflight">Failed because this payment is already in-flight right now</string>
+    <string name="err_ln_offline">Failed because channel is currently offline. Please wait a few seconds and try again</string>
+    <string name="err_ln_old">Failed because this payment request has expired. Please ask recipient to provide a new one</string>
+    <string name="err_ln_local_fee_overflow">Failed because payment sum combined with fee exceeds your current channel balance</string>
+    <string name="err_ln_amount_fee_overflow">Failed because payment sum combined with fee exceeds maximum allowed amount</string>
+    <string name="err_ln_remote_fee_overflow">Failed because payment fee exceeds your peer\'s current channel balance</string>
     <string name="err_ln_black">Failed because your peer is blacklisted. You may want to create a new payment channel</string>
-    <string name="err_ln_old">Failed because a payment request has expired. Please ask recipient to provide a new one</string>
+    <string name="err_ln_general">Could not proceed with this payment. Please ask recipient to issue another one</string>
 
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>

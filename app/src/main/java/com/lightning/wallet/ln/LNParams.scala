@@ -79,6 +79,18 @@ object LNParams { me =>
   }
 }
 
+object AddErrorCodes {
+  import com.lightning.wallet.R.string._
+  val ERR_AMOUNT_FEE_OVERFLOW = err_ln_amount_fee_overflow
+  val ERR_REMOTE_FEE_OVERFLOW = err_ln_remote_fee_overflow
+  val ERR_LOCAL_FEE_OVERFLOW = err_ln_local_fee_overflow
+  val ERR_TOO_MANY_HTLC = err_ln_too_many
+  val ERR_FULFILLED = err_ln_fulfilled
+  val ERR_IN_FLIGHT = err_ln_inflight
+  val ERR_OFFLINE = err_ln_offline
+  val ERR_FAILED = err_ln_general
+}
+
 trait Broadcaster extends ChannelListener { me =>
   val convertToBroadcastStatus: Seq[Transaction] => Seq[BroadcastStatus] = txs => {
     val augmented = for (tx <- txs) yield (tx, getConfirmations(tx.txIn.head.outPoint.txid), Scripts csvTimeout tx)
