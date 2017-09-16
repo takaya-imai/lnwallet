@@ -22,7 +22,7 @@ object LNParams { me =>
   val globalFeatures = ""
   val minDepth = 2
 
-  val htlcMinimumMsat = 500
+  val htlcMinimumMsat = 1000000
   val maxHtlcValue = MilliSatoshi(4000000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val chainHash = Block.RegtestGenesisBlock.hash

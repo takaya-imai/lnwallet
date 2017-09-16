@@ -268,8 +268,9 @@ trait ToolbarActivity extends TimerActivity { me =>
     def trySave(url1: String) = delayUI {
       val data1 = LNParams.cloud.data.copy(url = url1)
       val cloud1 = LNParams getCloud Success(data1)
+      val result = cloud1.checkIfWorks
 
-      cloud1.check.subscribe(ok => {
+      result.subscribe(ok => {
         CloudDataSaver saveObject data1
         app toast ln_backup_success
         LNParams.cloud = cloud1

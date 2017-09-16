@@ -25,14 +25,12 @@ import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 
 
-// Shared by both private and public clouds, empty url means "use public"
-case class CloudData(info: Option[RequestAndMemo], tokens: Set[ClearToken],
-                     acts: Set[CloudAct], url: String)
+// Persisted data exchange with a maintenance server
+abstract class Cloud extends StateMachine[CloudData] {
 
-trait Cloud { me: StateMachine[CloudData] =>
-  def check: Obs[Any] = Obs just null
-  protected var isFree = true
-  var needsToBeSaved = false
+  def checkIfWorks: Obs[Any] = Obs just null
+  protected var isFree: Boolean = true
+  var needsToBeSaved: Boolean = false
   val connector: Connector
 
   def UPDATE(d1: CloudData) = {
@@ -47,44 +45,10 @@ trait Cloud { me: StateMachine[CloudData] =>
   }
 }
 
-// Users may supply their own cloud
-class PrivateCloud(val connector: Connector)
-extends StateMachine[CloudData] with Cloud { me =>
+case class CloudData(info: Option[RequestAndMemo], tokens: Set[ClearToken], acts: Set[CloudAct], url: String)
+class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud { me =>
 
   // STATE MACHINE
-
-  def doProcess(some: Any) = (data, some) match {
-    // Execute if we are not busy and have available actions
-    case CloudData(_, _, SetEx(action, _*), _) \ CMDStart if isFree =>
-      val callAndRestart = action.run(signedParams(action.requestPayload), me)
-      callAndRestart doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
-      callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
-      isFree = false
-
-    case (_, action: CloudAct) =>
-      val actions1 = data.acts + action take 50
-      me UPDATE data.copy(acts = actions1)
-      me doProcess CMDStart
-
-    case _ =>
-  }
-
-  def signedParams(data: BinaryData): Seq[HttpParam] = {
-    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, body -> data.toString)
-  }
-
-  override def check = {
-    val test = signedParams(random getBytes 32)
-    connector.call("check", none, test:_*)
-  }
-}
-
-// Default cloud
-class PublicCloud(val connector: Connector, bag: PaymentInfoBag)
-extends StateMachine[CloudData] with Cloud { me =>
-
-  c
 
   def doProcess(some: Any) = (data, some) match {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
@@ -159,6 +123,38 @@ extends StateMachine[CloudData] with Cloud { me =>
   def getClearTokens(memo: BlindMemo) =
     connector.call("blindtokens/redeem", _.map(json2String(_).bigInteger),
       "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
+}
+
+// Users may supply their own cloud with key based authentication
+class PrivateCloud(val connector: Connector) extends Cloud { me =>
+
+  // STATE MACHINE
+
+  def doProcess(some: Any) = (data, some) match {
+    // Execute if we are not busy and have available actions
+    case CloudData(_, _, SetEx(action, _*), _) \ CMDStart if isFree =>
+      val callAndRestart = action.run(signedParams(action.requestPayload), me)
+      callAndRestart doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
+      callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
+      isFree = false
+
+    case (_, action: CloudAct) =>
+      val actions1 = data.acts + action take 50
+      me UPDATE data.copy(acts = actions1)
+      me doProcess CMDStart
+
+    case _ =>
+  }
+
+  def signedParams(data: BinaryData): Seq[HttpParam] = {
+    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
+    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, body -> data.toString)
+  }
+
+  override def checkIfWorks = {
+    val test = signedParams(random getBytes 32)
+    connector.call("check", none, test:_*)
+  }
 }
 
 trait CloudAct {
