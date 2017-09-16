@@ -8,6 +8,11 @@ import fr.acinq.bitcoin.BinaryData
 import crypto.RandomGenerator
 
 
+object SetEx {
+  // Matching sets as algebraic data structures
+  def unapplySeq[T](s: Set[T] /* got a set */) = Some(s.toSeq)
+}
+
 object \ {
   // Matching Tuple2 via arrows with much less noise
   def unapply[A, B](t2: (A, B) /* got a tuple */) = Some(t2)

@@ -459,7 +459,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => BECOME(some, CLOSING)
       case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
-      case (_: NormalData, add: PlainAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
+      case (_: NormalData, add: CMDAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
 
       case _ =>
         // Let know if received an unhandled message

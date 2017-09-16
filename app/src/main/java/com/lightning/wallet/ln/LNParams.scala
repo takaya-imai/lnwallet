@@ -81,9 +81,9 @@ object LNParams { me =>
 
 object AddErrorCodes {
   import com.lightning.wallet.R.string._
-  val ERR_AMOUNT_FEE_OVERFLOW = err_ln_amount_fee_overflow
+  val ERR_AMOUNT_OVERFLOW = err_ln_amount_overflow
   val ERR_REMOTE_FEE_OVERFLOW = err_ln_remote_fee_overflow
-  val ERR_LOCAL_FEE_OVERFLOW = err_ln_local_fee_overflow
+  val ERR_REMOTE_AMOUNT_LOW = err_ln_remote_amount_low
   val ERR_TOO_MANY_HTLC = err_ln_too_many
   val ERR_FULFILLED = err_ln_fulfilled
   val ERR_IN_FLIGHT = err_ln_inflight

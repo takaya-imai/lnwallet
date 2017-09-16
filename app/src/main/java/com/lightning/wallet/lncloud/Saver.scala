@@ -43,18 +43,18 @@ trait Saver {
 }
 
 object CloudDataSaver extends Saver {
-  def empty = CloudData(None, Nil, Nil, needsSave = false, "")
+  def empty = CloudData(None, Set.empty, Set.empty, url = "")
   def tryGetObject: TryCloudData = tryGet map to[CloudData]
   def saveObject(data: CloudData) = save(data.toJson)
   type TryCloudData = Try[CloudData]
-  val KEY = "cloudData"
+  val KEY = "cloudData30"
 }
 
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, RatesMap)
-  val KEY = "rates"
+  val KEY = "rates1"
 
   private val updatePeriod: FiniteDuration = 20.minutes
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
@@ -63,7 +63,8 @@ object RatesSaver extends Saver {
     def result = LNParams.cloud.connector.getRates map toVec[Result]
     def periodic = retry(result, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
     withDelay(periodic, rates.stamp, updatePeriod.toMillis) foreach { case newFee \ newFiat +: _ =>
-      rates = Rates(newFee("6") +: rates.feeHistory take 6, newFiat, System.currentTimeMillis)
+      val validFees = for (validFee <- newFee("6") +: rates.feeHistory if validFee > 0) yield validFee
+      rates = Rates(validFees take 6, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }

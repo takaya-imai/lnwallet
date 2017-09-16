@@ -26,22 +26,24 @@ import org.bitcoinj.core.ECKey
 
 
 // Shared by both private and public clouds, empty url means "use public"
-case class CloudData(info: Option[RequestAndMemo], tokens: List[ClearToken],
-                     acts: List[CloudAct], needsSave: Boolean, url: String)
+case class CloudData(info: Option[RequestAndMemo], tokens: Set[ClearToken],
+                     acts: Set[CloudAct], url: String)
 
 trait Cloud { me: StateMachine[CloudData] =>
   def check: Obs[Any] = Obs just null
+  protected var isFree = true
+  var needsToBeSaved = false
   val connector: Connector
 
-  def UPDATE(d1: CloudData): Unit = {
-    val d2 = d1.copy(needsSave = true)
-    become(d2, state)
+  def UPDATE(d1: CloudData) = {
+    // Each time data is changed
+    needsToBeSaved = true
+    become(d1, state)
   }
 
-  def SAVE: Unit = {
-    val d1 = data.copy(needsSave = false)
-    CloudDataSaver saveObject d1
-    become(d1, state)
+  def SAVE = {
+    CloudDataSaver saveObject data
+    needsToBeSaved = false
   }
 }
 
@@ -49,21 +51,22 @@ trait Cloud { me: StateMachine[CloudData] =>
 class PrivateCloud(val connector: Connector)
 extends StateMachine[CloudData] with Cloud { me =>
 
+  // STATE MACHINE
+
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(_, _, (action: CloudAct) :: rest, _, _) \ CMDStart =>
-      // Private server should use a public key based authorization so we add a signature
-      action.run(signedParams(action.requestPayload), me).doOnCompleted(me doProcess CMDStart)
-        .foreach(ok => me UPDATE data.copy(acts = rest), Tools.errlog)
+    // Execute if we are not busy and have available actions
+    case CloudData(_, _, SetEx(action, _*), _) \ CMDStart if isFree =>
+      val callAndRestart = action.run(signedParams(action.requestPayload), me)
+      callAndRestart doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
+      callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
+      isFree = false
 
     case (_, action: CloudAct) =>
-      // We must always record incoming actions
-      val actions1 = action :: data.acts take 50
+      val actions1 = data.acts + action take 50
       me UPDATE data.copy(acts = actions1)
       me doProcess CMDStart
 
     case _ =>
-      // Let know if received an unhandled message in some state
-      Tools log s"PrivateCloud: unhandled $some : $data"
   }
 
   def signedParams(data: BinaryData): Seq[HttpParam] = {
@@ -72,7 +75,6 @@ extends StateMachine[CloudData] with Cloud { me =>
   }
 
   override def check = {
-    // Just send random stuff to see if key fits
     val test = signedParams(random getBytes 32)
     connector.call("check", none, test:_*)
   }
@@ -82,52 +84,61 @@ extends StateMachine[CloudData] with Cloud { me =>
 class PublicCloud(val connector: Connector, bag: PaymentInfoBag)
 extends StateMachine[CloudData] with Cloud { me =>
 
-  // STATE MACHINE
+  c
 
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(None, Nil, _, _, _) \ CMDStart => for {
-      request \ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
-      Some(pay) <- retry(app.ChannelManager outPaymentObs request, pickInc, 2 to 3)
+    case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
+      paymentRequest \ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
+      Some(pay) <- retry(app.ChannelManager outPaymentObs paymentRequest, pickInc, 2 to 3)
     } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
-    case CloudData(None, tokens, _, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
+    case CloudData(None, tokens, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
       for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
       me UPDATE data.copy(info = Some(pay.request, memo), tokens = tokens)
 
-    // No matter what the state is: do auth based cloud call if we have spare tokens
-    case CloudData(_, (blindPoint, clearToken, clearSig) :: ts, (action: CloudAct) :: rest, _, _) \ CMDStart =>
-      val params = Seq("point" -> blindPoint, "cleartoken" -> clearToken, "clearsig" -> clearSig, body -> action.requestPayload.toString)
-      action.run(params, me).doOnCompleted(me doProcess CMDStart).foreach(ok => me UPDATE data.copy(tokens = ts, acts = rest), Tools.errlog)
+    // Execute if we are not busy and have available tokens and actions
+    case CloudData(_, SetEx(token @ (pt, clearToken, clearSig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
+      val params = Seq("point" -> pt, "cleartoken" -> clearToken, "clearsig" -> clearSig, body -> action.requestPayload.toString)
+      val callAndRestart = action.run(params, me) doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
+      callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
+      isFree = false
+
+      // 'data' may change while request is on so we always copy it
+      def onError(serverError: Throwable) = serverError.getMessage match {
+        case "tokeninvalid" => me UPDATE data.copy(tokens = data.tokens - token)
+        case "tokenused" => me UPDATE data.copy(tokens = data.tokens - token)
+        case _ => Tools errlog serverError
+      }
 
     // Start a new request while payment is in progress
-    case CloudData(Some(request \ memo), _, _, _, _) \ CMDStart =>
+    case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
       bag getPaymentInfo request.paymentHash getOrElse null match {
-        case out: OutgoingPayment if out.actualStatus == SUCCESS => me resolveSuccess memo
-        case out: OutgoingPayment if out.actualStatus == FAILURE => resetPaymentData
-        case in: IncomingPayment => resetPaymentData
+        case info if info.actualStatus == SUCCESS => me resolveSuccess memo
+        // This is crucial: payment may fail but we should wait until expiration
+        case info if info.actualStatus == FAILURE && info.request.isFresh =>
+        case info if info.actualStatus == FAILURE => resetPaymentData
+        case info if info.actualStatus == REFUND => resetPaymentData
         case null => resetPaymentData
-        case _ => // do nothing
+        case _ =>
       }
 
     case (_, action: CloudAct) =>
-      // We must always record incoming actions
-      val actions1 = action :: data.acts take 50
+      val actions1 = data.acts + action take 50
       me UPDATE data.copy(acts = actions1)
       me doProcess CMDStart
 
     case _ =>
-      // Let know if received an unhandled message in some state
-      Tools log s"LNCloudPublic: unhandled $some : $data"
   }
 
   // ADDING NEW TOKENS
 
   def resetPaymentData = me UPDATE data.copy(info = None)
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
+  // Send CMDStart only in case if call was successful as we may enter an infinite loop otherwise
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
-    .foreach(plus => me UPDATE data.copy(info = None, tokens = plus ::: data.tokens),
+    .foreach(plus => me UPDATE data.copy(info = None, tokens = data.tokens ++ plus),
       error => if (error.getMessage == "notfound") resetPaymentData)
 
   // TALKING TO SERVER

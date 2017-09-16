@@ -11,22 +11,23 @@ import rx.lang.scala.schedulers.IOScheduler
 class ThrottledWorkSpec {
   def allTests = {
 
-    val worker = new ThrottledWork[String] {
+    val worker = new ThrottledWork[String, String] {
       def work(input: String) = obsOn({
         Thread.sleep(5000)
         input * 2
       }, IOScheduler.apply)
 
       def process(result: String) = println(result)
+      def error(err: Throwable) = err.printStackTrace
     }
 
-    worker.onNewQuery("t")
-    worker.onNewQuery("te")
-    worker.onNewQuery("tes")
-    worker.onNewQuery("test")
+    worker.addWork("t")
+    worker.addWork("te")
+    worker.addWork("tes")
+    worker.addWork("test")
     Thread.sleep(6000)
-    worker.onNewQuery("n")
-    worker.onNewQuery("ne")
-    worker.onNewQuery("new")
+    worker.addWork("n")
+    worker.addWork("ne")
+    worker.addWork("new")
   }
 }

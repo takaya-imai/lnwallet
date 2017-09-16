@@ -4,7 +4,7 @@ import fr.acinq.bitcoin.Crypto._
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
-import com.lightning.wallet.ln.Channel._
+import com.lightning.wallet.ln.AddErrorCodes._
 
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
@@ -224,7 +224,7 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_LOCAL_FEE_OVERFLOW)
+    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
     else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
     else if (cmd.out.request.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
@@ -244,7 +244,7 @@ object Commitments {
       // The rest of the guards
       if (htlcValueInFlightOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       else if (acceptedHtlcsOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      else if (feesOverflow) throw AddException(cmd, ERR_REMOTE_FEE)
+      else if (feesOverflow) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
       else c1 -> add
     }
 

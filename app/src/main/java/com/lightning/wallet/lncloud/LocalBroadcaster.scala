@@ -5,21 +5,26 @@ import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
 import collection.JavaConverters.seqAsJavaListConverter
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import rx.lang.scala.{Observable => Obs}
 import com.lightning.wallet.Utils.app
+import org.bitcoinj.core.Sha256Hash
 
 
 object LocalBroadcaster extends Broadcaster { me =>
   def feeRatePerKw = RatesSaver.rates.feeLive.value / 2
   def send(tx: Transaction) = app.kit.blockingSend(tx).toString
 
-  def currentHeight =
+  def currentHeight: Int =
     math.max(app.kit.wallet.getLastBlockSeenHeight,
       app.kit.peerGroup.getMostCommonChainHeight)
 
-  def getConfirmations(txid: BinaryData) =
+  def getConfirmations(txid: BinaryData): Option[Int] =
+    getConfirmations(Sha256Hash wrap txid.toArray)
+
+  def getConfirmations(txid: Sha256Hash): Option[Int] =
     Option(app.kit.wallet getTransaction txid)
       .map(_.getConfidence.getDepthInBlocks)
 

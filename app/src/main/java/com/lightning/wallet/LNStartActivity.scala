@@ -37,16 +37,17 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   private[this] val adapter = new NodesAdapter
 
   type AnnounceChansNumVec = Vector[AnnounceChansNum]
-  private[this] val worker = new ThrottledWork[AnnounceChansNumVec] {
+  private[this] val worker = new ThrottledWork[String, AnnounceChansNumVec] {
     def work(radixNodeAliasOrNodeIdQuery: String) = LNParams.cloud.connector findNodes radixNodeAliasOrNodeIdQuery
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)
+    def error(err: Throwable) = Tools errlog err
   }
 
   // May change back pressed action throughout an activity lifecycle
   private[this] var whenBackPressed = anyToRunnable(super.onBackPressed)
   override def onBackPressed: Unit = whenBackPressed.run
 
-  def react(query: String) = worker onNewQuery query
+  def react(query: String) = worker addWork query
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will never be updated so just update subtitle
     timer.schedule(delete(infoType), 10000)
