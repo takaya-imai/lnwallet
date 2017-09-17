@@ -64,7 +64,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
     // Execute if we are not busy and have available tokens and actions
     case CloudData(_, SetEx(token @ (pt, clearToken, clearSig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
-      val params = Seq("point" -> pt, "cleartoken" -> clearToken, "clearsig" -> clearSig, body -> action.requestPayload.toString)
+      val params = Seq("point" -> pt, "cleartoken" -> clearToken, "clearsig" -> clearSig, BODY -> action.requestPayload.toString)
       val callAndRestart = action.run(params, me) doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
       callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
       isFree = false
@@ -148,7 +148,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 
   def signedParams(data: BinaryData): Seq[HttpParam] = {
     val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, body -> data.toString)
+    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, BODY -> data.toString)
   }
 
   override def checkIfWorks = {
@@ -180,8 +180,8 @@ class Connector(val url: String) {
   def getDatas(key: String) = call("data/get", toVec[BinaryData], "key" -> key)
   def getTxs(txids: String) = call("txs/get", toVec[Transaction], "txids" -> txids)
   def findNodes(ask: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> ask)
-  def findRoutes(from: PublicKey, to: PublicKey) = if (from == to) Obs just Vector(Vector.empty)
-    else call("router/routes", toVec[PaymentRoute], "from" -> from.toString, "to" -> to.toString)
+  def findRoutes(from: PublicKey, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
+    "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
@@ -196,5 +196,5 @@ object Connector {
   type ClearToken = (String, String, String)
   type RequestAndMemo = (PaymentRequest, BlindMemo)
   val CMDStart = "CMDStart"
-  val body = "body"
+  val BODY = "body"
 }

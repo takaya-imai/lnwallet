@@ -146,11 +146,21 @@ class WalletApp extends Application { me =>
       process(bootstrap)
     }
 
-    // Here and in the rest of an app we use first alive channel
-    def outPaymentObs(request: PaymentRequest) = alive.headOption map { chan =>
-      val rsObs = cloud.connector.findRoutes(chan.data.announce.nodeId, request.nodeId)
-      for (routes <- rsObs) yield outPaymentOpt(routes, request, chan)
-    } getOrElse Obs.just(None)
+    // Get routes from maintenance server and form an outgoing payment
+    def outPaymentObs(request: PaymentRequest) = alive.headOption match {
+      // Only proceed if we have an active channel, also account for a special
+      // case when payment recipient is our peer node
+
+      case None => Obs.empty
+      case Some(chan) if chan.data.announce.nodeId == request.nodeId =>
+        Obs just outPaymentOpt(Vector(Vector.empty), request, chan)
+
+      case Some(chan) =>
+        val routesObs = cloud.connector.findRoutes(chan.data.announce.nodeId, request.nodeId)
+        // Right from the start we should remove routes containing nodes which won't route our small payment
+        val reducedObs = for (routes <- routesObs) yield withoutUnsupportedAmount(routes, request.finalSum.amount)
+        for (rs <- reducedObs) yield if (rs.isEmpty) throw new Exception(NOROUTEFOUND) else outPaymentOpt(rs, request, chan)
+    }
 
     def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) = for {
       // Build outgoing payment info if we actually have routes and channel has an id and request

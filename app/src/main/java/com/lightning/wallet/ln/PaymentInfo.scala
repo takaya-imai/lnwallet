@@ -32,7 +32,7 @@ case class IncomingPayment(preimage: BinaryData, request: PaymentRequest, receiv
 
 case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
 case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
-                           chanId: BinaryData, status: Int) extends PaymentInfo {
+                           chanId: BinaryData, status: Int) extends PaymentInfo { // TODO: maybe no need for `receive` here?
 
   def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
 }
@@ -52,6 +52,8 @@ trait PaymentInfoBag {
 object PaymentInfo {
   // Used for unresolved outgoing payment infos
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
+  val FROMBLACKLISTED = "fromblacklisted"
+  val NOROUTEFOUND = "noroutefound"
 
   final val TEMP = 0
   final val HIDDEN = 1
@@ -79,9 +81,10 @@ object PaymentInfo {
     makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(perHopPayloadCodec.encode).map(serialize(_).toArray), assocData)
   }
 
-  private def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
-  private def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
-  private def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
+  def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
+  def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
+  def withoutUnsupportedAmount(routes: Vector[PaymentRoute], amount: Long) = without(routes, _.lastUpdate.htlcMinimumMsat < amount)
+  def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
 
   def cutRoutes(fail: UpdateFailHtlc, payment: OutgoingPayment) =
     parseErrorPacket(payment.routing.onion.sharedSecrets, fail.reason) map {

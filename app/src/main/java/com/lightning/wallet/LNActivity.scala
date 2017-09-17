@@ -26,7 +26,6 @@ import android.support.v4.view.MenuItemCompat
 import com.lightning.wallet.ln.Tools.none
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
-import android.app.AlertDialog
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
@@ -179,8 +178,8 @@ with SearchBar { me =>
       val payment = adapter getItem pos
       val description = me getDescription payment.request
       val humanStatus = s"<strong>${paymentStatesMap apply payment.status}</strong>"
-      paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
       paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
+      paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
       if (payment.status == SUCCESS) paymentProof setVisibility View.VISIBLE
 
       paymentProof setOnClickListener onButtonTap {
@@ -200,11 +199,15 @@ with SearchBar { me =>
           val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
           val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
           val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
-          paymentDetails setText s"$description<br><br>$humanSent".html
 
-          paymentRetryAgain setOnClickListener onButtonTap {
-            collectRoutesAndSend(alert, out.request, RetryAddHtlc)
+          def doPaymentRetry = rm(alert) {
+            notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+            val outPaymentObsOpt = app.ChannelManager.outPaymentObs(out.request)
+            outPaymentObsOpt.foreach(_ map RetryAddHtlc foreach chan.process, onError)
           }
+
+          paymentDetails setText s"$description<br><br>$humanSent".html
+          paymentRetryAgain setOnClickListener onButtonTap(doPaymentRetry)
 
           // No more routes left to try and request is not expired so we can try to send it again
           val canRetry = out.status == FAILURE && out.routing.routes.isEmpty && out.request.isFresh
@@ -222,20 +225,9 @@ with SearchBar { me =>
       denom withSign MilliSatoshi(canSend getOrElse 0L)
     }
 
-    def collectRoutesAndSend(alert: AlertDialog, request: PaymentRequest,
-                      out2Command: OutgoingPayment => CMDAddHtlc) =
-
-      rm(alert) {
-        notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-        app.ChannelManager.outPaymentObs(request).foreach(_ match {
-          case Some(outPayment) => chan process out2Command(outPayment)
-          case _ => onFail(me getString err_general)
-        }, onRouteError)
-      }
-
-    def onRouteError(err: Throwable) = err.getMessage match {
-      case "fromblacklisted" => onFail(me getString err_ln_black)
-      case "noroutefound" => onFail(me getString err_ln_no_route)
+    def onError(err: Throwable) = err.getMessage match {
+      case FROMBLACKLISTED => onFail(me getString err_ln_black)
+      case NOROUTEFOUND => onFail(me getString err_ln_no_route)
       case techDetails => onFail(techDetails)
     }
 
@@ -287,7 +279,12 @@ with SearchBar { me =>
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if request.amount.exists(_ > ms) => app toast dialog_sum_small
         case Success(ms) if request.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
-        case Success(ms) => collectRoutesAndSend(alert, request, PlainAddHtlc)
+
+        case _ => rm(alert) {
+          notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+          val outPaymentObsOpt = app.ChannelManager.outPaymentObs(request)
+          outPaymentObsOpt.foreach(_ map PlainAddHtlc foreach chan.process, onError)
+        }
       }
 
       val ok = alert getButton BUTTON_POSITIVE

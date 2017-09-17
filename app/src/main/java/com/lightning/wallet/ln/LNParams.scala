@@ -22,8 +22,8 @@ object LNParams { me =>
   val globalFeatures = ""
   val minDepth = 2
 
-  val htlcMinimumMsat = 1000000
-  val maxHtlcValue = MilliSatoshi(4000000000L)
+  val htlcMinimumMsat = 100000
+  val maxHtlcValue = MilliSatoshi(4194304000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val chainHash = Block.RegtestGenesisBlock.hash
   lazy val broadcaster = LocalBroadcaster
@@ -36,7 +36,7 @@ object LNParams { me =>
   var db: CipherOpenHelper = _
 
   def isSetUp: Boolean = db != null
-  def setup(seed: BinaryData): Unit = generate(seed) match { case master =>
+  def setup(seed: BinaryData) = generate(seed) match { case master =>
     val cloudExtendedKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)

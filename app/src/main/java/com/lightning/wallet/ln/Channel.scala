@@ -392,11 +392,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if cr.channelId == recovery.commitments.channelId =>
 
         val d1 = recovery.modify(_.commitments.remoteCommit.index) setTo cr.nextRemoteRevocationNumber
-        val d2 = d1.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo null
+        val d2 = d1.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo null // TODO: use real value
         me UPDATE d2 SEND Error(cr.channelId, "Balance recovery")
 
 
-      // SYNC: CONNECT/DISCONNECT
+      // SYNC: ONLINE/OFFLINE
 
 
       case (some: HasCommitments, CMDOnline, SYNC) =>

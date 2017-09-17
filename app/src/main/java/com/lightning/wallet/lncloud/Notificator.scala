@@ -25,13 +25,13 @@ object Notificator extends ChannelListener {
 
   override def onProcess = {
     case (_, norm: NormalData, _: CommitSig)
-      // GUARD: no in-flight HTLCs so cancel all pending alarms
-      if Commitments.pendingHtlcs(norm.commitments).isEmpty =>
-      try getAlarmManager cancel getIntent catch none
-
-    case (_, _: NormalData, _: CommitSig) =>
+      // GUARD: has in-flight HTLCs, set delayed notifcation
+      if Commitments.pendingHtlcs(norm.commitments).nonEmpty =>
       try getAlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
         System.currentTimeMillis + 1000 * 60 * 5, getIntent) catch none
+
+    case (_, norm: NormalData, _: CommitSig) =>
+      try getAlarmManager cancel getIntent catch none
   }
 }
 
