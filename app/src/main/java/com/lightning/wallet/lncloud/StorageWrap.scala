@@ -52,24 +52,22 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def byQuery(query: String): Cursor = db.select(searchSql, s"$query*")
   def recentPayments: Cursor = db select selectRecentSql
 
-  def toPaymentInfo(rc: RichCursor) = {
-    val delta = MilliSatoshi(rc long received)
-    val pr = to[PaymentRequest](rc string request)
-
+  def toPaymentInfo(rc: RichCursor) =
     Option(rc string routing) map to[RoutingData] match {
-      case Some(rs) => OutgoingPayment(rs, rc string preimage, pr, delta, rc string chanId, rc int status)
-      case _ => IncomingPayment(rc string preimage, pr, delta, rc string chanId, rc int status)
+      case Some(routes) => OutgoingPayment(routes, rc string preimage,
+        to[PaymentRequest](rc string request), rc string chanId, rc int status)
+
+      case None => IncomingPayment(MilliSatoshi(rc long received), rc string preimage,
+        to[PaymentRequest](rc string request), rc string chanId, rc int status)
     }
-  }
 
   def putPaymentInfo(info: PaymentInfo) = db txWrap {
     val paymentHashString = info.request.paymentHash.toString
-    // OutgoingPayment delta is negative amount, IncomingPayment is zero, to be updated later
-    val delta = info match { case out: OutgoingPayment => -out.request.finalSum.amount case _ => 0L }
+    val received = info match { case in: IncomingPayment => in.received.amount.toString case _ => null }
     val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case _ => null }
     db.change(newVirtualSql, s"${info.request.description} $paymentHashString", paymentHashString)
     db.change(newSql, paymentHashString, info.request.toJson.toString, info.status.toString,
-      info.chanId.toString, info.preimage.toString, delta.toString, routing)
+      info.chanId.toString, info.preimage.toString, received, routing)
   }
 
   def updateStatus(pre: Int, post: Int) = db.change(updStatusStatusSql, post.toString, pre.toString)
@@ -116,7 +114,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       for {
         // Then retry failed payments with routes left
         htlc \ fail <- norm.commitments.localCommit.spec.failed
-        out @ OutgoingPayment(_, _, request, _, _, _) <- getPaymentInfo(htlc.add.paymentHash)
+        out @ OutgoingPayment(_, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
         out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
       } chan process RetryAddHtlc(out1)
   }

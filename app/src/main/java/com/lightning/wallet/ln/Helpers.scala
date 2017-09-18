@@ -132,7 +132,7 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
-        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
+        IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
         success: Transaction = Scripts.addSigs(info, localSig, remoteSig, preimage).tx
         successDelayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(success)
       } yield success -> successDelayedClaim
@@ -160,7 +160,7 @@ object Helpers { me =>
 
       val claimSuccessTxs = for {
         Htlc(false, add) <- remoteCommit.spec.htlcs
-        IncomingPayment(preimage, _, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
+        IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
         txWithInputInfo = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
 

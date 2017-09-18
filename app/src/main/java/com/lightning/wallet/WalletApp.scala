@@ -167,12 +167,12 @@ class WalletApp extends Application { me =>
       // has a definite amount to be sent, otherwise fail silently
 
       route <- rs.headOption
-      id <- chan.pull(_.channelId)
+      chanId <- chan.pull(_.channelId)
       MilliSatoshi(amount) <- request.amount
 
       (payloads, withFees, allExpiry) = buildPayloads(amount, expiry, route)
       onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
-    } yield OutgoingPayment(RoutingData(rs.tail, onion, withFees, allExpiry), NOIMAGE, request, MilliSatoshi(0), id, TEMP)
+    } yield OutgoingPayment(RoutingData(rs.tail, onion, withFees, allExpiry), NOIMAGE, request, chanId, TEMP)
   }
 
   abstract class WalletKit extends AbstractKit { self =>

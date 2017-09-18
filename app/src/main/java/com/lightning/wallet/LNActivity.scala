@@ -92,7 +92,7 @@ with SearchBar { me =>
 
         val marking = info match {
           case in: IncomingPayment => sumIn.format(denom formatted in.received)
-          case out: OutgoingPayment => sumOut.format(denom formatted out.received)
+          case out: OutgoingPayment => sumOut.format(denom formatted out.request.finalSum * -1)
         }
 
         transactWhen setText when(System.currentTimeMillis, timestamp).html
@@ -304,7 +304,7 @@ with SearchBar { me =>
       def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { id =>
         val (description, hash, stamp) = (inputDescription.getText.toString.trim, Crypto sha256 preimg, 3600 * 6)
         val paymentRequest = PaymentRequest(chainHash, amount, hash, nodePrivateKey, description, None, stamp)
-        bag putPaymentInfo IncomingPayment(preimg, paymentRequest, MilliSatoshi(0), id, HIDDEN)
+        bag putPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, id, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }

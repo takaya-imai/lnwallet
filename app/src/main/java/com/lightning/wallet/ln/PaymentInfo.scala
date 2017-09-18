@@ -19,20 +19,19 @@ trait PaymentInfo {
   def actualStatus: Int
   val preimage: BinaryData
   val request: PaymentRequest
-  val received: MilliSatoshi
   val chanId: BinaryData
   val status: Int
 }
 
-case class IncomingPayment(preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
+case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData, request: PaymentRequest,
                            chanId: BinaryData, status: Int) extends PaymentInfo {
 
   def actualStatus = status
 }
 
 case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
-case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest, received: MilliSatoshi,
-                           chanId: BinaryData, status: Int) extends PaymentInfo { // TODO: maybe no need for `receive` here?
+case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest,
+                           chanId: BinaryData, status: Int) extends PaymentInfo {
 
   def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
 }
