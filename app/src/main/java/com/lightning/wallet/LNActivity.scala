@@ -194,23 +194,23 @@ with SearchBar { me =>
           mkForm(me negBld dialog_ok, getString(ln_incoming_title).format(humanStatus).html, detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanReceived".html
 
-        case out: OutgoingPayment =>
-          val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
+        case OutgoingPayment(routing, _, request, _, status) =>
+          val fee = MilliSatoshi(routing.amountWithFee - request.finalSum.amount)
           val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
-          val humanSent = humanFiat(sumOut.format(denom withSign out.request.finalSum), out.request.finalSum)
+          val humanSent = humanFiat(sumOut.format(denom withSign request.finalSum), request.finalSum)
           val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
 
           def doPaymentRetry = rm(alert) {
             notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-            val outPaymentObsOpt = app.ChannelManager.outPaymentObs(out.request)
+            val outPaymentObsOpt = app.ChannelManager.outPaymentObs(request)
             outPaymentObsOpt.foreach(_ map RetryAddHtlc foreach chan.process, onError)
           }
 
           paymentDetails setText s"$description<br><br>$humanSent".html
           paymentRetryAgain setOnClickListener onButtonTap(doPaymentRetry)
 
-          // No more routes left to try and request is not expired so we can try to send it again
-          val canRetry = out.status == FAILURE && out.routing.routes.isEmpty && out.request.isFresh
+          // No more routes left to try and request is not expired so we may send it again
+          val canRetry = status == FAILURE && routing.routes.isEmpty && request.isFresh
           if (canRetry) paymentRetryAgain setVisibility View.VISIBLE
       }
     }
@@ -235,7 +235,7 @@ with SearchBar { me =>
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
-        case (_, norm: NormalData, _, _) if norm.isShutDown => evacuate
+        case (_, norm: NormalData, _, _) if norm.isFinishing => evacuate
         case (_, _: EndingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
         case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
         case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
@@ -245,7 +245,9 @@ with SearchBar { me =>
         case AddException(cmd: RetryAddHtlc, _) => Tools log s"Retry payment rejected $cmd"
         case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
         case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
-        case _ => chan process CMDShutdown
+        case e =>
+          e.printStackTrace
+          chan process CMDShutdown
       }
 
       override def onProcess = {

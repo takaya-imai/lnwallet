@@ -6,21 +6,21 @@ import com.lightning.wallet.ln.wire._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
 import com.lightning.wallet.lncloud.Connector.{ClearToken, RequestAndMemo}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
-
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
-import com.lightning.wallet.ln.CommitmentSpec.HtlcUpdateFail
+import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
 import com.lightning.wallet.ln.crypto.ShaChain.Index
 import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
 import java.math.BigInteger
+
+import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import scodec.Codec
 
 
@@ -245,16 +245,16 @@ object ImplicitJsonFormats { me =>
   implicit val closingTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction,
     ClosingTx](ClosingTx.apply, "input", "tx"), tag = "ClosingTx")
 
-  implicit val localParamsFmt = jsonFormat[Long, UInt64, Long, Int,
-    Int, PrivateKey, Scalar, PrivateKey, Scalar, BinaryData, BinaryData, Boolean,
-    LocalParams](LocalParams.apply, "dustLimitSatoshis", "maxHtlcValueInFlightMsat",
-    "channelReserveSat", "toSelfDelay", "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret",
-    "paymentKey", "delayedPaymentKey", "defaultFinalScriptPubKey", "shaSeed", "isFunder")
+  implicit val localParamsFmt = jsonFormat[UInt64, Long, Int, Int,
+    PrivateKey, Scalar, PrivateKey, Scalar, BinaryData, BinaryData, Boolean,
+    LocalParams](LocalParams.apply, "maxHtlcValueInFlightMsat", "channelReserveSat", "toSelfDelay",
+    "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret", "paymentKey", "delayedPaymentKey",
+    "defaultFinalScriptPubKey", "shaSeed", "isFunder")
 
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
     Htlc](Htlc.apply, "incoming", "add")
 
-  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcUpdateFail], Long, Long, Long,
+  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcFailure], Long, Long, Long,
     CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
 
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,
@@ -279,19 +279,14 @@ object ImplicitJsonFormats { me =>
     "remoteChanges", "localNextHtlcId", "remoteNextHtlcId", "remoteNextCommitInfo", "commitInput",
     "remotePerCommitmentSecrets", "channelId")
 
-  implicit val localCommitPublishedFmt = jsonFormat[Seq[Transaction],
-    Seq[Transaction], Seq[Transaction], Seq[Transaction], Seq[Transaction], Transaction,
-    LocalCommitPublished](LocalCommitPublished.apply, "claimMainDelayedOutputTx", "htlcSuccessTxs",
-    "htlcTimeoutTxs", "claimHtlcSuccessTxs", "claimHtlcTimeoutTxs", "commitTx")
+  implicit val localCommitPublishedFmt = jsonFormat[Seq[ClaimDelayedOutputTx], Seq[SuccessAndClaim], Seq[TimeoutAndClaim], Transaction,
+    LocalCommitPublished](LocalCommitPublished.apply, "claimMainDelayed", "claimHtlcSuccess", "claimHtlcTimeout", "commitTx")
 
-  implicit val remoteCommitPublishedFmt = jsonFormat[Seq[Transaction], Seq[Transaction], Seq[Transaction], Transaction,
-    RemoteCommitPublished](RemoteCommitPublished.apply, "claimMainOutputTx", "claimHtlcSuccessTxs", "claimHtlcTimeoutTxs",
-    "commitTx")
+  implicit val remoteCommitPublishedFmt = jsonFormat[Seq[ClaimP2WPKHOutputTx], Seq[ClaimHtlcSuccessTx], Seq[ClaimHtlcTimeoutTx], Transaction,
+    RemoteCommitPublished](RemoteCommitPublished.apply, "claimMain", "claimHtlcSuccess", "claimHtlcTimeout", "commitTx")
 
-  implicit val revokedCommitPublishedFmt = jsonFormat[Seq[Transaction],
-    Seq[Transaction], Seq[Transaction], Seq[Transaction], Seq[Transaction], Transaction,
-    RevokedCommitPublished](RevokedCommitPublished.apply, "claimMainOutputTx", "mainPenaltyTx",
-    "claimHtlcTimeoutTxs", "htlcTimeoutTxs", "htlcPenaltyTxs", "commitTx")
+  implicit val revokedCommitPublishedFmt = jsonFormat[Seq[ClaimP2WPKHOutputTx], Seq[MainPenaltyTx], Transaction,
+    RevokedCommitPublished](RevokedCommitPublished.apply, "claimMain", "claimPenalty", "commitTx")
 
   implicit object HasCommitmentsFmt
   extends JsonFormat[HasCommitments] {

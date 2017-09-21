@@ -12,9 +12,6 @@ trait SetupMessage extends LightningMessage
 trait RoutingMessage extends LightningMessage
 trait ChannelMessage extends LightningMessage
 
-trait HasHtlcId extends ChannelMessage { def id: Long }
-trait FailHtlc extends HasHtlcId { def channelId: BinaryData }
-
 case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends SetupMessage
 case class Ping(pongLength: Int, data: BinaryData) extends SetupMessage
@@ -45,17 +42,17 @@ case class FundingLocked(channelId: BinaryData, nextPerCommitmentPoint: Point) e
 case class ClosingSigned(channelId: BinaryData, feeSatoshis: Long, signature: BinaryData) extends ChannelMessage
 case class Shutdown(channelId: BinaryData, scriptPubKey: BinaryData) extends ChannelMessage
 
-
+sealed trait HasHtlcId extends ChannelMessage { def id: Long }
 case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, paymentHash: BinaryData,
                          expiry: Long, onionRoutingPacket: BinaryData) extends HasHtlcId
 
+sealed trait FailHtlc extends HasHtlcId { def channelId: BinaryData }
 case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
 case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
 case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId {
 
   val paymentHash = fr.acinq.bitcoin.Crypto sha256 paymentPreimage.data
 }
-
 
 case class CommitSig(channelId: BinaryData, signature: BinaryData, htlcSignatures: List[BinaryData] = Nil) extends ChannelMessage
 case class RevokeAndAck(channelId: BinaryData, perCommitmentSecret: Scalar, nextPerCommitmentPoint: Point) extends ChannelMessage

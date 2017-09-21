@@ -4,17 +4,18 @@ import fr.acinq.bitcoin.Crypto._
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
+import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.AddErrorCodes._
-
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
+import com.lightning.wallet.ln.LNParams.broadcaster.{cltv, csv}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
-import com.lightning.wallet.ln.CommitmentSpec.HtlcUpdateFail
+import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
+import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
 import com.lightning.wallet.ln.Tools.LightningMessages
 import fr.acinq.eclair.UInt64
 
 
 sealed trait Command
-// These won't be memorized in channel sync mode
 case class CMDConfirmed(tx: Transaction) extends Command
 case class CMDBestHeight(height: Int) extends Command
 case class CMDSpent(tx: Transaction) extends Command
@@ -28,7 +29,6 @@ case object CMDOnline extends Command
 case class CMDOpenChannel(localParams: LocalParams, temporaryChannelId: BinaryData, initialFeeratePerKw: Long,
                           pushMsat: Long, remoteInit: Init, fundingAmountSat: Long) extends Command
 
-// These will be memorized in channel sync mode
 case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) extends Command
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
@@ -41,8 +41,6 @@ case class RetryAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
 // CHANNEL DATA
 
 sealed trait ChannelData { val announce: NodeAnnouncement }
-sealed trait HasCommitments extends ChannelData { val commitments: Commitments }
-
 case class InitData(announce: NodeAnnouncement) extends ChannelData
 case class WaitAcceptData(announce: NodeAnnouncement, cmd: CMDOpenChannel) extends ChannelData
 case class WaitFundingData(announce: NodeAnnouncement, cmd: CMDOpenChannel, accept: AcceptChannel) extends ChannelData
@@ -53,6 +51,7 @@ case class WaitFundingSignedData(announce: NodeAnnouncement, localParams: LocalP
 
 // All the data below will be stored
 
+sealed trait HasCommitments extends ChannelData { val commitments: Commitments }
 case class WaitFundingDoneData(announce: NodeAnnouncement, our: Option[FundingLocked],
                                their: Option[FundingLocked], fundingTx: Transaction,
                                commitments: Commitments) extends HasCommitments
@@ -61,7 +60,7 @@ case class NormalData(announce: NodeAnnouncement,
                       commitments: Commitments, localShutdown: Option[Shutdown] = None,
                       remoteShutdown: Option[Shutdown] = None) extends HasCommitments {
 
-  def isShutDown = localShutdown.isDefined || remoteShutdown.isDefined
+  def isFinishing = localShutdown.isDefined || remoteShutdown.isDefined
 }
 
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
@@ -77,48 +76,81 @@ trait EndingData extends HasCommitments {
 case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
                          startedAt: Long = System.currentTimeMillis) extends EndingData
 
-case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
-                       localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
-                       nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommits: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis) extends EndingData { me =>
-
-  def bss = LNParams.broadcaster convertToBroadcastStatus txs
-  lazy val txs = localCommit.flatMap(extractTxs) ++ remoteCommit.flatMap(extractTxs) ++
-    nextRemoteCommit.flatMap(extractTxs) ++ revokedCommits.flatMap(extractTxs)
-
-  private def extractTxs(bag: RemoteCommitPublished): Seq[Transaction] =
-    bag.claimMainOutputTx ++ bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
-
-  private def extractTxs(bag: RevokedCommitPublished): Seq[Transaction] =
-    bag.claimMainOutputTx ++ bag.mainPenaltyTx ++ bag.claimHtlcTimeoutTxs ++
-      bag.htlcTimeoutTxs ++ bag.htlcPenaltyTxs
-
-  private def extractTxs(bag: LocalCommitPublished): Seq[Transaction] =
-    bag.claimMainDelayedOutputTx ++ bag.htlcSuccessTxs ++ bag.htlcTimeoutTxs ++
-      bag.claimHtlcSuccessTxs ++ bag.claimHtlcTimeoutTxs
+trait CommitPublished {
+  // Cumulative delay, final fee, final amount
+  type PublishStatus = (Option[Long], Satoshi, Satoshi)
+  val allTransactions: Seq[Transaction]
+  def getAllStates: Seq[PublishStatus]
 }
 
+case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
+                       localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
+                       nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommit: Seq[RevokedCommitPublished] = Nil,
+                       startedAt: Long = System.currentTimeMillis) extends EndingData with CommitPublished {
 
-case class BroadcastStatus(relativeDelay: Option[Long], publishable: Boolean, tx: Transaction)
-case class LocalCommitPublished(claimMainDelayedOutputTx: Seq[Transaction], htlcSuccessTxs: Seq[Transaction],
-                                htlcTimeoutTxs: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
-                                claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
+  def getAllStates =
+    localCommit.flatMap(_.getAllStates) ++ remoteCommit.flatMap(_.getAllStates) ++
+      nextRemoteCommit.flatMap(_.getAllStates) ++ revokedCommit.flatMap(_.getAllStates)
 
-case class RemoteCommitPublished(claimMainOutputTx: Seq[Transaction], claimHtlcSuccessTxs: Seq[Transaction],
-                                 claimHtlcTimeoutTxs: Seq[Transaction], commitTx: Transaction)
+  val allTransactions =
+    mutualClose ++ localCommit.flatMap(_.allTransactions) ++ remoteCommit.flatMap(_.allTransactions) ++
+      nextRemoteCommit.flatMap(_.allTransactions) ++ revokedCommit.flatMap(_.allTransactions)
 
-case class RevokedCommitPublished(claimMainOutputTx: Seq[Transaction], mainPenaltyTx: Seq[Transaction],
-                                  claimHtlcTimeoutTxs: Seq[Transaction], htlcTimeoutTxs: Seq[Transaction],
-                                  htlcPenaltyTxs: Seq[Transaction], commitTx: Transaction)
+  lazy val allCommits =
+    nextRemoteCommit.map(_.commitTx) ++ localCommit.map(_.commitTx) ++
+      remoteCommit.map(_.commitTx) ++ revokedCommit.map(_.commitTx)
+}
+
+case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], claimHtlcSuccess: Seq[SuccessAndClaim],
+                                claimHtlcTimeout: Seq[TimeoutAndClaim], commitTx: Transaction) extends CommitPublished {
+
+  val allTransactions = List(commitTx) ++ claimMainDelayed.map(_.tx) ++
+    claimHtlcSuccess.map(_._1.tx) ++ claimHtlcTimeout.map(_._1.tx) ++
+    claimHtlcSuccess.map(_._2.tx) ++ claimHtlcTimeout.map(_._2.tx)
+
+  def getAllStates = {
+    val mainInfo = for (t1 <- claimMainDelayed) yield (csv(t1.tx), t1 feeDiff t1, t1.tx.txOut.head.amount)
+    val successInfo = for (t1 \ t2 <- claimHtlcSuccess) yield (csv(t2.tx), t1 feeDiff t2, t2.tx.txOut.head.amount)
+    val timeoutInfo = for (t1 \ t2 <- claimHtlcTimeout) yield (csv(t2.tx) map cltv(t1.tx).+, t1 feeDiff t2, t2.tx.txOut.head.amount)
+    mainInfo ++ successInfo ++ timeoutInfo
+  }
+}
+
+case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcSuccess: Seq[ClaimHtlcSuccessTx],
+                                 claimHtlcTimeout: Seq[ClaimHtlcTimeoutTx], commitTx: Transaction) extends CommitPublished {
+
+  // Not inlcuding commitTx here because it has already been published by peer
+  val allTransactions = claimMain.map(_.tx) ++ claimHtlcSuccess.map(_.tx) ++ claimHtlcTimeout.map(_.tx)
+
+  def getAllStates = {
+    val mainInfo = for (t1 <- claimMain) yield (Some apply 0L, t1 feeDiff t1, t1.tx.txOut.head.amount)
+    val successInfo = for (t1 <- claimHtlcSuccess) yield (Some apply 0L, t1 feeDiff t1, t1.tx.txOut.head.amount)
+    val timeoutInfo = for (t1 <- claimHtlcTimeout) yield (Some apply cltv(t1.tx), t1 feeDiff t1, t1.tx.txOut.head.amount)
+    mainInfo ++ successInfo ++ timeoutInfo
+  }
+}
+
+case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPenalty: Seq[MainPenaltyTx],
+                                  commitTx: Transaction) extends CommitPublished {
+
+  // Not inlcuding commitTx here because it has already been published by peer
+  val allTransactions = claimMain.map(_.tx) ++ claimPenalty.map(_.tx)
+
+  def getAllStates = {
+    val mainInfo = for (t1 <- claimMain) yield (Some apply 0L, t1 feeDiff t1, t1.tx.txOut.head.amount)
+    val penaltyInfo = for (t1 <- claimPenalty) yield (Some apply 0L, t1 feeDiff t1, t1.tx.txOut.head.amount)
+    mainInfo ++ penaltyInfo
+  }
+}
 
 // COMMITMENTS
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[HtlcUpdateFail],
+case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[HtlcFailure],
                           feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
-  type HtlcUpdateFail = (Htlc, UpdateFailHtlc)
+  type HtlcFailure = (Htlc, LightningMessage)
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
@@ -137,8 +169,8 @@ object CommitmentSpec {
       case None => cs
     }
 
-  private def fail(cs: CommitmentSpec, in: Boolean, u: UpdateFailHtlc) =
-    // Should rememeber HTLC as well as failure reason to reduce routes
+  private def fail(cs: CommitmentSpec, in: Boolean, u: FailHtlc) =
+    // Should rememeber HTLC and failure reason to reduce routes
 
     findHtlcById(cs, u.id, in) match {
       case Some(htlc) if htlc.incoming =>
@@ -164,29 +196,28 @@ object CommitmentSpec {
     // Before starting to reduce fresh changes we need to get rid of previous fulfilled and failed information
 
     val spec1 = cs.copy(fulfilled = Set.empty, failed = Set.empty)
-    val spec2 = (spec1 /: localChanges) { case (s, add: UpdateAddHtlc) => plusOutgoing(add, s) case (s, _) => s }
-    val spec3 = (spec2 /: remoteChanges) { case (s, add: UpdateAddHtlc) => plusIncoming(add, s) case (s, _) => s }
+    val spec2 = (spec1 /: localChanges) { case (s, add: UpdateAddHtlc) => plusOutgoing(add, s) case s \ _ => s }
+    val spec3 = (spec2 /: remoteChanges) { case (s, add: UpdateAddHtlc) => plusIncoming(add, s) case s \ _ => s }
 
     val spec4 = (spec3 /: localChanges) {
-      case (s, msg: UpdateFailHtlc) => fail(s, in = true, msg)
+      case (s, msg: FailHtlc) => fail(s, in = true, msg)
       case (s, msg: UpdateFulfillHtlc) => fulfill(s, in = true, msg)
       case (s, u: UpdateFee) => s.copy(feeratePerKw = u.feeratePerKw)
-      case (s, _) => s
+      case s \ _ => s
     }
 
     (spec4 /: remoteChanges) {
-      case (s, msg: UpdateFailHtlc) => fail(s, in = false, msg)
+      case (s, msg: FailHtlc) => fail(s, in = false, msg)
       case (s, msg: UpdateFulfillHtlc) => fulfill(s, in = false, msg)
       case (s, u: UpdateFee) => s.copy(feeratePerKw = u.feeratePerKw)
-      case (s, _) => s
+      case s \ _ => s
     }
   }
 }
 
-case class LocalParams(dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64, channelReserveSat: Long,
-                       toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPrivKey: PrivateKey, revocationSecret: Scalar,
-                       paymentKey: PrivateKey, delayedPaymentKey: Scalar, defaultFinalScriptPubKey: BinaryData,
-                       shaSeed: BinaryData, isFunder: Boolean)
+case class LocalParams(maxHtlcValueInFlightMsat: UInt64, channelReserveSat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
+                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey, delayedPaymentKey: Scalar,
+                       defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean)
 
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig, localCommitIndexSnapshot: Long)
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
@@ -225,7 +256,7 @@ object Commitments {
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
     if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
-    else if (cmd.out.request.amount.get > LNParams.maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
+    else if (cmd.out.request.amount.get > maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
     else if (cmd.out.request.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
 
@@ -238,18 +269,18 @@ object Commitments {
       val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.remoteParams.dustLimitSatoshis), reduced).amount else 0
       val htlcValueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.remoteParams.maxHtlcValueInFlightMsat
-      val feesOverflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0
+      val isOverflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
       // The rest of the guards
       if (htlcValueInFlightOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       else if (acceptedHtlcsOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      else if (feesOverflow) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
+      else if (isOverflow) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
       else c1 -> add
     }
 
   def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockLimit: Int) =
-    if (add.amountMsat < LNParams.htlcMinimumMsat) throw new LightningException
+    if (add.amountMsat < htlcMinimumMsat) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
     else if (add.expiry < blockLimit) throw new LightningException
@@ -258,15 +289,15 @@ object Commitments {
       // Let's compute the current commitment *as seen by us* including this change
       val c1 = addRemoteProposal(c, add).copy(remoteNextHtlcId = c.remoteNextHtlcId + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
-      val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.localParams.dustLimitSatoshis), reduced).amount else 0
       val htlcValueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.localParams.maxHtlcValueInFlightMsat
-      val feesOverflow = reduced.toRemoteMsat / 1000L - c1.localParams.channelReserveSat - fees < 0
+      val localFees = if (c1.localParams.isFunder) Scripts.commitTxFee(dustLimit, reduced).amount else 0L
+      val isOverflow = reduced.toRemoteMsat / 1000L - c1.localParams.channelReserveSat - localFees < 0L
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.localParams.maxAcceptedHtlcs
 
       // The rest of the guards
       if (htlcValueInFlightOverflow) throw new LightningException
       else if (acceptedHtlcsOverflow) throw new LightningException
-      else if (feesOverflow) throw new LightningException
+      else if (isOverflow) throw new LightningException
       else c1
     }
 

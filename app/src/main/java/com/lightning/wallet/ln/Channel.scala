@@ -45,7 +45,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         initialFeeratePerKw, pushMsat, _, fundingSat), WAIT_FOR_INIT) =>
 
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
-          tempId, fundingSat, pushMsat, localParams.dustLimitSatoshis, localParams.maxHtlcValueInFlightMsat,
+          tempId, fundingSat, pushMsat, LNParams.dustLimit.amount, localParams.maxHtlcValueInFlightMsat,
           localParams.channelReserveSat, LNParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
@@ -335,9 +335,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (norm: NormalData, cr: ChannelReestablish, SYNC)
         if cr.channelId == norm.commitments.channelId &&
-          norm.commitments.remoteChanges.acked.isEmpty &&
-          norm.commitments.remoteChanges.signed.isEmpty &&
-          norm.commitments.localCommit.index == 0 =>
+          norm.commitments.remoteNextCommitInfo.isRight &&
+          norm.commitments.localCommit.index == 0 &&
+          cr.nextLocalCommitmentNumber == 1 =>
 
         // They may not have received our FundingLocked so re-send
         BECOME(norm, NORMAL) SEND makeFundingLocked(norm.commitments)
@@ -418,13 +418,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val Seq(closeFeeSat, remoteFeeSat) = Seq(neg.localClosingSigned.feeSatoshis, feeSatoshis) map Satoshi
         val Seq(localScript, remoteScript) = Seq(neg.localShutdown.scriptPubKey, neg.remoteShutdown.scriptPubKey)
-        val closeTxOpt = Closing.checkClosingSignature(neg.commitments, localScript, remoteScript, remoteFeeSat, remoteSig)
+        val closeOpt = Closing.checkClosingSignature(neg.commitments, localScript, remoteScript, remoteFeeSat, remoteSig)
         lazy val (_, nextClosingSigned) = Closing.makeClosing(neg.commitments, localScript, remoteScript, nextCloseFee)
         lazy val nextCloseFee = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
 
-        closeTxOpt match {
-          case Some(closeTx) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closeTx)
-          case Some(closeTx) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closeTx)
+        closeOpt match {
+          case Some(close) if closeFeeSat == remoteFeeSat => startMutualClose(neg, close.tx)
+          case Some(close) if nextCloseFee == remoteFeeSat => startMutualClose(neg, close.tx)
           case Some(_) => me UPDATE neg.copy(localClosingSigned = nextClosingSigned) SEND nextClosingSigned
           case _ => throw new LightningException
         }
@@ -512,8 +512,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def startOtherClose(some: HasCommitments, tx: Transaction) =
     // They may have spent a revoked transaction so we can maybe take all the money
     Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, tx) -> some match {
-      case (Some(claim), close: ClosingData) => BECOME(me STORE close.modify(_.revokedCommits).using(claim +: _), CLOSING)
-      case (Some(claim), _) => BECOME(me STORE ClosingData(some.announce, some.commitments, revokedCommits = claim :: Nil), CLOSING)
+      case (Some(claim), close: ClosingData) => BECOME(me STORE close.modify(_.revokedCommit).using(claim +: _), CLOSING)
+      case (Some(claim), _) => BECOME(me STORE ClosingData(some.announce, some.commitments, revokedCommit = claim :: Nil), CLOSING)
       case (None, close: ClosingData) if close.mutualClose.exists(_.txid == tx.txid) => Tools log "Disregarding mutual closing tx"
       case (None, neg: NegotiationsData) => startMutualClose(neg, tx)
       case _ => startLocalCurrentClose(some)

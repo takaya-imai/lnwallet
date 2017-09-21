@@ -29,12 +29,19 @@ object StorageWrap {
 }
 
 object ChannelWrap extends ChannelListener {
-  def put(data: HasCommitments) = doPut(data.commitments.channelId.toString, data.toJson.toString)
-  def get = RichCursor(db select ChannelTable.selectAllSql).vec(_ string ChannelTable.data) map to[HasCommitments]
-
   def doPut(chanId: String, data: String) = db txWrap {
     db.change(ChannelTable.newSql, params = chanId, data)
     db.change(ChannelTable.updSql, params = data, chanId)
+  }
+
+  def put(data: HasCommitments) = {
+    val chanId = data.commitments.channelId
+    doPut(chanId.toString, data.toJson.toString)
+  }
+
+  def get = {
+    val rc = RichCursor(db select ChannelTable.selectAllSql)
+    rc.vec(_ string ChannelTable.data) map to[HasCommitments]
   }
 
   override def onProcess = {
@@ -112,8 +119,8 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       }
 
       for {
-        // Then retry failed payments with routes left
-        htlc \ fail <- norm.commitments.localCommit.spec.failed
+        // Then retry failed payments with routes left, except malformed ones
+        (htlc, fail: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
         out @ OutgoingPayment(_, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
         out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
       } chan process RetryAddHtlc(out1)

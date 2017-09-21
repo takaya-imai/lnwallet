@@ -3,7 +3,7 @@ package com.lightning.wallet
 import Utils._
 import R.string._
 import org.bitcoinj.core.{Address, Block, FilteredBlock, Peer, PeerAddress, Transaction}
-
+import collection.JavaConverters.seqAsJavaListConverter
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
@@ -22,7 +22,7 @@ import android.app.Application
 import android.widget.Toast
 import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
-
+import com.lightning.wallet.lncloud.ImplicitConversions._
 import Context.CLIPBOARD_SERVICE
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.wire.{Hop, Init, LightningMessage}
@@ -119,10 +119,15 @@ class WalletApp extends Application { me =>
     def reconnect(cv: ChannelVec) = cv.map(_.data.announce) foreach requestConnection
 
     val chainEventsListener = new TxTracker with BlocksListener {
+      override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
+        // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
+        Helpers extractPreimages spent.tx foreach bag.updatePreimage
+        for (chan <- all) chan process spent
+      }
+
       def height = for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
-      override def coinsSent(tx: Transaction) = for (chan <- all) chan process CMDSpent(tx)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
-      def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) height
+      override def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) height
       override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) height
     }
 
@@ -175,7 +180,10 @@ class WalletApp extends Application { me =>
     } yield OutgoingPayment(RoutingData(rs.tail, onion, withFees, allExpiry), NOIMAGE, request, chanId, TEMP)
   }
 
-  abstract class WalletKit extends AbstractKit { self =>
+  abstract class WalletKit extends AbstractKit {
+    type ScriptSeq = Seq[org.bitcoinj.script.Script]
+    def watchFunding(cs: Commitments) = watchScripts(cs.commitInput.txOut.publicKeyScript :: Nil)
+    def watchScripts(scs: ScriptSeq) = app.kit.wallet addWatchedScripts scs.asJava
     def currentBalance = wallet getBalance BalanceType.AVAILABLE_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight

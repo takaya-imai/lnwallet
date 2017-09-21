@@ -4,9 +4,8 @@ import com.lightning.wallet.ln._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
-import com.lightning.wallet.Utils.{app, sumIn, denom}
-import fr.acinq.bitcoin.{MilliSatoshi, Transaction}
+import com.lightning.wallet.Utils.{app, denom, sumIn, sumOut}
+import fr.acinq.bitcoin.{MilliSatoshi, Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.none
 import android.widget.Button
 import android.os.Bundle
@@ -36,13 +35,10 @@ class LNOpsActivity extends TimerActivity { me =>
     }
   }
 
-  private def prettyTxAmount(tx: Transaction) =
-    sumIn.format(denom withSign tx.txOut.head.amount)
-
   private def manageFirst(chan: Channel) = {
     def manageOpening(c: Commitments, open: Transaction) = {
       val channelCapacity = sumIn.format(denom withSign c.commitInput.txOut.amount)
-      val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfirmations(open.txid).getOrElse(0).toLong)
+      val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfs(open.txid).getOrElse(0).toLong)
       val confirmationThreshold = app.plurOrZero(number = math.max(c.remoteParams.minimumDepth, LNParams.minDepth), opts = txsConfs)
       lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity, confirmationThreshold, currentState).html
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
@@ -70,7 +66,7 @@ class LNOpsActivity extends TimerActivity { me =>
           me runOnUiThread manageOpening(commitments, tx)
 
         // Mutual shutdown initiated
-        case (_, norm: NormalData, _, _) if norm.isShutDown =>
+        case (_, norm: NormalData, _, _) if norm.isFinishing =>
           me runOnUiThread manageNegotiations(norm.commitments)
 
         // Normal is managed by main activity
@@ -122,23 +118,30 @@ class LNOpsActivity extends TimerActivity { me =>
 
   private def manageMutualClosing(close: Transaction) = {
     val finalizeThreshold = app.plurOrZero(txsConfs, LNParams.minDepth)
-    val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfirmations(close.txid).getOrElse(0).toLong)
+    val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfs(close.txid).getOrElse(0).toLong)
     lnOpsDescription setText getString(ln_ops_chan_bilateral_closing).format(finalizeThreshold, currentState).html
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsAction setText ln_ops_start
   }
 
+  private def basis(fee: Satoshi, amt: Satoshi) = {
+    val status = me getString ln_ops_chan_unilateral_status
+    val humanFee = sumOut.format(denom withSign fee)
+    val humanAmt = sumIn.format(denom withSign amt)
+    status.format(humanAmt, humanFee)
+  }
+
   private def manageForcedClosing(data: ClosingData) = {
-    def statusView(status: BroadcastStatus) = status match {
-      case BroadcastStatus(None, false, tx) => getString(ln_ops_chan_unilateral_status_wait) format prettyTxAmount(tx)
-      case BroadcastStatus(Some(blocks), false, tx) => prettyTxAmount(tx) + " " + app.plurOrZero(blocksLeft, blocks)
-      case BroadcastStatus(_, true, tx) => getString(ln_ops_chan_unilateral_status_done) format prettyTxAmount(tx)
+    val humanPublishStatus: Seq[String] = data.getAllStates map {
+      case (None, fee, amt) => me getString ln_ops_chan_unilateral_status_wait format basis(fee, amt)
+      case (Some(0L), fee, amt) => me getString ln_ops_chan_unilateral_status_done format basis(fee, amt)
+      case (Some(left), fee, amt) => app.plurOrZero(blocksLeft, left) format basis(fee, amt)
     }
 
     lnOpsAction setText ln_ops_start
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText getString(ln_ops_chan_unilateral_closing)
-      .format(data.bss map statusView mkString "<br>").html
+      .format(humanPublishStatus mkString "<br>").html
   }
 
   // Offer to create a new channel
