@@ -44,7 +44,7 @@ object SatDenomination extends Denomination {
 }
 
 object BitDenomination extends Denomination {
-  val fmt = new DecimalFormat("###,###,###.#####")
+  val fmt = new DecimalFormat("###,###,##0.00###")
   val txt = app getString amount_hint_bit
   val factor = bit2msatFactor
 
@@ -54,7 +54,7 @@ object BitDenomination extends Denomination {
 }
 
 object MBtcDenomination extends Denomination {
-  val fmt = new DecimalFormat("###,###.########")
+  val fmt = new DecimalFormat("###,##0.00######")
   val txt = app getString amount_hint_mbtc
   val factor = mbtc2msatFactor
 

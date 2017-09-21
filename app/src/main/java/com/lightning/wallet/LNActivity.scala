@@ -245,9 +245,7 @@ with SearchBar { me =>
         case AddException(cmd: RetryAddHtlc, _) => Tools log s"Retry payment rejected $cmd"
         case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
         case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
-        case e =>
-          e.printStackTrace
-          chan process CMDShutdown
+        case _ => chan process CMDShutdown
       }
 
       override def onProcess = {

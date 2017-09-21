@@ -126,16 +126,16 @@ class LNOpsActivity extends TimerActivity { me =>
 
   private def basis(fee: Satoshi, amt: Satoshi) = {
     val status = me getString ln_ops_chan_unilateral_status
-    val humanFee = sumOut.format(denom withSign fee)
-    val humanAmt = sumIn.format(denom withSign amt)
+    val humanAmt = sumIn.format(denom withSign fee + amt)
+    val humanFee = sumOut.format(denom formatted fee)
     status.format(humanAmt, humanFee)
   }
 
   private def manageForcedClosing(data: ClosingData) = {
-    val humanPublishStatus: Seq[String] = data.getAllStates map {
+    val humanPublishStatus = data.getAllStates(data.commitments.commitInput.txOut.amount) map {
       case (None, fee, amt) => me getString ln_ops_chan_unilateral_status_wait format basis(fee, amt)
       case (Some(0L), fee, amt) => me getString ln_ops_chan_unilateral_status_done format basis(fee, amt)
-      case (Some(left), fee, amt) => app.plurOrZero(blocksLeft, left) format basis(fee, amt)
+      case (Some(left), fee, amt) => basis(fee, amt) + app.plurOrZero(blocksLeft, left)
     }
 
     lnOpsAction setText ln_ops_start

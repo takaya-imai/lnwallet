@@ -84,9 +84,9 @@
 
     <string name="ln_notify_connecting">Connecting to Lightning peer&#8230;</string>
     <string name="ln_notify_operational">Lightning wallet is online</string>
-    <string name="ln_pr_make">Making a payment request&#8230;</string>
+    <string name="ln_pr_make">Making payment request&#8230;</string>
     <string name="ln_done">Lightning payment settled</string>
-    <string name="ln_send">Sending a payment&#8230;</string>
+    <string name="ln_send">Sending payment&#8230;</string>
     <string name="ln_notify_working">Working&#8230;</string>
     <string name="ln_select_peer">Select peer</string>
     
@@ -183,11 +183,11 @@
     <!-- see PaymentInfo.scala -->
     <array name="ln_payment_states">
         <item>Waiting for peer</item>
-        <item>Waiting for payment</item>
+        <item>Waiting for payee</item>
         <item>In progress&#8230;</item>
         <item>Paid and settled</item>
-        <item>Rejected</item>
-        <item>Refunded</item>
+        <item>Cancelled and aborted</item>
+        <item>Refunded to Bitcoin wallet</item>
     </array>
 
     <!-- setting a private backup server -->
@@ -209,14 +209,14 @@
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[Finalizing Payment Channel&#8230;<br><font color=#999999>Using <a href=https://lightning-wallet.com>forced channel closing</a></font><br><br>Remaining channel balance will be refunded to your Bitcoin wallet via series of delayed Bitcoin transactions<br><br>%1$s]]></string>
     <string name="ln_ops_chan_unilateral_warn"><![CDATA[<a href=https://lightning-wallet.com>Forced channel closing</a> is much more expensive and time consuming than a mutually agreed one]]></string>
 
-    <string name="ln_ops_chan_unilateral_status">%1$s with %2$s fee</string>
+    <string name="ln_ops_chan_unilateral_status">%1$s - %2$s fee</string>
     <string name="ln_ops_chan_unilateral_status_done">%1$s received</string>
     <string name="ln_ops_chan_unilateral_status_wait">%1$s queued</string>
 
     <array name="ln_ops_chan_unilateral_blocks_left">
-        <item><![CDATA[%1$s sending]]></item>
-        <item><![CDATA[in %1$s block]]></item>
-        <item><![CDATA[in %1$s blocks]]></item>
+        <item><![CDATA[&#160;sending&#8230;]]></item>
+        <item><![CDATA[&#160;in %1$s block]]></item>
+        <item><![CDATA[&#160;in %1$s blocks]]></item>
     </array>
 
     <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read about Lightning Network</a></small><br><br>Fund a Payment Channel]]></string>

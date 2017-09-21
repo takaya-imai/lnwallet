@@ -109,8 +109,11 @@ object Scripts { me =>
   // TRANSACTION TEMPLATES
 
   trait TransactionWithInputInfo {
-    def feeDiff(that: TransactionWithInputInfo) =
-      input.txOut.amount - that.tx.txOut.head.amount
+    def --(that: TransactionWithInputInfo) =
+      input.txOut.amount - that.amount
+
+    def amount: Satoshi =
+      tx.txOut.head.amount
 
     def input: InputInfo
     def tx: Transaction
@@ -258,11 +261,11 @@ object Scripts { me =>
                    localDelayedPubkey: PublicKey, remotePubkey: PublicKey,
                    spec: CommitmentSpec): CommitTx = {
 
-    val commitFee: Satoshi = commitTxFee(localDustLimit, spec)
+    val commitFee = commitTxFee(localDustLimit, spec)
     val toRemote: Satoshi = MilliSatoshi(spec.toRemoteMsat)
     val toLocal: Satoshi = MilliSatoshi(spec.toLocalMsat)
 
-    val (toLocalAmount: Satoshi, toRemoteAmount: Satoshi) =
+    val toLocalAmount \ toRemoteAmount =
       if (localIsFunder) (toLocal - commitFee, toRemote)
       else (toLocal, toRemote - commitFee)
 

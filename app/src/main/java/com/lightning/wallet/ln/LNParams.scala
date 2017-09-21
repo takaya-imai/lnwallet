@@ -5,11 +5,11 @@ import com.lightning.wallet.lncloud._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import scala.util.{Failure, Success}
 
+import scala.util.{Failure, Success}
 import com.lightning.wallet.lncloud.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
-import com.lightning.wallet.ln.Scripts.csvTimeout
+import com.lightning.wallet.ln.Scripts.{TransactionWithInputInfo, csvTimeout}
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
@@ -99,15 +99,13 @@ trait Broadcaster extends ChannelListener { me =>
   def feeRatePerKw: Long
   def currentHeight: Int
 
-  def safeSend(tx: Transaction) =
-    obsOn(me send tx, IOScheduler.apply)
-      .onErrorReturn(_.getMessage)
+  def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply).onErrorReturn(_.getMessage)
+  def cltv(info: TransactionWithInputInfo) = math.max(info.tx.lockTime - currentHeight, 0L)
+  def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) =
+    for (left <- me csv info2) yield cltv(info1) + left
 
-  def cltv(tx: Transaction) =
-    math.max(tx.lockTime - currentHeight, 0L)
-
-  def csv(tx: Transaction) =
-    getConfs(tx.txIn.head.outPoint.txid)
-      .map(parent => csvTimeout(tx) - parent)
+  def csv(info: TransactionWithInputInfo) =
+    getConfs(info.tx.txIn.head.outPoint.txid)
+      .map(parent => csvTimeout(info.tx) - parent)
       .map(delay => if (delay < 0L) 0L else delay)
 }
