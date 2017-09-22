@@ -145,6 +145,7 @@ object PaymentInfo {
 
   } getOrElse {
     val hash = sha256(add.onionRoutingPacket)
+    // BADONION bit must be set in failure_code
     CMDFailMalformedHtlc(add.id, hash, BADONION)
   }
 }

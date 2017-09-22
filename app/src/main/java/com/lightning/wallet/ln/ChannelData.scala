@@ -151,7 +151,7 @@ case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[Ht
                           feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
-  type HtlcFailure = (Htlc, LightningMessage) // Only interested in UpdateFailHtlc
+  type HtlcFailure = (Htlc, LightningMessage)
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
@@ -170,7 +170,7 @@ object CommitmentSpec {
       case None => cs
     }
 
-  private def fail(cs: CommitmentSpec, in: Boolean, u: FailHtlc) =
+  private def fail(cs: CommitmentSpec, in: Boolean, u: HasHtlcId) =
     // Should rememeber HTLC and failure reason to reduce routes
 
     findHtlcById(cs, u.id, in) match {
@@ -194,23 +194,25 @@ object CommitmentSpec {
       toRemoteMsat = cs.toRemoteMsat - data.amountMsat)
 
   def reduce(cs: CommitmentSpec, localChanges: LightningMessages, remoteChanges: LightningMessages) = {
-    // Before starting to reduce fresh changes we need to get rid of previous fulfilled and failed information
+    // Before reducing fresh changes we need to get rid of previous fulfilled and failed messages
 
     val spec1 = cs.copy(fulfilled = Set.empty, failed = Set.empty)
     val spec2 = (spec1 /: localChanges) { case (s, add: UpdateAddHtlc) => plusOutgoing(add, s) case s \ _ => s }
     val spec3 = (spec2 /: remoteChanges) { case (s, add: UpdateAddHtlc) => plusIncoming(add, s) case s \ _ => s }
 
     val spec4 = (spec3 /: localChanges) {
-      case (s, msg: FailHtlc) => fail(s, in = true, msg)
+      case (s, msg: UpdateFailHtlc) => fail(s, in = true, msg)
+      case (s, msg: UpdateFailMalformedHtlc) => fail(s, in = true, msg)
+      case (s, msg: UpdateFee) => s.copy(feeratePerKw = msg.feeratePerKw)
       case (s, msg: UpdateFulfillHtlc) => fulfill(s, in = true, msg)
-      case (s, u: UpdateFee) => s.copy(feeratePerKw = u.feeratePerKw)
       case s \ _ => s
     }
 
     (spec4 /: remoteChanges) {
-      case (s, msg: FailHtlc) => fail(s, in = false, msg)
+      case (s, msg: UpdateFailHtlc) => fail(s, in = false, msg)
+      case (s, msg: UpdateFailMalformedHtlc) => fail(s, in = false, msg)
+      case (s, msg: UpdateFee) => s.copy(feeratePerKw = msg.feeratePerKw)
       case (s, msg: UpdateFulfillHtlc) => fulfill(s, in = false, msg)
-      case (s, u: UpdateFee) => s.copy(feeratePerKw = u.feeratePerKw)
       case s \ _ => s
     }
   }
@@ -328,9 +330,19 @@ object Commitments {
     if (found.isEmpty) throw new LightningException else addLocalProposal(c, fail) -> fail
   }
 
-  def receiveFail(c: Commitments, fail: FailHtlc) = {
+  def receiveFail(c: Commitments, fail: UpdateFailHtlc) = {
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = false, fail.id)
     if (found.isEmpty) throw new LightningException else addRemoteProposal(c, fail)
+  }
+
+  def receiveFailMalformed(c: Commitments, fail: UpdateFailMalformedHtlc) = {
+    val found = getHtlcCrossSigned(c, incomingRelativeToLocal = false, fail.id)
+    // A receiving node MUST fail the channel if the BADONION bit is not set
+    val isBadOnion = (fail.failureCode & FailureMessageCodecs.BADONION) == 0
+
+    if (isBadOnion) throw new LightningException
+    else if (found.isEmpty) throw new LightningException
+    else addRemoteProposal(c, fail)
   }
 
   def sendFee(c: Commitments, ratePerKw: Long) = {

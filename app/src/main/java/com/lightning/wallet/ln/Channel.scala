@@ -160,11 +160,19 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE norm.copy(commitments = c1)
 
 
-      case (norm: NormalData, fail: FailHtlc, NORMAL)
+      case (norm: NormalData, fail: UpdateFailHtlc, NORMAL)
         if fail.channelId == norm.commitments.channelId =>
 
         // Got a failure for an outgoing HTLC we sent earlier
         val c1 = Commitments.receiveFail(norm.commitments, fail)
+        me UPDATE norm.copy(commitments = c1)
+
+
+      case (norm: NormalData, fail: UpdateFailMalformedHtlc, NORMAL)
+        if fail.channelId == norm.commitments.channelId =>
+
+        // Got 'malformed' failure for an outgoing HTLC we sent earlier
+        val c1 = Commitments.receiveFailMalformed(norm.commitments, fail)
         me UPDATE norm.copy(commitments = c1)
 
 

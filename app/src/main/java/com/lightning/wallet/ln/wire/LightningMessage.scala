@@ -46,9 +46,8 @@ sealed trait HasHtlcId extends ChannelMessage { def id: Long }
 case class UpdateAddHtlc(channelId: BinaryData, id: Long, amountMsat: Long, paymentHash: BinaryData,
                          expiry: Long, onionRoutingPacket: BinaryData) extends HasHtlcId
 
-sealed trait FailHtlc extends HasHtlcId { def channelId: BinaryData }
-case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends FailHtlc
-case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends FailHtlc
+case class UpdateFailHtlc(channelId: BinaryData, id: Long, reason: BinaryData) extends HasHtlcId
+case class UpdateFailMalformedHtlc(channelId: BinaryData, id: Long, onionHash: BinaryData, failureCode: Int) extends HasHtlcId
 case class UpdateFulfillHtlc(channelId: BinaryData, id: Long, paymentPreimage: BinaryData) extends HasHtlcId {
 
   val paymentHash = fr.acinq.bitcoin.Crypto sha256 paymentPreimage.data
