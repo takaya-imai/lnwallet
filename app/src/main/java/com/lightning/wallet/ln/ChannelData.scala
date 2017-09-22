@@ -11,7 +11,6 @@ import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.LNParams.broadcaster.{csv, cltv, cltvAndCsv}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
-
 import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
 import com.lightning.wallet.ln.Tools.LightningMessages
 import fr.acinq.eclair.UInt64
@@ -81,8 +80,8 @@ case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
 trait CommitPublished {
   // Cumulative delay, final fee, final amount
   type PublishStatus = (Option[Long], Satoshi, Satoshi)
-  def getAllStates(baseAmount: Satoshi): Seq[PublishStatus]
   val allTransactions: Seq[Transaction]
+  def getAllStates: Seq[PublishStatus]
 }
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
@@ -90,17 +89,17 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommit: Seq[RevokedCommitPublished] = Nil,
                        startedAt: Long = System.currentTimeMillis) extends EndingData with CommitPublished {
 
-  def getAllStates(baseAmount: Satoshi) =
-    localCommit.flatMap(_ getAllStates baseAmount) ++ remoteCommit.flatMap(_ getAllStates baseAmount) ++
-      nextRemoteCommit.flatMap(_ getAllStates baseAmount) ++ revokedCommit.flatMap(_ getAllStates baseAmount)
+  def getAllStates =
+    localCommit.flatMap(_.getAllStates) ++ remoteCommit.flatMap(_.getAllStates) ++
+      nextRemoteCommit.flatMap(_.getAllStates) ++ revokedCommit.flatMap(_.getAllStates)
 
   val allTransactions =
     mutualClose ++ localCommit.flatMap(_.allTransactions) ++ remoteCommit.flatMap(_.allTransactions) ++
       nextRemoteCommit.flatMap(_.allTransactions) ++ revokedCommit.flatMap(_.allTransactions)
 
   lazy val allCommits =
-    nextRemoteCommit.map(_.commitTx) ++ localCommit.map(_.commitTx) ++
-      remoteCommit.map(_.commitTx) ++ revokedCommit.map(_.commitTx)
+    mutualClose ++ localCommit.map(_.commitTx) ++ remoteCommit.map(_.commitTx) ++
+      nextRemoteCommit.map(_.commitTx) ++ revokedCommit.map(_.commitTx)
 }
 
 case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], claimHtlcSuccess: Seq[SuccessAndClaim],
@@ -110,11 +109,10 @@ case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], cla
     claimHtlcSuccess.map(_._1.tx) ++ claimHtlcTimeout.map(_._1.tx) ++
     claimHtlcSuccess.map(_._2.tx) ++ claimHtlcTimeout.map(_._2.tx)
 
-  def getAllStates(baseAmount: Satoshi) = {
-    val spentCommitFee = baseAmount - commitTx.txOut.map(_.amount).sum
-    val mainInfo = for (tier1 <- claimMainDelayed) yield (csv(tier1), tier1 -- tier1 + spentCommitFee, tier1.amount)
-    val timeoutInfo = for (tier1 \ tier2 <- claimHtlcTimeout) yield (cltvAndCsv(tier1, tier2), tier1 -- tier2, tier2.amount)
+  def getAllStates = {
+    val mainInfo = for (tier1 <- claimMainDelayed) yield (csv(tier1), tier1 -- tier1, tier1.amount)
     val successInfo = for (tier1 \ tier2 <- claimHtlcSuccess) yield (csv(tier2), tier1 -- tier2, tier2.amount)
+    val timeoutInfo = for (tier1 \ tier2 <- claimHtlcTimeout) yield (cltvAndCsv(tier1, tier2), tier1 -- tier2, tier2.amount)
     mainInfo ++ successInfo ++ timeoutInfo
   }
 }
@@ -125,11 +123,10 @@ case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcS
   // Not inlcuding commitTx here because by definition it has already been published by peer
   val allTransactions = claimMain.map(_.tx) ++ claimHtlcSuccess.map(_.tx) ++ claimHtlcTimeout.map(_.tx)
 
-  def getAllStates(baseAmount: Satoshi) = {
-    val spentCommitFee = baseAmount - commitTx.txOut.map(_.amount).sum
-    val mainInfo = for (t1 <- claimMain) yield (Some(0L), t1 -- t1 + spentCommitFee, t1.amount)
-    val timeoutInfo = for (t1 <- claimHtlcTimeout) yield (Some apply cltv(t1), t1 -- t1, t1.amount)
-    val successInfo = for (t1 <- claimHtlcSuccess) yield (Some(0L), t1 -- t1, t1.amount)
+  def getAllStates = {
+    val mainInfo = for (tier1 <- claimMain) yield (Some(0L), tier1 -- tier1, tier1.amount)
+    val successInfo = for (tier1 <- claimHtlcSuccess) yield (Some(0L), tier1 -- tier1, tier1.amount)
+    val timeoutInfo = for (tier1 <- claimHtlcTimeout) yield (Some apply cltv(tier1), tier1 -- tier1, tier1.amount)
     mainInfo ++ successInfo ++ timeoutInfo
   }
 }
@@ -140,10 +137,9 @@ case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPena
   // Not inlcuding commitTx here because it has already been published by peer
   val allTransactions = claimMain.map(_.tx) ++ claimPenalty.map(_.tx)
 
-  def getAllStates(baseAmount: Satoshi) = {
-    val spentCommitFee = baseAmount - commitTx.txOut.map(_.amount).sum
-    val mainInfo = for (t1 <- claimMain) yield (Some(0L), t1 -- t1 + spentCommitFee, t1.amount)
-    val penaltyInfo = for (t1 <- claimPenalty) yield (Some(0L), t1 -- t1, t1.amount)
+  def getAllStates = {
+    val mainInfo = for (tier1 <- claimMain) yield (Some(0L), tier1 -- tier1, tier1.amount)
+    val penaltyInfo = for (tier1 <- claimPenalty) yield (Some(0L), tier1 -- tier1, tier1.amount)
     mainInfo ++ penaltyInfo
   }
 }

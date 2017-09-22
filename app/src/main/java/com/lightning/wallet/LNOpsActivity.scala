@@ -1,10 +1,10 @@
 package com.lightning.wallet
 
 import com.lightning.wallet.ln._
+import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import com.lightning.wallet.Utils.{app, denom, sumIn, sumOut}
 import fr.acinq.bitcoin.{MilliSatoshi, Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.none
 import android.widget.Button
@@ -14,9 +14,14 @@ import android.view.View
 
 class LNOpsActivity extends TimerActivity { me =>
   lazy val txsConfs = getResources getStringArray R.array.txs_confs
-  lazy val blocksLeft = getResources getStringArray R.array.ln_ops_chan_unilateral_blocks_left
+  lazy val blocksLeft = getResources getStringArray R.array.ln_ops_chan_unilateral_status_left_blocks
   lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
+  lazy val bilateralClosing = getString(ln_ops_chan_bilateral_closing)
+  lazy val statusLeft = getString(ln_ops_chan_unilateral_status_left)
+  lazy val refundStatus = getString(ln_ops_chan_refund_status)
+  lazy val amountStatus = getString(ln_ops_chan_amount_status)
+  lazy val commitStatus = getString(ln_ops_chan_commit_status)
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
   def goStartChannel = me exitTo classOf[LNStartActivity]
 
@@ -37,17 +42,16 @@ class LNOpsActivity extends TimerActivity { me =>
 
   private def manageFirst(chan: Channel) = {
     def manageOpening(c: Commitments, open: Transaction) = {
-      val channelCapacity = sumIn.format(denom withSign c.commitInput.txOut.amount)
-      val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfs(open.txid).getOrElse(0).toLong)
-      val confirmationThreshold = app.plurOrZero(number = math.max(c.remoteParams.minimumDepth, LNParams.minDepth), opts = txsConfs)
-      lnOpsDescription setText getString(ln_ops_chan_opening).format(channelCapacity, confirmationThreshold, currentState).html
+      val status = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfs(open.txid).getOrElse(0).toLong)
+      val threshold = app.plurOrZero(number = math.max(c.remoteParams.minimumDepth, LNParams.minDepth), opts = txsConfs)
+      lnOpsDescription setText getString(ln_ops_chan_opening).format(coloredIn(c.commitInput.txOut.amount), threshold, status).html
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
       lnOpsAction setText ln_force_close
     }
 
     def manageNegotiations(c: Commitments) = {
-      val withSign = denom withSign MilliSatoshi(c.localCommit.spec.toLocalMsat)
-      val description = getString(ln_ops_chan_bilateral_negotiations).format(sumIn format withSign)
+      val amount = coloredIn apply MilliSatoshi(c.localCommit.spec.toLocalMsat)
+      val description = getString(ln_ops_chan_bilateral_negotiations) format amount
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
       lnOpsDescription setText description.html
       lnOpsAction setText ln_force_close
@@ -78,8 +82,8 @@ class LNOpsActivity extends TimerActivity { me =>
           me runOnUiThread manageNegotiations(negs.commitments)
 
         // Mutual closing is in progress because only a mutual close tx is available here
-        case (_, ClosingData(_, commitments, tx :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me runOnUiThread manageMutualClosing(tx)
+        case (_, close @ ClosingData(_, commitments, _ :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
+          me runOnUiThread manageMutualClosing(close)
 
         // Someone has initiated a unilateral channel closing
         case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, remoteNextTxs, revokedTxs, _), _, CLOSING)
@@ -114,34 +118,34 @@ class LNOpsActivity extends TimerActivity { me =>
     chanOpsListener reloadOnBecome chan
   }
 
-  // UI which does not need a channel access
+  // UI which does not need a channel
+  private def commit(data: ClosingData) = {
+    val totalOutAmount = data.allCommits.head.txOut.map(_.amount).sum
+    val fee = coloredOut(data.commitments.commitInput.txOut.amount - totalOutAmount)
+    val confs = LNParams.broadcaster.getConfs(data.allCommits.head.txid).getOrElse(0)
+    commitStatus.format(app.plurOrZero(txsConfs, confs.toLong), fee)
+  }
 
-  private def manageMutualClosing(close: Transaction) = {
-    val finalizeThreshold = app.plurOrZero(txsConfs, LNParams.minDepth)
-    val currentState = app.plurOrZero(txsConfs, LNParams.broadcaster.getConfs(close.txid).getOrElse(0).toLong)
-    lnOpsDescription setText getString(ln_ops_chan_bilateral_closing).format(finalizeThreshold, currentState).html
+  private def manageMutualClosing(data: ClosingData) = {
+    lnOpsDescription setText bilateralClosing.format(me commit data).html
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsAction setText ln_ops_start
   }
 
-  private def basis(fee: Satoshi, amt: Satoshi) = {
-    val status = me getString ln_ops_chan_unilateral_status
-    val humanAmt = sumIn.format(denom withSign fee + amt)
-    val humanFee = sumOut.format(denom formatted fee)
-    status.format(humanAmt, humanFee)
-  }
-
   private def manageForcedClosing(data: ClosingData) = {
-    val humanPublishStatus = data.getAllStates(data.commitments.commitInput.txOut.amount) map {
-      case (None, fee, amt) => me getString ln_ops_chan_unilateral_status_wait format basis(fee, amt)
-      case (Some(0L), fee, amt) => me getString ln_ops_chan_unilateral_status_done format basis(fee, amt)
-      case (Some(left), fee, amt) => basis(fee, amt) + app.plurOrZero(blocksLeft, left)
-    }
+    def basis(fee: Satoshi, amount: Satoshi) = amountStatus
+      .format(denom formatted amount + fee, coloredOut apply fee)
+
+    val humanPublishStatus = data.getAllStates take 4 map {
+      case (None, fee, amt) => getString(ln_ops_chan_unilateral_status_wait).format(basis(fee, amt), coloredIn apply amt)
+      case (Some(0L), fee, amt) => getString(ln_ops_chan_unilateral_status_done).format(basis(fee, amt), coloredIn apply amt)
+      case (Some(left), fee, amt) => statusLeft.format(app.plurOrZero(blocksLeft, left), basis(fee, amt), coloredIn apply amt)
+    } mkString "<br><br>"
 
     lnOpsAction setText ln_ops_start
     lnOpsAction setOnClickListener onButtonTap(goStartChannel)
     lnOpsDescription setText getString(ln_ops_chan_unilateral_closing)
-      .format(humanPublishStatus mkString "<br>").html
+      .format(s"${me commit data}<br><br>$refundStatus<br>$humanPublishStatus").html
   }
 
   // Offer to create a new channel

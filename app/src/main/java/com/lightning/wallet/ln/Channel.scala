@@ -260,7 +260,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // Sending CMDShutdown when mutual shutdown is already in progress means we want uncooperative close
       case (norm: NormalData, CMDShutdown, NORMAL) if norm.localShutdown.isDefined => startLocalCurrentClose(norm)
       case (norm: NormalData, CMDShutdown, NORMAL) if norm.remoteShutdown.isDefined => startLocalCurrentClose(norm)
-      case (norm @ NormalData(_, _, None, None), CMDShutdown, NORMAL) => me startShutdown norm
+      case (norm: NormalData, CMDShutdown, NORMAL) => me startShutdown norm
 
 
       // They try to shutdown with uncommited changes
@@ -334,17 +334,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       case (norm: NormalData, cr: ChannelReestablish, SYNC)
-        if cr.channelId == norm.commitments.channelId &&
-          norm.commitments.remoteNextCommitInfo.isRight &&
-          norm.commitments.localCommit.index == 0 &&
-          cr.nextLocalCommitmentNumber == 1 =>
-
-        // They may not have received our FundingLocked so re-send
-        BECOME(norm, NORMAL) SEND makeFundingLocked(norm.commitments)
-
-
-      case (norm: NormalData, cr: ChannelReestablish, SYNC)
         if cr.channelId == norm.commitments.channelId =>
+
+        // If next_local_commitment_number is 1 in both the channel_reestablish it sent
+        // and received, then the node MUST retransmit funding_locked, otherwise it MUST NOT
+        if (cr.nextLocalCommitmentNumber == 1 && norm.commitments.localCommit.index == 0)
+          me SEND makeFundingLocked(norm.commitments)
 
         // First we clean up unacknowledged updates
         val localProposedIdDelta = norm.commitments.localChanges.proposed count { case u: UpdateAddHtlc => true }

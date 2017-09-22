@@ -91,8 +91,8 @@ with SearchBar { me =>
         val purpose = info.request.description.right.toSeq.mkString
 
         val marking = info match {
-          case in: IncomingPayment => sumIn.format(denom formatted in.received)
-          case out: OutgoingPayment => sumOut.format(denom formatted out.request.finalSum * -1)
+          case in: IncomingPayment => coloredIn(in.received)
+          case out => coloredOut(out.request.finalSum * -1)
         }
 
         transactWhen setText when(System.currentTimeMillis, timestamp).html
@@ -190,14 +190,15 @@ with SearchBar { me =>
 
       payment match {
         case in: IncomingPayment =>
-          val humanReceived = humanFiat(sumIn.format(denom withSign in.received), in.received)
-          mkForm(me negBld dialog_ok, getString(ln_incoming_title).format(humanStatus).html, detailsWrapper)
+          val title = getString(ln_incoming_title).format(humanStatus)
+          val humanReceived = humanFiat(coloredIn(in.received), in.received)
           paymentDetails setText s"$description<br><br>$humanReceived".html
+          mkForm(me negBld dialog_ok, title.html, detailsWrapper)
 
         case OutgoingPayment(routing, _, request, _, status) =>
           val fee = MilliSatoshi(routing.amountWithFee - request.finalSum.amount)
-          val title = getString(ln_outgoing_title).format(sumOut.format(denom withSign fee), humanStatus)
-          val humanSent = humanFiat(sumOut.format(denom withSign request.finalSum), request.finalSum)
+          val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
+          val humanSent = humanFiat(coloredOut(request.finalSum), request.finalSum)
           val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
 
           def doPaymentRetry = rm(alert) {

@@ -14,6 +14,7 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
+import fr.acinq.bitcoin.{MilliSatoshi, Satoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -34,7 +35,6 @@ import android.view.View.OnClickListener
 import com.lightning.wallet.ln.LNParams
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
-import fr.acinq.bitcoin.MilliSatoshi
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
@@ -60,6 +60,8 @@ object Utils {
   lazy val denoms = List(SatDenomination, BitDenomination, MBtcDenomination, BtcDenomination)
   val textType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
   val passType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+  val coloredOut = (amt: Satoshi) => sumOut.format(denom withSign amt)
+  val coloredIn = (amt: Satoshi) => sumIn.format(denom withSign amt)
 
   // Mapping from text to Android id integer
   val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")
