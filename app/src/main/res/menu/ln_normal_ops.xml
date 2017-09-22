@@ -4,6 +4,11 @@
 
     <item
         app:showAsAction="never"
+        android:title="@string/ln_peer_info"
+        android:id="@+id/actionViewPeerInfo"/>
+
+    <item
+        app:showAsAction="never"
         android:title="@string/ln_close"
         android:id="@+id/actionCloseChannel"/>
 

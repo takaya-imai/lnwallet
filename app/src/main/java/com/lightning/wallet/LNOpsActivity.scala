@@ -50,8 +50,7 @@ class LNOpsActivity extends TimerActivity { me =>
     }
 
     def manageNegotiations(c: Commitments) = {
-      val amount = coloredIn apply MilliSatoshi(c.localCommit.spec.toLocalMsat)
-      val description = getString(ln_ops_chan_bilateral_negotiations) format amount
+      val description = getString(ln_ops_chan_bilateral_negotiations)
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
       lnOpsDescription setText description.html
       lnOpsAction setText ln_force_close

@@ -9,15 +9,14 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.R.drawable.{await, conf1, dead, refund}
-import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
+import com.lightning.wallet.ln.wire.{CommitSig, NodeAnnouncement, RevokeAndAck}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import android.view.{Menu, MenuItem, View}
-import scala.util.{Failure, Success, Try}
 
+import scala.util.{Failure, Success, Try}
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -29,6 +28,7 @@ import org.bitcoinj.core.Address
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
+
 import Utils.app
 
 
@@ -105,6 +105,7 @@ with SearchBar { me =>
   private[this] var sendPayment: PaymentRequest => Unit = none
   private[this] var makePaymentRequest = anyToRunnable(none)
   private[this] var whenStop = anyToRunnable(super.onStop)
+  private[this] var viewPeerInfo = anyToRunnable(none)
   override def onStop = whenStop.run
 
   def evacuate = me exitTo classOf[LNOpsActivity]
@@ -159,6 +160,7 @@ with SearchBar { me =>
 
   override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
     if (menu.getItemId == R.id.actionCloseChannel) closeAllActiveChannels
+    else if (menu.getItemId == R.id.actionViewPeerInfo) viewPeerInfo.run
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
@@ -322,6 +324,14 @@ with SearchBar { me =>
 
       val ok = alert getButton BUTTON_POSITIVE
       ok setOnClickListener onButtonTap(receiveAttempt)
+    }
+
+    viewPeerInfo = anyToRunnable {
+      val humanId = chan.data.announce.nodeId.toString grouped 3 mkString "\u0020"
+      val humanAddresses = chan.data.announce.addresses.map(adr => adr.getHostString + ":" + adr.getPort) mkString "<br>"
+      val (view, field) = str2Tuple(s"${chan.data.announce.alias}<br><br>$humanAddresses<br><br>$humanId".html)
+      mkForm(me negBld dialog_ok, null, view)
+      field setTextIsSelectable true
     }
 
     whenStop = anyToRunnable {
