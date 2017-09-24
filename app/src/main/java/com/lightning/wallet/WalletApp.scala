@@ -2,7 +2,8 @@ package com.lightning.wallet
 
 import Utils._
 import R.string._
-import org.bitcoinj.core.{Address, Block, FilteredBlock, Peer, PeerAddress, Transaction}
+import org.bitcoinj.core._
+
 import collection.JavaConverters.seqAsJavaListConverter
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -17,11 +18,12 @@ import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
 import com.lightning.wallet.ln.Tools._
 import com.google.protobuf.ByteString
-import org.bitcoinj.wallet.Protos
+import org.bitcoinj.wallet.{Protos, Wallet}
 import android.app.Application
 import android.widget.Toast
 import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import Context.CLIPBOARD_SERVICE
 import com.lightning.wallet.ln.PaymentInfo._
@@ -204,18 +206,20 @@ class WalletApp extends Application { me =>
       wallet addTransactionConfidenceEventListener Vibr.generalTracker
       wallet addCoinsReceivedEventListener Vibr.generalTracker
       wallet addCoinsSentEventListener Vibr.generalTracker
+      wallet.watchMode = true
 
       val address = InetAddresses forString cloud.connector.url
       peerGroup addAddress new PeerAddress(app.params, address, 8333)
       //peerGroup addPeerDiscovery new DnsDiscovery(params)
+      peerGroup.setMinRequiredProtocolVersion(70015)
       peerGroup.setUserAgent(appName, "0.01")
-      peerGroup setDownloadTxDependencies 0
-      peerGroup setPingIntervalMsec 10000
-      peerGroup setMaxConnections 6
-      peerGroup addWallet wallet
+      peerGroup.setDownloadTxDependencies(0)
+      peerGroup.setPingIntervalMsec(10000)
+      peerGroup.setMaxConnections(6)
+      peerGroup.addWallet(wallet)
 
-      wallet setAcceptRiskyTransactions true
-      wallet.autosaveToFile(walletFile, 100, MILLISECONDS, null)
+      //wallet setAcceptRiskyTransactions true
+      wallet.autosaveToFile(walletFile, 250, MILLISECONDS, null)
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       ConnectionManager.listeners += ChannelManager.reconnectListener
       startDownload(ChannelManager.chainEventsListener)

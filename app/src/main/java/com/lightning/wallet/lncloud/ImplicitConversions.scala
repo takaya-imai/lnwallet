@@ -14,7 +14,7 @@ object ImplicitConversions {
   implicit def bitcoinjTx2Wrap(bitcoinjTx: org.bitcoinj.core.Transaction): TxWrap = new TxWrap(bitcoinjTx)
 
   implicit def bitcoinLibScript2bitcoinjScript(pubKeyScript: BinaryData): org.bitcoinj.script.Script =
-    new org.bitcoinj.script.Script(pubKeyScript, System.currentTimeMillis / 1000)
+    new org.bitcoinj.script.Script(pubKeyScript, 1501538400L) // 2017-09-01
 
   implicit def bitcoinjTx2bitcoinLibTx(bitcoinjTx: org.bitcoinj.core.Transaction): fr.acinq.bitcoin.Transaction =
     fr.acinq.bitcoin.Transaction.read(bitcoinjTx.unsafeBitcoinSerialize)

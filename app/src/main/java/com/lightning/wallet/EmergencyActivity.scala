@@ -39,8 +39,15 @@ class EmergencyActivity extends ToolbarActivity { me =>
   override def notifySubTitle(subtitle: String, infoType: Int) = none
   def emergeMnemonic(view: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
 
-  def emergeReport(view: View) = Try(getIntent getStringExtra ERROR_REPORT) match {
-    case Success(report: String) => showForm(negBld(dialog_ok).setMessage(report).create)
-    case _ => showForm(negBld(dialog_ok).setMessage(me getString err_general).create)
+  def showDetails(report: String) = {
+    val (view, field) = str2Tuple(report)
+    mkForm(me negBld dialog_ok, null, view)
+    field setTextIsSelectable true
   }
+
+  def emergeReport(view: View) =
+    Try(getIntent getStringExtra ERROR_REPORT) match {
+      case Success(report: String) => showDetails(report)
+      case _ => showDetails(me getString err_general)
+    }
 }

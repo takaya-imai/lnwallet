@@ -40,7 +40,7 @@ object LocalBroadcaster extends Broadcaster { me =>
         close.remoteCommit.exists(_.claimHtlcTimeout.nonEmpty) ||
         close.localCommit.exists(_.claimHtlcTimeout.nonEmpty) =>
 
-      val txids = close.allCommits.map(_.txid).toJson.toString.hex
+      val txids: String = close.allCommits.map(_.txid).toJson.toString.hex
       app.kit.watchScripts(close.allCommits.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
       LNParams.cloud.connector.getTxs(txids).foreach(_ flatMap extractPreimages foreach LNParams.bag.updatePreimage, Tools.errlog)
   }

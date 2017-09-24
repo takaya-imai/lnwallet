@@ -54,7 +54,7 @@ object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, RatesMap)
-  val KEY = "rates1"
+  val KEY = "rates2"
 
   private val updatePeriod: FiniteDuration = 20.minutes
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)

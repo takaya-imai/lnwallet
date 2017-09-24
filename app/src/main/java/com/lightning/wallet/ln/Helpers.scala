@@ -14,9 +14,7 @@ object Helpers { me =>
   val toMessage = UpdateFulfillHtlc(BinaryData.empty, 0L, _: BinaryData)
   def extractPreimages(tx: Transaction) = tx.txIn.map(_.witness.stack) collect {
     case Seq(BinaryData.empty, _, _, paymentPreimage, _) if paymentPreimage.size == 32 => toMessage(paymentPreimage) // htlc-success
-    case Seq(BinaryData.empty, _, _, BinaryData.empty, script) => toMessage(script.slice(109, 109 + 20): BinaryData) // htlc-timeout
     case Seq(_, paymentPreimage, _) if paymentPreimage.size == 32 => toMessage(paymentPreimage) // claim-htlc-success
-    case Seq(_, BinaryData.empty, script) => toMessage(script.slice(69, 69 + 20): BinaryData) // claim-htlc-timeout
   }
 
   def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,

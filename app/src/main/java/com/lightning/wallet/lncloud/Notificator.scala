@@ -18,20 +18,20 @@ object Notificator extends ChannelListener {
   def getAlarmManager = app.getSystemService(Context.ALARM_SERVICE).asInstanceOf[AlarmManager]
 
   override def onBecome = {
-    case (_, _, _, CLOSING | NEGOTIATIONS) =>
-      // We are closing so this is no longer relevant
+    case (_, _, NORMAL | SYNC, CLOSING | NEGOTIATIONS) =>
       try getAlarmManager cancel getIntent catch none
   }
 
   override def onProcess = {
     case (_, norm: NormalData, _: CommitSig)
-      // GUARD: has in-flight HTLCs, set delayed notifcation
-      if Commitments.pendingHtlcs(norm.commitments).nonEmpty =>
-      try getAlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
-        System.currentTimeMillis + 1000 * 60 * 5, getIntent) catch none
+      // GUARD: has no in-flight HTLCs, remove delayed notifcation
+      if Commitments.pendingHtlcs(norm.commitments).isEmpty =>
+      try getAlarmManager cancel getIntent catch none
 
     case (_, norm: NormalData, _: CommitSig) =>
-      try getAlarmManager cancel getIntent catch none
+      val in4Minutes = System.currentTimeMillis + 1000 * 60 * 4
+      try getAlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+        in4Minutes, getIntent) catch none
   }
 }
 

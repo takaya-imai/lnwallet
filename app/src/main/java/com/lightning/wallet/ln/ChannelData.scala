@@ -70,7 +70,7 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
 
 trait EndingData extends HasCommitments {
   def isOutdated = lifespan < System.currentTimeMillis
-  def lifespan = startedAt + 1000 * 3600 * 24 * 7
+  def lifespan = startedAt + 1000 * 3600 * 24 * 5
   val startedAt: Long
 }
 
@@ -337,10 +337,10 @@ object Commitments {
 
   def receiveFailMalformed(c: Commitments, fail: UpdateFailMalformedHtlc) = {
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = false, fail.id)
+    val notBadOnion = (fail.failureCode & FailureMessageCodecs.BADONION) == 0
     // A receiving node MUST fail the channel if the BADONION bit is not set
-    val isBadOnion = (fail.failureCode & FailureMessageCodecs.BADONION) == 0
 
-    if (isBadOnion) throw new LightningException
+    if (notBadOnion) throw new LightningException
     else if (found.isEmpty) throw new LightningException
     else addRemoteProposal(c, fail)
   }

@@ -119,10 +119,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       }
 
       for {
+        (htlc, fail: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
         // UpdateFailMalformedHtlc this is a corner case, it can only happen when the *first* node cannot parse the onion
         // (if this happens higher up in the route, the error would be wrapped in an UpdateFailHtlc and handled above)
         // we now retry all outgoing UpdateFailHtlc which have routes left and UpdateFailMalformedHtlc is left failed
-        (htlc, fail: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
         out @ OutgoingPayment(_, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
         out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
       } chan process RetryAddHtlc(out1)

@@ -78,7 +78,7 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
 
       override def startUp = {
         // Get seed before encryption
-        wallet = new Wallet(app.params)
+        wallet = new Wallet(app.params, true)
         val seed = wallet.getKeyChainSeed
         LNParams setup seed.getSeedBytes
 

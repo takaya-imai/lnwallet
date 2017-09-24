@@ -79,7 +79,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         val whenTime = datePicker.cal.getTimeInMillis / 1000
         val mnemonic = restoreCode.getText.toString.toLowerCase.trim
         val seed = new DeterministicSeed(mnemonic, null, "", whenTime)
-        val keyChainGroup = new KeyChainGroup(app.params, seed)
+        val keyChainGroup = new KeyChainGroup(app.params, seed, true)
         val (crypter, key) = app newCrypter password.getText
         LNParams setup seed.getSeedBytes
 

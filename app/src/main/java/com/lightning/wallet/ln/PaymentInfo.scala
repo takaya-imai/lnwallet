@@ -109,6 +109,7 @@ object PaymentInfo {
   private def failHtlc(sharedSecret: BinaryData, add: UpdateAddHtlc, failure: FailureMessage) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
 
+  // After mutually signed HTLCs are present we need to parse and fail/fulfill them
   def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag) = Try {
     val packet = parsePacket(nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload)
