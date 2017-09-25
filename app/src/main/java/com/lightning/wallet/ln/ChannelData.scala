@@ -90,9 +90,10 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
 
   def isOutdated = {
     val statuses = allTransactions.flatMap(broadcaster txStatus _.txid)
-    // Either ALL txs have min number of confirmations or they are dead or hard timeout
-    val allOk = statuses forall { case confs \ false => confs >= minDepth case _ \ true => true }
-    (startedAt > 1000 * 60 && allOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
+    // Either ALL txs have min number of confirmations or hard timeout expiry
+    val allOk = statuses forall { case confirmations \ _ => confirmations >= minDepth }
+    val allOkWithTimeout = startedAt + 1000 * 60 < System.currentTimeMillis && allOk
+    allOkWithTimeout || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
   }
 
   def getAllStates =
