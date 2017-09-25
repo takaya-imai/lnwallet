@@ -109,12 +109,9 @@ object Scripts { me =>
   // TRANSACTION TEMPLATES
 
   trait TransactionWithInputInfo {
-    def --(that: TransactionWithInputInfo) =
-      input.txOut.amount - that.amount
-
-    def amount: Satoshi =
-      tx.txOut.head.amount
-
+    // Input of current tx - output of next tx output reveals a final fee
+    def --(that: TransactionWithInputInfo) = input.txOut.amount - that.amount
+    def amount: Satoshi = tx.txOut.head.amount
     def input: InputInfo
     def tx: Transaction
   }

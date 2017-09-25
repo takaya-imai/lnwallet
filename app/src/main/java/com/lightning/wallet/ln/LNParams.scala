@@ -95,18 +95,33 @@ object AddErrorCodes {
 }
 
 trait Broadcaster extends ChannelListener { me =>
-  def getConfs(txid: BinaryData): Option[Int]
+  def txStatus(txid: BinaryData): Option[DepthAndAlive]
+  type DepthAndAlive = (Long, Boolean)
+
   def send(tx: Transaction): String
   def feeRatePerKw: Long
   def currentHeight: Int
 
-  def safeSend(tx: Transaction) = obsOn(me send tx, IOScheduler.apply).onErrorReturn(_.getMessage)
-  def cltv(info: TransactionWithInputInfo) = math.max(info.tx.lockTime - currentHeight, 0L)
-  def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) =
-    for (left <- me csv info2) yield cltv(info1) + left
+  def safeSend(tx: Transaction) =
+    obsOn(me send tx, IOScheduler.apply)
+      .onErrorReturn(_.getMessage)
 
-  def csv(info: TransactionWithInputInfo) =
-    getConfs(info.tx.txIn.head.outPoint.txid)
-      .map(parent => csvTimeout(info.tx) - parent)
-      .map(delay => if (delay < 0L) 0L else delay)
+  // Parent status and next tier cltv delay
+  def cltv(txWithInputInfo: TransactionWithInputInfo) = for {
+    _ \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
+    delay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
+  } yield parentIsDead -> delay
+
+  // Parent status and next tier csv delay
+  def csv(txWithInputInfo: TransactionWithInputInfo) = for {
+    parentDepth \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
+    delay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
+  } yield parentIsDead -> delay
+
+  def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) = for {
+    // Calculate cumulative cltv + csv delay for 2nd tier transaction along with 1st tier status
+
+    commitIsDead \ cltv1 <- me cltv info1
+    tier1IsDead \ csv1 <- me csv info2
+  } yield (tier1IsDead, cltv1 + csv1)
 }

@@ -6,6 +6,7 @@ import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import com.lightning.wallet.ln.Helpers.extractPreimages
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Sha256Hash
@@ -17,9 +18,20 @@ import rx.lang.scala.{Observable => Obs}
 object LocalBroadcaster extends Broadcaster { me =>
   def feeRatePerKw: Long = RatesSaver.rates.feeLive.value / 2
   def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
-  def currentHeight: Int = math.max(app.kit.wallet.getLastBlockSeenHeight, app.kit.peerGroup.getMostCommonChainHeight)
-  def getConfs(txid: Sha256Hash): Option[Int] = Option(app.kit.wallet getTransaction txid).map(_.getConfidence.getDepthInBlocks)
-  def getConfs(txid: BinaryData): Option[Int] = getConfs(Sha256Hash wrap txid.toArray)
+
+  // Confirmations and confidence type
+  def txStatus(txid: Sha256Hash) = for {
+    tx <- Option(app.kit.wallet getTransaction txid)
+    isDead = tx.getConfidence.getConfidenceType == DEAD
+    depth = tx.getConfidence.getDepthInBlocks
+  } yield depth.toLong -> isDead
+
+  def txStatus(txid: BinaryData): Option[DepthAndAlive] =
+    txStatus(Sha256Hash wrap txid.toArray)
+
+  def currentHeight: Int =
+    math.max(app.kit.wallet.getLastBlockSeenHeight,
+      app.kit.peerGroup.getMostCommonChainHeight)
 
   override def onBecome = {
     case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>

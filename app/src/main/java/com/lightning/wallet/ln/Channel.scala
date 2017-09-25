@@ -155,12 +155,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (norm: NormalData, fulfill: UpdateFulfillHtlc, NORMAL)
         if fulfill.channelId == norm.commitments.channelId =>
 
-        println("CLOSING CONNECTION")
-        ConnectionManager.connections.values.foreach(_.socket.close)
-
         // Got a fulfill for an outgoing HTLC we sent them earlier
-//        val c1 = Commitments.receiveFulfill(norm.commitments, fulfill)
-//        me UPDATE norm.copy(commitments = c1)
+        val c1 = Commitments.receiveFulfill(norm.commitments, fulfill)
+        me UPDATE norm.copy(commitments = c1)
 
 
       case (norm: NormalData, fail: UpdateFailHtlc, NORMAL)

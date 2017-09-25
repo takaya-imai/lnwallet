@@ -78,8 +78,9 @@ case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
                          startedAt: Long = System.currentTimeMillis) extends EndingData
 
 trait CommitPublished {
-  // Cumulative delay, final fee, final amount
-  type PublishStatus = (Option[Long], Satoshi, Satoshi)
+  type ParentAliveAndDelay = (Boolean, Long)
+  type PublishStatus = (Option[ParentAliveAndDelay], Satoshi, Satoshi)
+  // Cumulative delay, parent status, final fee, final amount
   val allTransactions: Seq[Transaction]
   def getAllStates: Seq[PublishStatus]
 }
@@ -124,9 +125,9 @@ case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcS
   val allTransactions = claimMain.map(_.tx) ++ claimHtlcSuccess.map(_.tx) ++ claimHtlcTimeout.map(_.tx)
 
   def getAllStates = {
-    val mainInfo = for (tier1 <- claimMain) yield (Some(0L), tier1 -- tier1, tier1.amount)
-    val successInfo = for (tier1 <- claimHtlcSuccess) yield (Some(0L), tier1 -- tier1, tier1.amount)
-    val timeoutInfo = for (tier1 <- claimHtlcTimeout) yield (Some apply cltv(tier1), tier1 -- tier1, tier1.amount)
+    val mainInfo = for (tier1 <- claimMain) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
+    val successInfo = for (tier1 <- claimHtlcSuccess) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
+    val timeoutInfo = for (tier1 <- claimHtlcTimeout) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
     mainInfo ++ successInfo ++ timeoutInfo
   }
 }
@@ -138,8 +139,8 @@ case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPena
   val allTransactions = claimMain.map(_.tx) ++ claimPenalty.map(_.tx)
 
   def getAllStates = {
-    val mainInfo = for (tier1 <- claimMain) yield (Some(0L), tier1 -- tier1, tier1.amount)
-    val penaltyInfo = for (tier1 <- claimPenalty) yield (Some(0L), tier1 -- tier1, tier1.amount)
+    val mainInfo = for (tier1 <- claimMain) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
+    val penaltyInfo = for (tier1 <- claimPenalty) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
     mainInfo ++ penaltyInfo
   }
 }
