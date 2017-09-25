@@ -68,14 +68,12 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
 
-trait EndingData extends HasCommitments {
-  def isOutdated = lifespan < System.currentTimeMillis
-  def lifespan = startedAt + 1000 * 3600 * 24 * 5
-  val startedAt: Long
-}
-
+trait EndingData extends HasCommitments { def isOutdated: Boolean }
 case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
-                         startedAt: Long = System.currentTimeMillis) extends EndingData
+                         startedAt: Long = System.currentTimeMillis) extends EndingData {
+
+  def isOutdated = startedAt + 1000 * 3600 * 24 * 2 < System.currentTimeMillis
+}
 
 trait CommitPublished {
   type ParentAliveAndDelay = (Boolean, Long)
@@ -89,6 +87,13 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommit: Seq[RevokedCommitPublished] = Nil,
                        startedAt: Long = System.currentTimeMillis) extends EndingData with CommitPublished {
+
+  def isOutdated = {
+    val statuses = allTransactions.flatMap(broadcaster txStatus _.txid)
+    // Either ALL txs have min number of confirmations or they are dead or hard timeout
+    val allOk = statuses forall { case confs \ false => confs >= minDepth case _ \ true => true }
+    (startedAt > 1000 * 60 && allOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
+  }
 
   def getAllStates =
     localCommit.flatMap(_.getAllStates) ++ remoteCommit.flatMap(_.getAllStates) ++
