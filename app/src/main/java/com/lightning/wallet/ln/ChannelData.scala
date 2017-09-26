@@ -68,14 +68,14 @@ case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
 
-trait EndingData extends HasCommitments { def isOutdated: Boolean }
+sealed trait EndingData extends HasCommitments { def isOutdated: Boolean }
 case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
                          startedAt: Long = System.currentTimeMillis) extends EndingData {
 
   def isOutdated = startedAt + 1000 * 3600 * 24 * 2 < System.currentTimeMillis
 }
 
-trait CommitPublished {
+sealed trait CommitPublished {
   type ParentAliveAndDelay = (Boolean, Long)
   type PublishStatus = (Option[ParentAliveAndDelay], Satoshi, Satoshi)
   // Cumulative delay, parent status, final fee, final amount

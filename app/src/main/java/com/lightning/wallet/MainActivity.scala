@@ -2,9 +2,9 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
-
-import scala.util.{Failure, Success, Try}
+import com.lightning.wallet.lncloud.ImplicitConversions._
 import org.bitcoinj.core.{BlockChain, PeerGroup}
+import scala.util.{Failure, Success, Try}
 
 import org.ndeftools.util.activity.NfcReaderActivity
 import concurrent.ExecutionContext.Implicits.global
@@ -12,6 +12,7 @@ import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
+import fr.acinq.bitcoin.Crypto
 import scala.concurrent.Future
 import java.io.FileInputStream
 import android.content.Intent
@@ -148,19 +149,22 @@ with TimerActivity with ViewSwitch { me =>
       val form = getLayoutInflater.inflate(R.layout.frag_encrypted_mnemonic, null)
       val encryptedMnemonic = form.findViewById(R.id.encryptedMnemonic).asInstanceOf[EditText]
       val oldWalletPassword = form.findViewById(R.id.oldWalletPassword).asInstanceOf[EditText]
-      lazy val dialog = mkChoiceDialog(decryptAndImport, none, dialog_ok, dialog_cancel)
+      lazy val dialog = mkChoiceDialog(attempt, none, dialog_ok, dialog_cancel)
       lazy val alert1 = mkForm(dialog, me getString restore_wallet, form)
       alert1
 
-      def decryptAndImport: Unit = rm(alert1) {
-        val (seed, pass) = (encryptedMnemonic.getText.toString, oldWalletPassword.getText.toString)
-        <(app.TransData.value = Mnemonic.importSeed(seed, pass), wrongSomething)(_ => exitToRestore)
-        setVis(View.GONE, View.GONE, View.VISIBLE)
+      def attempt: Unit = rm(alert1) {
+        // Catch wrong password in Future
+        <(decryptAndImport, onFail)(none)
       }
 
-      def wrongSomething(err: Throwable) = {
-        setVis(View.VISIBLE, View.GONE, View.GONE)
-        me onFail err
+      def decryptAndImport = {
+        val seed = encryptedMnemonic.getText.toString
+        val password = oldWalletPassword.getText.toString.binary.data
+        val mnemonic = helper.AES.importData(seed, Crypto sha256 password)
+        require(Mnemonic isCorrect mnemonic, "Incorrect password")
+        app.TransData.value = mnemonic
+        exitToRestore
       }
     }
   }

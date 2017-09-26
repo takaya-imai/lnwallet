@@ -51,7 +51,7 @@ object ChannelWrap extends ChannelListener {
 }
 
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
-  // Incoming and outgoing payments are discerned by a presence of routing info
+  // Incoming and outgoing payments are discerned by presence of routing info
   // Incoming payments have null instead of routing info in a database
 
   import com.lightning.wallet.lncloud.PaymentInfoTable._

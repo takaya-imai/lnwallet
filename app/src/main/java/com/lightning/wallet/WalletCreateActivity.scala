@@ -1,9 +1,7 @@
 package com.lightning.wallet
 
 import R.string._
-import org.bitcoinj.core.Utils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import org.bitcoinj.crypto.{EncryptedData, KeyCrypterScrypt}
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
 import android.widget.{Button, EditText, TextView}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
@@ -15,30 +13,13 @@ import com.lightning.wallet.Utils.app
 import android.text.TextUtils
 import android.os.Bundle
 import android.view.View
-import java.util.Date
 
 
 object Mnemonic {
+  def isCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
   def text(seed: DeterministicSeed) = TextUtils.join("\u0020", seed.getMnemonicCode)
   def decrypt(pass: String) = app.kit.wallet.getKeyCrypter match { case scrypt =>
     app.kit.wallet.getKeyChainSeed.decrypt(scrypt, pass, scrypt deriveKey pass)
-  }
-
-  def exportSeed(seed: DeterministicSeed, pass: String) = {
-    val crypter = app.kit.wallet.getKeyCrypter.asInstanceOf[KeyCrypterScrypt]
-    val cipher = crypter.encrypt(text(seed) getBytes "UTF-8", crypter deriveKey pass)
-
-    val mnemonic = HEX encode cipher.encryptedBytes
-    val initVector = HEX encode cipher.initialisationVector
-    val salt = HEX encode crypter.getScryptParameters.getSalt.toByteArray
-    s"Encrypted BIP32 mnemonic ${new Date}: $initVector:$mnemonic:$salt"
-  }
-
-  def importSeed(seed: String, pass: String) = {
-    val Array(initVector, mnemonic, salt) = seed split ":"
-    val (crypter, key) = app.getCrypterScrypt(HEX decode salt, pass)
-    val data = new EncryptedData(HEX decode initVector, HEX decode mnemonic)
-    new String(crypter.decrypt(data, key), "UTF-8")
   }
 }
 

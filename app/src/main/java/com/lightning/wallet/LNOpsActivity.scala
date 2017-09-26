@@ -5,7 +5,7 @@ import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi, Transaction}
+import fr.acinq.bitcoin.{Satoshi, Transaction}
 import com.lightning.wallet.ln.Tools.none
 import android.widget.Button
 import android.os.Bundle

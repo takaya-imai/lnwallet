@@ -6,27 +6,27 @@ import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import fr.acinq.bitcoin.{BinaryData, Transaction}
+import rx.lang.scala.{Observable => Obs}
+
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import com.lightning.wallet.ln.Helpers.extractPreimages
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Sha256Hash
-
-import fr.acinq.bitcoin.{BinaryData, Transaction}
-import rx.lang.scala.{Observable => Obs}
 
 
 object LocalBroadcaster extends Broadcaster { me =>
   def feeRatePerKw: Long = RatesSaver.rates.feeLive.value / 2
   def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
 
-  // Confirmations and confidence type
+  // Confirmations and confidence
   def txStatus(txid: Sha256Hash) = for {
     tx <- Option(app.kit.wallet getTransaction txid)
     isDead = tx.getConfidence.getConfidenceType == DEAD
     depth = tx.getConfidence.getDepthInBlocks
   } yield depth.toLong -> isDead
 
-  def txStatus(txid: BinaryData): Option[DepthAndAlive] =
+  def txStatus(txid: BinaryData) =
     txStatus(Sha256Hash wrap txid.toArray)
 
   def currentHeight: Int =

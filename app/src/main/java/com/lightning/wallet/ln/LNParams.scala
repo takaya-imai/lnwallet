@@ -29,23 +29,23 @@ object LNParams { me =>
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash
-  lazy val broadcaster = LocalBroadcaster
-  lazy val bag = PaymentInfoWrap
 
-  var cloud: StateMachine[CloudData] with Cloud = _
-  var extendedNodeKey: ExtendedPrivateKey = _
   var cloudPrivateKey: PrivateKey = _
-  var nodePrivateKey: PrivateKey = _
+  var extendedNodeKey: ExtendedPrivateKey = _
+  var cloud: StateMachine[CloudData] with Cloud = _
   var db: CipherOpenHelper = _
+
+  lazy val cloudEncryptData: BinaryData = sha256(cloudPrivateKey.toBin)
+  lazy val nodePrivateKey: PrivateKey = extendedNodeKey.privateKey
+  lazy val broadcaster: Broadcaster = LocalBroadcaster
+  lazy val bag = PaymentInfoWrap
 
   def isSetUp: Boolean = db != null
   def setup(seed: BinaryData) = generate(seed) match { case master =>
-    val cloudExtendedKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
+    cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
-    db = new CipherOpenHelper(app, 1, Crypto.hash256(seed).toString)
+    db = new CipherOpenHelper(app, 1, sha256(seed).toString)
     cloud = me getCloud CloudDataSaver.tryGetObject
-    cloudPrivateKey = cloudExtendedKey.privateKey
-    nodePrivateKey = extendedNodeKey.privateKey
   }
 
   // CLOUD
@@ -109,14 +109,14 @@ trait Broadcaster extends ChannelListener { me =>
   // Parent status and next tier cltv delay
   def cltv(txWithInputInfo: TransactionWithInputInfo) = for {
     _ \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
-    delay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
-  } yield parentIsDead -> delay
+    cltvDelay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
+  } yield parentIsDead -> cltvDelay
 
   // Parent status and next tier csv delay
   def csv(txWithInputInfo: TransactionWithInputInfo) = for {
     parentDepth \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
-    delay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
-  } yield parentIsDead -> delay
+    csvDelay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
+  } yield parentIsDead -> csvDelay
 
   def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) = for {
     // Calculate cumulative cltv + csv delay for 2nd tier transaction along with 1st tier status

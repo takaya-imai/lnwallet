@@ -49,7 +49,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
     setContentView(R.layout.activity_restore)
     val changeListener = new TextChangedWatcher {
       override def onTextChanged(s: CharSequence, x: Int, y: Int, z: Int) = {
-        val mnemonicWordsAreOk = restoreCode.getText.toString.split("\\s+").length > 11
+        val mnemonicWordsAreOk = Mnemonic isCorrect restoreCode.getText.toString
         val passIsOk = password.getText.length >= 6
 
         restoreWallet.setEnabled(mnemonicWordsAreOk & passIsOk)

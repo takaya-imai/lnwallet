@@ -13,8 +13,8 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
+import fr.acinq.bitcoin.{Crypto, MilliSatoshi, Satoshi}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
-import fr.acinq.bitcoin.{MilliSatoshi, Satoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -187,9 +187,13 @@ trait ToolbarActivity extends TimerActivity { me =>
         alert1
 
         def encryptAndExport: Unit = rm(alert1) {
-          val exported = Mnemonic.exportSeed(seed, password)
+          val hash = Crypto sha256 password.binary.data
+          val ciphertext = helper.AES.exportData(Mnemonic text seed, hash)
+          val exported = s"Encrypted BIP32 mnemonic ${new java.util.Date}: $ciphertext"
           val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
-          me startActivity share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
+          val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
+          app.setBuffer(exported)
+          me startActivity s1
         }
       }
     }
