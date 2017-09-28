@@ -6,7 +6,7 @@ import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 
 import com.lightning.wallet.ln.Scripts.{TransactionWithInputInfo, csvTimeout}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import scala.util.{Failure, Success}
 
 import com.lightning.wallet.lncloud.CloudDataSaver.TryCloudData
@@ -17,32 +17,35 @@ import fr.acinq.eclair.UInt64
 
 
 object LNParams { me =>
-  val maxReserveToFundingRatio = 0.05 // %
-  val updateFeeMinDiffRatio = 0.25 // %
-  val reserveToFundingRatio = 0.01 // %
-  val localFeatures = "00"
-  val globalFeatures = ""
-  val minDepth = 2
-
-  val htlcMinimumMsat = 100000L
   val maxHtlcValue = MilliSatoshi(4194304000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash
+  val maxReserveToFundingRatio = 0.05 // %
+  val reserveToFundingRatio = 0.01 // %
+  val updateFeeMinDiffRatio = 0.25 // %
+  val htlcMinimumMsat = 100000L
+  val localFeatures = "00"
+  val globalFeatures = ""
+  val minDepth = 2
 
-  var cloudPrivateKey: PrivateKey = _
   var extendedNodeKey: ExtendedPrivateKey = _
+  var extendedCloudKey: ExtendedPrivateKey = _
   var cloud: StateMachine[CloudData] with Cloud = _
   var db: CipherOpenHelper = _
 
-  lazy val cloudEncryptData: BinaryData = sha256(cloudPrivateKey.toBin)
-  lazy val nodePrivateKey: PrivateKey = extendedNodeKey.privateKey
+  lazy val nodePrivateKey: PrivateKey = extendedNodeKey.privateKey // Corresponding pubkey is node id
+  lazy val cloudPrivateKey: PrivateKey = extendedCloudKey.privateKey // Sign messages to private maintenance server
+  lazy val cloudPublicKey: PublicKey = cloudPrivateKey.publicKey // Check signed messages on private maintenance server
+
+  lazy val cloudPrivateData: BinaryData = sha256(cloudPrivateKey.toBin) // Key for encrypting data on maintenance server
+  lazy val cloudPublicData: BinaryData = sha256(cloudPublicKey.toBin) // Key for retrieving data from maintenance server
   lazy val broadcaster: Broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
 
   def isSetUp: Boolean = db != null
   def setup(seed: BinaryData) = generate(seed) match { case master =>
-    cloudPrivateKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil).privateKey
+    extendedCloudKey = derivePrivateKey(master, hardened(92) :: hardened(0) :: Nil)
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, sha256(seed).toString)
     cloud = me getCloud CloudDataSaver.tryGetObject

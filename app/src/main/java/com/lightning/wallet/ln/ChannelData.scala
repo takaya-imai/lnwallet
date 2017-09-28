@@ -278,12 +278,12 @@ object Commitments {
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.remoteParams.dustLimitSatoshis), reduced).amount else 0
-      val htlcValueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.remoteParams.maxHtlcValueInFlightMsat
+      val valueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.remoteParams.maxHtlcValueInFlightMsat
       val isOverflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
 
       // The rest of the guards
-      if (htlcValueInFlightOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      if (valueInFlightOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       else if (acceptedHtlcsOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       else if (isOverflow) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
       else c1 -> add
@@ -299,13 +299,13 @@ object Commitments {
       // Let's compute the current commitment *as seen by us* including this change
       val c1 = addRemoteProposal(c, add).copy(remoteNextHtlcId = c.remoteNextHtlcId + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
-      val htlcValueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.localParams.maxHtlcValueInFlightMsat
+      val valueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.localParams.maxHtlcValueInFlightMsat
       val localFees = if (c1.localParams.isFunder) Scripts.commitTxFee(dustLimit, reduced).amount else 0L
       val isOverflow = reduced.toRemoteMsat / 1000L - c1.localParams.channelReserveSat - localFees < 0L
       val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.localParams.maxAcceptedHtlcs
 
       // The rest of the guards
-      if (htlcValueInFlightOverflow) throw new LightningException
+      if (valueInFlightOverflow) throw new LightningException
       else if (acceptedHtlcsOverflow) throw new LightningException
       else if (isOverflow) throw new LightningException
       else c1

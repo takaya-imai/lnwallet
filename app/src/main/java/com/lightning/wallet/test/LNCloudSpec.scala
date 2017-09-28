@@ -12,11 +12,6 @@ import com.lightning.wallet.ln.Tools.random
 import fr.acinq.bitcoin.BinaryData
 
 
-case class CheckCloudAct(requestPayload: BinaryData) extends CloudAct {
-  def run(params: Seq[HttpParam], cloud: Cloud) = cloud.connector
-    .call("check", res => println(res.head.convertTo[BinaryData] == requestPayload), params:_*)
-}
-
 class LNCloudSpec {
 
   def allTests = {
@@ -35,7 +30,7 @@ class LNCloudSpec {
     }
 
     chan.listeners += restartListener
-    val set: Set[CloudAct] = List.fill(75)(CheckCloudAct(random getBytes 32)).toSet
+    val set: Set[CloudAct] = List.fill(75)(CloudAct(random getBytes 32, Nil, "check")).toSet
     LNParams.cloud.data = LNParams.cloud.data.copy(acts = set)
     LNParams.cloud doProcess CMDStart
   }

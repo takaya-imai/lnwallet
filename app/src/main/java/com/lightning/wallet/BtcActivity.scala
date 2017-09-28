@@ -10,6 +10,7 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
+import com.lightning.wallet.ln.{PaymentRequest, Tools}
 import android.view.{Menu, MenuItem, View, ViewGroup}
 import scala.util.{Failure, Success, Try}
 
@@ -20,7 +21,6 @@ import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
-import com.lightning.wallet.ln.PaymentRequest
 import android.text.format.DateFormat
 import fr.acinq.bitcoin.MilliSatoshi
 import org.bitcoinj.uri.BitcoinURI
@@ -215,7 +215,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
         wrap.fee match {
           case _ if wrap.tx.getConfidence.getConfidenceType == DEAD =>
-            mkForm(me negBld dialog_ok, sumOut.format(me getString dead).html, lst)
+            mkForm(me negBld dialog_ok, sumOut.format(txsConfs.last).html, lst)
 
           case _ if wrap.nativeValue.isPositive =>
             val details = feeIncoming.format(confirms)
@@ -296,7 +296,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
       case unusable =>
         app.TransData.value = null
-        println(s"Unusable $unusable")
+        Tools log s"Unusable $unusable"
     }
 
   // Buy bitcoins

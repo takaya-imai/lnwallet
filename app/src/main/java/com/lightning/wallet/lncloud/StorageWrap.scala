@@ -4,13 +4,13 @@ import spray.json._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
+import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-
 import com.lightning.wallet.helper.RichCursor
-import com.lightning.wallet.ln.LNParams.db
+import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
 import net.sqlcipher.Cursor
 import scala.util.Try
@@ -42,6 +42,14 @@ object ChannelWrap extends ChannelListener {
   def get = {
     val rc = RichCursor(db select ChannelTable.selectAllSql)
     rc.vec(_ string ChannelTable.data) map to[HasCommitments]
+  }
+
+  override def onBecome = {
+    case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
+      val staticState = RefundingData(norm.announce, norm.commitments)
+      val packed = AES.encode(staticState.toJson.toString, cloudPrivateData)
+      val plus = Tuple2("key", cloudPublicData.toString) :: Nil
+      cloud doProcess CloudAct(packed, plus, "data/put")
   }
 
   override def onProcess = {
@@ -110,7 +118,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     // We need to update states for all active HTLCs
     case (chan, norm: NormalData, _: CommitSig) =>
 
-      LNParams.db txWrap {
+      db txWrap {
         // First we update status for failed, fulfilled and in-flight HTLCs
         for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
         for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)

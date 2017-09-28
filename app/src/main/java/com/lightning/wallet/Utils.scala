@@ -35,6 +35,7 @@ import android.view.View.OnClickListener
 import com.lightning.wallet.ln.LNParams
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
+import com.lightning.wallet.helper.AES
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
@@ -187,12 +188,10 @@ trait ToolbarActivity extends TimerActivity { me =>
         alert1
 
         def encryptAndExport: Unit = rm(alert1) {
-          val hash = Crypto sha256 password.binary.data
-          val ciphertext = helper.AES.exportData(Mnemonic text seed, hash)
-          val exported = s"Encrypted BIP32 mnemonic ${new java.util.Date}: $ciphertext"
+          val packed = AES.encode(Mnemonic text seed, Crypto sha256 password.binary.data)
+          val exported = s"Encrypted BIP32 mnemonic ${new java.util.Date}: ${packed.toString}"
           val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
           val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
-          app.setBuffer(exported)
           me startActivity s1
         }
       }
@@ -214,7 +213,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     rescanWallet setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_rescan) { _ =>
         mkForm(mkChoiceDialog(go, none, dialog_ok, dialog_cancel)
-          setMessage sets_rescan_ok, null, null)
+          .setMessage(sets_rescan_ok), null, null)
       }
 
       def go = try {

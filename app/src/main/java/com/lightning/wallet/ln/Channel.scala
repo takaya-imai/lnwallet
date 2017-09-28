@@ -50,7 +50,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
           Generators.perCommitPoint(localParams.shaSeed, index = 0),
-          channelFlags = 1.toByte) // TODO: remove this
+          channelFlags = 1.toByte) // TODO: zero to make private
 
 
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
@@ -350,11 +350,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           me SEND makeFundingLocked(norm.commitments)
 
         // First we clean up unacknowledged updates
-        val localProposedIdDelta = norm.commitments.localChanges.proposed count { case u: UpdateAddHtlc => true }
-        val remoteProposedIdDelta = norm.commitments.remoteChanges.proposed count { case u: UpdateAddHtlc => true }
+        val localDelta = norm.commitments.localChanges.proposed collect { case u: UpdateAddHtlc => true }
+        val remoteDelta = norm.commitments.remoteChanges.proposed collect { case u: UpdateAddHtlc => true }
         val c1 = norm.commitments.modifyAll(_.localChanges.proposed, _.remoteChanges.proposed).setTo(Vector.empty)
-          .modify(_.remoteNextHtlcId).using(currentRemoteCount => currentRemoteCount - remoteProposedIdDelta)
-          .modify(_.localNextHtlcId).using(currentLocalCount => currentLocalCount - localProposedIdDelta)
+          .modify(_.remoteNextHtlcId).using(_ - remoteDelta.size).modify(_.localNextHtlcId).using(_ - localDelta.size)
 
         def maybeResendRevocation = if (c1.localCommit.index == cr.nextRemoteRevocationNumber + 1) {
           val localPerCommitmentSecret = Generators.perCommitSecret(c1.localParams.shaSeed, c1.localCommit.index - 1)

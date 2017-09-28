@@ -8,8 +8,9 @@ import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
-import com.lightning.wallet.lncloud.Connector.{ClearToken, RequestAndMemo}
+import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
+import com.lightning.wallet.lncloud.Connector.{ClearToken, HttpParam, RequestAndMemo}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
 import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
@@ -19,8 +20,6 @@ import com.lightning.wallet.ln.crypto.ShaChain.Index
 import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
 import java.math.BigInteger
-
-import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import scodec.Codec
 
 
@@ -60,11 +59,6 @@ object ImplicitJsonFormats { me =>
   implicit object TransactionFmt extends JsonFormat[Transaction] {
     def read(json: JsValue): Transaction = Transaction.read(me json2String json)
     def write(internal: Transaction): JsValue = Transaction.write(internal).toString.toJson
-  }
-
-  implicit object cloudActFmt extends JsonFormat[CloudAct] {
-    def write(internal: CloudAct): JsValue = ???
-    def read(json: JsValue): CloudAct = ???
   }
 
   implicit object ShaHashesWithIndexFmt
@@ -168,6 +162,9 @@ object ImplicitJsonFormats { me =>
 
   implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
+
+  implicit val cloudActFmt = jsonFormat[BinaryData, Seq[HttpParam], String,
+    CloudAct](CloudAct.apply, "data", "plus", "path")
 
   implicit val cloudDataFmt = jsonFormat[Option[RequestAndMemo], Set[ClearToken], Set[CloudAct], String,
     CloudData](CloudData.apply, "info", "tokens", "acts", "url")

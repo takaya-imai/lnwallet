@@ -4,6 +4,7 @@ import R.string._
 import android.widget._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import org.bitcoinj.core.{BlockChain, PeerGroup}
+import fr.acinq.bitcoin.{BinaryData, Crypto}
 import scala.util.{Failure, Success, Try}
 
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -11,8 +12,8 @@ import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
+import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
-import fr.acinq.bitcoin.Crypto
 import scala.concurrent.Future
 import java.io.FileInputStream
 import android.content.Intent
@@ -159,11 +160,11 @@ with TimerActivity with ViewSwitch { me =>
       }
 
       def decryptAndImport = {
-        val seed = encryptedMnemonic.getText.toString
-        val password = oldWalletPassword.getText.toString.binary.data
-        val mnemonic = helper.AES.importData(seed, Crypto sha256 password)
-        require(Mnemonic isCorrect mnemonic, "Incorrect password")
-        app.TransData.value = mnemonic
+        val packed = BinaryData(encryptedMnemonic.getText.toString)
+        val hash = Crypto sha256 oldWalletPassword.getText.toString.binary.data
+        val plain = new String(AES.decode(packed.toArray, hash.toArray), "UTF-8")
+        require(Mnemonic isCorrect plain, "Wrong password")
+        app.TransData.value = plain
         exitToRestore
       }
     }

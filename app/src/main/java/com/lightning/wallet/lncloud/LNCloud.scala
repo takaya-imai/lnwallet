@@ -10,7 +10,6 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
@@ -22,13 +21,16 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
+
 import org.bitcoinj.core.ECKey
+
+import scala.util.{Failure, Success}
 
 
 // Persisted data exchange with a maintenance server
 abstract class Cloud extends StateMachine[CloudData] {
 
-  def checkIfWorks: Obs[Any] = Obs just null
+  def checkIfWorks: Obs[Any] = Obs just true
   protected var isFree: Boolean = true
   var needsToBeSaved: Boolean = false
   val connector: Connector
@@ -45,6 +47,7 @@ abstract class Cloud extends StateMachine[CloudData] {
   }
 }
 
+case class CloudAct(data: BinaryData, plus: Seq[HttpParam], path: String)
 case class CloudData(info: Option[RequestAndMemo], tokens: Set[ClearToken], acts: Set[CloudAct], url: String)
 class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud { me =>
 
@@ -63,10 +66,10 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       me UPDATE data.copy(info = Some(pay.request, memo), tokens = tokens)
 
     // Execute if we are not busy and have available tokens and actions
-    case CloudData(_, SetEx(token @ (pt, clearToken, clearSig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
-      val params = Seq("point" -> pt, "cleartoken" -> clearToken, "clearsig" -> clearSig, BODY -> action.requestPayload.toString)
-      val callAndRestart = action.run(params, me) doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
-      callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
+    case CloudData(_, SetEx(token @ (pnt, clear, sig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
+      val params = Seq("point" -> pnt, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
+      val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
+      go.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
       isFree = false
 
       // 'data' may change while request is on so we always copy it
@@ -78,13 +81,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
     // Start a new request while payment is in progress
     case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
-      bag getPaymentInfo request.paymentHash getOrElse null match {
-        case info if info.actualStatus == SUCCESS => me resolveSuccess memo
-        // This is crucial: payment may fail but we should wait until expiration
-        case info if info.actualStatus == FAILURE && info.request.isFresh =>
-        case info if info.actualStatus == FAILURE => resetPaymentData
-        case info if info.actualStatus == REFUND => resetPaymentData
-        case null => resetPaymentData
+
+      bag getPaymentInfo request.paymentHash match {
+        case Success(info) if info.actualStatus == SUCCESS => me resolveSuccess memo
+        // Important: payment may fail but we wait until expiration before restarting
+        case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
+        case Success(info) if info.actualStatus == FAILURE => resetPaymentData
+        case Success(info) if info.actualStatus == REFUND => resetPaymentData
+        case Failure(_) => resetPaymentData
         case _ =>
       }
 
@@ -108,7 +112,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   // TALKING TO SERVER
 
   def getRequestAndMemo: Obs[RequestAndMemo] =
-    connector.call("blindtokens/info", identity) flatMap { raw =>
+    connector.ask("blindtokens/info", identity) flatMap { raw =>
       val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
       val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubKeyR)
       val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubKeyQ)
@@ -116,12 +120,12 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
       val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
       val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
-      connector.call("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
+      connector.ask("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
         "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
     }
 
   def getClearTokens(memo: BlindMemo) =
-    connector.call("blindtokens/redeem", _.map(json2String(_).bigInteger),
+    connector.ask("blindtokens/redeem", _.map(json2String(_).bigInteger),
       "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
 }
 
@@ -133,9 +137,9 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
   def doProcess(some: Any) = (data, some) match {
     // Execute if we are not busy and have available actions
     case CloudData(_, _, SetEx(action, _*), _) \ CMDStart if isFree =>
-      val callAndRestart = action.run(signedParams(action.requestPayload), me)
-      callAndRestart doOnTerminate { isFree = true } doAfterTerminate { me doProcess CMDStart }
-      callAndRestart.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
+      val go = connector.tell(signed(action.data) ++ action.plus, action.path)
+      go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
+      go.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
       isFree = false
 
     case (_, action: CloudAct) =>
@@ -146,22 +150,15 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
     case _ =>
   }
 
-  def signedParams(data: BinaryData): Seq[HttpParam] = {
-    val signature = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> signature.toString, "key" -> cloudPrivateKey.publicKey.toString, BODY -> data.toString)
+  def signed(data: BinaryData): Seq[HttpParam] = {
+    val sig = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
+    Seq("sig" -> sig.toString, "key" -> cloudPublicKey.toString, BODY -> data.toString)
   }
 
   override def checkIfWorks = {
-    val test = signedParams(random getBytes 32)
-    connector.call("check", none, test:_*)
+    val params = signed(random getBytes 32)
+    connector.ask("check", none, params:_*)
   }
-}
-
-trait CloudAct {
-  // These will be presisted in case of failure
-  // and require token or key based authentication
-  def run(params: Seq[HttpParam], cloud: Cloud): Obs[Unit]
-  def requestPayload: BinaryData
 }
 
 // This is a basic interface for making cloud calls
@@ -169,30 +166,31 @@ trait CloudAct {
 
 class Connector(val url: String) {
   def http(way: String) = post(s"http://$url:9001/v1/$way", true)
-  def call[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
+  def tell(params: Seq[HttpParam], cmd: String) = ask(cmd, none, params:_*)
+  def ask[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
       case JsArray(JsString("ok") +: responses) => process(responses)
-      case err => throw new ProtocolException
+      case _ => throw new ProtocolException
     }
 
-  def getRates = call("rates/get", identity)
-  def getDatas(key: String) = call("data/get", toVec[BinaryData], "key" -> key)
-  def getTxs(txids: String) = call("txs/get", toVec[Transaction], "txids" -> txids)
-  def findNodes(ask: String) = call("router/nodes", toVec[AnnounceChansNum], "query" -> ask)
-  def findRoutes(from: PublicKey, to: PublicKey) = call("router/routes", toVec[PaymentRoute],
+  def getRates = ask("rates/get", identity)
+  def getDatas(key: String) = ask("data/get", toVec[BinaryData], "key" -> key)
+  def getTxs(txids: String) = ask("txs/get", toVec[Transaction], "txids" -> txids)
+  def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
+  def findRoutes(from: PublicKey, to: PublicKey) = ask("router/routes", toVec[PaymentRoute],
     "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
-  override def findNodes(ask: String) = super.findNodes(ask).onErrorResumeNext(_ => failover findNodes ask)
+  override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
   override def getTxs(txids: String) = super.getTxs(txids).onErrorResumeNext(_ => failover getTxs txids)
   override def getDatas(key: String) = super.getDatas(key).onErrorResumeNext(_ => failover getDatas key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 
 object Connector {
-  type HttpParam = (String, Object)
+  type HttpParam = (String, String)
   type ClearToken = (String, String, String)
   type RequestAndMemo = (PaymentRequest, BlindMemo)
   val CMDStart = "CMDStart"
