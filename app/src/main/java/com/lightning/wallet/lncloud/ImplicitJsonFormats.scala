@@ -215,11 +215,11 @@ object ImplicitJsonFormats { me =>
   implicit val commitTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction,
     CommitTx](CommitTx.apply, "input", "tx"), tag = "CommitTx")
 
-  implicit val htlcSuccessTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction, BinaryData,
-    HtlcSuccessTx](HtlcSuccessTx.apply, "input", "tx", "paymentHash"), tag = "HtlcSuccessTx")
+  implicit val htlcSuccessTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction, UpdateAddHtlc,
+    HtlcSuccessTx](HtlcSuccessTx.apply, "input", "tx", "add"), tag = "HtlcSuccessTx")
 
-  implicit val htlcTimeoutTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction,
-    HtlcTimeoutTx](HtlcTimeoutTx.apply, "input", "tx"), tag = "HtlcTimeoutTx")
+  implicit val htlcTimeoutTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction, UpdateAddHtlc,
+    HtlcTimeoutTx](HtlcTimeoutTx.apply, "input", "tx", "add"), tag = "HtlcTimeoutTx")
 
   implicit val claimHtlcSuccessTxFmt = taggedJsonFmt(jsonFormat[InputInfo, Transaction,
     ClaimHtlcSuccessTx](ClaimHtlcSuccessTx.apply, "input", "tx"), tag = "ClaimHtlcSuccessTx")
@@ -248,11 +248,10 @@ object ImplicitJsonFormats { me =>
     "maxAcceptedHtlcs", "fundingPrivKey", "revocationSecret", "paymentKey", "delayedPaymentKey",
     "defaultFinalScriptPubKey", "shaSeed", "isFunder")
 
-  implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc,
-    Htlc](Htlc.apply, "incoming", "add")
-
+  implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc, Htlc](Htlc.apply, "incoming", "add")
   implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcFailure], Long, Long, Long,
-    CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
+    CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw",
+    "toLocalMsat", "toRemoteMsat")
 
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,
     HtlcTxAndSigs](HtlcTxAndSigs.apply, "txinfo", "localSig", "remoteSig")

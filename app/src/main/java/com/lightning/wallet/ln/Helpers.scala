@@ -134,7 +134,7 @@ object Helpers { me =>
 
       val allSuccessTxs = for {
         HtlcTxAndSigs(info: HtlcSuccessTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
-        IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(info.paymentHash).toOption
+        IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(info.add.paymentHash).toOption
         success: HtlcSuccessTx = Scripts.addSigs(info, localSig, remoteSig, preimage)
         delayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(success.tx)
         if delayedClaim.tx.txOut.head.amount >= LNParams.dustLimit
@@ -155,11 +155,11 @@ object Helpers { me =>
                                    bag: PaymentInfoBag): RemoteCommitPublished = {
 
       val localPrivkey = Generators.derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
-      val (remoteCommitTx, _, _, remotePubkey, remoteRevPubkey) = makeRemoteTxs(remoteCommit.index, commitments.localParams,
+      val (remoteCommitTx, timeoutTxs, successTxs, remotePubkey, remoteRevPubkey) = makeRemoteTxs(remoteCommit.index, commitments.localParams,
         commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint, remoteCommit.spec)
 
       val claimSuccessTxs = for {
-        Htlc(false, add) <- remoteCommit.spec.htlcs
+        HtlcSuccessTx(_, _, add) <- successTxs
         IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
         claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
@@ -170,7 +170,7 @@ object Helpers { me =>
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
-        Htlc(true, add) <- remoteCommit.spec.htlcs
+        HtlcTimeoutTx(_, _, add) <- timeoutTxs
         claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
 

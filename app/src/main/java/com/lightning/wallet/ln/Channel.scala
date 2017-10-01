@@ -6,21 +6,21 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
 
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
-
-import concurrent.ExecutionContext.Implicits.global
 import fr.acinq.bitcoin.Crypto.PrivateKey
+import java.util.concurrent.Executors
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.util.Success
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
+  implicit val context: ExecutionContextExecutor = ExecutionContext fromExecutor Executors.newSingleThreadExecutor
   def pull[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
-  def process(change: Any) = Future apply synchronized(me doProcess change) onFailure events.onError
+  def process(change: Any) = Future(me doProcess change) onFailure events.onError
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -265,16 +265,15 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // NORMAL: SHUTDOWN
 
 
-      // Sending CMDShutdown when mutual shutdown is already in progress means we want uncooperative close
-      case (norm: NormalData, CMDShutdown, NORMAL) if norm.localShutdown.isDefined => startLocalCurrentClose(norm)
-      case (norm: NormalData, CMDShutdown, NORMAL) if norm.remoteShutdown.isDefined => startLocalCurrentClose(norm)
-      case (norm: NormalData, CMDShutdown, NORMAL) => me startShutdown norm
+      case (norm @ NormalData(_, commitments, our, their), CMDShutdown, NORMAL) =>
+        val nope = our.isDefined || their.isDefined || Commitments.localHasChanges(commitments)
+        if (nope) startLocalCurrentClose(norm) else me startShutdown norm
 
 
       // They try to shutdown with uncommited changes
       case (norm: NormalData, remote: Shutdown, NORMAL)
         if remote.channelId == norm.commitments.channelId &&
-          Commitments.remoteHasChanges(norm.commitments) =>
+          norm.commitments.remoteChanges.proposed.nonEmpty =>
 
         // Can't start mutual shutdown
         startLocalCurrentClose(norm)
@@ -299,12 +298,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // This is the final stage: both Shutdown messages are present and no pending HTLCs are left
-      case (NormalData(announce, commitments, Some(local), Some(remote) /* both present */), CMDProceed, NORMAL)
-        if Commitments.pendingHtlcs(commitments).isEmpty =>
+      case (NormalData(announce, commitments, Some(local), their), CMDProceed, NORMAL)
+        if Commitments.pendingHtlcs(commitments).isEmpty && their.isDefined =>
 
         val feerate = commitments.localCommit.spec.feeratePerKw
-        val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, remote.scriptPubKey, feerate)
-        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, remote)
+        val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
+        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
         BECOME(me STORE neg, NEGOTIATIONS) SEND sig
 
 

@@ -12,7 +12,6 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 
 import com.lightning.wallet.helper.{ReactCallback, ReactLoader, RichCursor}
 import com.lightning.wallet.R.drawable.{await, conf1, dead, refund}
-import com.lightning.wallet.ln.wire.{CommitSig, RevokeAndAck}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import android.view.{Menu, MenuItem, View}
@@ -22,6 +21,7 @@ import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
 import com.github.clans.fab.FloatingActionMenu
+import com.lightning.wallet.ln.wire.CommitSig
 import android.support.v4.view.MenuItemCompat
 import com.lightning.wallet.ln.Tools.none
 import org.bitcoinj.uri.BitcoinURI
@@ -91,8 +91,8 @@ with SearchBar { me =>
         val purpose = info.request.description.right.toSeq.mkString
 
         val marking = info match {
-          case in: IncomingPayment => coloredIn(in.received)
-          case out => coloredOut(out.request.finalSum * -1)
+          case in: IncomingPayment => sumIn.format(denom formatted in.received)
+          case out => sumOut.format(denom formatted out.request.finalSum * -1)
         }
 
         transactWhen setText when(System.currentTimeMillis, timestamp).html
@@ -234,6 +234,8 @@ with SearchBar { me =>
       case techDetails => onFail(techDetails)
     }
 
+    timer.schedule(anyToRunnable(cloud doProcess Connector.CMDStart), 0, 10000)
+
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
 
@@ -249,7 +251,7 @@ with SearchBar { me =>
         case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
         case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
         case err =>
-          err.printStackTrace
+          println(s"-- ERROR IN CHANNEL $err")
           //chan process CMDShutdown
       }
 
@@ -265,8 +267,9 @@ with SearchBar { me =>
           Vibr vibrate Vibr.confirmed
           updTitle
 
-        case (_, _, cmd: CMDAddHtlc) => Vibr vibrate Vibr.processed
-        case (_, _, _: RevokeAndAck | _: CommitSig) => updTitle
+        case (_, _, cmd: CMDAddHtlc) =>
+          // Let know it's in progress
+          Vibr vibrate Vibr.processed
       }
     }
 

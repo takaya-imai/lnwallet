@@ -82,7 +82,7 @@ object PaymentInfo {
 
   def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
   def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
-  def withoutUnsupportedAmount(routes: Vector[PaymentRoute], amount: Long) = without(routes, _.lastUpdate.htlcMinimumMsat < amount)
+  def withoutUnsupportedAmount(routes: Vector[PaymentRoute], amount: Long) = without(routes, amount < _.lastUpdate.htlcMinimumMsat)
   def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
 
   def cutRoutes(fail: UpdateFailHtlc, payment: OutgoingPayment) =

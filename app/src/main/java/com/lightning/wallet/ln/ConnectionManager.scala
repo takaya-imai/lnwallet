@@ -65,6 +65,7 @@ object ConnectionManager {
     }
 
     def send(message: LightningMessage) = {
+      println(s"--> $message")
       val bytes = LightningMessageCodecs serialize message
       handler process Tuple2(TransportHandler.Send, bytes)
     }
@@ -81,11 +82,12 @@ object ConnectionManager {
 
       case error: Error =>
         val decoded = new String(error.data.toArray)
-        Tools log s"Got remote Error: $decoded"
+        Tools log s"-- Got remote Error: $decoded"
         events.onTerminalError(nodeId)
 
       case _ =>
         // Send to channels
+        println(s"<-- $message")
         events.onMessage(message)
     }
   }

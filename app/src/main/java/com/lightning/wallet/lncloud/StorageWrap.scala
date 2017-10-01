@@ -9,6 +9,8 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+
+import com.lightning.wallet.lncloud.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
@@ -44,17 +46,23 @@ object ChannelWrap extends ChannelListener {
     rc.vec(_ string ChannelTable.data) map to[HasCommitments]
   }
 
-  override def onBecome = {
-    case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
-      val staticState = RefundingData(norm.announce, norm.commitments)
-      val packed = AES.encode(staticState.toJson.toString, cloudPrivateData)
-      val plus = Tuple2("key", cloudPublicData.toString) :: Nil
-      cloud doProcess CloudAct(packed, plus, "data/put")
+  override def onProcess = {
+    case (_, close: EndingData, _: CMDBestHeight) => //if close.isOutdated =>
+      db.change(ChannelTable.killSql, close.commitments.channelId.toString)
+
+    case (_, norm: NormalData, _: CommitSig)
+      // GUARD: this may be a storage token HTLC so we
+      // should remind cloud to maybe send a scheduled data
+      if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+      cloud doProcess CMDStart
   }
 
-  override def onProcess = {
-    case (_, close: EndingData, _: CMDBestHeight) if close.isOutdated =>
-      db.change(ChannelTable.killSql, close.commitments.channelId.toString)
+  override def onBecome = {
+    case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
+//      val staticState = RefundingData(norm.announce, norm.commitments)
+//      val packed = AES.encode(staticState.toJson.toString, cloudPrivateData)
+//      val plus = Tuple2("key", cloudPublicData.toString) :: Nil
+//      cloud doProcess CloudAct(packed, plus, "data/put")
   }
 }
 

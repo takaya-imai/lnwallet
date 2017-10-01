@@ -141,10 +141,10 @@ object Scripts { me =>
 
   case class InputInfo(outPoint: OutPoint, txOut: TxOut, redeemScript: BinaryData)
   case class CommitTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
-  case class HtlcSuccessTx(input: InputInfo, tx: Transaction, paymentHash: BinaryData)
-    extends TransactionWithInputInfo
 
-  case class HtlcTimeoutTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
+  case class HtlcSuccessTx(input: InputInfo, tx: Transaction, add: UpdateAddHtlc) extends TransactionWithInputInfo
+  case class HtlcTimeoutTx(input: InputInfo, tx: Transaction, add: UpdateAddHtlc) extends TransactionWithInputInfo
+
   case class ClaimHtlcSuccessTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
   case class ClaimHtlcTimeoutTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
   case class ClaimP2WPKHOutputTx(input: InputInfo, tx: Transaction) extends TransactionWithInputInfo
@@ -168,12 +168,12 @@ object Scripts { me =>
 
   private def trimOfferedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
     val htlcTimeoutFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcTimeoutWeight) + dustLimit
-    spec.htlcs collect { case x if !x.incoming & x.add.amountMsat >= htlcTimeoutFee.amount => x.add }
+    spec.htlcs collect { case Htlc(false, add) if add.amountMsat >= htlcTimeoutFee.amount => add }
   }.toSeq
 
   private def trimReceivedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
     val htlcSuccessFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcSuccessWeight) + dustLimit
-    spec.htlcs collect { case x if x.incoming & x.add.amountMsat >= htlcSuccessFee.amount => x.add }
+    spec.htlcs collect { case Htlc(true, add) if add.amountMsat >= htlcSuccessFee.amount => add }
   }.toSeq
 
   def commitTxFee(dustLimit: Satoshi, spec: CommitmentSpec): Satoshi = {
@@ -331,18 +331,18 @@ object Scripts { me =>
 
     def makeHtlcTimeoutTx(add: UpdateAddHtlc) = {
       val paymentHash160 = Crypto ripemd160 add.paymentHash
+      val offered = htlcOffered(localPubkey, remotePubkey, localRevPubkey, paymentHash160)
       val pubKeyScript = Script pay2wsh toLocalDelayed(localRevPubkey, toLocalDelay, localDelayedPubkey)
-      makeHtlcTx(HtlcTimeoutTx, commitTx, htlcOffered(localPubkey, remotePubkey, localRevPubkey, paymentHash160),
-        pubKeyScript, MilliSatoshi(add.amountMsat), weight2fee(spec.feeratePerKw, htlcTimeoutWeight),
-        add.expiry, 0x00000000L)
+      makeHtlcTx(HtlcTimeoutTx(_, _, add), commitTx, offered, pubKeyScript, MilliSatoshi(add.amountMsat),
+        weight2fee(spec.feeratePerKw, htlcTimeoutWeight), add.expiry, 0x00000000L)
     }
 
     def makeHtlcSuccessTx(add: UpdateAddHtlc) = {
       val paymentHash160 = Crypto ripemd160 add.paymentHash
       val pubKeyScript = Script pay2wsh toLocalDelayed(localRevPubkey, toLocalDelay, localDelayedPubkey)
-      makeHtlcTx(HtlcSuccessTx(_, _, add.paymentHash), commitTx, htlcReceived(localPubkey, remotePubkey, localRevPubkey,
-        paymentHash160, add.expiry), pubKeyScript, MilliSatoshi(add.amountMsat), weight2fee(spec.feeratePerKw, htlcSuccessWeight),
-        0L, 0x00000000L)
+      val received = htlcReceived(localPubkey, remotePubkey, localRevPubkey, paymentHash160, add.expiry)
+      makeHtlcTx(HtlcSuccessTx(_, _, add), commitTx, received, pubKeyScript, MilliSatoshi(add.amountMsat),
+        weight2fee(spec.feeratePerKw, htlcSuccessWeight), 0L, 0x00000000L)
     }
 
     // Dusty HTLCs are filtered out and thus go to fees

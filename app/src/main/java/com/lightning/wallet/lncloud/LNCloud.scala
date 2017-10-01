@@ -10,9 +10,11 @@ import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
+import scala.util.{Failure, Success}
 
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
@@ -21,17 +23,14 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
-
 import org.bitcoinj.core.ECKey
-
-import scala.util.{Failure, Success}
 
 
 // Persisted data exchange with a maintenance server
 abstract class Cloud extends StateMachine[CloudData] {
 
   def checkIfWorks: Obs[Any] = Obs just true
-  protected var isFree: Boolean = true
+  protected[this] var isFree: Boolean = true
   var needsToBeSaved: Boolean = false
   val connector: Connector
 
@@ -54,14 +53,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
+    case CloudData(_, ts, _, _) \ CMDStart if ts.isEmpty => for {
       paymentRequest \ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
       Some(pay) <- retry(app.ChannelManager outPaymentObs paymentRequest, pickInc, 2 to 3)
     } me doProcess Tuple2(pay, blindMemo)
 
     // This payment request may arrive in some time after an initialization above,
     // hence we state that it can only be accepted if info == None to avoid race condition
-    case CloudData(None, tokens, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
+    case CloudData(_, tokens, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
       for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
       me UPDATE data.copy(info = Some(pay.request, memo), tokens = tokens)
 
@@ -83,7 +82,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
 
       bag getPaymentInfo request.paymentHash match {
-        case Success(info) if info.actualStatus == SUCCESS => me resolveSuccess memo
+        case Success(info) if info.actualStatus == SUCCESS => //me resolveSuccess memo
         // Important: payment may fail but we wait until expiration before restarting
         case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
         case Success(info) if info.actualStatus == FAILURE => resetPaymentData

@@ -47,14 +47,14 @@ object CloudDataSaver extends Saver {
   def tryGetObject: TryCloudData = tryGet map to[CloudData]
   def saveObject(data: CloudData) = save(data.toJson)
   type TryCloudData = Try[CloudData]
-  val KEY = "cloudData38"
+  val KEY = "cloudData42"
 }
 
 object RatesSaver extends Saver {
   type RatesMap = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, RatesMap)
-  val KEY = "rates2"
+  val KEY = "rates4"
 
   private val updatePeriod: FiniteDuration = 20.minutes
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)

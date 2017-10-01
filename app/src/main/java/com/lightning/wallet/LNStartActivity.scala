@@ -140,6 +140,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       override def onError = {
         case error: Throwable =>
+          println("-- ERROR CAUGHT IN START")
           chan process CMDShutdown
           Tools errlog error
       }
@@ -191,7 +192,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
         val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
-        chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
+        chan process CMDOpenChannel(localParams, random getBytes 32, 10000 /* TODO: LNParams.broadcaster.feeRatePerKw */, 0, their, amountSat)
       }
     }
 
