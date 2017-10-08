@@ -146,11 +146,11 @@ class WalletApp extends Application { me =>
     }
 
     def createChannel(bootstrap: ChannelData) = new Channel {
-      def SEND(msg: LightningMessage) = for (work <- connections get data.announce.nodeId) work send msg
-      def STORE(content: HasCommitments): HasCommitments = runAnd(content)(ChannelWrap put content)
-      // Listeners should always be added first and only then a process should be called
+      def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
+      def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
+      // Listeners should always be added first and only then a doProcess should be called
       listeners ++= Set(broadcaster, bag, ChannelWrap, Notificator)
-      process(bootstrap)
+      doProcess(bootstrap)
     }
 
     // Get routes from maintenance server and form an outgoing payment
@@ -177,7 +177,7 @@ class WalletApp extends Application { me =>
       chanId <- chan.pull(_.channelId)
       MilliSatoshi(amount) <- request.amount
 
-      (payloads, withFees, allExpiry) = buildPayloads(amount, expiry, route)
+      (payloads, withFees, allExpiry) = buildPayloads(amount, sendExpiry, route)
       onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
     } yield OutgoingPayment(RoutingData(rs.tail, onion, withFees, allExpiry), NOIMAGE, request, chanId, TEMP)
   }
@@ -224,7 +224,7 @@ class WalletApp extends Application { me =>
       ConnectionManager.listeners += ChannelManager.reconnectListener
       startDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.alive
-      RatesSaver.process
+      RatesSaver.update
     }
   }
 }

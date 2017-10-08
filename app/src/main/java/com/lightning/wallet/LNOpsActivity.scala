@@ -144,7 +144,7 @@ class LNOpsActivity extends TimerActivity { me =>
     def basis(fee: Satoshi, amount: Satoshi) = amountStatus
       .format(denom formatted amount + fee, coloredOut apply fee)
 
-    val humanPublishStatus = data.getAllStates take 4 map {
+    val humanPublishStatus = data.getAllStates take 3 map {
       case (Some(true \ _), fee, amt) => getString(ln_ops_chan_unilateral_status_dead).format(basis(fee, amt), coloredIn apply amt)
       case (Some(false \ 0L), fee, amt) => getString(ln_ops_chan_unilateral_status_done).format(basis(fee, amt), coloredIn apply amt)
       case (Some(false \ left), fee, amt) => statusLeft.format(app.plurOrZero(blocksLeft, left), basis(fee, amt), coloredIn apply amt)

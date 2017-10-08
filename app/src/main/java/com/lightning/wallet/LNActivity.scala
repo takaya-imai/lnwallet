@@ -105,7 +105,6 @@ with SearchBar { me =>
   private[this] var sendPayment: PaymentRequest => Unit = none
   private[this] var makePaymentRequest = anyToRunnable(none)
   private[this] var whenStop = anyToRunnable(super.onStop)
-  private[this] var viewPeerInfo = anyToRunnable(none)
   override def onStop = whenStop.run
 
   def evacuate = me exitTo classOf[LNOpsActivity]
@@ -160,7 +159,6 @@ with SearchBar { me =>
 
   override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
     if (menu.getItemId == R.id.actionCloseChannel) closeAllActiveChannels
-    else if (menu.getItemId == R.id.actionViewPeerInfo) viewPeerInfo.run
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
@@ -234,8 +232,6 @@ with SearchBar { me =>
       case techDetails => onFail(techDetails)
     }
 
-    timer.schedule(anyToRunnable(cloud doProcess Connector.CMDStart), 0, 10000)
-
     val chanListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
 
@@ -250,9 +246,7 @@ with SearchBar { me =>
         case AddException(cmd: RetryAddHtlc, _) => Tools log s"Retry payment rejected $cmd"
         case AddException(cmd: SilentAddHtlc, _) => Tools log s"Silent payment rejected $cmd"
         case AddException(_: PlainAddHtlc, code) => onFail(me getString code)
-        case err =>
-          println(s"-- ERROR IN CHANNEL $err")
-          //chan process CMDShutdown
+        case _ => chan process CMDShutdown
       }
 
       override def onProcess = {
@@ -264,12 +258,7 @@ with SearchBar { me =>
           // GUARD: notify and vibrate because HTLC is fulfilled
           if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
           notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
-          Vibr vibrate Vibr.confirmed
           updTitle
-
-        case (_, _, cmd: CMDAddHtlc) =>
-          // Let know it's in progress
-          Vibr vibrate Vibr.processed
       }
     }
 
@@ -329,14 +318,6 @@ with SearchBar { me =>
 
       val ok = alert getButton BUTTON_POSITIVE
       ok setOnClickListener onButtonTap(receiveAttempt)
-    }
-
-    viewPeerInfo = anyToRunnable {
-      val humanId = s"<small>PEER\u00A0ID:\u00A0${chan.data.announce.nodeId.toString}</small>"
-      val humanAddresses = chan.data.announce.addresses.map(adr => adr.getHostString + ":" + adr.getPort) mkString "<br>"
-      val (view, field) = str2Tuple(s"${chan.data.announce.alias}<br><br>$humanAddresses<br><br>$humanId".html)
-      mkForm(me negBld dialog_ok, null, view)
-      field setTextIsSelectable true
     }
 
     whenStop = anyToRunnable {

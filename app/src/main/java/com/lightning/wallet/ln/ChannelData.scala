@@ -241,11 +241,10 @@ case class Commitments(localParams: LocalParams, remoteParams: AcceptChannel, lo
                        remotePerCommitmentSecrets: ShaHashesWithIndex, channelId: BinaryData)
 
 object Commitments {
-  def pendingHtlcs(c: Commitments): Set[Htlc] =
-    c.localCommit.spec.htlcs ++ c.remoteCommit.spec.htlcs ++
-      c.remoteNextCommitInfo.left.toSeq.flatMap(_.nextRemoteCommit.spec.htlcs)
-
-  def localHasChanges(c: Commitments): Boolean = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
+  def localHasChanges(c: Commitments) = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
+  def hasNoPendingHtlc(c: Commitments) = c.localCommit.spec.htlcs.isEmpty && actualRemoteCommit(c).spec.htlcs.isEmpty
+  def remoteHashUnsignedOutgoing(c: Commitments) = c.remoteChanges.proposed.collectFirst { case u: UpdateAddHtlc => u }.isDefined
+  def actualRemoteCommit(c: Commitments) = c.remoteNextCommitInfo.left.toOption.map(_.nextRemoteCommit) getOrElse c.remoteCommit
   def addRemoteProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
   def addLocalProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.localChanges.proposed).using(_ :+ proposal)
 
@@ -274,39 +273,34 @@ object Commitments {
       val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.out.routing.amountWithFee,
         cmd.out.request.paymentHash, cmd.out.routing.expiry, cmd.out.routing.onion.packet.serialize)
 
+      val rp = c.remoteParams
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
-      val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
-      val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c1.remoteParams.dustLimitSatoshis), reduced).amount else 0
-      val valueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.remoteParams.maxHtlcValueInFlightMsat
-      val isOverflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0
-      val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.remoteParams.maxAcceptedHtlcs
+      val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
+      val remoteFees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(rp.dustLimitSatoshis), reduced).amount else 0L
 
       // The rest of the guards
-      if (valueInFlightOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      else if (acceptedHtlcsOverflow) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      else if (isOverflow) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
+      if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > rp.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      else if (reduced.toRemoteMsat / 1000L - rp.channelReserveSatoshis - remoteFees < 0) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
+      else if (reduced.htlcs.count(_.incoming) > rp.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       else c1 -> add
     }
 
-  def receiveAdd(c: Commitments, add: UpdateAddHtlc, blockLimit: Int) =
+  def receiveAdd(c: Commitments, add: UpdateAddHtlc) =
     if (add.amountMsat < htlcMinimumMsat) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
-    else if (add.expiry < blockLimit) throw new LightningException
     else {
 
-      // Let's compute the current commitment *as seen by us* including this change
-      val c1 = addRemoteProposal(c, add).copy(remoteNextHtlcId = c.remoteNextHtlcId + 1)
+      // Let's compute the current commitment
+      // *as seen by us* with this change taken into account
+      val c1 = addRemoteProposal(c, add).modify(_.remoteNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
-      val valueInFlightOverflow = UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c1.localParams.maxHtlcValueInFlightMsat
-      val localFees = if (c1.localParams.isFunder) Scripts.commitTxFee(dustLimit, reduced).amount else 0L
-      val isOverflow = reduced.toRemoteMsat / 1000L - c1.localParams.channelReserveSat - localFees < 0L
-      val acceptedHtlcsOverflow = reduced.htlcs.count(_.incoming) > c1.localParams.maxAcceptedHtlcs
+      val localFees = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
 
       // The rest of the guards
-      if (valueInFlightOverflow) throw new LightningException
-      else if (acceptedHtlcsOverflow) throw new LightningException
-      else if (isOverflow) throw new LightningException
+      if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
+      else if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - localFees < 0L) throw new LightningException
+      else if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
       else c1
     }
 
@@ -357,8 +351,8 @@ object Commitments {
 
     val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
     val fees = Scripts.commitTxFee(dustLimit = Satoshi(c1.remoteParams.dustLimitSatoshis), spec = reduced).amount
-    val feesOverflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0
-    if (feesOverflow) throw new LightningException else c1 -> updateFee
+    val overflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0L
+    if (overflow) throw new LightningException else c1 -> updateFee
   }
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {
@@ -376,7 +370,7 @@ object Commitments {
     // Update commitment data
     val remoteChanges1 = c.remoteChanges.copy(acked = Vector.empty, signed = c.remoteChanges.acked)
     val localChanges1 = c.localChanges.copy(proposed = Vector.empty, signed = c.localChanges.proposed)
-    val remoteCommit1 = RemoteCommit(index = c.remoteCommit.index + 1, spec, remoteCommitTx.tx.txid, remoteNextPerCommitmentPoint)
+    val remoteCommit1 = RemoteCommit(c.remoteCommit.index + 1, spec, remoteCommitTx.tx.txid, remoteNextPerCommitmentPoint)
     val commitSig = CommitSig(c.channelId, Scripts.sign(remoteCommitTx, c.localParams.fundingPrivKey), htlcSigs.toList)
     val waiting = WaitingForRevocation(remoteCommit1, commitSig, c.localCommit.index)
 
@@ -403,8 +397,8 @@ object Commitments {
       c.remoteParams.fundingPubkey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey),
       remoteSig = commit.signature)
 
-    if (Scripts.checkSpendable(signedCommitTx).isEmpty) throw new LightningException
     if (commit.htlcSignatures.size != sortedHtlcTxs.size) throw new LightningException
+    if (Scripts.checkSpendable(signedCommitTx).isEmpty) throw new LightningException
 
     val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, localPaymentKey)
     val combined = (sortedHtlcTxs, htlcSigs, commit.htlcSignatures).zipped.toList
@@ -412,11 +406,13 @@ object Commitments {
     val htlcTxsAndSigs = combined.collect {
       case (htlcTx: HtlcTimeoutTx, localSig, remoteSig) =>
         val check = Scripts checkSpendable Scripts.addSigs(htlcTx, localSig, remoteSig)
-        if (check.isEmpty) throw new LightningException else HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        if (check.isDefined) HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        else throw new LightningException
 
       case (htlcTx: HtlcSuccessTx, localSig, remoteSig) =>
-        val isSigValid = Scripts.checkSig(htlcTx, remoteSig, remotePaymentPubkey)
-        if (!isSigValid) throw new LightningException else HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        val sigValid = Scripts.checkSig(htlcTx, remoteSig, remotePaymentPubkey)
+        if (sigValid) HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        else throw new LightningException
     }
 
     val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx)

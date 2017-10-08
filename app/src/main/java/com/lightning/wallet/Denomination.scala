@@ -70,5 +70,5 @@ object BtcDenomination extends Denomination {
 
   fmt setDecimalFormatSymbols symbols
   def withSign(msat: MilliSatoshi) =
-    "Ƀ\u00A0" + formatted(msat)
+    formatted(msat) + "\u00A0BTC"
 }

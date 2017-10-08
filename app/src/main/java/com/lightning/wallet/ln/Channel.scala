@@ -11,6 +11,7 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+
 import fr.acinq.bitcoin.Crypto.PrivateKey
 import java.util.concurrent.Executors
 import scala.collection.mutable
@@ -147,8 +148,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
         if add.channelId == norm.commitments.channelId =>
 
-        // Should check if we have enough blocktime left to fulfill this HTLC
-        val c1 = Commitments.receiveAdd(norm.commitments, add, LNParams.expiry)
+        // Got new incoming HTLC so put it to changes for now
+        val c1 = Commitments.receiveAdd(norm.commitments, add)
         me UPDATE norm.copy(commitments = c1)
 
 
@@ -183,13 +184,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
           case Success(out: OutgoingPayment) if out.actualStatus == WAITING => throw AddException(cmd, ERR_IN_FLIGHT)
           case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(out: OutgoingPayment) if out.actualStatus == TEMP => throw AddException(cmd, ERR_IN_FLIGHT)
           case Success(out: OutgoingPayment) if out.actualStatus == REFUND => throw AddException(cmd, ERR_FAILED)
           case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
-            // This may be a failed outgoing payment
-            // which probably means we try to re-use a failed request
+            // This may be a TEMP or FAILED outgoing payment
             // this is fine, but such a request should not be stored twice
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
             doProcess(CMDProceed)
@@ -215,7 +214,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // Fail or fulfill incoming HTLCs
       case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
         for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
-          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag)
+          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag, LNParams.receiveExpiry)
 
         // And sign once done
         doProcess(CMDProceed)
@@ -273,7 +272,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // They try to shutdown with uncommited changes
       case (norm: NormalData, remote: Shutdown, NORMAL)
         if remote.channelId == norm.commitments.channelId &&
-          norm.commitments.remoteChanges.proposed.nonEmpty =>
+          Commitments.remoteHashUnsignedOutgoing(norm.commitments) =>
 
         // Can't start mutual shutdown
         startLocalCurrentClose(norm)
@@ -290,8 +289,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // GUARD: we can't send our shutdown untill all HTLCs are resolved
+      // GUARD: this case will only be triggered if CMDProceed above was not
       case (norm @ NormalData(_, commitments, None, their), CMDProceed, NORMAL)
-        if Commitments.pendingHtlcs(commitments).isEmpty && their.isDefined =>
+        if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
 
         me startShutdown norm
         doProcess(CMDProceed)
@@ -299,14 +299,20 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // This is the final stage: both Shutdown messages are present and no pending HTLCs are left
       case (NormalData(announce, commitments, Some(local), their), CMDProceed, NORMAL)
-        if Commitments.pendingHtlcs(commitments).isEmpty && their.isDefined =>
+        if their.isDefined =>
 
-        val feerate = commitments.localCommit.spec.feeratePerKw
-        val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
-        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
-        BECOME(me STORE neg, NEGOTIATIONS) SEND sig
+        if (Commitments hasNoPendingHtlc commitments) {
+          println("-- STARTING NEGOTIATIONS")
+          val feerate = commitments.localCommit.spec.feeratePerKw
+          val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
+          val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
+          BECOME(me STORE neg, NEGOTIATIONS) SEND sig
+        } else {
+          println("-- CAN'T START BECAUSE HAVE PENDING HTLCS")
+        }
 
 
+      // Check if we have outdated outgoing HTLCs
       case (norm: NormalData, CMDBestHeight(height), NORMAL | SYNC)
         if norm.commitments.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && height >= htlc.add.expiry) ||
           norm.commitments.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && height >= htlc.add.expiry) =>

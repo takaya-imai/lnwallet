@@ -14,9 +14,10 @@
     <string name="sets_rescan_ok">Application is about to be closed now and blockchain rescan will be triggered on next launch</string>
     <string name="greetings">Bitcoin + Lightning Network\nPlease read a short yet important\n<a href='https://lightning-wallet.com/'>wallet manual</a> before proceeding</string>
     <string name="password_info">Without password you are in constant danger of losing your money. Please pick one which is at least 6 characters long</string>
+    <string name="ln_chan_details"><![CDATA[Channel capacity %1$s<br>Opened at %2$s<br><small>%3$s</small>]]></string>
     <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
     <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Minimal transaction fee</small></small>]]></string>
-    <string name="title_fee"><![CDATA[Select transaction fee<br><br>%1$s]]></string>
+    <string name="title_fee"><![CDATA[<small>Select transaction fee</small><br>%1$s]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="wallet_create">Create New Bitcoin Wallet</string>
     <string name="wallet_restore">Restore Wallet</string>
@@ -24,6 +25,7 @@
     <string name="unlock">Unlock Wallet</string>
 
     <string name="sets_pass_change">Change wallet password</string>
+    <string name="sets_chan_history">View channel history</string>
     <string name="sets_mnemonic">View mnemonic code</string>
     <string name="sets_rescan">Rescan blockchain</string>
     <string name="sets_backup">Set Backup Server</string>
@@ -46,7 +48,6 @@
     <string name="action_scan">Scan QR code</string>
     <string name="action_buy">Buy bitcoin</string>
 
-    <string name="ln_peer_info">View peer info</string>
     <string name="ln_search">Find payments</string>
     <string name="ln_close">Close channel</string>
 
@@ -73,7 +74,7 @@
     <string name="dialog_sum_big">Amount is too large</string>
 
     <!-- notifications -->
-    <string name="tx_announce">Announcing transaction&#8230;</string>
+    <string name="tx_announcing">Announcing transaction&#8230;</string>
     <string name="tx_confirmed">Bitcoin transaction confirmed</string>
     <string name="tx_received">Bitcoin transaction received</string>
     <string name="tx_sent">Bitcoin transaction sent</string>
@@ -84,12 +85,12 @@
     <string name="pass_changing">Changing wallet password&#8230;</string>
     <string name="pass_checking">Checking password&#8230;</string>
 
+    <string name="notify_working">Working&#8230;</string>
     <string name="ln_notify_connecting">Connecting to Lightning peer&#8230;</string>
     <string name="ln_notify_operational">Lightning wallet is online</string>
     <string name="ln_pr_make">Making payment request&#8230;</string>
     <string name="ln_done">Lightning payment settled</string>
     <string name="ln_send">Sending payment&#8230;</string>
-    <string name="ln_notify_working">Working&#8230;</string>
     <string name="ln_select_peer">Select peer</string>
     
     <array name="info_progress">

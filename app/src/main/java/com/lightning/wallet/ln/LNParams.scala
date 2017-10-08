@@ -27,7 +27,7 @@ object LNParams { me =>
   val htlcMinimumMsat = 100000L
   val localFeatures = "00"
   val globalFeatures = ""
-  val minDepth = 2
+  val minDepth = 1
 
   var extendedNodeKey: ExtendedPrivateKey = _
   var extendedCloudKey: ExtendedPrivateKey = _
@@ -38,8 +38,8 @@ object LNParams { me =>
   lazy val cloudPrivateKey: PrivateKey = extendedCloudKey.privateKey // Sign messages to private maintenance server
   lazy val cloudPublicKey: PublicKey = cloudPrivateKey.publicKey // Check signed messages on private maintenance server
 
-  lazy val cloudPrivateData: BinaryData = sha256(cloudPrivateKey.toBin) // Key for encrypting data on maintenance server
-  lazy val cloudPublicData: BinaryData = sha256(cloudPublicKey.toBin) // Key for retrieving data from maintenance server
+  lazy val cloudPrivateId: BinaryData = sha256(cloudPrivateKey.toBin) // Key for encrypting data on maintenance server
+  lazy val cloudPublicId: BinaryData = sha256(cloudPublicKey.toBin) // Key for retrieving data from maintenance server
   lazy val broadcaster: Broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
 
@@ -75,7 +75,8 @@ object LNParams { me =>
 
   // MISC
 
-  def expiry: Int = broadcaster.currentHeight + 6
+  def sendExpiry: Int = broadcaster.currentHeight + 6
+  def receiveExpiry: Int = broadcaster.currentHeight + 3
   def makeLocalParams(reserve: Long, finalScriptPubKey: BinaryData, idx: Long) = {
     val Seq(fund, revoke, pay, delay, sha) = for (n <- 0L to 4L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil)
     LocalParams(maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 20,

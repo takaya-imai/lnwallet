@@ -8,12 +8,13 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.lncloud.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
+import com.lightning.wallet.Vibr
 import net.sqlcipher.Cursor
 import scala.util.Try
 
@@ -47,22 +48,32 @@ object ChannelWrap extends ChannelListener {
   }
 
   override def onProcess = {
-    case (_, close: EndingData, _: CMDBestHeight) => //if close.isOutdated =>
+    case (_, close: EndingData, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
+
+    case (_, _: NormalData, cmd: CMDAddHtlc) =>
+      // Vibrate to show payment is in progress
+      Vibr vibrate Vibr.processed
+
+    case (_, _: NormalData, _: NormalData) =>
+      // This happens when channel with `null` data gets `NormalData` on app start,
+      // we re-send `CMDStart` just in case if we have any pending cloud actions
+      cloud doProcess CMDStart
 
     case (_, norm: NormalData, _: CommitSig)
       // GUARD: this may be a storage token HTLC so we
       // should remind cloud to maybe send a scheduled data
       if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+      Vibr vibrate Vibr.confirmed
       cloud doProcess CMDStart
   }
 
   override def onBecome = {
     case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
-//      val staticState = RefundingData(norm.announce, norm.commitments)
-//      val packed = AES.encode(staticState.toJson.toString, cloudPrivateData)
-//      val plus = Tuple2("key", cloudPublicData.toString) :: Nil
-//      cloud doProcess CloudAct(packed, plus, "data/put")
+      // Once a new channel becomes NORMAL we save it's state on a cloud
+      val staticChannelState = RefundingData(norm.announce, norm.commitments)
+      val packed = AES.encode(staticChannelState.toJson.toString, cloudPrivateId)
+      cloud doProcess CloudAct(packed, Seq("key" -> cloudPublicId.toString), "data/put")
   }
 }
 

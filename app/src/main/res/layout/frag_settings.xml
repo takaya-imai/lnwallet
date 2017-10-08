@@ -9,13 +9,18 @@
 
     <Button
         style="@style/TransButton"
+        android:id="@+id/rescanWallet"
+        android:text="@string/sets_rescan"/>
+
+    <Button
+        style="@style/TransButton"
         android:id="@+id/viewMnemonic"
         android:text="@string/sets_mnemonic"/>
 
     <Button
         style="@style/TransButton"
-        android:id="@+id/rescanWallet"
-        android:text="@string/sets_rescan"/>
+        android:id="@+id/viewChanHistory"
+        android:text="@string/sets_chan_history"/>
 
     <Button
         style="@style/TransButton"

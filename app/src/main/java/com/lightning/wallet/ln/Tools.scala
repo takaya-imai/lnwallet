@@ -2,7 +2,6 @@ package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
-
 import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
 import crypto.RandomGenerator
@@ -21,8 +20,8 @@ object \ {
 object Tools {
   type Bytes = Array[Byte]
   type LightningMessages = Vector[LightningMessage]
-  val random = new RandomGenerator
 
+  val random = new RandomGenerator
   def runAnd[T](result: T)(action: Any): T = result
   def errlog(error: Throwable): Unit = error.printStackTrace
   def log(message: String): Unit = android.util.Log.d("LN", message)

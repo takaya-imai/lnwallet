@@ -106,26 +106,34 @@ object PaymentInfo {
       // Could not parse, try the rest of routes
     } getOrElse payment.routing.routes
 
-  private def failHtlc(sharedSecret: BinaryData, add: UpdateAddHtlc, failure: FailureMessage) =
+  private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
-  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag) = Try {
-    val packet = parsePacket(nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
+  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Int) = Try {
+    val packet = parsePacket(privateKey = nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     val payload = LightningMessageCodecs.perHopPayloadCodec decode BitVector(packet.payload)
     Tuple3(payload, packet.nextPacket, packet.sharedSecret)
   } map {
-    case (_, nextPacket, sharedSecret) if nextPacket.isLast =>
-      // We are the final HTLC recipient, the only viable option
+    case (Attempt.Successful(decoded), nextPacket, sharedSecret) if nextPacket.isLast =>
+      // We are the final HTLC recipient, the only viable option since we don't route
 
       bag getPaymentInfo add.paymentHash match {
+        case Success(_) if add.expiry < minExpiry =>
+          // GUARD: not enough time to redeem it on-chain
+          failHtlc(sharedSecret, FinalExpiryTooSoon, add)
+
+        case Success(_) if decoded.value.outgoing_cltv_value != add.expiry =>
+          // GUARD: final outgoing CLTV value does not equal the one from message
+          failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
+
         case Success(pay) if pay.request.amount.exists(add.amountMsat > _.amount * 2) =>
           // GUARD: they have sent too much funds, this is a protective measure against that
-          failHtlc(sharedSecret, add, IncorrectPaymentAmount)
+          failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
         case Success(pay) if pay.request.amount.exists(add.amountMsat < _.amount) =>
           // GUARD: amount is less than what we requested, we won't accept such payment
-          failHtlc(sharedSecret, add, IncorrectPaymentAmount)
+          failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
         case Success(pay: IncomingPayment) =>
           // We have a valid *incoming* payment
@@ -133,16 +141,16 @@ object PaymentInfo {
 
         case _ =>
           // Payment spec has not been found
-          failHtlc(sharedSecret, add, UnknownPaymentHash)
+          failHtlc(sharedSecret, UnknownPaymentHash, add)
       }
 
     case (Attempt.Successful(_), _, sharedSecret) =>
       // We don't route so can't find the next node
-      failHtlc(sharedSecret, add, UnknownNextPeer)
+      failHtlc(sharedSecret, UnknownNextPeer, add)
 
     case (Attempt.Failure(_), _, sharedSecret) =>
       // Payload could not be parsed at all so fail it
-      failHtlc(sharedSecret, add, PermanentNodeFailure)
+      failHtlc(sharedSecret, PermanentNodeFailure, add)
 
   } getOrElse {
     val hash = sha256(add.onionRoutingPacket)

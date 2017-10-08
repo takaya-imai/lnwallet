@@ -297,8 +297,8 @@ trait ToolbarActivity extends TimerActivity { me =>
     import RatesSaver.rates
     def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
       <(makeTx(password, rates.feeRisky), onTxFail) { feeEstimate: Transaction =>
-        val riskyFinalFee: MilliSatoshi = rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
-        val liveFinalFee: MilliSatoshi = rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000
+        val riskyFinalFee: MilliSatoshi = rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
+        val liveFinalFee: MilliSatoshi = rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
         val riskyFeePretty = sumOut format denom.withSign(riskyFinalFee)
         val liveFeePretty = sumOut format denom.withSign(liveFinalFee)
 
@@ -412,7 +412,10 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   override def onDestroy = wrap(super.onDestroy) { timer.cancel }
-  override def onPause = wrap(super.onPause) { if (LNParams.cloud.needsToBeSaved) LNParams.cloud.SAVE }
+  override def onPause = wrap(super.onPause) {
+    println(s"NEEDS TO BE SAVED: ${LNParams.cloud.needsToBeSaved}")
+    if (LNParams.cloud.needsToBeSaved) LNParams.cloud.SAVE
+  }
   implicit def uiTask(process: => Runnable): TimerTask = new TimerTask { def run = me runOnUiThread process }
   implicit def str2View(res: CharSequence): LinearLayout = str2Tuple(res) match { case (view, _) => view }
 

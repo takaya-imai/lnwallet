@@ -107,9 +107,9 @@ class TransactionsSpec {
         // ClaimHtlcSuccessTx
         // first we create a fake commitTx tx, containing only the output that will be spent by the ClaimHtlcSuccessTx
         val paymentPreimage = BinaryData("42" * 32)
-        val htlc = UpdateAddHtlc("00" * 32, 0, Satoshi(20000).amount * 1000, sha256(paymentPreimage), 400144, BinaryData(""))
+        val htlc = UpdateAddHtlc("00" * 32, 0, Satoshi(20000).amount * 1000L, sha256(paymentPreimage), 400144, BinaryData(""))
         val pubKeyScript = write(pay2wsh(htlcOffered(localPaymentPriv.publicKey, remotePaymentPriv.publicKey, localRevocationPriv.publicKey, ripemd160(htlc.paymentHash))))
-        val commitTx = Transaction(version = 0, txIn = Nil, txOut = TxOut(Satoshi(htlc.amountMsat / 1000), pubKeyScript) :: Nil, lockTime = 0)
+        val commitTx = Transaction(version = 0, txIn = Nil, txOut = TxOut(Satoshi(htlc.amountMsat / 1000L), pubKeyScript) :: Nil, lockTime = 0)
         val claimHtlcSuccessTx = makeClaimHtlcSuccessTx(commitTx, remotePaymentPriv.publicKey, localPaymentPriv.publicKey, localRevocationPriv.publicKey, finalPubKeyScript, htlc, feeratePerKw)
         // we use dummy signatures to compute the weight
         val weight = Transaction.weight(addSigs(claimHtlcSuccessTx, "bb" * 71, paymentPreimage).tx)
@@ -120,9 +120,9 @@ class TransactionsSpec {
         // ClaimHtlcTimeoutTx
         // first we create a fake commitTx tx, containing only the output that will be spent by the ClaimHtlcSuccessTx
         val paymentPreimage = BinaryData("42" * 32)
-        val htlc = UpdateAddHtlc("00" * 32, 0, Satoshi(20000).amount * 1000, sha256(paymentPreimage), 400144, BinaryData(""))
+        val htlc = UpdateAddHtlc("00" * 32, 0, Satoshi(20000).amount * 1000L, sha256(paymentPreimage), 400144, BinaryData(""))
         val pubKeyScript = write(pay2wsh(htlcReceived(localPaymentPriv.publicKey, remotePaymentPriv.publicKey, localRevocationPriv.publicKey, ripemd160(htlc.paymentHash), htlc.expiry)))
-        val commitTx = Transaction(version = 0, txIn = Nil, txOut = TxOut(Satoshi(htlc.amountMsat / 1000), pubKeyScript) :: Nil, lockTime = 0)
+        val commitTx = Transaction(version = 0, txIn = Nil, txOut = TxOut(Satoshi(htlc.amountMsat / 1000L), pubKeyScript) :: Nil, lockTime = 0)
         val claimClaimHtlcTimeoutTx = makeClaimHtlcTimeoutTx(commitTx, remotePaymentPriv.publicKey, localPaymentPriv.publicKey, localRevocationPriv.publicKey, finalPubKeyScript, htlc, feeratePerKw)
         // we use dummy signatures to compute the weight
         val weight = Transaction.weight(addSigs(claimClaimHtlcTimeoutTx, "bb" * 71).tx)

@@ -32,7 +32,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   lazy val lnStartDetails = findViewById(R.id.lnStartDetails).asInstanceOf[TextView]
   lazy val views = lnStartNodesList :: lnStartDetails :: Nil
   lazy val nodeView = getString(ln_ops_start_node_view)
-  lazy val notifyWorking = getString(ln_notify_working)
+  lazy val notifyWorking = getString(notify_working)
   lazy val selectPeer = getString(ln_select_peer)
   private[this] val adapter = new NodesAdapter
 

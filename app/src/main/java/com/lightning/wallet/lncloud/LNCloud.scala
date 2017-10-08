@@ -3,6 +3,7 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
+import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.Connector._
@@ -53,19 +54,22 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(_, ts, _, _) \ CMDStart if ts.isEmpty => for {
-      paymentRequest \ blindMemo <- retry(getRequestAndMemo, pickInc, 2 to 3)
-      Some(pay) <- retry(app.ChannelManager outPaymentObs paymentRequest, pickInc, 2 to 3)
-    } me doProcess Tuple2(pay, blindMemo)
+    case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
+      // Get payment request, then fetch payment routes, then fulfill it
+      paymentRequest \ blindMemo <- retry(getRequestAndMemo, pickInc, 3 to 4)
+      Some(pay) <- retry(app.ChannelManager outPaymentObs paymentRequest, pickInc, 3 to 4)
+      channel <- app.ChannelManager.alive.headOption
 
-    // This payment request may arrive in some time after an initialization above,
-    // hence we state that it can only be accepted if info == None to avoid race condition
-    case CloudData(_, tokens, _, _) \ Tuple2(pay: OutgoingPayment, memo: BlindMemo) =>
-      for (chan <- app.ChannelManager.alive.headOption) chan process SilentAddHtlc(pay)
-      me UPDATE data.copy(info = Some(pay.request, memo), tokens = tokens)
+    } if (data.info.isEmpty) {
+      // Payment request may arrive in some time after an initialization above,
+      // so we state that it can only be accepted if `data.info` is still empty
+      val data1 = data.modify(_.info) setTo Some(pay.request, blindMemo)
+      channel process SilentAddHtlc(pay)
+      me UPDATE data1
+    }
 
     // Execute if we are not busy and have available tokens and actions
-    case CloudData(_, SetEx(token @ (pnt, clear, sig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
+    case CloudData(_, SetEx(token @ Tuple3(pnt, clear, sig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> pnt, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
       val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
@@ -82,7 +86,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
 
       bag getPaymentInfo request.paymentHash match {
-        case Success(info) if info.actualStatus == SUCCESS => //me resolveSuccess memo
+        case Success(info) if info.actualStatus == SUCCESS => me resolveSuccess memo
         // Important: payment may fail but we wait until expiration before restarting
         case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
         case Success(info) if info.actualStatus == FAILURE => resetPaymentData

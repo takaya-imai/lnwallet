@@ -352,7 +352,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
           override def processTx(pass: String, fee: Coin) = {
             <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
-            add(me getString tx_announce, Informer.BTCEVENT).flash.run
+            add(me getString tx_announcing, Informer.BTCEVENT).flash.run
           }
 
           override def onTxFail(err: Throwable) =
