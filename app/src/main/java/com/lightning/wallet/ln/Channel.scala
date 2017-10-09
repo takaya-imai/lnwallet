@@ -272,7 +272,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // They try to shutdown with uncommited changes
       case (norm: NormalData, remote: Shutdown, NORMAL)
         if remote.channelId == norm.commitments.channelId &&
-          Commitments.remoteHashUnsignedOutgoing(norm.commitments) =>
+          Commitments.remoteHasUnsignedOutgoing(norm.commitments) =>
 
         // Can't start mutual shutdown
         startLocalCurrentClose(norm)

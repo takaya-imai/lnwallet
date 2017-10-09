@@ -1,13 +1,16 @@
 <resources>
     <string name="lang">eng</string>
 
+    <!-- stepper -->
+    <string name="step_2"><![CDATA[<font color=#999999>Step 2 of 3: security</font><br><br>%1$s]]></string>
+    <string name="step_3"><![CDATA[<font color=#999999>Step 3 of 3: fees</font><br><br>%1$s]]></string>
+
     <!-- emergency mode -->
     <string name="emerge_report">Show error report</string>
     <string name="emerge_title">Something went wrong</string>
     <string name="emerge_subtitle">Emergency mode</string>
 
     <!-- app wide -->
-    <string name="or">or</string>
     <string name="app_name">Bitcoin</string>
     <string name="sets_noscreen">Do not make a screenshot</string>
     <string name="sets_password_ok">New password has been set successfully</string>
@@ -17,7 +20,6 @@
     <string name="ln_chan_details"><![CDATA[Channel capacity %1$s<br>Opened at %2$s<br><small>%3$s</small>]]></string>
     <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
     <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Minimal transaction fee</small></small>]]></string>
-    <string name="title_fee"><![CDATA[<small>Select transaction fee</small><br>%1$s]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="wallet_create">Create New Bitcoin Wallet</string>
     <string name="wallet_restore">Restore Wallet</string>
@@ -41,13 +43,14 @@
     <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
     <string name="read_settings"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read a short app manual</a><br><br></small>Wallet settings]]></string>
 
-    <!-- menu -->
+    <!-- menu and fab -->
     <string name="action_settings">Wallet settings</string>
     <string name="action_bitcoin_receive">Receive bitcoin</string>
     <string name="action_bitcoin_send">Send bitcoin</string>
     <string name="action_scan">Scan QR code</string>
     <string name="action_buy">Buy bitcoin</string>
 
+    <string name="ln_receive">Receive lightning</string>
     <string name="ln_search">Find payments</string>
     <string name="ln_close">Close channel</string>
 
@@ -137,11 +140,11 @@
     <string name="err_ln_no_route">Failed because no route to recipient could be found</string>
     <string name="err_ln_too_many">Failed because too many payments are already in-flight</string>
     <string name="err_ln_inflight">Failed because this payment is already in-flight right now</string>
-    <string name="err_ln_amount_overflow">Failed because payment sum exceeds maximum allowed amount</string>
+    <string name="err_ln_amount_overflow">Failed because payment amount exceeds an allowed maximum</string>
     <string name="err_ln_remote_amount_low">Failed because payment amount is too low for your peer to process it</string>
     <string name="err_ln_offline">Failed because channel is currently offline. Please wait a few seconds and try again</string>
     <string name="err_ln_old">Failed because this payment request has expired. Please ask recipient to provide a new one</string>
-    <string name="err_ln_remote_fee_overflow">Failed because payment combined with fee exceeds your peer\'s channel balance</string>
+    <string name="err_ln_remote_fee_overflow">Failed because payment amount combined with fee exceeds your peer\'s balance</string>
     <string name="err_ln_black">Failed because your peer is blacklisted. You may want to create a new payment channel</string>
     <string name="err_ln_general">Could not proceed with this payment. Please ask recipient to issue another one</string>
 
@@ -165,15 +168,13 @@
 
     <!-- SPECIFIC TO LIGHTNING NETWORK -->
 
-    <string name="ln_receive">Receive payment</string>
     <string name="ln_description_hint">add some description</string>
-    <string name="ln_receive_title">Receive Lightning Payment</string>
-    <string name="ln_send_title"><![CDATA[Send Lightning Payment<br><br><small>%1$s</small>]]></string>
+    <string name="ln_send_title"><![CDATA[Send lightning<br><br><small>%1$s</small>]]></string>
     <string name="ln_incoming_title"><![CDATA[<font color=#1BA2E0>Incoming payment</font><br>%1$s]]></string>
     <string name="ln_outgoing_title"><![CDATA[<font color=#E31300>Outgoing payment</font><br>%2$s<br><br>%1$s fee]]></string>
     <string name="ln_proof">Recipient: %1$s\nDescription: %2$s\nSigned request: %3$s\nPayment hash: %4$s\nPayment preimage: %5$s</string>
-    <string name="ln_htlc_notification">to resolve some pending payments</string>
     <string name="ln_htlc_notification_title">Bring your wallet online</string>
+    <string name="ln_htlc_notification">to resolve pending payments</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_retry">Retrying payment&#8230;\n%1$s</string>
     <string name="ln_copy_proof">Copy Proof of Payment</string>

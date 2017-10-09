@@ -22,7 +22,7 @@
 
         <TextView
             style="@style/Info"
-            android:text="@string/or"
+            android:text="&#8226;"
             android:layout_margin="10dp"
             android:layout_width="wrap_content"/>
 

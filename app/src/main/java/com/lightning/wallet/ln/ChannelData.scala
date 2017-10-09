@@ -243,7 +243,7 @@ case class Commitments(localParams: LocalParams, remoteParams: AcceptChannel, lo
 object Commitments {
   def localHasChanges(c: Commitments) = c.remoteChanges.acked.nonEmpty || c.localChanges.proposed.nonEmpty
   def hasNoPendingHtlc(c: Commitments) = c.localCommit.spec.htlcs.isEmpty && actualRemoteCommit(c).spec.htlcs.isEmpty
-  def remoteHashUnsignedOutgoing(c: Commitments) = c.remoteChanges.proposed.collectFirst { case u: UpdateAddHtlc => u }.isDefined
+  def remoteHasUnsignedOutgoing(c: Commitments) = c.remoteChanges.proposed.collectFirst { case u: UpdateAddHtlc => u }.isDefined
   def actualRemoteCommit(c: Commitments) = c.remoteNextCommitInfo.left.toOption.map(_.nextRemoteCommit) getOrElse c.remoteCommit
   def addRemoteProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
   def addLocalProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.localChanges.proposed).using(_ :+ proposal)

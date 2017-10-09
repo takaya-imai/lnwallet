@@ -23,6 +23,7 @@ import java.util.{Timer, TimerTask}
 import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
+import android.widget.AdapterView.OnItemClickListener
 import info.hoang8f.android.segmented.SegmentedGroup
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
@@ -294,29 +295,30 @@ trait ToolbarActivity extends TimerActivity { me =>
     def processTx(password: String, fee: Coin)
     val pay: PayData
 
-    import RatesSaver.rates
-    def chooseFee: Unit = passPlus(pay.cute(sumOut).html) { password =>
-      <(makeTx(password, rates.feeRisky), onTxFail) { feeEstimate: Transaction =>
-        val riskyFinalFee: MilliSatoshi = rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
-        val liveFinalFee: MilliSatoshi = rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
-        val riskyFeePretty = sumOut format denom.withSign(riskyFinalFee)
-        val liveFeePretty = sumOut format denom.withSign(liveFinalFee)
+    def chooseFee: Unit =
+      passPlus(getString(step_2).format(pay cute sumOut).html) { password =>
+        <(makeTx(password, RatesSaver.rates.feeRisky), onTxFail) { feeEstimate =>
+          val riskyFinalFee: MilliSatoshi = RatesSaver.rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
+          val liveFinalFee: MilliSatoshi = RatesSaver.rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
+          val feeRisky = getString(fee_risky) format humanFiat(sumOut format denom.withSign(riskyFinalFee), riskyFinalFee, " ")
+          val feeLive = getString(fee_live) format humanFiat(sumOut format denom.withSign(liveFinalFee), liveFinalFee, " ")
+          val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
+          val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
+          val slot = android.R.layout.select_dialog_singlechoice
+          val feesOptions = Array(feeRisky.html, feeLive.html)
+          val opts = new ArrayAdapter(me, slot, feesOptions)
 
-        // Show formatted fees as well as in current fiat value
-        val feeRiskyComplete = getString(fee_risky) format humanFiat(riskyFeePretty, riskyFinalFee, " ")
-        val feeLiveComplete = getString(fee_live) format humanFiat(liveFeePretty, liveFinalFee, " ")
-        val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
-        val feesOptions = Array(feeRiskyComplete.html, feeLiveComplete.html)
-        val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
-        val slot = android.R.layout.select_dialog_singlechoice
-        lst setAdapter new ArrayAdapter(me, slot, feesOptions)
-        lst.setItemChecked(0, true)
+          def proceed = lst.getCheckedItemPosition match {
+            case 0 => processTx(password, RatesSaver.rates.feeRisky)
+            case _ => processTx(password, RatesSaver.rates.feeLive)
+          }
 
-        def proceed = processTx(password, if (lst.getCheckedItemPosition == 0) rates.feeRisky else rates.feeLive)
-        lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
-        lazy val alert = mkForm(dialog, getString(title_fee).format(pay cute sumOut).html, form)
-        alert
-      }
+          lst setAdapter opts
+          lst.setItemChecked(0, true)
+          lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
+          lazy val alert = mkForm(dialog, getString(step_3).format(pay cute sumOut).html, form)
+          alert
+        }
     }
 
     def makeTx(password: String, fee: Coin) = {
@@ -412,10 +414,7 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   override def onDestroy = wrap(super.onDestroy) { timer.cancel }
-  override def onPause = wrap(super.onPause) {
-    println(s"NEEDS TO BE SAVED: ${LNParams.cloud.needsToBeSaved}")
-    if (LNParams.cloud.needsToBeSaved) LNParams.cloud.SAVE
-  }
+  override def onPause = wrap(super.onPause) { if (LNParams.cloud.needsToBeSaved) LNParams.cloud.SAVE }
   implicit def uiTask(process: => Runnable): TimerTask = new TimerTask { def run = me runOnUiThread process }
   implicit def str2View(res: CharSequence): LinearLayout = str2Tuple(res) match { case (view, _) => view }
 
@@ -431,19 +430,20 @@ trait TimerActivity extends AppCompatActivity { me =>
     mgr.hideSoftInputFromWindow(getCurrentFocus.getWindowToken, HIDE_NOT_ALWAYS)
   } catch none finally me delayUI fun
 
-  def onTap(run: Int => Unit) = new AdapterView.OnItemClickListener {
-    def onItemClick(p: AdapterView[_], v: View, pos: Int, id: Long) = run(pos)
+  def onTap(run: Int => Unit): OnItemClickListener = new OnItemClickListener {
+    def onItemClick(adapter: AdapterView[_], view: View, pos: Int, id: Long) = run(pos)
   }
 
-  def onButtonTap(run: => Unit) = new OnClickListener {
-    def onClick(tappedButtonView: View) = me hideKeys run
+  def onButtonTap(run: => Unit): OnClickListener = new OnClickListener {
+    // Shortcut for click listener for buttons, also tries to hide a keyboard
+    def onClick(view: View) = me hideKeys run
   }
 
-  def clickableTextField(view: View): TextView =
-    view.asInstanceOf[TextView] match { case textView =>
-      textView setMovementMethod LinkMovementMethod.getInstance
-      textView
-    }
+  def clickableTextField(view: View): TextView = {
+    val textView: TextView = view.asInstanceOf[TextView]
+    textView setMovementMethod LinkMovementMethod.getInstance
+    textView
+  }
 }
 
 class RateManager(extra: String, val content: View) { me =>
