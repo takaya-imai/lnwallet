@@ -4,15 +4,15 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.crypto.Sphinx._
+import com.lightning.wallet.ln.wire.FailureMessageCodecs._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import com.lightning.wallet.ln.wire.FailureMessageCodecs.BADONION
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+import scala.util.{Success, Try}
+
 import com.lightning.wallet.ln.Tools.random
 import scodec.bits.BitVector
 import scodec.Attempt
-
-import fr.acinq.bitcoin.Crypto.{PrivateKey, sha256}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import scala.util.{Success, Try}
 
 
 trait PaymentInfo {
@@ -23,15 +23,20 @@ trait PaymentInfo {
   val status: Int
 }
 
-case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData, request: PaymentRequest,
-                           chanId: BinaryData, status: Int) extends PaymentInfo {
+case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData,
+                           request: PaymentRequest, chanId: BinaryData,
+                           status: Int) extends PaymentInfo {
 
   def actualStatus = status
 }
 
-case class RoutingData(routes: Vector[PaymentRoute], onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
-case class OutgoingPayment(routing: RoutingData, preimage: BinaryData, request: PaymentRequest,
-                           chanId: BinaryData, status: Int) extends PaymentInfo {
+case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey],
+                       badChannels: Set[Long], onion: SecretsAndPacket,
+                       amountWithFee: Long, expiry: Long)
+
+case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
+                           request: PaymentRequest, chanId: BinaryData,
+                           status: Int) extends PaymentInfo {
 
   def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
 }
@@ -59,7 +64,6 @@ object PaymentInfo {
   final val WAITING = 2
   final val SUCCESS = 3
   final val FAILURE = 4
-  final val REFUND = 5
 
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long) =
     baseMsat + (proportional * msat) / 1000000L
@@ -77,37 +81,46 @@ object PaymentInfo {
 
   def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): SecretsAndPacket = {
     require(nodes.size == payloads.size, "Payload count mismatch: there should be exactly as much payloads as node pubkeys")
-    makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(perHopPayloadCodec.encode).map(serialize(_).toArray), assocData)
+    makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assocData)
   }
 
-  def without(routes: Vector[PaymentRoute], predicate: Hop => Boolean) = routes.filterNot(_ exists predicate)
-  def withoutChannel(routes: Vector[PaymentRoute], chanId: Long) = without(routes, _.lastUpdate.shortChannelId == chanId)
-  def withoutUnsupportedAmount(routes: Vector[PaymentRoute], amount: Long) = without(routes, amount < _.lastUpdate.htlcMinimumMsat)
-  def withoutNode(routes: Vector[PaymentRoute], nodeId: BinaryData) = without(routes, _.nodeId == nodeId)
+  // If we have routes available AND channel has an id AND request has some definite amount
+  def buildPayment(rs: Vector[PaymentRoute], badNodes: Set[PublicKey], badChannels: Set[Long],
+                   pr: PaymentRequest, chan: Channel): Option[OutgoingPayment] = for {
 
-  def cutRoutes(fail: UpdateFailHtlc, payment: OutgoingPayment) =
-    parseErrorPacket(payment.routing.onion.sharedSecrets, fail.reason) map {
-      case ErrorPacket(nodeId, _: Perm) if payment.request.nodeId == nodeId =>
-        // Permanent error from a final node, nothing we can do here
-        Vector.empty
+    route <- rs.headOption
+    chanId <- chan.pull(_.channelId)
+    MilliSatoshi(amount) <- pr.amount
 
-      case ErrorPacket(nodeId, _: Node) =>
-        // Look for channels left without this node
-        withoutNode(payment.routing.routes, nodeId.toBin)
+    (payloads, amountWithFees, finalExpiry) = buildPayloads(amount, LNParams.sendExpiry, route)
+    onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, pr.paymentHash)
+    routing = RoutingData(rs.tail, badNodes, badChannels, onion, amountWithFees, finalExpiry)
+  } yield OutgoingPayment(routing, NOIMAGE, pr, chanId, TEMP)
 
-      case ErrorPacket(nodeId, message: Update) =>
-        // This node may have other channels left so try them out
-        withoutChannel(payment.routing.routes, message.update.shortChannelId)
-
-      case _ =>
-        // Nothing to cut
-        payment.routing.routes
-
-      // Could not parse, try the rest of routes
-    } getOrElse payment.routing.routes
-
+  private def without(rs: Vector[PaymentRoute], test: Hop => Boolean) = rs.filterNot(_ exists test)
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
+
+  def cutRoutes(fail: UpdateFailHtlc, routing: RoutingData, finalNodeId: PublicKey) = {
+    val RoutingData(routes, badNodes, badChannels, onion: SecretsAndPacket, _, _) = routing
+
+    parseErrorPacket(onion.sharedSecrets, fail.reason) collect {
+      case ErrorPacket(nodeId, _: Perm) if finalNodeId == nodeId =>
+        // Permanent error from a final node, nothing we can do here
+        (Vector.empty, badNodes, badChannels)
+
+      case ErrorPacket(nodeId, _: Node) =>
+        // Look for channels left without this node, also remember this node
+        (without(routes, _.nodeId == nodeId), badNodes + nodeId, badChannels)
+
+      case ErrorPacket(nodeId, message: Update) =>
+        // This node may have other channels left so try them out too, also remember this channel as failed
+        val routesWithoutChannel = without(routes, _.lastUpdate.shortChannelId == message.update.shortChannelId)
+        (routesWithoutChannel, badNodes, badChannels + message.update.shortChannelId)
+
+      // Nothing to cut so we try other routes
+    } getOrElse (routes, badNodes, badChannels)
+  }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
   def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Int) = Try {
@@ -154,7 +167,6 @@ object PaymentInfo {
 
   } getOrElse {
     val hash = sha256(add.onionRoutingPacket)
-    // BADONION bit must be set in failure_code
     CMDFailMalformedHtlc(add.id, hash, BADONION)
   }
 }

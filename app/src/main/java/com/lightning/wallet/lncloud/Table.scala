@@ -39,7 +39,6 @@ object ChannelTable extends Table {
 
 object PaymentInfoTable extends Table {
   import com.lightning.wallet.ln.PaymentInfo._
-
   val names = ("payments", "hash", "request", "status", "chanid", "preimage", "received", "routing", "search")
   val (table, hash, request, status, chanId, preimage, received, routing, search) = names
 
@@ -49,11 +48,11 @@ object PaymentInfoTable extends Table {
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
+  def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?"
   def updStatusHashSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updStatusStatusSql = s"UPDATE $table SET $status = ? WHERE $status = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?" // Save incoming preimages, do not wait for commit signature
   def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?" // Actual received sum may differ from what we have asked
-  def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?" // Decrease routes to avoid infinite loop when retrying
 
   def createVirtualSql = s"""
     CREATE VIRTUAL TABLE $fts$table

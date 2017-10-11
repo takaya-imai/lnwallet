@@ -13,7 +13,7 @@ import com.lightning.wallet.Utils.app
 
 
 object Notificator extends ChannelListener {
-  private lazy val notificatorClass = classOf[Notificator]
+  private val notificatorClass = classOf[Notificator]
   def getIntent = PendingIntent.getBroadcast(app, 0, new Intent(app, notificatorClass), 0)
   def getAlarmManager = app.getSystemService(Context.ALARM_SERVICE).asInstanceOf[AlarmManager]
 
@@ -23,14 +23,11 @@ object Notificator extends ChannelListener {
   }
 
   override def onProcess = {
-    case (_, norm: NormalData, _: CommitSig)
-      // GUARD: has no in-flight HTLCs, remove notifcation
-      if Commitments.hasNoPendingHtlc(norm.commitments) =>
-      try getAlarmManager cancel getIntent catch none
-
-    case (_, norm: NormalData, _: CommitSig) =>
-      try getAlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
-        System.currentTimeMillis + 1000 * 60 * 4, getIntent) catch none
+    case (_, norm: NormalData, _: CommitSig) => try {
+      val in4Minutes = System.currentTimeMillis + 1000 * 60 * 4
+      if (Commitments hasNoPendingHtlc norm.commitments) getAlarmManager cancel getIntent
+      else getAlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, in4Minutes, getIntent)
+    } catch none
   }
 }
 

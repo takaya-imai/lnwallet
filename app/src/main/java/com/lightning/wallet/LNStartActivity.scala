@@ -111,9 +111,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       override def onMessage(message: LightningMessage) = chan process message
       override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan process CMDShutdown
       override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan process CMDShutdown
-
-      override def onOperational(nodeId: PublicKey, their: Init) =
-        if (nodeId == announce.nodeId) me runOnUiThread askForFunding(chan, their)
+      override def onOperational(nodeId: PublicKey, their: Init) = if (nodeId == announce.nodeId)
+        me runOnUiThread askForFunding(chan, their)
     }
 
     chan.listeners += new ChannelListener { chanOpenListener =>
@@ -136,13 +135,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           ConnectionManager.listeners -= socketOpenListener
           chan.listeners -= chanOpenListener
           me exitTo classOf[LNOpsActivity]
-      }
-
-      override def onError = {
-        case error: Throwable =>
-          println("-- ERROR CAUGHT IN START")
-          chan process CMDShutdown
-          Tools errlog error
       }
     }
 

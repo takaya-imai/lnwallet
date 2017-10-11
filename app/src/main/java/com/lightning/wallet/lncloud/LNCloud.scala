@@ -56,14 +56,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   def doProcess(some: Any) = (data, some) match {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
       // Get payment request, then fetch payment routes, then fulfill it
-      paymentRequest \ blindMemo <- retry(getRequestAndMemo, pickInc, 3 to 4)
-      Some(pay) <- retry(app.ChannelManager outPaymentObs paymentRequest, pickInc, 3 to 4)
+      info @ (request, blindMemo) <- retry(getRequestAndMemo, pickInc, 3 to 4)
+      Some(pay) <- retry(app.ChannelManager outPaymentObsFirst request, pickInc, 3 to 4)
       channel <- app.ChannelManager.alive.headOption
 
     } if (data.info.isEmpty) {
       // Payment request may arrive in some time after an initialization above,
       // so we state that it can only be accepted if `data.info` is still empty
-      val data1 = data.modify(_.info) setTo Some(pay.request, blindMemo)
+      val data1 = data.modify(_.info) setTo Some(info)
       channel process SilentAddHtlc(pay)
       me UPDATE data1
     }
@@ -90,7 +90,6 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         // Important: payment may fail but we wait until expiration before restarting
         case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
         case Success(info) if info.actualStatus == FAILURE => resetPaymentData
-        case Success(info) if info.actualStatus == REFUND => resetPaymentData
         case Failure(_) => resetPaymentData
         case _ =>
       }
@@ -164,12 +163,12 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
   }
 }
 
-// This is a basic interface for making cloud calls
-// failover invariant will fall back to default in case of failure
-
 class Connector(val url: String) {
-  def http(way: String) = post(s"http://$url:9001/v1/$way", true)
-  def tell(params: Seq[HttpParam], cmd: String) = ask(cmd, none, params:_*)
+  // This is a basic interface for making cloud calls
+  // failover invariant below will fall back to default in case of failure
+  def http(way: String) = post(s"http://$url:9001/v1/$way", true) connectTimeout 15000
+
+  def tell(params: Seq[HttpParam], path: String) = ask(path, none, params:_*)
   def ask[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
@@ -181,12 +180,12 @@ class Connector(val url: String) {
   def getDatas(key: String) = ask("data/get", toVec[BinaryData], "key" -> key)
   def getTxs(txids: String) = ask("txs/get", toVec[Transaction], "txids" -> txids)
   def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
-  def findRoutes(from: PublicKey, to: PublicKey) = ask("router/routes", toVec[PaymentRoute],
-    "from" -> from.toString, "to" -> to.toString)
+  def findRoutes(nodes: Set[PublicKey], channels: Set[Long], from: PublicKey, to: PublicKey) =
+    ask("router/routes", toVec[PaymentRoute], "from" -> from.toString, "to" -> to.toString,
+      "nodes" -> nodes.toJson.toString.hex, "channels" -> channels.toJson.toString.hex)
 }
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
-  override def findNodes(query: String) = super.findNodes(query).onErrorResumeNext(_ => failover findNodes query)
   override def getTxs(txids: String) = super.getTxs(txids).onErrorResumeNext(_ => failover getTxs txids)
   override def getDatas(key: String) = super.getDatas(key).onErrorResumeNext(_ => failover getDatas key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)

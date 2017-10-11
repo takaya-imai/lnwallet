@@ -51,7 +51,7 @@ object ChannelWrap extends ChannelListener {
     case (_, close: EndingData, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
 
-    case (_, _: NormalData, cmd: CMDAddHtlc) =>
+    case (_, _: NormalData, cmd: PlainAddHtlc) =>
       // Vibrate to show payment is in progress
       Vibr vibrate Vibr.processed
 
@@ -61,9 +61,9 @@ object ChannelWrap extends ChannelListener {
       cloud doProcess CMDStart
 
     case (_, norm: NormalData, _: CommitSig)
-      // GUARD: this may be a storage token HTLC so we
-      // should remind cloud to maybe send a scheduled data
+      // GUARD: this may be a storage token HTLC
       if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+      // We should remind cloud to maybe send a scheduled data
       Vibr vibrate Vibr.confirmed
       cloud doProcess CMDStart
   }
@@ -104,12 +104,29 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       info.chanId.toString, info.preimage.toString, received, routing)
   }
 
+  def getPaymentInfo(hash: BinaryData) = {
+    val cursor = db.select(selectByHashSql, hash.toString)
+    RichCursor apply cursor headTry toPaymentInfo
+  }
+
   def updateStatus(pre: Int, post: Int) = db.change(updStatusStatusSql, post.toString, pre.toString)
   def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusHashSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
-  def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
-  def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
+  def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
+
+  override def onError = {
+    case _ \ AddException(cmd: CMDAddHtlc, _) =>
+      // Useless most of the time but needed for retry failures
+      // CMDAddHtlc should still be used or channel will be closed
+      updateStatus(FAILURE, cmd.out.request.paymentHash)
+      uiNotify
+
+    case chan \ error =>
+      // Close and log an error
+      chan process CMDShutdown
+      Tools errlog error
+  }
 
   override def onProcess = {
     case (_, _, add: UpdateAddHtlc) =>
@@ -121,7 +138,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away
       me updatePreimage fulfill
-      uiNotify
 
     case (_, _, retry: RetryAddHtlc) =>
       // Update outgoing payment routing data
@@ -129,41 +145,49 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       me updateRouting retry.out
 
     case (_, _, cmd: CMDAddHtlc) =>
-      // Try to record a new outgoing payment
-      // fails if payment hash is already in db
+      // Tries to record a *new* outgoing payment
+      // throws if hash has already been saved
       me putPaymentInfo cmd.out
       uiNotify
 
-    // We need to update states for all active HTLCs
     case (chan, norm: NormalData, _: CommitSig) =>
+      val failed = norm.commitments.localCommit.spec.failed
 
       db txWrap {
-        // First we update status for failed, fulfilled and in-flight HTLCs
+        // First we update status for committed, fulfilled and failed HTLCs
         for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
         for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
-        for (htlc \ _ <- norm.commitments.localCommit.spec.failed) updateStatus(FAILURE, htlc.add.paymentHash)
-        uiNotify
+        for (Tuple2(htlc, _: UpdateFailMalformedHtlc) <- failed) updateStatus(FAILURE, htlc.add.paymentHash)
+        // Set it to TEMP instead of FAILURE so it does not look failed on UI and can be retried in channel
+        for (Tuple2(htlc, _: UpdateFailHtlc) <- failed) updateStatus(TEMP, htlc.add.paymentHash)
       }
 
       for {
-        (htlc, fail: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
-        // UpdateFailMalformedHtlc this is a corner case, it can only happen when the *first* node cannot parse the onion
-        // (if this happens higher up in the route, the error would be wrapped in an UpdateFailHtlc and handled above)
-        // so we retry all outgoing UpdateFailHtlc which have routes left and UpdateFailMalformedHtlc is left failed
-        out @ OutgoingPayment(_, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
-        out1 <- app.ChannelManager.outPaymentOpt(cutRoutes(fail, out), request, chan)
-      } chan process RetryAddHtlc(out1)
+        // Then we try to re-send failed payments
+        Tuple2(htlc, updateFailHtlc: UpdateFailHtlc) <- failed
+        outgoing @ OutgoingPayment(routing, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
+        Tuple3(routes1, badNodes1, badChans1) = cutRoutes(updateFailHtlc, routing, request.nodeId)
+        routing1 = routing.copy(routes = routes1, badNodes = badNodes1, badChannels = badChans1)
+      } buildPayment(routes1, badNodes1, badChans1, request, chan) match {
+
+        case Some(outgoing1) =>
+          // Accepted: routing info updates in onProcess
+          // Not accepted: status changes to FAILURE in onError
+          chan process RetryAddHtlc(outgoing1)
+
+        case None =>
+          // Save the latest updates in case of payment retry
+          me updateRouting outgoing.copy(routing = routing1)
+          updateStatus(FAILURE, htlc.add.paymentHash)
+      }
+
+      uiNotify
   }
 
   override def onBecome = {
-    case (_, some: HasCommitments, NORMAL, SYNC | NEGOTIATIONS) =>
-      // At worst will be marked as FAILURE and then as WAITING
-      updateStatus(TEMP, FAILURE)
-      uiNotify
-
     case (_, some: HasCommitments, NORMAL | SYNC | NEGOTIATIONS, CLOSING) =>
       // At worst WAITING will be REFUND and then SUCCESS if we get a preimage
-      updateStatus(WAITING, REFUND)
+      updateStatus(WAITING, HIDDEN)
       updateStatus(TEMP, FAILURE)
   }
 }

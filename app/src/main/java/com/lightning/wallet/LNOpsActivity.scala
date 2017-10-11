@@ -110,12 +110,6 @@ class LNOpsActivity extends TimerActivity { me =>
           // Need to update UI on each block
           reloadOnBecome(chan)
       }
-
-      override def onError = {
-        case error: Throwable =>
-          chan process CMDShutdown
-          Tools errlog error
-      }
     }
 
     whenDestroy = anyToRunnable {

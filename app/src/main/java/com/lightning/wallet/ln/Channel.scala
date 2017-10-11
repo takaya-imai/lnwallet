@@ -21,13 +21,13 @@ import scala.util.Success
 abstract class Channel extends StateMachine[ChannelData] { me =>
   implicit val context: ExecutionContextExecutor = ExecutionContext fromExecutor Executors.newSingleThreadExecutor
   def pull[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
-  def process(change: Any) = Future(me doProcess change) onFailure events.onError
+  def process(change: Any) = Future(me doProcess change) onFailure { case err => events onError me -> err }
   val listeners = mutable.Set.empty[ChannelListener]
 
   private[this] val events = new ChannelListener {
-    override def onError = { case error => for (lst <- listeners if lst.onError isDefinedAt error) lst onError error }
-    override def onBecome = { case trans => for (lst <- listeners if lst.onBecome isDefinedAt trans) lst onBecome trans }
-    override def onProcess = { case some => for (lst <- listeners if lst.onProcess isDefinedAt some) lst onProcess some }
+    override def onError = { case malfunction => for (lst <- listeners if lst.onError isDefinedAt malfunction) lst onError malfunction }
+    override def onBecome = { case transition => for (lst <- listeners if lst.onBecome isDefinedAt transition) lst onBecome transition }
+    override def onProcess = { case incoming => for (lst <- listeners if lst.onProcess isDefinedAt incoming) lst onProcess incoming }
   }
 
   def SEND(msg: LightningMessage): Unit
@@ -184,12 +184,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
           case Success(out: OutgoingPayment) if out.actualStatus == WAITING => throw AddException(cmd, ERR_IN_FLIGHT)
           case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(out: OutgoingPayment) if out.actualStatus == REFUND => throw AddException(cmd, ERR_FAILED)
+          // HIDDEN for OutgoingPayment happens when channel is closed with in-flight HTLCs, these can't be retried
+          case Success(out: OutgoingPayment) if out.actualStatus == HIDDEN => throw AddException(cmd, ERR_FAILED)
           case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
-            // This may be a TEMP or FAILED outgoing payment
-            // this is fine, but such a request should not be stored twice
+            // This might be a TEMP or FAILED outgoing payment
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
             doProcess(CMDProceed)
         }
@@ -547,13 +547,15 @@ object Channel {
 
 trait ChannelListener {
   def reloadOnBecome(chan: Channel): Unit = {
-    val trans = Tuple4(chan, chan.data, null, chan.state)
-    if (onBecome isDefinedAt trans) onBecome(trans)
+    // For listener to reload itself without affecting others
+    val nullTransition = Tuple4(chan, chan.data, null, chan.state)
+    if (onBecome isDefinedAt nullTransition) onBecome(nullTransition)
   }
 
+  type Malfunction = (Channel, Throwable)
   type Incoming = (Channel, ChannelData, Any)
   type Transition = (Channel, ChannelData, String, String)
+  def onError: PartialFunction[Malfunction, Unit] = none
   def onBecome: PartialFunction[Transition, Unit] = none
   def onProcess: PartialFunction[Incoming, Unit] = none
-  def onError: PartialFunction[Throwable, Unit] = none
 }

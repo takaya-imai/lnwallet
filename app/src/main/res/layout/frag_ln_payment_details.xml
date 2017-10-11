@@ -8,8 +8,6 @@
         android:id="@+id/paymentHash"
         android:textSize="14sp"/>
 
-    <View style="@style/GrayDivider"/>
-
     <Button
         style="@style/TransButton"
         android:id="@+id/paymentProof"

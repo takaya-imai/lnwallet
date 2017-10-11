@@ -153,39 +153,28 @@ class WalletApp extends Application { me =>
       doProcess(bootstrap)
     }
 
-    // Get routes from maintenance server and form an outgoing payment
-    def outPaymentObs(request: PaymentRequest) = alive.headOption match {
-      // Only proceed if we have an active channel, also account for a special
-      // case when payment recipient is our peer node
+    // Get routes from maintenance server and form an OutgoingPayment
+    def outPaymentObsFirst(request: PaymentRequest) = outPaymentObs(Set.empty, Set.empty, request)
+    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], request: PaymentRequest) =
 
-      case None => Obs.empty
-      case Some(chan) if chan.data.announce.nodeId == request.nodeId =>
-        Obs just outPaymentOpt(Vector(Vector.empty), request, chan)
+      alive.headOption match {
+        case None => Obs error new Exception(NOROUTEFOUND)
+        case Some(chan) if chan.data.announce.nodeId == request.nodeId =>
+          // A special case where we send a payment to our peer, no need for routes
+          Obs just buildPayment(Vector(Vector.empty), Set.empty, Set.empty, request, chan)
 
-      case Some(chan) =>
-        val routesObs = cloud.connector.findRoutes(chan.data.announce.nodeId, request.nodeId)
-        // Right from the start we should remove routes containing nodes which won't route our small payment
-        val reducedObs = for (routes <- routesObs) yield withoutUnsupportedAmount(routes, request.finalSum.amount)
-        for (rs <- reducedObs) yield if (rs.isEmpty) throw new Exception(NOROUTEFOUND) else outPaymentOpt(rs, request, chan)
-    }
-
-    def outPaymentOpt(rs: Vector[PaymentRoute], request: PaymentRequest, chan: Channel) = for {
-      // Build outgoing payment info if we actually have routes and channel has an id and request
-      // has a definite amount to be sent, otherwise fail silently
-
-      route <- rs.headOption
-      chanId <- chan.pull(_.channelId)
-      MilliSatoshi(amount) <- request.amount
-
-      (payloads, withFees, allExpiry) = buildPayloads(amount, sendExpiry, route)
-      onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, request.paymentHash)
-    } yield OutgoingPayment(RoutingData(rs.tail, onion, withFees, allExpiry), NOIMAGE, request, chanId, TEMP)
+        case Some(chan) =>
+          cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, request.nodeId) map {
+            case newRoutes if newRoutes.nonEmpty => buildPayment(newRoutes, badNodes, badChannels, request, chan)
+            case _ => throw new Exception(NOROUTEFOUND)
+          }
+      }
   }
 
   abstract class WalletKit extends AbstractKit {
     type ScriptSeq = Seq[org.bitcoinj.script.Script]
     def watchFunding(cs: Commitments) = watchScripts(cs.commitInput.txOut.publicKeyScript :: Nil)
-    def watchScripts(scs: ScriptSeq) = app.kit.wallet addWatchedScripts scs.asJava
+    def watchScripts(scripts: ScriptSeq) = app.kit.wallet addWatchedScripts scripts.asJava
     def currentBalance = wallet getBalance BalanceType.AVAILABLE_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
