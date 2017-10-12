@@ -25,7 +25,7 @@ object StorageWrap {
     db.change(StorageTable.updSql, params = value, key)
   }
 
-  def get(key: String): Try[String] = {
+  def get(key: String) = {
     val cursor = db.select(StorageTable.selectSql, key)
     RichCursor(cursor).headTry(_ string StorageTable.value)
   }
@@ -56,8 +56,8 @@ object ChannelWrap extends ChannelListener {
       Vibr vibrate Vibr.processed
 
     case (_, _: NormalData, _: NormalData) =>
-      // This happens when channel with `null` data gets `NormalData` on app start,
-      // we re-send `CMDStart` just in case if we have any pending cloud actions
+      // This happens when channel with null data gets NormalData on app start,
+      // we re-send CMDStart just in case if we have any pending cloud actions
       cloud doProcess CMDStart
 
     case (_, norm: NormalData, _: CommitSig)
@@ -77,11 +77,9 @@ object ChannelWrap extends ChannelListener {
   }
 }
 
+import com.lightning.wallet.lncloud.PaymentInfoTable._
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by presence of routing info
-  // Incoming payments have null instead of routing info in a database
-
-  import com.lightning.wallet.lncloud.PaymentInfoTable._
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
   def byQuery(query: String): Cursor = db.select(searchSql, s"$query*")
   def recentPayments: Cursor = db select selectRecentSql

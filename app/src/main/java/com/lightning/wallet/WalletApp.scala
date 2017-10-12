@@ -197,8 +197,9 @@ class WalletApp extends Application { me =>
       wallet addCoinsSentEventListener Vibr.generalTracker
       wallet.watchMode = true
 
-      val address = InetAddresses forString cloud.connector.url
-      peerGroup addAddress new PeerAddress(app.params, address, 8333)
+      peerGroup addAddress new PeerAddress(app.params,
+        InetAddresses forString cloud.connector.url, 8333)
+
       //peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setMinRequiredProtocolVersion(70015)
       peerGroup.setUserAgent(appName, "0.01")

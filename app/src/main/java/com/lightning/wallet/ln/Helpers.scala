@@ -179,13 +179,12 @@ object Helpers { me =>
         claimTimeout <- Scripts checkSpendable signed
       } yield claimTimeout
 
-      val claimMainTx = {
+      val claimMainTx = Scripts checkSpendable {
         val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivkey.publicKey,
           commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
 
         val sig = Scripts.sign(txWithInputInfo, localPrivkey)
-        val signed = Scripts.addSigs(txWithInputInfo, localPrivkey.publicKey, sig)
-        Scripts checkSpendable signed
+        Scripts.addSigs(txWithInputInfo, localPrivkey.publicKey, sig)
       }
 
       RemoteCommitPublished(claimMainTx.toList, claimSuccessTxs.toList,
@@ -207,22 +206,21 @@ object Helpers { me =>
         val remoteRevocationPrivkey = Generators.revocationPrivKey(commitments.localParams.revocationSecret, remotePerCommitmentSecretScalar)
         val localPrivkey = Generators.derivePrivKey(commitments.localParams.paymentKey, remotePerCommitmentPoint)
 
-        val claimMainTx = {
+        val claimMainTx = Scripts checkSpendable {
           val claimMain = Scripts.makeClaimP2WPKHOutputTx(tx, localPrivkey.publicKey,
             commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
 
-          val sig: BinaryData = Scripts.sign(claimMain, localPrivkey)
-          val signed = Scripts.addSigs(claimMain, localPrivkey.publicKey, sig)
-          Scripts checkSpendable signed
+          val sig = Scripts.sign(claimMain, localPrivkey)
+          Scripts.addSigs(claimMain, localPrivkey.publicKey, sig)
         }
 
-        val claimPenaltyTx = {
+        val claimPenaltyTx = Scripts checkSpendable {
           val txinfo = Scripts.makeMainPenaltyTx(tx, remoteRevocationPrivkey.publicKey,
             commitments.localParams.defaultFinalScriptPubKey, commitments.remoteParams.toSelfDelay,
             remoteDelayedPubkey, LNParams.broadcaster.feeRatePerKw)
 
           val sig = Scripts.sign(txinfo, remoteRevocationPrivkey)
-          Scripts checkSpendable Scripts.addSigs(txinfo, sig)
+          Scripts.addSigs(txinfo, sig)
         }
 
         RevokedCommitPublished(claimMainTx.toList,

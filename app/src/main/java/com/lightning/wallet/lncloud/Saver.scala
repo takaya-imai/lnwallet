@@ -45,7 +45,7 @@ object CloudDataSaver extends Saver {
   def tryGetObject: TryCloudData = tryGet map to[CloudData]
   def saveObject(data: CloudData) = save(data.toJson)
   type TryCloudData = Try[CloudData]
-  val KEY = "cloudData51"
+  val KEY = "cloudData52"
 }
 
 object RatesSaver extends Saver {

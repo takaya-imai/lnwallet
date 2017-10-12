@@ -47,6 +47,7 @@ dependencies {
 
     // UI
     compile 'com.chauthai.swipereveallayout:swipe-reveal-layout:1.4.0'
+    compile 'com.github.castorflex.smoothprogressbar:library:1.1.0'
     compile 'com.android.support:appcompat-v7:24.0.0'
     compile 'info.hoang8f:android-segmented:1.0.6'
     compile 'com.github.clans:fab:1.6.4'

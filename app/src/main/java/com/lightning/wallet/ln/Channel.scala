@@ -220,10 +220,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         doProcess(CMDProceed)
 
 
-      // GUARD: We can send a commit sig
       case (norm: NormalData, CMDProceed, NORMAL)
-        if Commitments.localHasChanges(norm.commitments) &&
-          norm.commitments.remoteNextCommitInfo.isRight =>
+        // Only if we have a point and something to sign
+        if norm.commitments.remoteNextCommitInfo.isRight &&
+          (norm.commitments.localChanges.proposed.nonEmpty ||
+          norm.commitments.remoteChanges.acked.nonEmpty) =>
 
         // Propose new remote commit via commit tx sig
         val nextRemotePoint = norm.commitments.remoteNextCommitInfo.right.get
@@ -265,7 +266,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       case (norm @ NormalData(_, commitments, our, their), CMDShutdown, NORMAL) =>
-        val nope = our.isDefined || their.isDefined || Commitments.localHasChanges(commitments)
+        val nope = our.isDefined || their.isDefined || Commitments.localHasUnsignedOutgoing(commitments)
         if (nope) startLocalCurrentClose(norm) else me startShutdown norm
 
 
@@ -299,17 +300,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // This is the final stage: both Shutdown messages are present and no pending HTLCs are left
       case (NormalData(announce, commitments, Some(local), their), CMDProceed, NORMAL)
-        if their.isDefined =>
+        if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
 
-        if (Commitments hasNoPendingHtlc commitments) {
-          println("-- STARTING NEGOTIATIONS")
-          val feerate = commitments.localCommit.spec.feeratePerKw
-          val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
-          val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
-          BECOME(me STORE neg, NEGOTIATIONS) SEND sig
-        } else {
-          println("-- CAN'T START BECAUSE HAVE PENDING HTLCS")
-        }
+        val feerate = commitments.localCommit.spec.feeratePerKw
+        val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
+        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
+        BECOME(me STORE neg, NEGOTIATIONS) SEND sig
 
 
       // Check if we have outdated outgoing HTLCs
@@ -488,8 +484,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   }
 
   private def startShutdown(norm: NormalData) = {
-    val localShutdown = Shutdown(norm.commitments.channelId, norm.commitments.localParams.defaultFinalScriptPubKey)
-    me UPDATE norm.copy(localShutdown = Some apply localShutdown) SEND localShutdown
+    val finalScriptPubKey = norm.commitments.localParams.defaultFinalScriptPubKey
+    val localShutdown = Shutdown(norm.commitments.channelId, finalScriptPubKey)
+    val norm1 = norm.copy(localShutdown = Some apply localShutdown)
+    me UPDATE norm1 SEND localShutdown
   }
 
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction) =

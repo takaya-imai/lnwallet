@@ -34,7 +34,7 @@ object LocalBroadcaster extends Broadcaster { me =>
       app.kit.peerGroup.getMostCommonChainHeight)
 
   override def onBecome = {
-    case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>
+    case (chan, wait: WaitFundingDoneData, from, WAIT_FUNDING_DONE) =>
       safeSend(wait.fundingTx).foreach(Tools.log, Tools.errlog)
       app.kit watchFunding wait.commitments
 
