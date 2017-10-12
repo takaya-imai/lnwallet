@@ -1,10 +1,9 @@
 package com.lightning.wallet
 
 import R.string._
-import com.lightning.wallet.lncloud.ImplicitConversions._
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
-import android.widget.{Button, EditText, TextView}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
+import android.widget.{Button, EditText}
 
 import com.lightning.wallet.ln.Tools.wrap
 import org.bitcoinj.store.SPVBlockStore
@@ -26,17 +25,11 @@ object Mnemonic {
 class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
   lazy val createWallet = findViewById(R.id.createWallet).asInstanceOf[Button]
   lazy val createPass = findViewById(R.id.createPass).asInstanceOf[EditText]
-
-  // After wallet is created we emphasize an importance of mnemonic
-  lazy val mnemonicText = findViewById(R.id.mnemonicText).asInstanceOf[TextView]
-  lazy val walletReady = findViewById(R.id.walletReady).asInstanceOf[TextView]
-  lazy val openWallet = findViewById(R.id.openWallet).asInstanceOf[Button]
   lazy val info = me clickableTextField findViewById(R.id.mnemonicInfo)
 
   lazy val views =
     findViewById(R.id.createInfo) ::
-    findViewById(R.id.createProgress) ::
-    findViewById(R.id.createDone) :: Nil
+    findViewById(R.id.createProgress) :: Nil
 
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
@@ -44,17 +37,15 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
     super.onCreate(savedState)
     setContentView(R.layout.activity_create)
     createPass addTextChangedListener new TextChangedWatcher {
-      override def onTextChanged(s: CharSequence, st: Int, n: Int, af: Int) = {
-        val buttonMessage = if (s.length >= 6) wallet_create else password_too_short
-        createWallet setEnabled s.length >= 6
-        createWallet setText buttonMessage
-      }
+      override def onTextChanged(s: CharSequence, st: Int, n: Int, af: Int) =
+        if (s.length >= 6) wrap(createWallet setEnabled true)(createWallet setText wallet_create)
+        else wrap(createWallet setEnabled false)(createWallet setText password_too_short)
     }
   }
 
   def makeNewWallet =
     app.kit = new app.WalletKit {
-      setVis(View.GONE, View.VISIBLE, View.GONE)
+      setVis(View.GONE, View.VISIBLE)
       startAsync
 
       override def startUp = {
@@ -76,20 +67,11 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
         if (app.isAlive) {
           setupAndStartDownload
           wallet saveToFile app.walletFile
-          me runOnUiThread mnemonicText.setText(Mnemonic text seed)
-          me runOnUiThread setVis(View.GONE, View.GONE, View.VISIBLE)
+          me exitTo classOf[BtcActivity]
         }
       }
     }
 
   override def onBackPressed = wrap(super.onBackPressed)(app.kit.stopAsync)
-  def goBtcWallet(view: View) = me exitTo classOf[BtcActivity]
   def newWallet(view: View) = hideKeys(makeNewWallet)
-
-  def revealMnemonic(show: View) = {
-    walletReady setText sets_noscreen
-    mnemonicText setVisibility View.VISIBLE
-    openWallet setVisibility View.VISIBLE
-    show setVisibility View.GONE
-  }
 }

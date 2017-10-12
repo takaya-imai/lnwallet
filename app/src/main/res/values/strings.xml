@@ -114,7 +114,6 @@
     <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
     <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
     <string name="restore_mnemonic_wrong">Mnemonic must be 12 words long</string>
-    <string name="restore_wallet_ready">Bitcoin wallet is ready</string>
     <string name="restore_hint">Your BIP32 mnemonic code</string>
     <string name="restore_wallet">Restore Wallet</string>
 

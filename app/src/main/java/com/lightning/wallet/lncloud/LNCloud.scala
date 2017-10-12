@@ -3,7 +3,6 @@ package com.lightning.wallet.lncloud
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
-import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.Connector._
