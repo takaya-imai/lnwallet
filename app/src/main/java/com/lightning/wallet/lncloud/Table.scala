@@ -43,16 +43,16 @@ object PaymentInfoTable extends Table {
   val (table, hash, request, status, chanId, preimage, received, routing, search) = names
 
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
-  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $request, $status, $chanId, $preimage, $received, $routing) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  // A payment may be re-sent hence we need to replace it instead of adding a new identical record if the hash is already present
+  def newSql = s"REPLACE INTO $table ($hash, $request, $status, $chanId, $preimage, $received, $routing) VALUES (?, ?, ?, ?, ?, ?, ?)"
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24) AND $status <> $HIDDEN"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
   def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
-  def updRoutingSql = s"UPDATE $table SET $routing = ? WHERE $hash = ?"
-  def updStatusHashSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updStatusStatusSql = s"UPDATE $table SET $status = ? WHERE $status = ?"
-  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?" // Save incoming preimages, do not wait for commit signature
-  def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?" // Actual received sum may differ from what we have asked
+  def updStatusHashSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
+  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
+  def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?"
 
   def createVirtualSql = s"""
     CREATE VIRTUAL TABLE $fts$table
@@ -85,8 +85,8 @@ extends SQLiteOpenHelper(context, "lndata4.db", null, version) { me =>
   def select(sql: String, params: String*) = base.rawQuery(sql, params.toArray)
   def sqlPath(tbl: String) = Uri parse s"sqlite://com.lightning.wallet/table/$tbl"
 
-  def txWrap(run: => Unit) = try {
-    runAnd(base.beginTransaction)(run)
+  def txWrap(process: => Unit) = try {
+    runAnd(base.beginTransaction)(process)
     base.setTransactionSuccessful
   } finally base.endTransaction
 

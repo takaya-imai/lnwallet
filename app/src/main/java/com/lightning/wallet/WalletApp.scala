@@ -158,16 +158,15 @@ class WalletApp extends Application { me =>
     def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], request: PaymentRequest) =
 
       alive.headOption match {
-        case None => Obs error new Exception(NOROUTEFOUND)
+        case None => Obs.empty
         case Some(chan) if chan.data.announce.nodeId == request.nodeId =>
           // A special case where we send a payment to our peer, no need for routes
-          Obs just buildPayment(Vector(Vector.empty), Set.empty, Set.empty, request, chan)
+          val rd = RoutingData(Vector(Vector.empty), Set.empty, Set.empty, null, 0L, 0L)
+          Obs just buildPayment(rd, request, chan)
 
         case Some(chan) =>
-          cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, request.nodeId) map {
-            case newRoutes if newRoutes.nonEmpty => buildPayment(newRoutes, badNodes, badChannels, request, chan)
-            case _ => throw new Exception(NOROUTEFOUND)
-          }
+          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, request.nodeId)
+          for (routes <- obs) yield buildPayment(RoutingData(routes, badNodes, badChannels, null, 0L, 0L), request, chan)
       }
   }
 

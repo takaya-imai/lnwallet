@@ -37,7 +37,6 @@ case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 sealed trait CMDAddHtlc extends Command { val out: OutgoingPayment }
 case class SilentAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
 case class PlainAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
-case class RetryAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
 
 // CHANNEL DATA
 

@@ -8,15 +8,14 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+
 import com.lightning.wallet.lncloud.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
 import com.lightning.wallet.Vibr
 import net.sqlcipher.Cursor
-import scala.util.Try
 
 
 object StorageWrap {
@@ -111,12 +110,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusHashSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
-  def updateRouting(out: OutgoingPayment) = db.change(updRoutingSql, out.routing.toJson.toString, out.request.paymentHash.toString)
 
   override def onError = {
     case _ \ AddException(cmd: CMDAddHtlc, _) =>
       // Useless most of the time but needed for retry failures
-      // CMDAddHtlc should still be used or channel will be closed
+      // CMDAddHtlc should still be used or channel may be closed
       updateStatus(FAILURE, cmd.out.request.paymentHash)
       uiNotify
 
@@ -129,54 +127,48 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   override def onProcess = {
     case (_, _, add: UpdateAddHtlc) =>
       // Payment request may not contain an amount
-      // or an actual amount paid may differ so
-      // we need to record how much was paid
+      // Or an actual incoming amount paid may differ
+      // We need to record exactly how much was paid
       me updateReceived add
 
     case (_, _, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away
       me updatePreimage fulfill
 
-    case (_, _, retry: RetryAddHtlc) =>
-      // Update outgoing payment routing data
-      // Fee is not shown so no need for UI changes
-      me updateRouting retry.out
-
     case (_, _, cmd: CMDAddHtlc) =>
-      // Tries to record a *new* outgoing payment
-      // throws if hash has already been saved
+      // Channel has accepted this payment, now we have to save it
+      // Using REPLACE instead of INSERT in SQL to update duplicates
       me putPaymentInfo cmd.out
-      uiNotify
 
     case (chan, norm: NormalData, _: CommitSig) =>
-      val failed = norm.commitments.localCommit.spec.failed
+      // On each incoming CommitSig we have HTLC updates
+      // which have to be reflected on the UI
 
       db txWrap {
         // First we update status for committed, fulfilled and failed HTLCs
         for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
         for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
-        for (Tuple2(htlc, _: UpdateFailMalformedHtlc) <- failed) updateStatus(FAILURE, htlc.add.paymentHash)
-        // Set it to TEMP instead of FAILURE so it does not look failed on UI and can be retried in channel
-        for (Tuple2(htlc, _: UpdateFailHtlc) <- failed) updateStatus(TEMP, htlc.add.paymentHash)
+        // Set UpdateFailHtlc to TEMP instead of FAILURE so it does not look failed on UI and can be retried in channel
+        for (Tuple2(htlc, _: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed) updateStatus(TEMP, htlc.add.paymentHash)
+        for (Tuple2(htlc, _: UpdateFailMalformedHtlc) <- norm.commitments.localCommit.spec.failed) updateStatus(FAILURE, htlc.add.paymentHash)
       }
 
       for {
         // Then we try to re-send failed payments
-        Tuple2(htlc, updateFailHtlc: UpdateFailHtlc) <- failed
+        Tuple2(htlc, updateFailHtlc: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
         outgoing @ OutgoingPayment(routing, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
-        Tuple3(routes1, badNodes1, badChans1) = cutRoutes(updateFailHtlc, routing, request.nodeId)
-        routing1 = routing.copy(routes = routes1, badNodes = badNodes1, badChannels = badChans1)
-      } buildPayment(routes1, badNodes1, badChans1, request, chan) match {
+        routing1 = cutRoutes(updateFailHtlc, routing, request.nodeId)
+      } buildPayment(routing1, request, chan) match {
 
         case Some(outgoing1) =>
           // Accepted: routing info updates in onProcess
           // Not accepted: status changes to FAILURE in onError
-          chan process RetryAddHtlc(outgoing1)
+          chan process PlainAddHtlc(outgoing1)
 
         case None =>
-          // Save the latest updates in case of payment retry
-          me updateRouting outgoing.copy(routing = routing1)
-          updateStatus(FAILURE, htlc.add.paymentHash)
+          // We may have new bad nodes or channels
+          // Should save them anyway in case of user initiated payment retry
+          me putPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
       }
 
       uiNotify

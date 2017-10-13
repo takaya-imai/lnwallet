@@ -167,19 +167,24 @@ with SearchBar { me =>
   }
 
   def manageActive(chan: Channel) = {
-    def sendError(err: Throwable) = err.getMessage match {
-      case FROMBLACKLISTED => onFail(me getString err_ln_black)
-      case NOROUTEFOUND => onFail(me getString err_ln_no_route)
-      case techDetails => onFail(techDetails)
-    }
-
-    def updTitle = animateTitle {
+    def updTitle: Runnable = animateTitle {
       val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
       denom withSign MilliSatoshi(canSend getOrElse 0L)
     }
 
+    def onPaymentError(e: Throwable) = e.getMessage match {
+      case FROMBLACKLISTED => onFail(me getString err_ln_black)
+      case techDetails => onFail(techDetails)
+    }
+
+    val onPaymentResult: Option[OutgoingPayment] => Unit = {
+      case Some(payment) => chan process PlainAddHtlc(payment)
+      case None => onFail(me getString err_ln_no_route)
+    }
+
     val chanListener = new ChannelListener {
-      // Updates UI accordingly to changes in channel
+      // Updates local ui according to changes in channel
+      // Should be removed when activity is stopped
 
       override def onError = {
         case _ \ AddException(_: PlainAddHtlc, code) =>
@@ -231,7 +236,7 @@ with SearchBar { me =>
           mkForm(me negBld dialog_ok, title.html, detailsWrapper)
 
         case OutgoingPayment(RoutingData(routes, badNodes,
-          badChannels, _, amtWithFee, _), _, pr, _, status) =>
+          badChans, _, amtWithFee, _), _, pr, _, status) =>
 
           val fee = MilliSatoshi(amtWithFee - pr.finalSum.amount)
           val humanSent = humanFiat(coloredOut(pr.finalSum), pr.finalSum)
@@ -239,9 +244,9 @@ with SearchBar { me =>
           val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
 
           def doPaymentRetry = rm(alert) {
-            val outPaymentObsOpt = app.ChannelManager.outPaymentObs(badNodes, badChannels, pr)
-            outPaymentObsOpt.foreach(_ map RetryAddHtlc foreach chan.process, sendError)
+            val out = app.ChannelManager.outPaymentObs(badNodes, badChans, pr)
             notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+            out.foreach(onPaymentResult, onPaymentError)
           }
 
           paymentDetails setText s"$description<br><br>$humanSent".html
@@ -272,9 +277,9 @@ with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
 
         case _ => rm(alert) {
-          val outPaymentObsOpt = app.ChannelManager.outPaymentObsFirst(request = pr)
-          outPaymentObsOpt.foreach(_ map PlainAddHtlc foreach chan.process, sendError)
+          val out = app.ChannelManager outPaymentObsFirst pr
           notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+          out.foreach(onPaymentResult, onPaymentError)
         }
       }
 
