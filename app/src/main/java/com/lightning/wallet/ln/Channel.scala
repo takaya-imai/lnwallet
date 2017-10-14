@@ -5,17 +5,16 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
+import fr.acinq.bitcoin.Crypto.PrivateKey
+import java.util.concurrent.Executors
+import scala.collection.mutable
+import scala.util.Success
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
-
-import fr.acinq.bitcoin.Crypto.PrivateKey
-import java.util.concurrent.Executors
-import scala.collection.mutable
-import scala.util.Success
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>

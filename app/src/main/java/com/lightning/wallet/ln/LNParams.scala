@@ -2,6 +2,7 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import com.lightning.wallet.lncloud._
+import com.lightning.wallet.ln.Broadcaster._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lncloud.JsonHttpUtils._
 
@@ -98,10 +99,16 @@ object AddErrorCodes {
   val ERR_FAILED = err_ln_general
 }
 
-trait Broadcaster extends ChannelListener { me =>
-  def txStatus(txid: BinaryData): Option[DepthAndAlive]
-  type DepthAndAlive = (Long, Boolean)
+object Broadcaster {
+  type DepthAndDead = (Long, Boolean)
+  type ParentDeadAndDelay = (Boolean, Long)
+  // (Parent is dead = true, cumulative delay) final fee, final amount
+  type PublishStatus = (Option[ParentDeadAndDelay], Satoshi, Satoshi)
+  type DepthAndDeadOpt = Option[DepthAndDead]
+}
 
+trait Broadcaster extends ChannelListener { me =>
+  def txStatus(txid: BinaryData): DepthAndDeadOpt
   def send(tx: Transaction): String
   def feeRatePerKw: Long
   def currentHeight: Int
@@ -125,7 +132,8 @@ trait Broadcaster extends ChannelListener { me =>
   def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) = for {
     // Calculate cumulative cltv + csv delay for 2nd tier transaction along with 1st tier status
 
-    commitIsDead \ cltv1 <- me cltv info1
-    tier1IsDead \ csv1 <- me csv info2
-  } yield (tier1IsDead, cltv1 + csv1)
+    commitDead \ cltv1 <- me cltv info1
+    tier1Dead \ csv1 <- me csv info2
+    dead = commitDead || tier1Dead
+  } yield (dead, cltv1 + csv1)
 }

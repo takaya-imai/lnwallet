@@ -10,6 +10,7 @@ import com.lightning.wallet.ln.Tools.none
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
+import com.lightning.wallet.ln.Broadcaster._
 
 
 class LNOpsActivity extends TimerActivity { me =>
@@ -40,18 +41,17 @@ class LNOpsActivity extends TimerActivity { me =>
     }
   }
 
-  private def humanStatus(tx: Transaction) =
-    LNParams.broadcaster txStatus tx.txid match {
-      case Some(cfs \ false) => app.plurOrZero(txsConfs, cfs)
-      case Some(_ \ true) => txsConfs.last
-      case _ => txsConfs.head
-    }
+  private def humanStatus(opt: DepthAndDeadOpt) = opt match {
+    case Some(confs \ false) => app.plurOrZero(txsConfs, confs)
+    case Some(_ \ true) => txsConfs.last
+    case _ => txsConfs.head
+  }
 
   private def manageFirst(chan: Channel) = {
     def manageOpening(c: Commitments, open: Transaction) = {
       val threshold = math.max(c.remoteParams.minimumDepth, LNParams.minDepth)
-      val balance: String = coloredIn(c.commitInput.txOut.amount)
-      val openStatus: String = humanStatus(open)
+      val openStatus = humanStatus(LNParams.broadcaster txStatus open.txid)
+      val balance = coloredIn(c.commitInput.txOut.amount)
 
       lnOpsAction setText ln_force_close
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
@@ -82,22 +82,18 @@ class LNOpsActivity extends TimerActivity { me =>
         case (_, norm: NormalData, _, _) if norm.isFinishing =>
           me runOnUiThread manageNegotiations(norm.commitments)
 
-        // Normal is managed by main activity
+        // Normal is managed by ln activity
         case (_, norm: NormalData, _, _) =>
           me exitTo classOf[LNActivity]
 
-        // Closing tx fee negotiations started
+        // Closing tx fee negotiations
         case (_, negs: NegotiationsData, _, _) =>
           me runOnUiThread manageNegotiations(negs.commitments)
 
-        // Mutual closing is in progress because only a mutual close tx is available here
-        case (_, close @ ClosingData(_, commitments, _ :: _, Nil, Nil, Nil, Nil, _), _, CLOSING) =>
-          me runOnUiThread manageMutualClosing(close)
-
-        // Someone has initiated a unilateral channel closing
-        case (_, close @ ClosingData(_, _, _, localTxs, remoteTxs, remoteNextTxs, revokedTxs, _), _, CLOSING)
-          if localTxs.nonEmpty || remoteTxs.nonEmpty || remoteNextTxs.nonEmpty || revokedTxs.nonEmpty =>
-          me runOnUiThread manageForcedClosing(close)
+        // Someone has initiated a cooperative or unilateral channel closing
+        case (_, close @ ClosingData(_, _, mutual, local, remote, remoteNext, revoked, _), _, CLOSING)
+          if mutual.nonEmpty || local.nonEmpty || remote.nonEmpty || remoteNext.nonEmpty || revoked.nonEmpty =>
+          me runOnUiThread manageClosing(close)
 
         case _ =>
           // Mutual closing without txs, recovery mode
@@ -122,19 +118,8 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   // UI which does not need a channel
-  private def commit(data: ClosingData) = {
-    val totalOutAmount: Satoshi = data.allCommits.head.txOut.map(_.amount).sum
-    val fee = coloredOut(data.commitments.commitInput.txOut.amount - totalOutAmount)
-    commitStatus.format(humanStatus(data.allCommits.head), fee)
-  }
 
-  private def manageMutualClosing(data: ClosingData) = {
-    lnOpsDescription setText bilateralClosing.format(me commit data).html
-    lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-    lnOpsAction setText ln_ops_start
-  }
-
-  private def manageForcedClosing(data: ClosingData) = {
+  private def manageClosing(data: ClosingData) = {
     def basis(fee: Satoshi, amount: Satoshi) = amountStatus
       .format(denom formatted amount + fee, coloredOut apply fee)
 
