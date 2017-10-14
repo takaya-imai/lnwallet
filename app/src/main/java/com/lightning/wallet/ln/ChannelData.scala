@@ -12,7 +12,6 @@ import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.LNParams.broadcaster.{cltv, cltvAndCsv, csv, txStatus}
-
 import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
 import com.lightning.wallet.ln.Tools.LightningMessages
 import fr.acinq.eclair.UInt64
@@ -81,16 +80,24 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommit: Seq[RevokedCommitPublished] = Nil,
                        startedAt: Long = System.currentTimeMillis) extends EndingData {
 
+
   // Either ALL transactions have enough depth OR static timeout
   def isOutdated = allTransactions.forall(depthOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
   def depthOk(tx: Transaction) = txStatus(tx.txid) match { case Some(cfs \ false) => cfs > minDepth case _ => false }
-  val allTransactions = mutualClose ++ localCommit.flatMap(_.transactions) ++ remoteCommit.flatMap(_.transactions) ++
-      nextRemoteCommit.flatMap(_.transactions) ++ revokedCommit.flatMap(_.transactions)
+
+  lazy val allTransactions = mutualClose ++ localCommit.flatMap(_.transactions) ++
+    remoteCommit.flatMap(_.transactions) ++ nextRemoteCommit.flatMap(_.transactions) ++
+    revokedCommit.flatMap(_.transactions)
+
+  lazy val allClosings = mutualClose.map(Left.apply) ++ localCommit.map(Right.apply) ++
+    remoteCommit.map(Right.apply) ++ nextRemoteCommit.map(Right.apply) ++
+    revokedCommit.map(Right.apply)
 }
 
 sealed trait CommitPublished {
-  val transactions: Seq[Transaction]
   def getState: Seq[PublishStatus]
+  val transactions: Seq[Transaction]
+  val commitTx: Transaction
 }
 
 case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], claimHtlcSuccess: Seq[SuccessAndClaim],
