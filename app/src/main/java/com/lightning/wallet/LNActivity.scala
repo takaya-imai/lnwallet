@@ -1,5 +1,6 @@
 package com.lightning.wallet
 
+import android.view._
 import android.widget._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
@@ -13,16 +14,18 @@ import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
-import android.view.{Menu, MenuItem, View}
 import scala.util.{Failure, Success, Try}
 
+import fr.castorflex.android.smoothprogressbar.SmoothProgressDrawable
 import fr.castorflex.android.smoothprogressbar.SmoothProgressBar
 import android.support.v7.widget.SearchView.OnQueryTextListener
+import android.content.Context.LAYOUT_INFLATER_SERVICE
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
 import com.github.clans.fab.FloatingActionMenu
 import com.lightning.wallet.ln.wire.CommitSig
 import android.support.v4.view.MenuItemCompat
+import android.view.ViewGroup.LayoutParams
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
@@ -78,7 +81,9 @@ with SearchBar { me =>
 
   val imgMap = Array(await, await, conf1, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
-  lazy val bar = findViewById(R.id.progressBar).asInstanceOf[SmoothProgressBar]
+  lazy val layoutInflater = app.getSystemService(LAYOUT_INFLATER_SERVICE).asInstanceOf[LayoutInflater]
+  lazy val viewParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+  lazy val container = findViewById(R.id.container).asInstanceOf[RelativeLayout]
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
 
@@ -124,7 +129,6 @@ with SearchBar { me =>
       // Set action bar, main view content, wire up list events, update title later
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
-      timer.schedule(anyToRunnable(bar.progressiveStop), 100)
       me startListUpdates adapter
       me setDetecting true
 
@@ -137,6 +141,7 @@ with SearchBar { me =>
       app.kit.peerGroup addBlocksDownloadedEventListener catchListener
     } else me exitTo classOf[MainActivity]
   }
+
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
@@ -251,9 +256,10 @@ with SearchBar { me =>
 
           if (status == FAILURE && pr.isFresh) {
             def doManualPaymentRetry = rm(alert) {
+              val barManager = new ProgressBarManager
               notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-              app.ChannelManager.outPaymentObs(badNodes, badChans, request = pr)
-                .doOnSubscribe(bar.progressiveStart).doOnTerminate(bar.progressiveStop)
+              app.ChannelManager.outPaymentObs(badNodes, badChans, pr)
+                .doOnTerminate(barManager.progressBar.progressiveStop)
                 .foreach(onPaymentResult, onPaymentError)
             }
 
@@ -286,9 +292,10 @@ with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
 
         case _ => rm(alert) {
+          val barManager = new ProgressBarManager
           notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-          app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request = pr)
-            .doOnSubscribe(bar.progressiveStart).doOnTerminate(bar.progressiveStop)
+          app.ChannelManager.outPaymentObs(Set.empty, Set.empty, pr)
+            .doOnTerminate(barManager.progressBar.progressiveStop)
             .foreach(onPaymentResult, onPaymentError)
         }
       }
@@ -401,6 +408,17 @@ with SearchBar { me =>
       def updatePaymentList(pays: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter set pays)
       def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
       type InfoVec = Vector[PaymentInfo]
+    }
+  }
+
+  class ProgressBarManager {
+    val progressBar = layoutInflater.inflate(R.layout.frag_progress_bar, null).asInstanceOf[SmoothProgressBar]
+    val drawable = progressBar.getIndeterminateDrawable.asInstanceOf[SmoothProgressDrawable]
+
+    container.addView(progressBar, viewParams)
+    drawable setCallbacks new SmoothProgressDrawable.Callbacks {
+      def onStop = timer.schedule(anyToRunnable(container removeView progressBar), 250)
+      def onStart = drawable.setColors(getResources getIntArray R.array.bar_colors)
     }
   }
 

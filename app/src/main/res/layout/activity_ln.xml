@@ -1,6 +1,8 @@
 <RelativeLayout
-    style="@style/StandardLinearLayoutPage" xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:fab="http://schemas.android.com/apk/res-auto" xmlns:app="http://schemas.android.com/apk/res-auto">
+    style="@style/StandardLinearLayoutPage"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:fab="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/container">
 
     <LinearLayout style="@style/StandardLinearLayout">
 
@@ -13,24 +15,6 @@
             style="@style/GrayDividerListView"/>
 
     </LinearLayout>
-
-    <fr.castorflex.android.smoothprogressbar.SmoothProgressBar
-        app:spb_interpolator="spb_interpolator_acceleratedecelerate"
-        app:spb_progressiveStart_activated="true"
-        app:spb_stroke_separator_length="0dp"
-        app:spb_progressiveStart_speed="1.2"
-        app:spb_progressiveStop_speed="1.2"
-        app:spb_colors="@array/bar_colors"
-        app:spb_mirror_mode="false"
-        app:spb_sections_count="2"
-        app:spb_stroke_width="2dp"
-        app:spb_reversed="false"
-        app:spb_speed="1.2"
-
-        android:indeterminate="true"
-        android:layout_height="wrap_content"
-        android:layout_width="match_parent"
-        android:id="@+id/progressBar"/>
 
     <com.github.clans.fab.FloatingActionMenu
         fab:menu_icon="@drawable/ic_flash_24dp"
