@@ -180,11 +180,10 @@
 
     <!-- see PaymentInfo.scala -->
     <array name="ln_payment_states">
-        <item>Waiting for peer</item>
         <item>Waiting for payee</item>
         <item>In progress&#8230;</item>
         <item>Paid and settled</item>
-        <item>Cancelled and aborted</item>
+        <item>Cancelled</item>
     </array>
 
     <!-- setting a private backup server -->

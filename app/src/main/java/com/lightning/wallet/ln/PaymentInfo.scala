@@ -42,7 +42,7 @@ case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
 }
 
 trait PaymentInfoBag {
-  def updateStatus(pre: Int, post: Int): Unit
+  def updateFailWaiting: Unit
   def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
   def updateReceived(add: UpdateAddHtlc): Unit
@@ -57,11 +57,10 @@ object PaymentInfo {
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
 
-  final val TEMP = 0
-  final val HIDDEN = 1
-  final val WAITING = 2
-  final val SUCCESS = 3
-  final val FAILURE = 4
+  final val HIDDEN = 0
+  final val WAITING = 1
+  final val SUCCESS = 2
+  final val FAILURE = 3
 
   def nodeFee(baseMsat: Long, proportional: Long, msat: Long) =
     baseMsat + (proportional * msat) / 1000000L
@@ -93,7 +92,7 @@ object PaymentInfo {
     (payloads, amountWithFee, finalExpiry) = buildPayloads(amount, LNParams.sendExpiry, route)
     onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, pr.paymentHash)
     rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, onion, amountWithFee, finalExpiry)
-  } yield OutgoingPayment(rd1, NOIMAGE, pr, chanId, TEMP)
+  } yield OutgoingPayment(rd1, NOIMAGE, pr, chanId, WAITING)
 
   private def without(rs: Vector[PaymentRoute], test: Hop => Boolean) = rs.filterNot(_ exists test)
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =

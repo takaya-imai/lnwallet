@@ -44,12 +44,6 @@ class LNOpsActivity extends TimerActivity { me =>
     }
   }
 
-  private def humanStatus(opt: DepthAndDeadOpt) = opt match {
-    case Some(confs \ false) => app.plurOrZero(txsConfs, confs)
-    case Some(_ \ true) => txsConfs.last
-    case _ => txsConfs.head
-  }
-
   private def manageFirst(chan: Channel) = {
     def manageOpening(c: Commitments, open: Transaction) = {
       val threshold = math.max(c.remoteParams.minimumDepth, LNParams.minDepth)
@@ -110,6 +104,12 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   // UI which does not need a channel
+  def humanStatus(opt: DepthAndDeadOpt) = opt match {
+    case Some(confs \ false) => app.plurOrZero(txsConfs, confs)
+    case Some(_ \ true) => txsConfs.last
+    case _ => txsConfs.head
+  }
+
   def tier0View(tx: Transaction, input: InputInfo) = {
     val fee = coloredOut(input.txOut.amount - tx.txOut.map(_.amount).sum)
     commitStatus.format(humanStatus(LNParams.broadcaster txStatus tx.txid), fee)
@@ -119,7 +119,7 @@ class LNOpsActivity extends TimerActivity { me =>
   def basis(fee: Satoshi, amount: Satoshi) = amountStatus.format(denom formatted amount + fee, coloredOut apply fee)
 
   // Any number of different closing ways may appear at different times
-  // so we need to select a best closing with most confirmations
+  // so we need to select the best closing with most confirmations
   private def manageClosing(data: ClosingData) =
 
     data.allClosings maxBy {

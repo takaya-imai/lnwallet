@@ -16,6 +16,7 @@ import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import android.view.{Menu, MenuItem, View}
 import scala.util.{Failure, Success, Try}
 
+import fr.castorflex.android.smoothprogressbar.SmoothProgressBar
 import android.support.v7.widget.SearchView.OnQueryTextListener
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -23,12 +24,12 @@ import com.github.clans.fab.FloatingActionMenu
 import com.lightning.wallet.ln.wire.CommitSig
 import android.support.v4.view.MenuItemCompat
 import com.lightning.wallet.ln.Tools.none
+import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
-import Utils.app
 
 
 trait SearchBar { me =>
@@ -75,8 +76,9 @@ class LNActivity extends DataReader
 with ToolbarActivity with ListUpdater
 with SearchBar { me =>
 
-  val imgMap = Array(await, await, await, conf1, dead)
+  val imgMap = Array(await, await, conf1, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
+  lazy val bar = findViewById(R.id.progressBar).asInstanceOf[SmoothProgressBar]
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
 
@@ -118,11 +120,11 @@ with SearchBar { me =>
   {
     if (app.isAlive) {
       super.onCreate(savedState)
-      bag.updateStatus(TEMP, FAILURE)
 
       // Set action bar, main view content, wire up list events, update title later
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
+      timer.schedule(anyToRunnable(bar.progressiveStop), 500)
       me startListUpdates adapter
       me setDetecting true
 
@@ -233,7 +235,7 @@ with SearchBar { me =>
           val title = getString(ln_incoming_title).format(humanStatus)
           val humanReceived = humanFiat(coloredIn(in.received), in.received)
           paymentDetails setText s"$description<br><br>$humanReceived".html
-          mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+          mkForm(me negBld dialog_ok, title.html, content = detailsWrapper)
 
         case OutgoingPayment(RoutingData(routes, badNodes,
           badChans, _, amtWithFee, _), _, pr, _, status) =>
@@ -241,7 +243,7 @@ with SearchBar { me =>
           val fee = MilliSatoshi(amtWithFee - pr.finalSum.amount)
           val humanSent = humanFiat(coloredOut(pr.finalSum), pr.finalSum)
           val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
-          val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+          val alert = mkForm(me negBld dialog_ok, title.html, content = detailsWrapper)
 
           def doPaymentRetry = rm(alert) {
             val out = app.ChannelManager.outPaymentObs(badNodes, badChans, pr)

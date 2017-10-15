@@ -47,16 +47,13 @@ object PaymentInfoTable extends Table {
   def newSql = s"REPLACE INTO $table ($hash, $request, $status, $chanId, $preimage, $received, $routing) VALUES (?, ?, ?, ?, ?, ?, ?)"
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24) AND $status <> $HIDDEN"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
-  def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
+  def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? AND $status <> $HIDDEN LIMIT 1"
 
-  def updStatusStatusSql = s"UPDATE $table SET $status = ? WHERE $status = ?"
-  def updStatusHashSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
+  def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
   def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?"
-
-  def createVirtualSql = s"""
-    CREATE VIRTUAL TABLE $fts$table
-    USING $fts($search, $hash)"""
+  def updFailSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
+  def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 
   def createSql = s"""
     CREATE TABLE $table(

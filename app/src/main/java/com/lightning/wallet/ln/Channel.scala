@@ -178,20 +178,23 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // We only can add new HTLCs when mutual shutdown process is not active
       case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL) =>
-        val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
 
-        LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
-          case Success(out: OutgoingPayment) if out.actualStatus == WAITING => throw AddException(cmd, ERR_IN_FLIGHT)
+        val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
+        val inFlight = Commitments.actualRemoteCommit(commitments).spec
+          .htlcs.exists(_.add.paymentHash == cmd.out.request.paymentHash)
+
+        if (inFlight) throw AddException(cmd, ERR_IN_FLIGHT)
+        else LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
+          // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
           case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          // HIDDEN for OutgoingPayment happens when channel is closed with in-flight HTLCs, these can't be retried
-          case Success(out: OutgoingPayment) if out.actualStatus == HIDDEN => throw AddException(cmd, ERR_FAILED)
           case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
-            // This might be a TEMP or FAILED outgoing payment
+            // This may be a FAILED outgoing payment which is fine
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
             doProcess(CMDProceed)
         }
+
 
       // We're fulfilling an HTLC we got earlier
       case (norm @ NormalData(_, commitments, _, _), cmd: CMDFulfillHtlc, NORMAL) =>

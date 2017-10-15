@@ -106,8 +106,8 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     RichCursor apply cursor headTry toPaymentInfo
   }
 
-  def updateStatus(pre: Int, post: Int) = db.change(updStatusStatusSql, post.toString, pre.toString)
-  def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusHashSql, status.toString, hash.toString)
+  def updateFailWaiting = db.change(updFailSql)
+  def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
 
@@ -146,11 +146,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
       db txWrap {
         // First we update status for committed, fulfilled and failed HTLCs
-        for (htlc <- norm.commitments.localCommit.spec.htlcs) updateStatus(WAITING, htlc.add.paymentHash)
         for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
-        // Set UpdateFailHtlc to TEMP instead of FAILURE so it does not look failed on UI and can be retried in channel
-        for (Tuple2(htlc, _: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed) updateStatus(TEMP, htlc.add.paymentHash)
-        for (Tuple2(htlc, _: UpdateFailMalformedHtlc) <- norm.commitments.localCommit.spec.failed) updateStatus(FAILURE, htlc.add.paymentHash)
+        for (Tuple2(htlc, _: UpdateFailMalformedHtlc) <- norm.commitments.localCommit.spec.failed)
+          updateStatus(FAILURE, htlc.add.paymentHash)
       }
 
       for {
@@ -166,7 +164,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
           chan process PlainAddHtlc(outgoing1)
 
         case None =>
-          // We may have new bad nodes or channels
+          // We may have updated bad nodes or bad channels in routing1
           // Should save them anyway in case of user initiated payment retry
           me putPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
       }
@@ -176,8 +174,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onBecome = {
     case (_, some: HasCommitments, NORMAL | SYNC | NEGOTIATIONS, CLOSING) =>
-      // At worst WAITING will be REFUND and then SUCCESS if we get a preimage
-      updateStatus(WAITING, HIDDEN)
-      updateStatus(TEMP, FAILURE)
+      // At worst WAITING will be FAILED and then SUCCESS if we get a preimage
+      updateFailWaiting
   }
 }
