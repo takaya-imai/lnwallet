@@ -52,7 +52,7 @@ object PaymentInfoTable extends Table {
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
   def updReceivedSql = s"UPDATE $table SET $received = ? WHERE $hash = ?"
-  def updFailSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
+  def updFailWaitingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
   def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 
   def createSql = s"""

@@ -56,7 +56,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
       // Get payment request, then fetch payment routes, then fulfill it
       requestAndMemo @ Tuple2(request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
-      Some(pay) <- retry(app.ChannelManager outPaymentObsFirst request, pickInc, 3 to 4)
+      Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4)
       channel <- app.ChannelManager.alive.headOption
 
     } if (data.info.isEmpty) {

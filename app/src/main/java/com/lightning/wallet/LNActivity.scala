@@ -124,7 +124,7 @@ with SearchBar { me =>
       // Set action bar, main view content, wire up list events, update title later
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
       add(me getString ln_notify_connecting, Informer.LNSTATE)
-      timer.schedule(anyToRunnable(bar.progressiveStop), 500)
+      timer.schedule(anyToRunnable(bar.progressiveStop), 100)
       me startListUpdates adapter
       me setDetecting true
 
@@ -213,8 +213,6 @@ with SearchBar { me =>
     list setOnItemClickListener onTap { pos =>
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
-      val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
-      val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
       val payment = adapter getItem pos
@@ -222,39 +220,48 @@ with SearchBar { me =>
       val humanStatus = s"<strong>${paymentStatesMap apply payment.status}</strong>"
       paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
       paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
-      if (payment.status == SUCCESS) paymentProof setVisibility View.VISIBLE
 
-      paymentProof setOnClickListener onButtonTap {
-        val humanPreimage = payment.preimage.toString
-        val serializedRequest = PaymentRequest.write(payment.request)
-        app setBuffer getString(ln_proof).format(serializedRequest, humanPreimage)
+      if (payment.status == SUCCESS) {
+        // Users may copy request and preimage for fulfilled payments to prove they've happened
+        val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
+        paymentProof setVisibility View.VISIBLE
+
+        paymentProof setOnClickListener onButtonTap {
+          val humanPreimage = payment.preimage.toString
+          val serializedRequest = PaymentRequest.write(payment.request)
+          app setBuffer getString(ln_proof).format(serializedRequest, humanPreimage)
+        }
       }
 
       payment match {
         case in: IncomingPayment =>
           val title = getString(ln_incoming_title).format(humanStatus)
           val humanReceived = humanFiat(coloredIn(in.received), in.received)
-          paymentDetails setText s"$description<br><br>$humanReceived".html
           mkForm(me negBld dialog_ok, title.html, content = detailsWrapper)
+          paymentDetails setText s"$description<br><br>$humanReceived".html
 
-        case OutgoingPayment(RoutingData(routes, badNodes,
+        case OutgoingPayment(RoutingData(_, badNodes,
           badChans, _, amtWithFee, _), _, pr, _, status) =>
 
           val fee = MilliSatoshi(amtWithFee - pr.finalSum.amount)
           val humanSent = humanFiat(coloredOut(pr.finalSum), pr.finalSum)
           val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
           val alert = mkForm(me negBld dialog_ok, title.html, content = detailsWrapper)
-
-          def doPaymentRetry = rm(alert) {
-            val out = app.ChannelManager.outPaymentObs(badNodes, badChans, pr)
-            notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-            out.foreach(onPaymentResult, onPaymentError)
-          }
-
           paymentDetails setText s"$description<br><br>$humanSent".html
-          paymentRetryAgain setOnClickListener onButtonTap(doPaymentRetry)
-          val canRetry = status == FAILURE && routes.isEmpty && pr.isFresh
-          if (canRetry) paymentRetryAgain setVisibility View.VISIBLE
+
+          if (status == FAILURE && pr.isFresh) {
+            def doManualPaymentRetry = rm(alert) {
+              notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+              app.ChannelManager.outPaymentObs(badNodes, badChans, request = pr)
+                .doOnSubscribe(bar.progressiveStart).doOnTerminate(bar.progressiveStop)
+                .foreach(onPaymentResult, onPaymentError)
+            }
+
+            // Users may issue a server request to get an updated set of routes for failed but fresh payments
+            val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
+            paymentRetryAgain setOnClickListener onButtonTap(doManualPaymentRetry)
+            paymentRetryAgain setVisibility View.VISIBLE
+          }
       }
     }
 
@@ -279,9 +286,10 @@ with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
 
         case _ => rm(alert) {
-          val out = app.ChannelManager outPaymentObsFirst pr
           notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-          out.foreach(onPaymentResult, onPaymentError)
+          app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request = pr)
+            .doOnSubscribe(bar.progressiveStart).doOnTerminate(bar.progressiveStop)
+            .foreach(onPaymentResult, onPaymentError)
         }
       }
 

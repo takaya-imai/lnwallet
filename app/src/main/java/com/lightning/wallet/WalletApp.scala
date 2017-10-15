@@ -153,8 +153,7 @@ class WalletApp extends Application { me =>
       doProcess(bootstrap)
     }
 
-    // Get routes from maintenance server and form an OutgoingPayment
-    def outPaymentObsFirst(request: PaymentRequest) = outPaymentObs(Set.empty, Set.empty, request)
+    // Get routes from maintenance server and form an OutgoingPayment if routes were found
     def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], request: PaymentRequest) =
 
       alive.headOption match {

@@ -106,7 +106,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     RichCursor apply cursor headTry toPaymentInfo
   }
 
-  def updateFailWaiting = db.change(updFailSql)
+  def updateFailWaiting = db.change(updFailWaitingSql)
   def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
@@ -170,11 +170,5 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       }
 
       uiNotify
-  }
-
-  override def onBecome = {
-    case (_, some: HasCommitments, NORMAL | SYNC | NEGOTIATIONS, CLOSING) =>
-      // At worst WAITING will be FAILED and then SUCCESS if we get a preimage
-      updateFailWaiting
   }
 }
