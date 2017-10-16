@@ -497,7 +497,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     BECOME(me STORE ClosingData(neg.announce, neg.commitments, closeTx :: Nil), CLOSING)
 
   private def startLocalCurrentClose(some: HasCommitments) =
-    // Something went wrong and we decided to spend our current commit transaction
+    // Something went wrong and we decided to spend our CURRENT commit transaction
     Closing.claimCurrentLocalCommitTxOutputs(some.commitments, LNParams.bag) -> some match {
       case (claim: LocalCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(localCommit = claim :: Nil)
       case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, localCommit = claim :: Nil)
@@ -518,7 +518,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     }
 
   private def startOtherClose(some: HasCommitments, tx: Transaction) =
-    // They may have spent a revoked transaction so we can maybe take all the money
+    // They may have spent a REVOKED transaction so we can maybe take all the money
     Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, tx) -> some match {
       case (Some(claim), close: ClosingData) => BECOME(me STORE close.modify(_.revokedCommit).using(claim +: _), CLOSING)
       case (Some(claim), _) => BECOME(me STORE ClosingData(some.announce, some.commitments, revokedCommit = claim :: Nil), CLOSING)

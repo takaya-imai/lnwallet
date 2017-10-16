@@ -264,12 +264,13 @@ object Commitments {
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val remoteFees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(rp.dustLimitSatoshis), reduced).amount else 0L
+      val inFlight = reduced.htlcs.count(_.incoming)
 
-      // The rest of the guards
+      // We should both check if WE can send another HTLC and if PEER can accept another HTLC
+      if (inFlight > c.localParams.maxAcceptedHtlcs || inFlight > rp.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > rp.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      else if (reduced.toRemoteMsat / 1000L - rp.channelReserveSatoshis - remoteFees < 0) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
-      else if (reduced.htlcs.count(_.incoming) > rp.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      else c1 -> add
+      if (reduced.toRemoteMsat / 1000L - rp.channelReserveSatoshis - remoteFees < 0) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
+      c1 -> add
     }
 
   def receiveAdd(c: Commitments, add: UpdateAddHtlc) =
@@ -285,10 +286,10 @@ object Commitments {
       val localFees = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
 
       // The rest of the guards
+      if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
       if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
-      else if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - localFees < 0L) throw new LightningException
-      else if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
-      else c1
+      if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - localFees < 0L) throw new LightningException
+      c1
     }
 
   def sendFulfill(c: Commitments, cmd: CMDFulfillHtlc) = {
@@ -328,8 +329,8 @@ object Commitments {
     // A receiving node MUST fail the channel if the BADONION bit is not set
 
     if (notBadOnion) throw new LightningException
-    else if (found.isEmpty) throw new LightningException
-    else addRemoteProposal(c, fail)
+    if (found.isEmpty) throw new LightningException
+    addRemoteProposal(c, fail)
   }
 
   def sendFee(c: Commitments, ratePerKw: Long) = {

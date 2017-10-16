@@ -125,8 +125,8 @@ class WalletApp extends Application { me =>
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
         // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
-        for (chan <- all) chan process spent
-        bag extractPreimages spent.tx
+        for (channel <- all) channel process spent
+        bag.extractPreimages(spent.tx)
       }
 
       def height = for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
@@ -153,7 +153,7 @@ class WalletApp extends Application { me =>
 
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
-        // Collect all the commit outputs and watch them for spent preimages, both locally and requesting a server
+        // Collect all the commit outputs and watch them for preimages, both locally and requesting a server
         val commits = cd.localCommit.map(_.commitTx) ++ cd.remoteCommit.map(_.commitTx) ++ cd.nextRemoteCommit.map(_.commitTx)
         cloud.connector.getTxs(commits.map(_.txid).toJson.toString.hex).foreach(_ foreach bag.extractPreimages, Tools.errlog)
         kit.watchScripts(commits.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
@@ -221,10 +221,9 @@ class WalletApp extends Application { me =>
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup.setDownloadTxDependencies(0)
       peerGroup.setPingIntervalMsec(10000)
-      peerGroup.setMaxConnections(6)
+      peerGroup.setMaxConnections(5)
       peerGroup.addWallet(wallet)
 
-      //wallet setAcceptRiskyTransactions true
       wallet.autosaveToFile(walletFile, 250, MILLISECONDS, null)
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       ConnectionManager.listeners += ChannelManager.reconnectListener
