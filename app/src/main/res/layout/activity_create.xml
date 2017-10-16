@@ -14,17 +14,17 @@
             android:inputType="textVisiblePassword"/>
 
         <TextView
-            style="@style/MarginInfo"
+            style="@style/Info"
             android:layout_width="wrap_content"
             android:text="@string/password_info"/>
 
         <Button
-            style="@style/Info"
-            android:enabled="false"
+            style="@style/MarginInfo"
             android:onClick="newWallet"
             android:id="@+id/createWallet"
             android:layout_width="wrap_content"
-            android:text="@string/wallet_create"/>
+            android:text="@string/wallet_create"
+            android:enabled="false"/>
 
     </LinearLayout>
 

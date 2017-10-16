@@ -154,9 +154,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       for {
         // Then we try to re-send failed payments
         Tuple2(htlc, updateFailHtlc: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
-        outgoing @ OutgoingPayment(routing, _, request, _, _) <- getPaymentInfo(htlc.add.paymentHash)
-        routing1 = cutRoutes(updateFailHtlc, routing, request.nodeId)
-      } buildPayment(routing1, request, chan) match {
+        outgoing @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(htlc.add.paymentHash)
+        routing1 = cutRoutes(updateFailHtlc, routing, pr.nodeId)
+      } buildPayment(routing1, pr, chan) match {
 
         case Some(outgoing1) =>
           // Accepted: routing info updates in onProcess

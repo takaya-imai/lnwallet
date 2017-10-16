@@ -55,14 +55,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   def doProcess(some: Any) = (data, some) match {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
       // Get payment request, then fetch payment routes, then fulfill it
-      requestAndMemo @ Tuple2(request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
+      paymentRequestAndMemo @ Tuple2(request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
       Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4)
       channel <- app.ChannelManager.alive.headOption
 
     } if (data.info.isEmpty) {
       // Payment request may arrive in some time after an initialization above,
       // so we state that it can only be accepted if `data.info` is still empty
-      me UPDATE data.copy(info = Some apply requestAndMemo)
+      me UPDATE data.copy(info = Some apply paymentRequestAndMemo)
       channel process SilentAddHtlc(pay)
     }
 

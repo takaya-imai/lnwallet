@@ -79,6 +79,7 @@ object Utils {
 
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
+  def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
   def msatInFiat(msat: MilliSatoshi) = currentRate.map(perBtc => msat.amount * perBtc / btc2msatFactor)
   def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = msatInFiat(ms) match {
     case Success(amt) if fiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} CNY</font>"
@@ -178,9 +179,10 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   def doViewMnemonic(password: String) =
-    <(Mnemonic decrypt password, _ => tellGenError) { seed =>
+    <(app.kit decryptSeed password, _ => tellGenError) { seed =>
+      val wordsText = TextUtils.join("\u0020", seed.getMnemonicCode)
       lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
-      lazy val alert: AlertDialog = mkForm(dialog, me getString sets_noscreen, Mnemonic text seed)
+      lazy val alert: AlertDialog = mkForm(dialog, me getString sets_noscreen, wordsText)
       alert
 
       def warnUser: Unit = rm(alert) {
@@ -189,7 +191,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         alert1
 
         def encryptAndExport: Unit = rm(alert1) {
-          val packed = AES.encode(Mnemonic text seed, Crypto sha256 password.binary.data)
+          val packed = AES.encode(wordsText, Crypto sha256 password.binary.data)
           val exported = s"Encrypted BIP32 mnemonic ${new java.util.Date}: ${packed.toString}"
           val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
           val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)

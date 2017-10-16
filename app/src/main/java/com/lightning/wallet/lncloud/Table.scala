@@ -47,7 +47,7 @@ object PaymentInfoTable extends Table {
   def newSql = s"REPLACE INTO $table ($hash, $request, $status, $chanId, $preimage, $received, $routing) VALUES (?, ?, ?, ?, ?, ?, ?)"
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24) AND $status <> $HIDDEN"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
-  def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? AND $status <> $HIDDEN LIMIT 1"
+  def selectByHashSql = s"SELECT * FROM $table WHERE $hash = ? LIMIT 1"
 
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"

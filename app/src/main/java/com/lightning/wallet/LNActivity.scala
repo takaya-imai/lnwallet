@@ -122,7 +122,7 @@ with SearchBar { me =>
 
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
-  {
+
     if (app.isAlive) {
       super.onCreate(savedState)
 
@@ -140,8 +140,6 @@ with SearchBar { me =>
       app.kit.wallet addTransactionConfidenceEventListener txTracker
       app.kit.peerGroup addBlocksDownloadedEventListener catchListener
     } else me exitTo classOf[MainActivity]
-  }
-
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker

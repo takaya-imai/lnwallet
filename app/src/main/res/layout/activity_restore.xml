@@ -1,31 +1,39 @@
 <LinearLayout
     style="@style/StandardLinearLayout"
-    xmlns:android="http://schemas.android.com/apk/res/android">
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <LinearLayout
         style="@style/StandardLinearLayout"
         android:id="@+id/restoreInfo">
 
         <TextView
-            style="@style/Info"
+            style="@style/MarginInfo"
             android:layout_width="wrap_content"
             android:text="@string/restore_when"/>
 
         <Button
-            style="@style/MarginInfo"
+            style="@style/Info"
             android:onClick="setWhen"
             android:id="@+id/restoreWhen"
             android:layout_width="wrap_content"/>
 
-        <EditText
-            style="@style/Info"
-            android:id="@+id/restoreCode"
-            android:inputType="textMultiLine"
+        <com.hootsuite.nachos.NachoTextView
+            app:chipTextColor="@color/white"
+            app:chipVerticalSpacing="2dp"
+            app:chipBackground="#656565"
+            app:chipTextSize="18sp"
+            app:chipHeight="26dp"
+            app:chipSpacing="3dp"
+
+            android:layout_height="wrap_content"
             android:hint="@string/restore_hint"
-            android:layout_width="wrap_content"/>
+            android:id="@+id/restoreCode"
+            android:layout_width="330dp"
+            style="@style/MarginInfo"/>
 
         <EditText
-            style="@style/MarginInfo"
+            style="@style/Info"
             android:id="@+id/restorePass"
             android:layout_width="wrap_content"
             android:hint="@string/password_new"
@@ -37,13 +45,12 @@
             android:text="@string/password_info"/>
 
         <Button
-            style="@style/Info"
-            android:enabled="false"
-            android:onClick="recWallet"
+            style="@style/MarginInfo"
             android:id="@+id/restoreWallet"
             android:layout_marginTop="25dp"
             android:layout_width="wrap_content"
-            android:text="@string/restore_wallet"/>
+            android:text="@string/restore_wallet"
+            android:enabled="false"/>
 
     </LinearLayout>
 

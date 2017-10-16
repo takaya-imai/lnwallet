@@ -72,7 +72,7 @@ sealed trait EndingData extends HasCommitments { def isOutdated: Boolean }
 case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
                          startedAt: Long = System.currentTimeMillis) extends EndingData {
 
-  def isOutdated = startedAt + 1000 * 3600 * 24 * 2 < System.currentTimeMillis
+  def isOutdated = startedAt + 1000 * 3600 * 2 < System.currentTimeMillis
 }
 
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,

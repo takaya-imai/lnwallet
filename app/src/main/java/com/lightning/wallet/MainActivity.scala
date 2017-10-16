@@ -3,6 +3,7 @@ package com.lightning.wallet
 import R.string._
 import android.widget._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.Utils.{isMnemonicCorrect, app}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import scala.util.{Failure, Success, Try}
@@ -13,7 +14,6 @@ import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.helper.AES
-import com.lightning.wallet.Utils.app
 import scala.concurrent.Future
 import java.io.FileInputStream
 import android.content.Intent
@@ -124,8 +124,8 @@ with TimerActivity with ViewSwitch { me =>
 
   def setup(some: Any) = {
     val password = mainPassData.getText.toString
-    val bytes = Mnemonic.decrypt(password).getSeedBytes
-    LNParams setup bytes
+    val rawSeed = app.kit decryptSeed password
+    LNParams setup rawSeed.getSeedBytes
   }
 
   def wrongPass(err: Throwable) = {
@@ -163,7 +163,7 @@ with TimerActivity with ViewSwitch { me =>
         val packed = BinaryData(encryptedMnemonic.getText.toString)
         val hash = Crypto sha256 oldWalletPassword.getText.toString.binary.data
         val plain = new String(AES.decode(packed.toArray, hash.toArray), "UTF-8")
-        require(Mnemonic isCorrect plain, "Wrong password")
+        require(isMnemonicCorrect(plain), "Wrong password")
         app.TransData.value = plain
         exitToRestore
       }

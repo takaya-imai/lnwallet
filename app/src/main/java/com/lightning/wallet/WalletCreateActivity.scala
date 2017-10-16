@@ -1,7 +1,6 @@
 package com.lightning.wallet
 
 import R.string._
-import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import android.widget.{Button, EditText}
 
@@ -9,18 +8,10 @@ import com.lightning.wallet.ln.Tools.wrap
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
-import android.text.TextUtils
+import org.bitcoinj.wallet.Wallet
 import android.os.Bundle
 import android.view.View
 
-
-object Mnemonic {
-  def isCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
-  def text(seed: DeterministicSeed) = TextUtils.join("\u0020", seed.getMnemonicCode)
-  def decrypt(pass: String) = app.kit.wallet.getKeyCrypter match { case scrypt =>
-    app.kit.wallet.getKeyChainSeed.decrypt(scrypt, pass, scrypt deriveKey pass)
-  }
-}
 
 class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
   lazy val createWallet = findViewById(R.id.createWallet).asInstanceOf[Button]
