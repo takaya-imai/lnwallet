@@ -178,7 +178,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
-  {
+
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
 
@@ -248,7 +248,6 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       app.kit.peerGroup addDisconnectedEventListener constListener
       app.kit.peerGroup addConnectedEventListener constListener
     } else me exitTo classOf[MainActivity]
-  }
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeTransactionConfidenceEventListener txsTracker

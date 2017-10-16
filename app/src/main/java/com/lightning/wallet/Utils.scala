@@ -77,9 +77,11 @@ object Utils {
     denom = denoms(index1)
   }
 
+  def isMnemonicCorrect(mnemonic: String) =
+    mnemonic.split("\\s+").length > 11
+
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
-  def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
   def msatInFiat(msat: MilliSatoshi) = currentRate.map(perBtc => msat.amount * perBtc / btc2msatFactor)
   def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = msatInFiat(ms) match {
     case Success(amt) if fiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} CNY</font>"

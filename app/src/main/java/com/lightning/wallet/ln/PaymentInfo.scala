@@ -6,13 +6,13 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.FailureMessageCodecs._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import scala.util.{Success, Try}
-
 import com.lightning.wallet.ln.Tools.random
 import scodec.bits.BitVector
 import scodec.Attempt
+
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import scala.util.{Success, Try}
 
 
 trait PaymentInfo {
@@ -41,7 +41,7 @@ case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
   def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
 }
 
-trait PaymentInfoBag {
+trait PaymentInfoBag { me =>
   def updateFailWaiting: Unit
   def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
@@ -50,6 +50,16 @@ trait PaymentInfoBag {
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
   def putPaymentInfo(info: PaymentInfo): Unit
+
+  def extractPreimages(trans: Transaction) = trans.txIn.map(_.witness.stack) collect {
+    case Seq(BinaryData.empty, _, _, paymentPreimage, _) if paymentPreimage.size == 32 =>
+      me updatePreimage UpdateFulfillHtlc(BinaryData.empty, 0L, paymentPreimage)
+      // htlc-success preimage
+
+    case Seq(_, paymentPreimage, _) if paymentPreimage.size == 32 =>
+      me updatePreimage UpdateFulfillHtlc(BinaryData.empty, 0L, paymentPreimage)
+      // claim-htlc-success preimage
+  }
 }
 
 object PaymentInfo {

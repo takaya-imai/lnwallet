@@ -27,9 +27,9 @@
             app:chipSpacing="3dp"
 
             android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
             android:hint="@string/restore_hint"
             android:id="@+id/restoreCode"
-            android:layout_width="330dp"
             style="@style/MarginInfo"/>
 
         <EditText
@@ -46,6 +46,7 @@
 
         <Button
             style="@style/MarginInfo"
+            android:onClick="recWallet"
             android:id="@+id/restoreWallet"
             android:layout_marginTop="25dp"
             android:layout_width="wrap_content"

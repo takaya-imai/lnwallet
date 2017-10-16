@@ -30,6 +30,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   }
 
   def SEND(msg: LightningMessage): Unit
+  def CLOSEANDWATCH(close: ClosingData): Unit
   def STORE(content: HasCommitments): HasCommitments
   def UPDATE(d1: ChannelData): Channel = BECOME(d1, state)
   def BECOME(data1: ChannelData, state1: String) = runAnd(me) {
@@ -497,23 +498,23 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   private def startLocalCurrentClose(some: HasCommitments) =
     // Something went wrong and we decided to spend our current commit transaction
-    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, some.commitments.localCommit.commitTx.tx, LNParams.bag) -> some match {
-      case (claim: LocalCommitPublished, closing: ClosingData) => BECOME(data1 = me STORE closing.copy(localCommit = claim :: Nil), CLOSING)
-      case (claim, _) => BECOME(data1 = me STORE ClosingData(some.announce, some.commitments, localCommit = claim :: Nil), CLOSING)
+    Closing.claimCurrentLocalCommitTxOutputs(some.commitments, LNParams.bag) -> some match {
+      case (claim: LocalCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(localCommit = claim :: Nil)
+      case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, localCommit = claim :: Nil)
     }
 
   private def startRemoteCurrentClose(some: HasCommitments) =
     // They've decided to spend their CURRENT commit tx, we need to take what's ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, LNParams.bag) -> some match {
-      case (claim: RemoteCommitPublished, closing: ClosingData) => BECOME(me STORE closing.copy(remoteCommit = claim :: Nil), CLOSING)
-      case (claim, _) => BECOME(me STORE ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil), CLOSING)
+      case (claim: RemoteCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(remoteCommit = claim :: Nil)
+      case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil)
     }
 
   private def startRemoteNextClose(some: HasCommitments, nextRemoteCommit: RemoteCommit) =
     // They've decided to spend their NEXT commit tx, once again we need to take what's ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, LNParams.bag) -> some match {
-      case (claim: RemoteCommitPublished, closing: ClosingData) => BECOME(me STORE closing.copy(nextRemoteCommit = claim :: Nil), CLOSING)
-      case (claim, _) => BECOME(me STORE ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil), CLOSING)
+      case (claim: RemoteCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(nextRemoteCommit = claim :: Nil)
+      case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil)
     }
 
   private def startOtherClose(some: HasCommitments, tx: Transaction) =

@@ -1,9 +1,10 @@
 package com.lightning.wallet
 
-import Utils._
+import com.lightning.wallet.Utils._
 import R.string._
+import spray.json._
 import org.bitcoinj.core._
-
+import com.lightning.wallet.lncloud.ImplicitJsonFormats._
 import collection.JavaConverters.seqAsJavaListConverter
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -24,6 +25,7 @@ import android.widget.Toast
 import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
+import com.lightning.wallet.ln.Channel.CLOSING
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import Context.CLIPBOARD_SERVICE
 import com.lightning.wallet.ln.PaymentInfo._
@@ -123,8 +125,8 @@ class WalletApp extends Application { me =>
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
         // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
-        Helpers extractPreimages spent.tx foreach bag.updatePreimage
         for (chan <- all) chan process spent
+        bag extractPreimages spent.tx
       }
 
       def height = for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
@@ -148,7 +150,17 @@ class WalletApp extends Application { me =>
     def createChannel(bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
-      // Listeners should always be added first and only then a doProcess should be called
+
+      def CLOSEANDWATCH(cd: ClosingData) = {
+        BECOME(data1 = STORE(cd), state1 = CLOSING)
+        // Collect all the commit outputs and watch them for spent preimages, both locally and requesting a server
+        val commits = cd.localCommit.map(_.commitTx) ++ cd.remoteCommit.map(_.commitTx) ++ cd.nextRemoteCommit.map(_.commitTx)
+        cloud.connector.getTxs(commits.map(_.txid).toJson.toString.hex).foreach(_ foreach bag.extractPreimages, Tools.errlog)
+        kit.watchScripts(commits.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
+      }
+
+      // Listeners should always be added first
+      // and only then a doProcess should be called to trigger them
       listeners ++= Set(broadcaster, bag, ChannelWrap, Notificator)
       doProcess(bootstrap)
     }
