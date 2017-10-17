@@ -13,7 +13,6 @@ import android.view.{Menu, View, ViewGroup}
 import com.lightning.wallet.Utils.{app, denom}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
-
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
@@ -21,9 +20,10 @@ import com.lightning.wallet.helper.ThrottledWork
 import android.support.v4.view.MenuItemCompat
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
-import fr.acinq.bitcoin.Script
+import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import org.bitcoinj.core.Coin
 import android.os.Bundle
+import com.lightning.wallet.lncloud.RatesSaver
 
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
@@ -170,14 +170,17 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   def askForFunding(chan: Channel, their: Init) = {
     val walletBalance = denom withSign app.kit.currentBalance
     val maxCapacity = denom withSign LNParams.maxChannelCapacity
+    val minCapacity: MilliSatoshi = RatesSaver.rates.feeLive multiply 3
+
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
-    val rateManager = new RateManager(getString(amount_hint_newchan).format(maxCapacity, walletBalance), content)
+    val extra = getString(amount_hint_newchan).format(denom withSign minCapacity, maxCapacity, walletBalance)
+    val rateManager = new RateManager(extra, content)
 
     def askAttempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
-      case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_sum_big
-      case Success(ms) if MIN_NONDUST_OUTPUT isGreaterThan ms => app toast dialog_sum_small
+      case Success(ms) if ms.amount < minCapacity.amount => app toast dialog_sum_small
+      case Success(ms) if ms.amount > LNParams.maxChannelCapacity.amount => app toast dialog_sum_big
 
       case Success(ms) => rm(alert) {
         val amountSat = ms.amount / sat2msatFactor

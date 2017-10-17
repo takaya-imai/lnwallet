@@ -254,10 +254,10 @@ with SearchBar { me =>
 
           if (status == FAILURE && pr.isFresh) {
             def doManualPaymentRetry = rm(alert) {
-              val barManager = new ProgressBarManager
+              val progressBarManager = new ProgressBarManager
               notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
               app.ChannelManager.outPaymentObs(badNodes, badChans, pr)
-                .doOnTerminate(barManager.progressBar.progressiveStop)
+                .doOnTerminate(progressBarManager.delayedRemove)
                 .foreach(onPaymentResult, onPaymentError)
             }
 
@@ -290,10 +290,10 @@ with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
 
         case _ => rm(alert) {
-          val barManager = new ProgressBarManager
+          val progressBarManager = new ProgressBarManager
           notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
           app.ChannelManager.outPaymentObs(Set.empty, Set.empty, pr)
-            .doOnTerminate(barManager.progressBar.progressiveStop)
+            .doOnTerminate(progressBarManager.delayedRemove)
             .foreach(onPaymentResult, onPaymentError)
         }
       }
@@ -410,13 +410,15 @@ with SearchBar { me =>
   }
 
   class ProgressBarManager {
+    def delayedRemove = try timer.schedule(anyToRunnable(progressBar.progressiveStop), 250) catch none
     val progressBar = layoutInflater.inflate(R.layout.frag_progress_bar, null).asInstanceOf[SmoothProgressBar]
     val drawable = progressBar.getIndeterminateDrawable.asInstanceOf[SmoothProgressDrawable]
 
     container.addView(progressBar, viewParams)
     drawable setCallbacks new SmoothProgressDrawable.Callbacks {
-      def onStop = timer.schedule(anyToRunnable(container removeView progressBar), 250)
-      def onStart = drawable.setColors(getResources getIntArray R.array.bar_colors)
+      // In some cases activity may be killed while progress bar is active so timer will throw here
+      def onStop = try timer.schedule(anyToRunnable(container removeView progressBar), 250) catch none
+      def onStart = try drawable.setColors(getResources getIntArray R.array.bar_colors) catch none
     }
   }
 

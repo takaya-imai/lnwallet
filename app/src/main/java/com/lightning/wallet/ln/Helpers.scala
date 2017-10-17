@@ -18,10 +18,9 @@ object Helpers { me =>
     val localPubkey = derivePubKey(localParams.paymentKey.toPoint, localPerCommitmentPoint)
     val localDelayedPubkey = derivePubKey(localParams.delayedPaymentKey.toPoint, localPerCommitmentPoint)
     val localRevocationPubkey = revocationPubKey(remoteParams.revocationBasepoint, localPerCommitmentPoint)
-
-    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, localParams.paymentKey.toPoint,
-      remoteParams.paymentBasepoint, localParams.isFunder, LNParams.dustLimit, localPubkey, localRevocationPubkey,
-      remoteParams.toSelfDelay, localDelayedPubkey, remotePubkey, spec)
+    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, localParams.paymentKey.toPoint, remoteParams.paymentBasepoint,
+      localParams.isFunder, LNParams.dustLimit, localPubkey, localRevocationPubkey, remoteParams.toSelfDelay, localDelayedPubkey,
+      remotePubkey, spec)
 
     val (htlcTimeoutTxs, htlcSuccessTxs) = Scripts.makeHtlcTxs(commitTx.tx, LNParams.dustLimit,
       localRevocationPubkey, remoteParams.toSelfDelay, localPubkey, localDelayedPubkey, remotePubkey, spec)
@@ -60,17 +59,15 @@ object Helpers { me =>
     }
 
     def makeFirstClosing(commitments: Commitments, localScriptPubkey: BinaryData,
-                         remoteScriptPubkey: BinaryData, rate: Long): ClosingSigned = {
+                         remoteScriptPubkey: BinaryData, rate: Long) = {
 
       // This is just to estimate the weight, it depends on size of the pubkey scripts
-      val dummy: ClosingTx = Scripts.addSigs(makeFunderClosingTx(commitments.commitInput, localScriptPubkey,
-        remoteScriptPubkey, dustLimit = Satoshi(0), closingFee = Satoshi(0), spec = commitments.localCommit.spec),
-        commitments.localParams.fundingPrivKey.publicKey, commitments.remoteParams.fundingPubkey, "aa" * 71, "bb" * 71)
+      val closingWeight: Int = Transaction.weight(Scripts.addSigs(makeFunderClosingTx(commitments.commitInput,
+        localScriptPubkey, remoteScriptPubkey, dustLimit = Satoshi(0), closingFee = Satoshi(0), commitments.localCommit.spec),
+        commitments.localParams.fundingPrivKey.publicKey, commitments.remoteParams.fundingPubkey, "aa" * 71, "bb" * 71).tx)
 
-      val closingWeight = Transaction.weight(dummy.tx)
       val closingFee = Scripts.weight2fee(feeratePerKw = rate, closingWeight)
-      val _ \ msg = makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, closingFee)
-      msg
+      makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, closingFee)
     }
 
     def makeClosing(commitments: Commitments, localScriptPubkey: BinaryData,
@@ -94,19 +91,11 @@ object Helpers { me =>
       require(spec.htlcs.isEmpty, "No HTLCs allowed")
       val toRemoteAmount = Satoshi(spec.toRemoteMsat / 1000L)
       val toLocalAmount = Satoshi(spec.toLocalMsat / 1000L) - closingFee
-      val toLocalOutput = if (toLocalAmount >= dustLimit) TxOut(toLocalAmount, localScriptPubKey) :: Nil else Nil
-      val toRemoteOutput = if (toRemoteAmount >= dustLimit) TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil else Nil
+      val toLocalOutput = if (toLocalAmount < dustLimit) Nil else TxOut(toLocalAmount, localScriptPubKey) :: Nil
+      val toRemoteOutput = if (toRemoteAmount < dustLimit) Nil else TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil
       val input = TxIn(commitTxInput.outPoint, Array.emptyByteArray, sequence = 0xffffffffL) :: Nil
       val tx = Transaction(version = 2, input, toLocalOutput ++ toRemoteOutput, lockTime = 0)
       ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
-    }
-
-    def checkClosingSignature(commitments: Commitments, localScriptPubkey: BinaryData, remoteScriptPubkey: BinaryData,
-                              remoteClosingFee: Satoshi, remoteClosingSig: BinaryData): Option[TransactionWithInputInfo] = {
-
-      val (closingTx, closingSigned) = makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, remoteClosingFee)
-      Scripts checkSpendable Scripts.addSigs(closingTx, commitments.localParams.fundingPrivKey.publicKey,
-        commitments.remoteParams.fundingPubkey, closingSigned.signature, remoteClosingSig)
     }
 
     def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi): Satoshi =
@@ -130,14 +119,12 @@ object Helpers { me =>
         IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(info.add.paymentHash).toOption
         success: HtlcSuccessTx = Scripts.addSigs(info, localSig, remoteSig, preimage)
         delayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(success.tx)
-        if delayedClaim.tx.txOut.head.amount >= LNParams.dustLimit
       } yield success -> delayedClaim
 
       val allTimeoutTxs = for {
         HtlcTxAndSigs(info: HtlcTimeoutTx, localSig, remoteSig) <- commitments.localCommit.htlcTxsAndSigs
         timeout: HtlcTimeoutTx = Scripts.addSigs(htlcTimeoutTx = info, localSig, remoteSig)
         delayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(timeout.tx)
-        if delayedClaim.tx.txOut.head.amount >= LNParams.dustLimit
       } yield timeout -> delayedClaim
 
       val claimMainDelayedTx = Scripts checkSpendable {

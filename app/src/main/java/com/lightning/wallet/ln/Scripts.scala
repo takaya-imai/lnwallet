@@ -244,6 +244,9 @@ object Scripts { me =>
 
   def checkSpendable[T <: TransactionWithInputInfo](txWithInputInfo: => T) = Try {
     val check = Map(txWithInputInfo.tx.txIn.head.outPoint -> txWithInputInfo.input.txOut)
+    val totalOutputValue = txWithInputInfo.tx.txOut.map(_.amount).sum
+
+    if (totalOutputValue < LNParams.dustLimit) throw new Exception("Dusty amount detected")
     Transaction.correctlySpends(txWithInputInfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
     txWithInputInfo
   }.toOption
@@ -297,7 +300,7 @@ object Scripts { me =>
 
   // General templates
 
-  def tier2Amount(amt: Satoshi, fee: Satoshi): Satoshi = if (amt - fee <= LNParams.dustLimit) amt / 2 else amt - fee
+  def tier2Amount(amt: Satoshi, fee: Satoshi): Satoshi = if (amt - fee < LNParams.dustLimit) amt / 2 else amt - fee
   def findPubKeyScriptIndex(tx: Transaction, script: BinaryData): Int = tx.txOut.indexWhere(_.publicKeyScript == script)
   def makeHtlcTx[T](fun: (InputInfo, Transaction) => T, parent: Transaction, redeemScript: ScriptEltSeq,
                     pubKeyScript: ScriptEltSeq, amount: MilliSatoshi, fee: Satoshi,

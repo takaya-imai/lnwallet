@@ -42,7 +42,7 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) =>
-      // Each time we get spent/height command we send out all possible spending txs
-      Obs.from(close.allTransactions map safeSend).concat.foreach(Tools.log, Tools.errlog)
+      val txsToBroadcast = close.localCommit.map(_.commitTx) ++ close.allTransactions
+      Obs.from(txsToBroadcast map safeSend).concat.foreach(Tools.log, Tools.errlog)
   }
 }

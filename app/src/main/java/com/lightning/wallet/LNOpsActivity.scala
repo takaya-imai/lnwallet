@@ -3,7 +3,6 @@ package com.lightning.wallet
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
-import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.Broadcaster._
 import com.lightning.wallet.lncloud.ImplicitConversions._
 import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
@@ -73,13 +72,9 @@ class LNOpsActivity extends TimerActivity { me =>
       override def onBecome = {
         case (_, WaitFundingDoneData(_, _, _, tx, commitments), _, _) => me runOnUiThread manageOpening(commitments, tx)
         case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegotiations(norm.commitments)
+        case (_, close: ClosingData, _, _) if close.allTransactions.nonEmpty => me runOnUiThread manageClosing(close)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegotiations(negs.commitments)
         case (_, norm: NormalData, _, _) => me exitTo classOf[LNActivity]
-
-        // Someone has initiated a cooperative or unilateral channel closing (or both!)
-        case (_, close @ ClosingData(_, _, mutual, local, remote, remoteNext, revoked, _), _, CLOSING)
-          if mutual.nonEmpty || local.nonEmpty || remote.nonEmpty || remoteNext.nonEmpty || revoked.nonEmpty =>
-          me runOnUiThread manageClosing(close)
 
         case _ =>
           // Mutual closing without txs, recovery mode

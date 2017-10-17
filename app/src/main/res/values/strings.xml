@@ -63,7 +63,7 @@
 
     <string name="amount_hint_maxamount"><![CDATA[max amount %1$s]]></string>
     <string name="amount_hint_wallet"><![CDATA[wallet balance %1$s]]></string>
-    <string name="amount_hint_newchan"><![CDATA[max capacity %1$s<br>wallet balance %2$s]]></string>
+    <string name="amount_hint_newchan"><![CDATA[min channel capacity %1$s<br>max channel capacity %2$s<br>wallet balance %3$s]]></string>
     <string name="amount_hint_sat"><![CDATA[Amount in Satoshi<br><small>%1$s</small>]]></string>
     <string name="amount_hint_btc"><![CDATA[Amount in Bitcoin<br><small>%1$s</small>]]></string>
     <string name="amount_hint_mbtc"><![CDATA[Amount in mBTC<br><small>%1$s</small>]]></string>
@@ -143,7 +143,7 @@
     <string name="err_ln_remote_amount_low">Failed because payment amount is too low for your peer to process it</string>
     <string name="err_ln_offline">Failed because channel is currently offline. Please wait a few seconds and try again</string>
     <string name="err_ln_old">Failed because this payment request has expired. Please ask recipient to provide a new one</string>
-    <string name="err_ln_remote_fee_overflow">Failed because payment amount combined with fee exceeds your peer\'s balance</string>
+    <string name="err_ln_fee_overflow">Failed because payment amount combined with fees exceeds your current channel balance</string>
     <string name="err_ln_black">Failed because your peer is blacklisted. You may want to create a new payment channel</string>
     <string name="err_ln_general">Could not proceed with this payment. Please ask recipient to issue another one</string>
 

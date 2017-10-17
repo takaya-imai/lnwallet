@@ -4,7 +4,9 @@ import com.lightning.wallet.Utils._
 import R.string._
 import spray.json._
 import org.bitcoinj.core._
+import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+
 import collection.JavaConverters.seqAsJavaListConverter
 import scala.concurrent.duration._
 import com.lightning.wallet.lncloud.ImplicitConversions._
@@ -39,6 +41,8 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.core.listeners.{NewBestBlockListener, PeerConnectedEventListener}
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.spongycastle.crypto.params.KeyParameter
+
+import scala.collection.mutable
 
 
 class WalletApp extends Application { me =>
@@ -110,7 +114,6 @@ class WalletApp extends Application { me =>
   object ChannelManager {
     import ConnectionManager._
     type ChannelVec = Vector[Channel]
-    type OutPaymentOption = Option[OutgoingPayment]
 
     // New NORMAL channels should always be prepended
     // while new channel in RECOVERY mode should be appended
@@ -161,7 +164,7 @@ class WalletApp extends Application { me =>
 
       // Listeners should always be added first
       // and only then a doProcess should be called to trigger them
-      listeners ++= Set(broadcaster, bag, ChannelWrap, Notificator)
+      val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
       doProcess(bootstrap)
     }
 

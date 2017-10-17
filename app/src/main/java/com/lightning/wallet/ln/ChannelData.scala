@@ -85,6 +85,7 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
   def isOutdated = allTransactions.forall(depthOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
   def depthOk(tx: Transaction) = txStatus(tx.txid) match { case Some(cfs \ false) => cfs > minDepth case _ => false }
 
+  // Mutual closing and all tier 1-2 txs in case of uncooperative close
   lazy val allTransactions = mutualClose ++ localCommit.flatMap(_.transactions) ++
     remoteCommit.flatMap(_.transactions) ++ nextRemoteCommit.flatMap(_.transactions) ++
     revokedCommit.flatMap(_.transactions)
@@ -103,11 +104,11 @@ sealed trait CommitPublished {
 case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], claimHtlcSuccess: Seq[SuccessAndClaim],
                                 claimHtlcTimeout: Seq[TimeoutAndClaim], commitTx: Transaction) extends CommitPublished {
 
-  val transactions = List(commitTx) ++ claimMainDelayed.map(_.tx) ++
+  val transactions: Seq[Transaction] = claimMainDelayed.map(_.tx) ++
     claimHtlcSuccess.map(_._1.tx) ++ claimHtlcTimeout.map(_._1.tx) ++
     claimHtlcSuccess.map(_._2.tx) ++ claimHtlcTimeout.map(_._2.tx)
 
-  def getState = {
+  def getState: Seq[PublishStatus] = {
     val mainInfo = for (tier1 <- claimMainDelayed) yield (csv(tier1), tier1 -- tier1, tier1.amount)
     val successInfo = for (tier1 \ tier2 <- claimHtlcSuccess) yield (csv(tier2), tier1 -- tier2, tier2.amount)
     val timeoutInfo = for (tier1 \ tier2 <- claimHtlcTimeout) yield (cltvAndCsv(tier1, tier2), tier1 -- tier2, tier2.amount)
@@ -118,10 +119,10 @@ case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], cla
 case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcSuccess: Seq[ClaimHtlcSuccessTx],
                                  claimHtlcTimeout: Seq[ClaimHtlcTimeoutTx], commitTx: Transaction) extends CommitPublished {
 
-  // Not inlcuding commitTx here because by definition it has already been published by peer
-  val transactions = claimMain.map(_.tx) ++ claimHtlcSuccess.map(_.tx) ++ claimHtlcTimeout.map(_.tx)
+  val transactions: Seq[Transaction] = claimMain.map(_.tx) ++
+    claimHtlcSuccess.map(_.tx) ++ claimHtlcTimeout.map(_.tx)
 
-  def getState = {
+  def getState: Seq[PublishStatus] = {
     val mainInfo = for (tier1 <- claimMain) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
     val successInfo = for (tier1 <- claimHtlcSuccess) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
     val timeoutInfo = for (tier1 <- claimHtlcTimeout) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
@@ -132,10 +133,10 @@ case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcS
 case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPenalty: Seq[MainPenaltyTx],
                                   commitTx: Transaction) extends CommitPublished {
 
-  // Not inlcuding commitTx here because it has already been published by peer
-  val transactions = claimMain.map(_.tx) ++ claimPenalty.map(_.tx)
+  val transactions: Seq[Transaction] =
+    claimMain.map(_.tx) ++ claimPenalty.map(_.tx)
 
-  def getState = {
+  def getState: Seq[PublishStatus] = {
     val mainInfo = for (tier1 <- claimMain) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
     val penaltyInfo = for (tier1 <- claimPenalty) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
     mainInfo ++ penaltyInfo
@@ -263,13 +264,13 @@ object Commitments {
       val rp = c.remoteParams
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
-      val remoteFees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(rp.dustLimitSatoshis), reduced).amount else 0L
+      val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(rp.dustLimitSatoshis), reduced).amount else 0L
       val inFlight = reduced.htlcs.count(_.incoming)
 
       // We should both check if WE can send another HTLC and if PEER can accept another HTLC
       if (inFlight > c.localParams.maxAcceptedHtlcs || inFlight > rp.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > rp.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (reduced.toRemoteMsat / 1000L - rp.channelReserveSatoshis - remoteFees < 0) throw AddException(cmd, ERR_REMOTE_FEE_OVERFLOW)
+      if (reduced.toRemoteMsat / 1000L - rp.channelReserveSatoshis - fees < 0) throw AddException(cmd, ERR_FEE_OVERFLOW)
       c1 -> add
     }
 
@@ -283,12 +284,12 @@ object Commitments {
       // *as seen by us* with this change taken into account
       val c1 = addRemoteProposal(c, add).modify(_.remoteNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
-      val localFees = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
+      val fees = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
 
       // The rest of the guards
       if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
       if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
-      if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - localFees < 0L) throw new LightningException
+      if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - fees < 0L) throw new LightningException
       c1
     }
 
@@ -340,7 +341,7 @@ object Commitments {
     val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
     val fees = Scripts.commitTxFee(dustLimit = Satoshi(c1.remoteParams.dustLimitSatoshis), spec = reduced).amount
     val overflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0L
-    if (overflow) throw new LightningException else c1 -> updateFee
+    if (overflow) Some(c1 -> updateFee) else None
   }
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {

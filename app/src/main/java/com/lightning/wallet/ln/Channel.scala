@@ -21,7 +21,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   implicit val context: ExecutionContextExecutor = ExecutionContext fromExecutor Executors.newSingleThreadExecutor
   def pull[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
   def process(change: Any) = Future(me doProcess change) onFailure { case err => events onError me -> err }
-  val listeners = mutable.Set.empty[ChannelListener]
+  val listeners: mutable.Set[ChannelListener]
 
   private[this] val events = new ChannelListener {
     override def onError = { case malfunction => for (lst <- listeners if lst.onError isDefinedAt malfunction) lst onError malfunction }
@@ -258,11 +258,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (norm: NormalData, CMDFeerate(rate), NORMAL)
         // GUARD: only send fee updates if the fee gap between nodes is large enough
         if LNParams.shouldUpdateFee(norm.commitments.localCommit.spec.feeratePerKw, rate) =>
-
-        // Periodic fee updates to ensure commit txs could be confirmed
-        val c1 \ updateFeeMessage = Commitments.sendFee(norm.commitments, rate)
-        me UPDATE norm.copy(commitments = c1) SEND updateFeeMessage
-        doProcess(CMDProceed)
+        Commitments.sendFee(norm.commitments, rate) foreach { case c1 \ updateFeeMessage =>
+          // Periodic fee updates to ensure commit txs could be confirmed on a blockchain
+          me UPDATE norm.copy(commitments = c1) SEND updateFeeMessage
+          doProcess(CMDProceed)
+        }
 
 
       // NORMAL: SHUTDOWN
@@ -306,7 +306,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
 
         val feerate = commitments.localCommit.spec.feeratePerKw
-        val sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
+        val _ \ sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
         val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
         BECOME(me STORE neg, NEGOTIATIONS) SEND sig
 
@@ -424,13 +424,17 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val Seq(closeFeeSat, remoteFeeSat) = Seq(neg.localClosingSigned.feeSatoshis, feeSatoshis) map Satoshi
         val Seq(localScript, remoteScript) = Seq(neg.localShutdown.scriptPubKey, neg.remoteShutdown.scriptPubKey)
-        val closeOpt = Closing.checkClosingSignature(neg.commitments, localScript, remoteScript, remoteFeeSat, remoteSig)
-        lazy val (_, nextClosingSigned) = Closing.makeClosing(neg.commitments, localScript, remoteScript, nextCloseFee)
+        val (closingTx, closingSigned) = Closing.makeClosing(neg.commitments, localScript, remoteScript, remoteFeeSat)
+        val closeOpt = Scripts checkSpendable Scripts.addSigs(closingTx, neg.commitments.localParams.fundingPrivKey.publicKey,
+          neg.commitments.remoteParams.fundingPubkey, closingSigned.signature, remoteSig)
+
         lazy val nextCloseFee = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
+        lazy val _ \ nextClosingSigned = Closing.makeClosing(neg.commitments,
+          localScript, remoteScript, nextCloseFee)
 
         closeOpt match {
-          case Some(close) if closeFeeSat == remoteFeeSat => startMutualClose(neg, close.tx)
-          case Some(close) if nextCloseFee == remoteFeeSat => startMutualClose(neg, close.tx)
+          case Some(closingInfo) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closingInfo.tx)
+          case Some(closingInfo) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closingInfo.tx)
           case Some(_) => me UPDATE neg.copy(localClosingSigned = nextClosingSigned) SEND nextClosingSigned
           case _ => throw new LightningException
         }
