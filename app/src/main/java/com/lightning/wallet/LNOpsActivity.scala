@@ -72,7 +72,7 @@ class LNOpsActivity extends TimerActivity { me =>
       override def onBecome = {
         case (_, WaitFundingDoneData(_, _, _, tx, commitments), _, _) => me runOnUiThread manageOpening(commitments, tx)
         case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegotiations(norm.commitments)
-        case (_, close: ClosingData, _, _) if close.allTransactions.nonEmpty => me runOnUiThread manageClosing(close)
+        case (_, close: ClosingData, _, _) if close.myTransactions.nonEmpty => me runOnUiThread manageClosing(close)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegotiations(negs.commitments)
         case (_, norm: NormalData, _, _) => me exitTo classOf[LNActivity]
 

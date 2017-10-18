@@ -81,15 +81,13 @@ object LNParams { me =>
   def makeLocalParams(reserve: Long, finalScriptPubKey: BinaryData, idx: Long) = {
     val Seq(fund, revoke, pay, delay, sha) = for (n <- 0L to 4L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil)
     LocalParams(maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 5,
-      fundingPrivKey = fund.privateKey, revocationSecret = revoke.privateKey, paymentKey = pay.privateKey,
-      delayedPaymentKey = delay.privateKey, finalScriptPubKey, shaSeed = sha256(sha.privateKey.toBin),
-      isFunder = true)
+      fund.privateKey, revoke.privateKey, pay.privateKey, delay.privateKey, finalScriptPubKey,
+      shaSeed = sha256(sha.privateKey.toBin), isFunder = true)
   }
 }
 
 object AddErrorCodes {
   import com.lightning.wallet.R.string._
-  val ERR_FEE_OVERFLOW = err_ln_fee_overflow
   val ERR_AMOUNT_OVERFLOW = err_ln_amount_overflow
   val ERR_REMOTE_AMOUNT_LOW = err_ln_remote_amount_low
   val ERR_TOO_MANY_HTLC = err_ln_too_many

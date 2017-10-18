@@ -112,10 +112,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
 
   override def onError = {
-    case _ \ AddException(cmd: CMDAddHtlc, _) =>
-      // Useless most of the time but needed for retry failures
-      // CMDAddHtlc should still be used or channel may be closed
-      updateStatus(FAILURE, cmd.out.request.paymentHash)
+    case Tuple2(_, ex: CMDException) =>
+      // Useless most of the time but needed for retry add failures
+      // CMDException should still be used or channel may be closed
+      updateStatus(FAILURE, ex.cmd.out.request.paymentHash)
       uiNotify
 
     case chan \ error =>

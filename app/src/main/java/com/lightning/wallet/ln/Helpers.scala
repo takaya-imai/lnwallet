@@ -18,9 +18,10 @@ object Helpers { me =>
     val localPubkey = derivePubKey(localParams.paymentKey.toPoint, localPerCommitmentPoint)
     val localDelayedPubkey = derivePubKey(localParams.delayedPaymentKey.toPoint, localPerCommitmentPoint)
     val localRevocationPubkey = revocationPubKey(remoteParams.revocationBasepoint, localPerCommitmentPoint)
-    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, localParams.paymentKey.toPoint, remoteParams.paymentBasepoint,
-      localParams.isFunder, LNParams.dustLimit, localPubkey, localRevocationPubkey, remoteParams.toSelfDelay, localDelayedPubkey,
-      remotePubkey, spec)
+
+    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, localParams.paymentKey.toPoint,
+      remoteParams.paymentBasepoint, localParams.isFunder, LNParams.dustLimit, localPubkey, localRevocationPubkey,
+      remoteParams.toSelfDelay, localDelayedPubkey, remotePubkey, spec)
 
     val (htlcTimeoutTxs, htlcSuccessTxs) = Scripts.makeHtlcTxs(commitTx.tx, LNParams.dustLimit,
       localRevocationPubkey, remoteParams.toSelfDelay, localPubkey, localDelayedPubkey, remotePubkey, spec)
@@ -36,9 +37,11 @@ object Helpers { me =>
     val remotePubkey = derivePubKey(remoteParams.paymentBasepoint, remotePerCommitmentPoint)
     val remoteDelayedPubkey = derivePubKey(remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
     val remoteRevocationPubkey = revocationPubKey(localParams.revocationSecret.toPoint, remotePerCommitmentPoint)
-    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint, localParams.paymentKey.toPoint,
-      !localParams.isFunder, Satoshi(remoteParams.dustLimitSatoshis), remotePubkey, remoteRevocationPubkey, localParams.toSelfDelay,
-      remoteDelayedPubkey, localPubkey, spec)
+
+    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint,
+      localParams.paymentKey.toPoint, !localParams.isFunder, Satoshi(remoteParams.dustLimitSatoshis),
+      remotePubkey, remoteRevocationPubkey, localParams.toSelfDelay, remoteDelayedPubkey,
+      localPubkey, spec)
 
     val (htlcTimeoutTxs, htlcSuccessTxs) = Scripts.makeHtlcTxs(commitTx.tx, Satoshi(remoteParams.dustLimitSatoshis),
       remoteRevocationPubkey, localParams.toSelfDelay, remotePubkey, remoteDelayedPubkey, localPubkey, spec)

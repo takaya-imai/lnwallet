@@ -135,21 +135,22 @@
     </array>
 
     <!-- errors -->
-    <string name="err_ln_fulfilled">Failed because this payment is already fulfilled</string>
-    <string name="err_ln_no_route">Failed because no route to recipient could be found</string>
-    <string name="err_ln_too_many">Failed because too many payments are already in-flight</string>
-    <string name="err_ln_inflight">Failed because this payment is already in-flight right now</string>
-    <string name="err_ln_amount_overflow">Failed because payment amount exceeds an allowed maximum</string>
-    <string name="err_ln_remote_amount_low">Failed because payment amount is too low for your peer to process it</string>
-    <string name="err_ln_offline">Failed because channel is currently offline. Please wait a few seconds and try again</string>
     <string name="err_ln_old">Failed because this payment request has expired. Please ask recipient to provide a new one</string>
-    <string name="err_ln_fee_overflow">Failed because payment amount combined with fees exceeds your current channel balance</string>
+    <string name="err_ln_offline">Failed because channel is currently offline. Please wait a few seconds and try again</string>
     <string name="err_ln_black">Failed because your peer is blacklisted. You may want to create a new payment channel</string>
     <string name="err_ln_general">Could not proceed with this payment. Please ask recipient to issue another one</string>
+    <string name="err_ln_remote_amount_low">Failed because payment amount is too low for your peer to accept it</string>
+    <string name="err_ln_amount_overflow">Failed because payment amount exceeds an allowed maximum</string>
+    <string name="err_ln_inflight">Failed because this payment is already in-flight right now</string>
+    <string name="err_ln_too_many">Failed because too many payments are already in-flight</string>
+    <string name="err_ln_no_route">Failed because no route to recipient could be found</string>
+    <string name="err_ln_fulfilled">Failed because this payment is already fulfilled</string>
 
-    <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
-    <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>
+    <string name="err_ln_fee_overflow"><![CDATA[Failed because payment amount with fees exceeds your current channel reserve<br><br>reserve %1$s<br>sending %2$s<br>missing %3$s]]></string>
     <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that incoming transactions need to get at least one confirmation to become spendable]]></string>
+
+    <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>
+    <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
     <string name="err_uri">Failed because request contains a malformed URI which could not be parsed</string>

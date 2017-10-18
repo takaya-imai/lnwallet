@@ -42,7 +42,7 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) =>
-      val txsToBroadcast = close.localCommit.map(_.commitTx) ++ close.allTransactions
+      val txsToBroadcast = close.localCommit.map(_.commitTx) ++ close.myTransactions
       Obs.from(txsToBroadcast map safeSend).concat.foreach(Tools.log, Tools.errlog)
   }
 }

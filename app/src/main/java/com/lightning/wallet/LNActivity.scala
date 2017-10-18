@@ -11,8 +11,9 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lncloud.ImplicitConversions._
+
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import scala.util.{Failure, Success, Try}
 
@@ -192,6 +193,15 @@ with SearchBar { me =>
       // Should be removed when activity is stopped
 
       override def onError = {
+        case _ \ ReserveException(PlainAddHtlc(out), missingSat, reserveSat) =>
+          // Current commit tx fee and channel reserve forbid sending of this payment
+          // Inform user with all the details laid out as cleanly as possible
+
+          val reserve = coloredIn apply Satoshi(reserveSat)
+          val missing = coloredOut apply Satoshi(missingSat)
+          val sending = coloredOut apply MilliSatoshi(out.routing.amountWithFee)
+          onFail(getString(err_ln_fee_overflow).format(reserve, sending, missing).html)
+
         case _ \ AddException(_: PlainAddHtlc, code) =>
           // Let user know why payment could not be added
           onFail(me getString code)

@@ -11,19 +11,19 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import scala.util.{Failure, Success}
 import android.view.{Menu, View, ViewGroup}
 import com.lightning.wallet.Utils.{app, denom}
+import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import android.widget.{BaseAdapter, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
-import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
+
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
+import com.lightning.wallet.lncloud.RatesSaver
 import android.support.v4.view.MenuItemCompat
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
-import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import org.bitcoinj.core.Coin
 import android.os.Bundle
-import com.lightning.wallet.lncloud.RatesSaver
 
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
@@ -71,7 +71,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
-  {
+
     if (app.isAlive) {
       super.onCreate(savedState)
 
@@ -89,7 +89,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       app.kit.wallet addCoinsReceivedEventListener txTracker
       app.kit.wallet addTransactionConfidenceEventListener txTracker
     } else me exitTo classOf[MainActivity]
-  }
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
@@ -170,7 +169,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   def askForFunding(chan: Channel, their: Init) = {
     val walletBalance = denom withSign app.kit.currentBalance
     val maxCapacity = denom withSign LNParams.maxChannelCapacity
-    val minCapacity: MilliSatoshi = RatesSaver.rates.feeLive multiply 3
+    val minCapacity: MilliSatoshi = RatesSaver.rates.feeLive multiply 4
 
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)

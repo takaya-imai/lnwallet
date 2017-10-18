@@ -82,17 +82,17 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
 
 
   // Either ALL transactions have enough depth OR static timeout
-  def isOutdated = allTransactions.forall(depthOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
+  def isOutdated = myTransactions.forall(depthOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
   def depthOk(tx: Transaction) = txStatus(tx.txid) match { case Some(cfs \ false) => cfs > minDepth case _ => false }
 
   // Mutual closing and all tier 1-2 txs in case of uncooperative close
-  lazy val allTransactions = mutualClose ++ localCommit.flatMap(_.transactions) ++
+  lazy val myTransactions = mutualClose ++ localCommit.flatMap(_.transactions) ++
     remoteCommit.flatMap(_.transactions) ++ nextRemoteCommit.flatMap(_.transactions) ++
     revokedCommit.flatMap(_.transactions)
 
-  lazy val allClosings = mutualClose.map(Left.apply) ++ localCommit.map(Right.apply) ++
-    remoteCommit.map(Right.apply) ++ nextRemoteCommit.map(Right.apply) ++
-    revokedCommit.map(Right.apply)
+  lazy val allClosings = mutualClose.map(Left.apply) ++
+    localCommit.map(Right.apply) ++ remoteCommit.map(Right.apply) ++
+    nextRemoteCommit.map(Right.apply) ++ revokedCommit.map(Right.apply)
 }
 
 sealed trait CommitPublished {
@@ -261,16 +261,17 @@ object Commitments {
       val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.out.routing.amountWithFee,
         cmd.out.request.paymentHash, cmd.out.routing.expiry, cmd.out.routing.onion.packet.serialize)
 
-      val rp = c.remoteParams
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
-      val fees = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(rp.dustLimitSatoshis), reduced).amount else 0L
-      val inFlight = reduced.htlcs.count(_.incoming)
+      val feesSat = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c.remoteParams.dustLimitSatoshis), reduced).amount else 0L
+      val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
+      val reserveSat = feesSat + c.remoteParams.channelReserveSatoshis
+      val missingSat = reduced.toRemoteMsat / 1000L - reserveSat
 
       // We should both check if WE can send another HTLC and if PEER can accept another HTLC
-      if (inFlight > c.localParams.maxAcceptedHtlcs || inFlight > rp.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > rp.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (reduced.toRemoteMsat / 1000L - rp.channelReserveSatoshis - fees < 0) throw AddException(cmd, ERR_FEE_OVERFLOW)
+      if (reduced.htlcs.count(_.incoming) > c.remoteParams.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      if (totalInFlightMsat > c.remoteParams.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      if (missingSat < 0) throw ReserveException(cmd, missingSat, reserveSat)
       c1 -> add
     }
 
@@ -284,12 +285,12 @@ object Commitments {
       // *as seen by us* with this change taken into account
       val c1 = addRemoteProposal(c, add).modify(_.remoteNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
-      val fees = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
+      val feesSat = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
 
       // The rest of the guards
       if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
       if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
-      if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - fees < 0L) throw new LightningException
+      if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - feesSat < 0L) throw new LightningException
       c1
     }
 
