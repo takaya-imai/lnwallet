@@ -19,8 +19,8 @@
 
     <Button
         style="@style/TransButton"
-        android:id="@+id/viewChanHistory"
-        android:text="@string/sets_chan_history"/>
+        android:id="@+id/recoverChannelFunds"
+        android:text="@string/sets_chan_recover"/>
 
     <Button
         style="@style/TransButton"

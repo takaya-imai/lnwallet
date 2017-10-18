@@ -69,7 +69,6 @@ object Utils {
   val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")
   val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeCNY -> strYuan)
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYuan -> typeCNY)
-  val nullFail = Failure(null)
 
   def changeDenom = {
     val index1 = (denoms.indexOf(denom) + 1) % denoms.size
@@ -184,7 +183,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     <(app.kit decryptSeed password, _ => tellGenError) { seed =>
       val wordsText = TextUtils.join("\u0020", seed.getMnemonicCode)
       lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
-      lazy val alert: AlertDialog = mkForm(dialog, me getString sets_noscreen, wordsText)
+      lazy val alert: AlertDialog = mkForm(dialog, getString(sets_noscreen).html, wordsText)
       alert
 
       def warnUser: Unit = rm(alert) {
@@ -205,10 +204,19 @@ trait ToolbarActivity extends TimerActivity { me =>
   def mkSetsForm: Unit = {
     val form = getLayoutInflater.inflate(R.layout.frag_settings, null)
     val menu = mkForm(me negBld dialog_cancel, getString(read_settings).html, form)
+    val recoverChannelFunds = form.findViewById(R.id.recoverChannelFunds).asInstanceOf[Button]
     val setBackupServer = form.findViewById(R.id.setBackupServer).asInstanceOf[Button]
     val rescanWallet = form.findViewById(R.id.rescanWallet).asInstanceOf[Button]
     val viewMnemonic = form.findViewById(R.id.viewMnemonic).asInstanceOf[Button]
     val changePass = form.findViewById(R.id.changePass).asInstanceOf[Button]
+
+    recoverChannelFunds setOnClickListener onButtonTap {
+
+      rm(menu) {
+        lazy val dialog = mkChoiceDialog(none, none, dialog_ok, dialog_cancel)
+        mkForm(dialog, getString(ln_recover_explain).html, null)
+      }
+    }
 
     setBackupServer setOnClickListener onButtonTap {
       // Power users may provide their own backup servers
