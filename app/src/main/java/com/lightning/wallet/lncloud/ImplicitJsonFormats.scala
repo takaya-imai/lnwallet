@@ -13,6 +13,7 @@ import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIn
 import com.lightning.wallet.lncloud.Connector.{ClearToken, HttpParam, RequestAndMemo}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
+import com.lightning.wallet.ln.RoutingInfoTag.HiddenHopVec
 import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lncloud.RatesSaver.RatesMap
@@ -137,8 +138,11 @@ object ImplicitJsonFormats { me =>
   implicit val descriptionHashTagFmt = taggedJsonFmt(jsonFormat[BinaryData,
     DescriptionHashTag](DescriptionHashTag.apply, "hash"), tag = "DescriptionHashTag")
 
-  implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[PublicKey, BinaryData, Long, Int,
-    RoutingInfoTag](RoutingInfoTag.apply, "pubkey", "channelId", "fee", "cltvExpiryDelta"), tag = "RoutingInfoTag")
+  implicit val hiddenHopFmt: JsonFormat[HiddenHop] = jsonFormat[PublicKey, BinaryData, Long, Int,
+    HiddenHop](HiddenHop.apply, "pubkey", "channelId", "fee", "cltvExpiryDelta")
+
+  implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[HiddenHopVec,
+    RoutingInfoTag](RoutingInfoTag.apply, "hiddenHops"), tag = "RoutingInfoTag")
 
   implicit val expiryTagFmt = taggedJsonFmt(jsonFormat[Long,
     ExpiryTag](ExpiryTag.apply, "seconds"), tag = "ExpiryTag")

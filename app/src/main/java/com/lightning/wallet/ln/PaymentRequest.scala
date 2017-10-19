@@ -2,9 +2,11 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import fr.acinq.bitcoin.Bech32._
+import fr.acinq.bitcoin.Protocol._
 import fr.acinq.eclair.crypto.BitStream._
 import com.lightning.wallet.ln.PaymentRequest._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
+import com.lightning.wallet.ln.RoutingInfoTag.HiddenHopVec
 import fr.acinq.eclair.crypto.BitStream
 import java.nio.ByteOrder.BIG_ENDIAN
 import java.math.BigInteger
@@ -33,10 +35,29 @@ case class DescriptionHashTag(hash: BinaryData) extends Tag {
   def toInt5s: Int5Seq = encode(Bech32 eight2five hash, 'h')
 }
 
-case class RoutingInfoTag(pubkey: PublicKey, channelId: BinaryData, fee: Long, cltvExpiryDelta: Int) extends Tag {
-  private val feeAndDelta = Protocol.writeUInt64(fee, BIG_ENDIAN) ++ Protocol.writeUInt16(cltvExpiryDelta, BIG_ENDIAN)
-  def toInt5s: Int5Seq = encode(Bech32.eight2five(pubkey.toBin ++ channelId.data ++ feeAndDelta), 'r')
-  def shortChannelId: Long = Protocol.uint64(channelId, BIG_ENDIAN)
+case class HiddenHop(pubkey: PublicKey, channelId: BinaryData, fee: Long, cltvExpiryDelta: Int) {
+  def pack = pubkey.toBin ++ channelId.data ++ writeUInt64(fee, BIG_ENDIAN) ++ writeUInt16(cltvExpiryDelta, BIG_ENDIAN)
+  def shortChannelId = uint64(channelId, BIG_ENDIAN)
+}
+
+case class RoutingInfoTag(hiddenHops: HiddenHopVec) extends Tag {
+  def toInt5s: Int5Seq = encode(Bech32 eight2five hiddenHops.flatMap(_.pack), 'r')
+}
+
+object RoutingInfoTag {
+  def parse(data: Int5Seq) = {
+    val pubkey = data.slice(0, 33)
+    val channelId = data.slice(33, 33 + 8)
+    val fee = uint64(data.slice(33 + 8, 33 + 8 + 8), BIG_ENDIAN)
+    val cltv = uint16(data.slice(33 + 8 + 8, chunkLength), BIG_ENDIAN)
+    HiddenHop(PublicKey(pubkey), channelId, fee, cltv)
+  }
+
+  def parseAll(data: Int5Seq): HiddenHopVec =
+    data.grouped(chunkLength).map(parse).toVector
+
+  type HiddenHopVec = Vector[HiddenHop]
+  val chunkLength = 33 + 8 + 8 + 2
 }
 
 case class ExpiryTag(seconds: Long) extends Tag {
@@ -72,7 +93,7 @@ object FallbackAddressTag {
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
-  def routingInfo: Vector[RoutingInfoTag] = tags.collect { case t: RoutingInfoTag => t }
+  def routingInfo: Vector[RoutingInfoTag] = tags.collect { case r: RoutingInfoTag => r }
   def paymentHash: BinaryData = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
   def finalSum = amount.get
 
@@ -202,18 +223,12 @@ object PaymentRequest {
 
         case fTag if fTag == Bech32.map('f') =>
           val prog = Bech32 five2eight input.slice(4, len - 1 + 4)
-          val version = input(3)
-
-          version match {
-            case v if v >= 0 && v <= 16 => FallbackAddressTag(version, prog)
-            case 17 | 18 => FallbackAddressTag(version, prog)
-          }
+          FallbackAddressTag(version = input(3), prog)
 
         case rTag if rTag == Bech32.map('r') =>
           val data = Bech32 five2eight input.slice(3, len + 3)
-          val fee = Protocol.uint64(data.drop(33 + 8), BIG_ENDIAN)
-          val cltv = Protocol.uint16(data.drop(33 + 8 + 8), BIG_ENDIAN)
-          RoutingInfoTag(PublicKey(data take 33), data.slice(33, 33 + 8), fee, cltv)
+          val path = RoutingInfoTag parseAll data
+          RoutingInfoTag(path)
 
         case xTag if xTag == Bech32.map('x') =>
           require(len == 2, s"Invalid length for expiry tag")
@@ -282,9 +297,7 @@ object PaymentRequest {
   }
 
   def write(pr: PaymentRequest): String = {
-    val hramount = Amount encode pr.amount
-    val hrp = pr.prefix + hramount
-
+    val hrp = pr.prefix + Amount.encode(pr.amount)
     val int5s = toInt5s(pr.stream writeBytes pr.signature)
     val checksum = Bech32.checksum(hrp, int5s)
 
