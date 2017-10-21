@@ -196,16 +196,13 @@ class WalletApp extends Application { me =>
 
   abstract class WalletKit extends AbstractKit {
     type ScriptSeq = Seq[org.bitcoinj.script.Script]
+    def blockingSend(tx: Transaction) = peerGroup.broadcastTransaction(tx, 1).broadcast.get
     def watchFunding(cs: Commitments) = watchScripts(cs.commitInput.txOut.publicKeyScript :: Nil)
     def watchScripts(scripts: ScriptSeq) = app.kit.wallet addWatchedScripts scripts.asJava
-    def currentBalance = wallet getBalance BalanceType.AVAILABLE_SPENDABLE
+    def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def currentHeight = blockChain.getBestChainHeight
     def shutDown = none
-
-    def blockingSend(tx: Transaction) =
-      // Wait for at least one peer confirmation or failure
-      peerGroup.broadcastTransaction(tx, 1).broadcast.get
 
     def useCheckPoints(time: Long) = {
 //      val pts = getAssets open "checkpoints-testnet.txt"

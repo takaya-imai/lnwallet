@@ -426,7 +426,6 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   override def onDestroy = wrap(super.onDestroy) { timer.cancel }
-  override def onPause = wrap(super.onPause) { if (LNParams.cloud.needsToBeSaved) LNParams.cloud.SAVE }
   implicit def uiTask(process: => Runnable): TimerTask = new TimerTask { def run = me runOnUiThread process }
   implicit def str2View(res: CharSequence): LinearLayout = str2Tuple(res) match { case (view, _) => view }
 

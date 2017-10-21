@@ -32,18 +32,11 @@ abstract class Cloud extends StateMachine[CloudData] {
 
   def checkIfWorks: Obs[Any] = Obs just true
   protected[this] var isFree: Boolean = true
-  var needsToBeSaved: Boolean = false
   val connector: Connector
 
   def UPDATE(d1: CloudData) = {
-    // Each time data is changed
-    needsToBeSaved = true
+    CloudDataSaver saveObject d1
     become(d1, state)
-  }
-
-  def SAVE = {
-    CloudDataSaver saveObject data
-    needsToBeSaved = false
   }
 }
 
