@@ -12,8 +12,8 @@ import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.LNParams.broadcaster.{cltv, cltvAndCsv, csv, txStatus}
-import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
-import com.lightning.wallet.ln.Tools.LightningMessages
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.LNMessageVector
+import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import fr.acinq.eclair.UInt64
 
 
@@ -146,11 +146,11 @@ case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPena
 // COMMITMENTS
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[HtlcFailure],
+case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[HtlcAndFail],
                           feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
-  type HtlcFailure = (Htlc, LightningMessage)
+  type HtlcAndFail = (Htlc, LightningMessage)
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
@@ -192,7 +192,7 @@ object CommitmentSpec {
     cs.copy(htlcs = cs.htlcs + Htlc(incoming = true, add = data),
       toRemoteMsat = cs.toRemoteMsat - data.amountMsat)
 
-  def reduce(cs: CommitmentSpec, localChanges: LightningMessages, remoteChanges: LightningMessages) = {
+  def reduce(cs: CommitmentSpec, localChanges: LNMessageVector, remoteChanges: LNMessageVector) = {
     // Before reducing fresh changes we need to get rid of previous fulfilled and failed messages
 
     val spec1 = cs.copy(fulfilled = Set.empty, failed = Set.empty)
@@ -225,7 +225,7 @@ case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig,
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
 case class RemoteCommit(index: Long, spec: CommitmentSpec, txid: BinaryData, remotePerCommitmentPoint: Point)
 case class HtlcTxAndSigs(txinfo: TransactionWithInputInfo, localSig: BinaryData, remoteSig: BinaryData)
-case class Changes(proposed: LightningMessages, signed: LightningMessages, acked: LightningMessages)
+case class Changes(proposed: LNMessageVector, signed: LNMessageVector, acked: LNMessageVector)
 
 case class Commitments(localParams: LocalParams, remoteParams: AcceptChannel, localCommit: LocalCommit,
                        remoteCommit: RemoteCommit, localChanges: Changes, remoteChanges: Changes, localNextHtlcId: Long,

@@ -105,7 +105,7 @@ class PaymentRequestSpec {
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
       assert(pr.fallbackAddress == Some("1RustyRX2oai4EYYDpQGWvEL62BBGqN9T"))
-      assert(pr.routingInfo.head == RoutingInfoTag(Vector(HiddenHop(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), "0102030405060708", 20, 3), HiddenHop(PublicKey("039e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), "030405060708090a", 30, 4))))
+      assert(pr.routingInfo.head == RoutingInfoTag(Vector(ExtraHop(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), 72623859790382856L, 20, 3), ExtraHop(PublicKey("039e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), 217304205466536202L, 30, 4))))
       assert(pr.tags.size == 4)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }

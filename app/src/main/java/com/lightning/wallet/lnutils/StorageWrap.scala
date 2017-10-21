@@ -1,4 +1,4 @@
-package com.lightning.wallet.lncloud
+package com.lightning.wallet.lnutils
 
 import spray.json._
 import com.lightning.wallet.ln._
@@ -6,11 +6,11 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.lncloud.JsonHttpUtils._
-import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import com.lightning.wallet.lnutils.JsonHttpUtils._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 
-import com.lightning.wallet.lncloud.Connector.CMDStart
+import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
@@ -76,7 +76,7 @@ object ChannelWrap extends ChannelListener {
   }
 }
 
-import com.lightning.wallet.lncloud.PaymentInfoTable._
+import com.lightning.wallet.lnutils.PaymentInfoTable._
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   // Incoming and outgoing payments are discerned by presence of routing info
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
@@ -111,8 +111,24 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
 
+  def resend(chan: Channel, hash: BinaryData, fail: UpdateFailHtlc) = for {
+    outgoing @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(hash)
+    routing1 = cutRoutes(fail, routing, pr.nodeId)
+  } buildPayment(routing1, pr, chan) match {
+
+    case Some(outgoing1) =>
+      // Accepted: routing info will be updated in onProcess
+      // Not accepted: status will change to FAILURE in onError
+      chan process PlainAddHtlc(outgoing1)
+
+    case None =>
+      // We may have updated bad nodes or bad channels in routing1
+      // Should save them anyway in case of user initiated payment retry
+      me putPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
+  }
+
   override def onError = {
-    case Tuple2(_, ex: CMDException) =>
+    case (_, ex: CMDException) =>
       // Useless most of the time but needed for retry add failures
       // CMDException should still be used or channel may be closed
       updateStatus(FAILURE, ex.cmd.out.request.paymentHash)
@@ -141,32 +157,18 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       me putPaymentInfo cmd.out
 
     case (chan, norm: NormalData, _: CommitSig) =>
-      // On each incoming CommitSig we have HTLC updates
-      // which have to be reflected on the UI
+      // spec.fulfilled: update as SUCCESS in a database
+      // spec.failed: try to re-send or update as FAILURE
+      // spec.htlcs: no need to update
 
       db txWrap {
-        // First we update status for committed, fulfilled and failed HTLCs
-        for (htlc <- norm.commitments.localCommit.spec.fulfilled) updateStatus(SUCCESS, htlc.add.paymentHash)
-        for (Tuple2(htlc, _: UpdateFailMalformedHtlc) <- norm.commitments.localCommit.spec.failed)
-          updateStatus(FAILURE, htlc.add.paymentHash)
-      }
+        for (htlc <- norm.commitments.localCommit.spec.fulfilled)
+          updateStatus(SUCCESS, htlc.add.paymentHash)
 
-      for {
-        // Then we try to re-send failed payments
-        Tuple2(htlc, updateFailHtlc: UpdateFailHtlc) <- norm.commitments.localCommit.spec.failed
-        outgoing @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(htlc.add.paymentHash)
-        routing1 = cutRoutes(updateFailHtlc, routing, pr.nodeId)
-      } buildPayment(routing1, pr, chan) match {
-
-        case Some(outgoing1) =>
-          // Accepted: routing info updates in onProcess
-          // Not accepted: status changes to FAILURE in onError
-          chan process PlainAddHtlc(outgoing1)
-
-        case None =>
-          // We may have updated bad nodes or bad channels in routing1
-          // Should save them anyway in case of user initiated payment retry
-          me putPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
+        for (htlc \ fail <- norm.commitments.localCommit.spec.failed) fail match {
+          case _: UpdateFailMalformedHtlc => updateStatus(FAILURE, htlc.add.paymentHash)
+          case fail: UpdateFailHtlc => resend(chan, htlc.add.paymentHash, fail)
+        }
       }
 
       uiNotify

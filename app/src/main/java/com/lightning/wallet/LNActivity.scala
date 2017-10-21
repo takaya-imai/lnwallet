@@ -5,13 +5,12 @@ import android.widget._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.helper._
-import com.lightning.wallet.lncloud._
+import com.lightning.wallet.lnutils._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.lncloud.ImplicitConversions._
-
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
@@ -230,19 +229,19 @@ with SearchBar { me =>
 
       val payment = adapter getItem pos
       val description = me getDescription payment.request
-      val humanStatus = s"<strong>${paymentStatesMap apply payment.status}</strong>"
+      val humanStatus = s"<strong>${paymentStatesMap apply payment.actualStatus}</strong>"
       paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
       paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
 
-      if (payment.status == SUCCESS) {
+      if (payment.actualStatus == SUCCESS) {
         // Users may copy request and preimage for fulfilled payments to prove they've happened
         val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
         paymentProof setVisibility View.VISIBLE
 
         paymentProof setOnClickListener onButtonTap {
-          val humanPreimage = payment.preimage.toString
           val serializedRequest = PaymentRequest.write(payment.request)
-          app setBuffer getString(ln_proof).format(serializedRequest, humanPreimage)
+          app setBuffer getString(ln_proof).format(serializedRequest,
+            payment.preimage.toString)
         }
       }
 
@@ -250,27 +249,24 @@ with SearchBar { me =>
         case in: IncomingPayment =>
           val title = getString(ln_incoming_title).format(humanStatus)
           val humanReceived = humanFiat(coloredIn(in.received), in.received)
-          mkForm(me negBld dialog_ok, title.html, content = detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanReceived".html
+          mkForm(me negBld dialog_ok, title.html, detailsWrapper)
 
-        case OutgoingPayment(RoutingData(_, badNodes,
-          badChans, _, amtWithFee, _), _, pr, _, status) =>
-
-          val fee = MilliSatoshi(amtWithFee - pr.finalSum.amount)
-          val humanSent = humanFiat(coloredOut(pr.finalSum), pr.finalSum)
+        case out: OutgoingPayment =>
+          val humanSent = humanFiat(coloredOut(out.request.finalSum), out.request.finalSum)
+          val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
           val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
-          val alert = mkForm(me negBld dialog_ok, title.html, content = detailsWrapper)
+          val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanSent".html
 
-          if (status == FAILURE && pr.isFresh) {
-            def doManualPaymentRetry = rm(alert) {
-              val progressBarManager = new ProgressBarManager
-              notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-              app.ChannelManager.outPaymentObs(badNodes, badChans, pr)
-                .doOnTerminate(progressBarManager.delayedRemove)
-                .foreach(onPaymentResult, onPaymentError)
-            }
+          def doManualPaymentRetry = rm(alert) {
+            val progressBarManager = new ProgressBarManager
+            notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+            app.ChannelManager.outPaymentObs(out.routing.badNodes, out.routing.badChannels, out.request)
+              .doOnTerminate(progressBarManager.delayedRemove).foreach(onPaymentResult, onPaymentError)
+          }
 
+          if (out.actualStatus == FAILURE && out.request.isFresh) {
             // Users may issue a server request to get an updated set of routes for failed but fresh payments
             val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
             paymentRetryAgain setOnClickListener onButtonTap(doManualPaymentRetry)

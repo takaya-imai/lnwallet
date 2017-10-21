@@ -2,12 +2,12 @@ package com.lightning.wallet.test
 
 import spray.json._
 import DefaultJsonProtocol._
-import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.Utils.app
 import com.lightning.wallet.ln.wire.CommitSig
 import com.lightning.wallet.ln.{Channel, ChannelListener, LNParams, NormalData}
-import com.lightning.wallet.lncloud.{Cloud, CloudAct}
-import com.lightning.wallet.lncloud.Connector._
+import com.lightning.wallet.lnutils.{Cloud, CloudAct}
+import com.lightning.wallet.lnutils.Connector._
 import com.lightning.wallet.ln.Tools.random
 import fr.acinq.bitcoin.BinaryData
 

@@ -1,16 +1,16 @@
 package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
-import com.lightning.wallet.lncloud._
+import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Broadcaster._
 import fr.acinq.bitcoin.DeterministicWallet._
-import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.lnutils.JsonHttpUtils._
 
 import com.lightning.wallet.ln.Scripts.{TransactionWithInputInfo, csvTimeout}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import scala.util.{Failure, Success}
 
-import com.lightning.wallet.lncloud.CloudDataSaver.TryCloudData
+import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
@@ -80,9 +80,8 @@ object LNParams { me =>
   def receiveExpiry: Int = broadcaster.currentHeight + 3
   def makeLocalParams(reserve: Long, finalScriptPubKey: BinaryData, idx: Long) = {
     val Seq(fund, revoke, pay, delay, sha) = for (n <- 0L to 4L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil)
-    LocalParams(maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 5,
-      fund.privateKey, revoke.privateKey, pay.privateKey, delay.privateKey, finalScriptPubKey,
-      shaSeed = sha256(sha.privateKey.toBin), isFunder = true)
+    LocalParams(maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 5, fund.privateKey,
+      revoke.privateKey, pay.privateKey, delay.privateKey, finalScriptPubKey, shaSeed = sha256(sha.privateKey.toBin), isFunder = true)
   }
 }
 
@@ -98,6 +97,7 @@ object AddErrorCodes {
 }
 
 object Broadcaster {
+  type TxSeq = Seq[Transaction]
   type DepthAndDead = (Long, Boolean)
   type ParentDeadAndDelay = (Boolean, Long)
   // (Parent is dead = true, cumulative delay) final fee, final amount

@@ -2,6 +2,7 @@ package com.lightning.wallet.test
 
 import java.net.{InetAddress, InetSocketAddress}
 
+import com.lightning.wallet.ln.PerHopPayload
 import com.lightning.wallet.ln.crypto.Sphinx
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._

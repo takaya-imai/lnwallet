@@ -2,7 +2,7 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
@@ -11,7 +11,6 @@ import scala.util.{Failure, Success, Try}
 import org.ndeftools.util.activity.NfcReaderActivity
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
-import com.lightning.wallet.test.PaymentRequestSpec
 import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.helper.AES
@@ -64,7 +63,6 @@ with TimerActivity with ViewSwitch { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
-    (new PaymentRequestSpec).allTests
   }
 
   // NFC AND SHARE

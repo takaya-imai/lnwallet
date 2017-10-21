@@ -5,17 +5,17 @@ import R.string._
 import spray.json._
 import org.bitcoinj.core._
 import spray.json.DefaultJsonProtocol._
-import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 
 import collection.JavaConverters.seqAsJavaListConverter
 import scala.concurrent.duration._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import rx.lang.scala.{Observable => Obs}
-import com.lightning.wallet.lncloud.{ChannelWrap, Notificator, RatesSaver, Saver}
+import com.lightning.wallet.lnutils.{ChannelWrap, Notificator, RatesSaver, Saver}
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
@@ -28,13 +28,14 @@ import java.io.File
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
 import com.lightning.wallet.ln.Channel.CLOSING
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import Context.CLIPBOARD_SERVICE
 import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.ln.wire.{Hop, Init, LightningMessage}
-import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.ln.wire.{Init, LightningMessage}
+import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.LNParams._
+import com.lightning.wallet.ln.PaymentHop.PublicPaymentRoute
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PublicKey
@@ -129,7 +130,7 @@ class WalletApp extends Application { me =>
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
         // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
         for (channel <- all) channel process spent
-        bag.extractPreimages(spent.tx)
+        bag.extractPreimage(spent.tx)
       }
 
       def height = for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
@@ -156,10 +157,10 @@ class WalletApp extends Application { me =>
 
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
-        // Collect all the commit outputs and watch them for preimages, both locally and requesting a server
-        val commits = cd.localCommit.map(_.commitTx) ++ cd.remoteCommit.map(_.commitTx) ++ cd.nextRemoteCommit.map(_.commitTx)
-        cloud.connector.getTxs(commits.map(_.txid).toJson.toString.hex).foreach(_ foreach bag.extractPreimages, Tools.errlog)
-        kit.watchScripts(commits.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
+        // Collect all the commit outputs and watch them for preimages
+        val commitTxs = cd.localCommit.map(_.commitTx) ++ cd.remoteCommit.map(_.commitTx) ++ cd.nextRemoteCommit.map(_.commitTx)
+        kit.watchScripts(commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
+        cloud.connector.getChildTxs(commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
       }
 
       // Listeners should always be added first
@@ -169,18 +170,27 @@ class WalletApp extends Application { me =>
     }
 
     // Get routes from maintenance server and form an OutgoingPayment if routes were found
-    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], request: PaymentRequest) =
+    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) =
 
       alive.headOption match {
-        case None => Obs.empty
-        case Some(chan) if chan.data.announce.nodeId == request.nodeId =>
-          // A special case where we send a payment to our peer, no need for routes
-          val rd = RoutingData(Vector(Vector.empty), Set.empty, Set.empty, null, 0L, 0L)
-          Obs just buildPayment(rd, request, chan)
+        case Some(chan) if chan.data.announce.nodeId == pr.nodeId =>
+          // A special case where we send a payment directly to our peer
+          val rd = RoutingData(Vector(Vector.empty), Set.empty, Set.empty)
+          Obs just buildPayment(rd, pr, chan)
+
+        case Some(chan) if pr.routingInfo.nonEmpty =>
+          // Payment request conaints an extra routing info which means we should find routes to first node in extra routing
+          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, pr.routingInfo.head.firstNodeId)
+          val rdObs = for (routes <- obs) yield RoutingData(routes.map(_ ++ pr.routingInfo.head.route), badNodes, badChannels)
+          for (rd <- rdObs) yield buildPayment(rd, pr, chan)
 
         case Some(chan) =>
-          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, request.nodeId)
-          for (routes <- obs) yield buildPayment(RoutingData(routes, badNodes, badChannels, null, 0L, 0L), request, chan)
+          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, pr.nodeId)
+          val rdObs = for (routes <- obs) yield RoutingData(routes, badNodes, badChannels)
+          for (rd <- rdObs) yield buildPayment(rd, pr, chan)
+
+        case None =>
+          Obs.empty
       }
   }
 

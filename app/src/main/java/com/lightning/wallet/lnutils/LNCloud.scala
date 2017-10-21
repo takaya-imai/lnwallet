@@ -1,23 +1,24 @@
-package com.lightning.wallet.lncloud
+package com.lightning.wallet.lnutils
 
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.lncloud.Connector._
-import com.lightning.wallet.lncloud.JsonHttpUtils._
-import com.lightning.wallet.lncloud.ImplicitConversions._
-import com.lightning.wallet.lncloud.ImplicitJsonFormats._
+import com.lightning.wallet.lnutils.Connector._
+import com.lightning.wallet.lnutils.JsonHttpUtils._
+import com.lightning.wallet.lnutils.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
 import scala.util.{Failure, Success}
 
+import com.lightning.wallet.ln.PaymentHop.PublicPaymentRoute
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
+import com.lightning.wallet.ln.Broadcaster.TxSeq
 import rx.lang.scala.schedulers.IOScheduler
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
@@ -26,8 +27,8 @@ import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
 
 
-// Persisted data exchange with a maintenance server
 abstract class Cloud extends StateMachine[CloudData] {
+  // Persisted data exchange with a maintenance server
 
   def checkIfWorks: Obs[Any] = Obs just true
   protected[this] var isFree: Boolean = true
@@ -176,15 +177,16 @@ class Connector(val url: String) {
 
   def getRates = ask("rates/get", identity)
   def getDatas(key: String) = ask("data/get", toVec[BinaryData], "key" -> key)
-  def getTxs(txids: String) = ask("txs/get", toVec[Transaction], "txids" -> txids)
   def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
-  def findRoutes(nodes: Set[PublicKey], channels: Set[Long], from: PublicKey, to: PublicKey) =
-    ask("router/routes", toVec[PaymentRoute], "from" -> from.toString, "to" -> to.toString,
-      "nodes" -> nodes.toJson.toString.hex, "channels" -> channels.toJson.toString.hex)
+  def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
+
+  def findRoutes(noNodes: Set[PublicKey], noChannels: Set[Long], fromNode: PublicKey, toNode: PublicKey) =
+    ask("router/routes", toVec[PublicPaymentRoute], "from" -> fromNode.toString, "to" -> toNode.toString,
+      "nodes" -> noNodes.map(_.toBin).toJson.toString.hex, "channels" -> noChannels.toJson.toString.hex)
 }
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
-  override def getTxs(txids: String) = super.getTxs(txids).onErrorResumeNext(_ => failover getTxs txids)
+  override def getChildTxs(txs: TxSeq) = super.getChildTxs(txs).onErrorResumeNext(_ => failover getChildTxs txs)
   override def getDatas(key: String) = super.getDatas(key).onErrorResumeNext(_ => failover getDatas key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }

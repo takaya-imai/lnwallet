@@ -6,13 +6,14 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.wire.FailureMessageCodecs._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import com.lightning.wallet.ln.Tools.random
-import scodec.bits.BitVector
-import scodec.Attempt
-
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import scala.util.{Success, Try}
+
+import com.lightning.wallet.ln.PaymentHop.PaymentRoute
+import com.lightning.wallet.ln.Tools.random
+import scodec.bits.BitVector
+import scodec.Attempt
 
 
 trait PaymentInfo {
@@ -31,8 +32,8 @@ case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData,
 }
 
 case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey],
-                       badChannels: Set[Long], onion: SecretsAndPacket,
-                       amountWithFee: Long, expiry: Long)
+                       badChannels: Set[Long], onion: SecretsAndPacket = null,
+                       amountWithFee: Long = 0L, expiry: Long = 0L)
 
 case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
                            request: PaymentRequest, chanId: BinaryData,
@@ -51,14 +52,10 @@ trait PaymentInfoBag { me =>
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
   def putPaymentInfo(info: PaymentInfo): Unit
 
-  def extractPreimages(trans: Transaction) = trans.txIn.map(_.witness.stack) collect {
-    case Seq(BinaryData.empty, _, _, paymentPreimage, _) if paymentPreimage.size == 32 =>
-      me updatePreimage UpdateFulfillHtlc(BinaryData.empty, 0L, paymentPreimage)
-      // htlc-success preimage
-
-    case Seq(_, paymentPreimage, _) if paymentPreimage.size == 32 =>
-      me updatePreimage UpdateFulfillHtlc(BinaryData.empty, 0L, paymentPreimage)
-      // claim-htlc-success preimage
+  private def toFulfill(img: BinaryData) = UpdateFulfillHtlc(null, 0L, img)
+  def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
+    case Seq(_, preimage, _) if preimage.size == 32 => me updatePreimage toFulfill(preimage)
+    case Seq(_, _, _, preimage, _) if preimage.size == 32 => me updatePreimage toFulfill(preimage)
   }
 }
 
@@ -72,39 +69,38 @@ object PaymentInfo {
   final val SUCCESS = 2
   final val FAILURE = 3
 
-  def nodeFee(baseMsat: Long, proportional: Long, msat: Long) =
-    baseMsat + (proportional * msat) / 1000000L
+  def buildPayloads(hops: PaymentRoute, finalAmountMsat: Long, finalExpiry: Int) = {
+    // First PerHopPayload is for recipient so it has a zero shortChannelId and zero fee
 
-  def buildPayloads(finalAmountMsat: Long, finalExpiry: Int, hops: PaymentRoute) = {
-    val paymentPayloads = Vector apply PerHopPayload(0L, finalAmountMsat, finalExpiry)
-    val startValues = (paymentPayloads, finalAmountMsat, finalExpiry)
+    val finalPayload = PerHopPayload(0L, finalAmountMsat, finalExpiry)
+    val startValues = (Vector(finalPayload), finalAmountMsat, finalExpiry)
 
-    (startValues /: hops.reverse) { case (loads, msat, expiry) \ hop =>
-      val nextFee = nodeFee(hop.lastUpdate.feeBaseMsat, hop.lastUpdate.feeProportionalMillionths, msat)
-      val perHopPayloads = PerHopPayload(hop.lastUpdate.shortChannelId, msat, expiry) +: loads
-      (perHopPayloads, msat + nextFee, expiry + hop.lastUpdate.cltvExpiryDelta)
+    (startValues /: hops.reverse) {
+      case Tuple3(payloads, amountMsat, expiry) \ hop =>
+        Tuple3(PerHopPayload(hop.shortChannelId, amountMsat, expiry) +: payloads,
+          amountMsat + hop.nextFee(amountMsat), expiry + hop.cltvExpiryDelta)
     }
   }
 
-  def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assocData: BinaryData): SecretsAndPacket = {
+  def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assoc: BinaryData): SecretsAndPacket = {
     require(nodes.size == payloads.size, "Payload count mismatch: there should be exactly as much payloads as node pubkeys")
-    makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assocData)
+    makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assoc)
   }
 
-  // Build a new OutgoingPayment given previous RoutingData
-  // If we have routes available AND channel has an id AND request has amount
   def buildPayment(rd: RoutingData, pr: PaymentRequest, chan: Channel) = for {
+    // Iff we have routes available AND channel has an id AND request has amount
+    // Build a new OutgoingPayment given previous RoutingData
 
     route <- rd.routes.headOption
     chanId <- chan.pull(_.channelId)
     MilliSatoshi(amount) <- pr.amount
 
-    (payloads, amountWithFee, finalExpiry) = buildPayloads(amount, LNParams.sendExpiry, route)
-    onion = buildOnion(chan.data.announce.nodeId +: route.map(_.nextNodeId), payloads, pr.paymentHash)
-    rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, onion, amountWithFee, finalExpiry)
+    (payloads, firstAmount, firstExpiry) = buildPayloads(route, amount, LNParams.sendExpiry)
+    onion = buildOnion(nodes = route.map(_.nodeId) :+ pr.nodeId, payloads, assoc = pr.paymentHash)
+    rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, onion, firstAmount, firstExpiry)
   } yield OutgoingPayment(rd1, NOIMAGE, pr, chanId, WAITING)
 
-  private def without(rs: Vector[PaymentRoute], test: Hop => Boolean) = rs.filterNot(_ exists test)
+  private def without(rs: Vector[PaymentRoute], test: PaymentHop => Boolean) = rs.filterNot(_ exists test)
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
 
@@ -122,7 +118,7 @@ object PaymentInfo {
 
       case ErrorPacket(_, message: Update) =>
         // Node may have other channels left so try them out, also remember this channel as failed
-        val routesWithoutChannel = without(rd.routes, _.lastUpdate.shortChannelId == message.update.shortChannelId)
+        val routesWithoutChannel = without(rd.routes, _.shortChannelId == message.update.shortChannelId)
         rd.copy(routes = routesWithoutChannel, badChannels = rd.badChannels + message.update.shortChannelId)
 
       // Nothing to cut

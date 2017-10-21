@@ -1,4 +1,4 @@
-package com.lightning.wallet.lncloud
+package com.lightning.wallet.lnutils
 
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.{ChannelListener, Commitments, NormalData}

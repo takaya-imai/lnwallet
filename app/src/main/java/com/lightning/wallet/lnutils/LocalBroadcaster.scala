@@ -1,8 +1,8 @@
-package com.lightning.wallet.lncloud
+package com.lightning.wallet.lnutils
 
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Channel._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Sha256Hash

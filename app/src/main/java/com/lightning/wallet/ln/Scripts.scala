@@ -243,11 +243,10 @@ object Scripts { me =>
     sign(txinfo.tx, inputIndex = 0, txinfo.input.redeemScript, txinfo.input.txOut.amount, key)
 
   def checkSpendable[T <: TransactionWithInputInfo](txWithInputInfo: => T) = Try {
+    val isDustyOrEmpty = txWithInputInfo.tx.txOut.map(_.amount).sum < LNParams.dustLimit
     val check = Map(txWithInputInfo.tx.txIn.head.outPoint -> txWithInputInfo.input.txOut)
-    val totalOutputValue = txWithInputInfo.tx.txOut.map(_.amount).sum
-
-    if (totalOutputValue < LNParams.dustLimit) throw new Exception("Dusty amount detected")
     Transaction.correctlySpends(txWithInputInfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
+    if (isDustyOrEmpty) throw new Exception("Empty or dusty outputs")
     txWithInputInfo
   }.toOption
 

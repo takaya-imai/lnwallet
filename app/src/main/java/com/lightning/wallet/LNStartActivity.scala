@@ -5,7 +5,7 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.Denomination._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 
 import scala.util.{Failure, Success}
@@ -18,7 +18,7 @@ import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
-import com.lightning.wallet.lncloud.RatesSaver
+import com.lightning.wallet.lnutils.RatesSaver
 import android.support.v4.view.MenuItemCompat
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder

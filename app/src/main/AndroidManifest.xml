@@ -25,7 +25,7 @@
 
         <receiver
             android:process=":remote"
-            android:name=".lncloud.Notificator"/>
+            android:name=".lnutils.Notificator"/>
 
         <activity
             android:name="MainActivity"

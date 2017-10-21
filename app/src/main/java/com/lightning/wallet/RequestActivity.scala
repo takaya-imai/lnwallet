@@ -14,7 +14,7 @@ import android.widget.{ImageButton, ImageView}
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.google.zxing.{BarcodeFormat, EncodeHintType}
 
-import com.lightning.wallet.lncloud.ImplicitConversions.string2Ops
+import com.lightning.wallet.lnutils.ImplicitConversions.string2Ops
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import org.ndeftools.util.activity.NfcBeamWriterActivity
 import android.text.Layout.Alignment.ALIGN_NORMAL

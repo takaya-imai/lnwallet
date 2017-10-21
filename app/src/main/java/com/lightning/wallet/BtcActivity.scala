@@ -6,7 +6,7 @@ import collection.JavaConverters._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.Denomination._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}

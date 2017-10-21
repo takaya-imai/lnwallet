@@ -91,8 +91,8 @@ class ShaChainSpec {
 
     import spray.json._
     import spray.json.DefaultJsonProtocol._
-    import com.lightning.wallet.lncloud.ImplicitJsonFormats._
-    import com.lightning.wallet.lncloud.JsonHttpUtils._
+    import com.lightning.wallet.lnutils.ImplicitJsonFormats._
+    import com.lightning.wallet.lnutils.JsonHttpUtils._
 
     val a= System.currentTimeMillis()
     val string = receiver.toJson.toString

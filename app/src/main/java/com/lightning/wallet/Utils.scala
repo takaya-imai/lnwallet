@@ -7,10 +7,10 @@ import android.widget._
 import org.bitcoinj.core._
 import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
-import com.lightning.wallet.lncloud._
+import com.lightning.wallet.lnutils._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import fr.acinq.bitcoin.{Crypto, MilliSatoshi, Satoshi}

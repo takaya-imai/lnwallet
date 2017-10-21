@@ -6,7 +6,7 @@ import fr.acinq.bitcoin.Protocol._
 import fr.acinq.eclair.crypto.BitStream._
 import com.lightning.wallet.ln.PaymentRequest._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import com.lightning.wallet.ln.RoutingInfoTag.HiddenHopVec
+import com.lightning.wallet.ln.PaymentHop.ExtraPaymentRoute
 import fr.acinq.eclair.crypto.BitStream
 import java.nio.ByteOrder.BIG_ENDIAN
 import java.math.BigInteger
@@ -35,29 +35,24 @@ case class DescriptionHashTag(hash: BinaryData) extends Tag {
   def toInt5s: Int5Seq = encode(Bech32 eight2five hash, 'h')
 }
 
-case class HiddenHop(pubkey: PublicKey, channelId: BinaryData, fee: Long, cltvExpiryDelta: Int) {
-  def pack = pubkey.toBin ++ channelId.data ++ writeUInt64(fee, BIG_ENDIAN) ++ writeUInt16(cltvExpiryDelta, BIG_ENDIAN)
-  def shortChannelId = uint64(channelId, BIG_ENDIAN)
-}
-
-case class RoutingInfoTag(hiddenHops: HiddenHopVec) extends Tag {
-  def toInt5s: Int5Seq = encode(Bech32 eight2five hiddenHops.flatMap(_.pack), 'r')
+case class RoutingInfoTag(route: ExtraPaymentRoute) extends Tag {
+  require(route.nonEmpty, "Routing info tag has to contain one or more routes")
+  def toInt5s: Int5Seq = encode(Bech32 eight2five route.flatMap(_.pack), 'r')
+  def firstNodeId = route.head.nodeId
 }
 
 object RoutingInfoTag {
   def parse(data: Int5Seq) = {
     val pubkey = data.slice(0, 33)
-    val channelId = data.slice(33, 33 + 8)
+    val shortId = uint64(data.slice(33, 33 + 8), BIG_ENDIAN)
     val fee = uint64(data.slice(33 + 8, 33 + 8 + 8), BIG_ENDIAN)
     val cltv = uint16(data.slice(33 + 8 + 8, chunkLength), BIG_ENDIAN)
-    HiddenHop(PublicKey(pubkey), channelId, fee, cltv)
+    ExtraHop(PublicKey(pubkey), shortId, fee, cltv)
   }
 
-  def parseAll(data: Int5Seq): HiddenHopVec =
-    data.grouped(chunkLength).map(parse).toVector
-
-  type HiddenHopVec = Vector[HiddenHop]
   val chunkLength = 33 + 8 + 8 + 2
+  def parseAll(data: Int5Seq): ExtraPaymentRoute =
+    data.grouped(chunkLength).map(parse).toVector
 }
 
 case class ExpiryTag(seconds: Long) extends Tag {
@@ -93,9 +88,9 @@ object FallbackAddressTag {
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
-  def routingInfo: Vector[RoutingInfoTag] = tags.collect { case r: RoutingInfoTag => r }
-  def paymentHash: BinaryData = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
-  def finalSum = amount.get
+  lazy val paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
+  lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
+  lazy val finalSum = amount.get
 
   def isFresh: Boolean = {
     val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }

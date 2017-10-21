@@ -4,7 +4,7 @@ import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Broadcaster._
-import com.lightning.wallet.lncloud.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
 import com.lightning.wallet.ln.Scripts.InputInfo
 import com.lightning.wallet.ln.Tools.none

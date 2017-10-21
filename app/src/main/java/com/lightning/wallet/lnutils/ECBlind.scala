@@ -1,4 +1,4 @@
-package com.lightning.wallet.lncloud
+package com.lightning.wallet.lnutils
 
 import com.lightning.wallet.ln.Tools.{random, Bytes}
 import org.bitcoinj.core.ECKey.CURVE.{getN, getG}

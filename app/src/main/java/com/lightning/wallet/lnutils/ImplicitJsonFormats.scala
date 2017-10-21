@@ -1,23 +1,23 @@
-package com.lightning.wallet.lncloud
+package com.lightning.wallet.lnutils
 
 import spray.json._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.wire._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Scripts._
+import com.lightning.wallet.ln.PaymentHop._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import com.lightning.wallet.ln.Tools.{Bytes, LightningMessages}
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
-import com.lightning.wallet.lncloud.Connector.{ClearToken, HttpParam, RequestAndMemo}
+import com.lightning.wallet.lnutils.Connector.{ClearToken, HttpParam, RequestAndMemo}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
-import com.lightning.wallet.ln.wire.LightningMessageCodecs.PaymentRoute
-import com.lightning.wallet.ln.RoutingInfoTag.HiddenHopVec
-import com.lightning.wallet.ln.CommitmentSpec.HtlcFailure
+import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
-import com.lightning.wallet.lncloud.RatesSaver.RatesMap
+import com.lightning.wallet.lnutils.RatesSaver.RatesMap
 import com.lightning.wallet.ln.crypto.ShaChain.Index
+import com.lightning.wallet.ln.Broadcaster.TxSeq
+import com.lightning.wallet.ln.Tools.Bytes
 import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
 import java.math.BigInteger
@@ -88,9 +88,9 @@ object ImplicitJsonFormats { me =>
   implicit val updateAddHtlcFmt = sCodecJsonFmt(updateAddHtlcCodec)
   implicit val closingSignedFmt = sCodecJsonFmt(closingSignedCodec)
   implicit val sundingLockedFmt = sCodecJsonFmt(fundingLockedCodec)
+  implicit val channelUpdateFmt = sCodecJsonFmt(channelUpdateCodec)
   implicit val commitSigFmt = sCodecJsonFmt(commitSigCodec)
   implicit val shutdownFmt = sCodecJsonFmt(shutdownCodec)
-  implicit val hopsCodecFmt = sCodecJsonFmt(hopsCodec)
   implicit val uint64exFmt = sCodecJsonFmt(uint64ex)
   implicit val pointFmt = sCodecJsonFmt(point)
 
@@ -105,6 +105,24 @@ object ImplicitJsonFormats { me =>
   implicit val publicKeyFmt = jsonFormat[Point, Boolean, PublicKey](PublicKey.apply, "value", "compressed")
   implicit val milliSatoshiFmt = jsonFormat[Long, MilliSatoshi](MilliSatoshi.apply, "amount")
   implicit val satoshiFmt = jsonFormat[Long, Satoshi](Satoshi.apply, "amount")
+
+  // Hops
+
+  implicit object PaymentHopFmt extends JsonFormat[PaymentHop] {
+    def read(json: JsValue) = json.asJsObject fields "tag" match {
+      case JsString("ExtraHop") => json.convertTo[ExtraHop]
+      case JsString("Hop") => json.convertTo[Hop]
+      case _ => throw new RuntimeException
+    }
+
+    def write(internal: PaymentHop) = internal match {
+      case paymentHop: ExtraHop => paymentHop.toJson
+      case paymentHop: Hop => paymentHop.toJson
+    }
+  }
+
+  implicit val extraHopFmt = sCodecJsonFmt(extraHopCodec)
+  implicit val hopFmt = sCodecJsonFmt(hopCodec)
 
   // Payment request and tags
 
@@ -138,11 +156,8 @@ object ImplicitJsonFormats { me =>
   implicit val descriptionHashTagFmt = taggedJsonFmt(jsonFormat[BinaryData,
     DescriptionHashTag](DescriptionHashTag.apply, "hash"), tag = "DescriptionHashTag")
 
-  implicit val hiddenHopFmt: JsonFormat[HiddenHop] = jsonFormat[PublicKey, BinaryData, Long, Int,
-    HiddenHop](HiddenHop.apply, "pubkey", "channelId", "fee", "cltvExpiryDelta")
-
-  implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[HiddenHopVec,
-    RoutingInfoTag](RoutingInfoTag.apply, "hiddenHops"), tag = "RoutingInfoTag")
+  implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[ExtraPaymentRoute,
+    RoutingInfoTag](RoutingInfoTag.apply, "route"), tag = "RoutingInfoTag")
 
   implicit val expiryTagFmt = taggedJsonFmt(jsonFormat[Long,
     ExpiryTag](ExpiryTag.apply, "seconds"), tag = "ExpiryTag")
@@ -253,7 +268,7 @@ object ImplicitJsonFormats { me =>
     "defaultFinalScriptPubKey", "shaSeed", "isFunder")
 
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc, Htlc](Htlc.apply, "incoming", "add")
-  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcFailure], Long, Long, Long,
+  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcAndFail], Long, Long, Long,
     CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw",
     "toLocalMsat", "toRemoteMsat")
 
@@ -270,7 +285,7 @@ object ImplicitJsonFormats { me =>
     WaitingForRevocation](WaitingForRevocation.apply, "nextRemoteCommit", "sent",
     "localCommitIndexSnapshot")
 
-  implicit val changesFmt = jsonFormat[LightningMessages, LightningMessages, LightningMessages,
+  implicit val changesFmt = jsonFormat[LNMessageVector, LNMessageVector, LNMessageVector,
     Changes](Changes.apply, "proposed", "signed", "acked")
 
   implicit val commitmentsFmt = jsonFormat[LocalParams, AcceptChannel, LocalCommit, RemoteCommit,
@@ -313,7 +328,7 @@ object ImplicitJsonFormats { me =>
   implicit val refundingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, Long,
     RefundingData](RefundingData.apply, "announce", "commitments", "startedAt"), tag = "RefundingData")
 
-  implicit val closingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, Seq[Transaction],
+  implicit val closingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, TxSeq,
     Seq[LocalCommitPublished], Seq[RemoteCommitPublished], Seq[RemoteCommitPublished], Seq[RevokedCommitPublished], Long,
     ClosingData](ClosingData.apply, "announce", "commitments", "mutualClose", "localCommit", "remoteCommit", "nextRemoteCommit",
     "revokedCommits", "startedAt"), tag = "ClosingData")

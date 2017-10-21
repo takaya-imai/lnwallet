@@ -1,6 +1,5 @@
 package com.lightning.wallet.ln
 
-import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Tools._
 import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
@@ -19,8 +18,6 @@ object \ {
 
 object Tools {
   type Bytes = Array[Byte]
-  type LightningMessages = Vector[LightningMessage]
-
   val random = new RandomGenerator
   def runAnd[T](result: T)(action: Any): T = result
   def errlog(error: Throwable): Unit = error.printStackTrace

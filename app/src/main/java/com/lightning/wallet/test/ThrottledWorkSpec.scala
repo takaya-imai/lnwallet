@@ -2,7 +2,7 @@ package com.lightning.wallet.test
 
 import rx.lang.scala.{Scheduler, Observable => Obs}
 import com.lightning.wallet.helper.ThrottledWork
-import com.lightning.wallet.lncloud.JsonHttpUtils._
+import com.lightning.wallet.lnutils.JsonHttpUtils._
 import rx.lang.scala.schedulers.IOScheduler
 
 /**
