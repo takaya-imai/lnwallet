@@ -1,7 +1,8 @@
 package com.lightning.wallet.test
 
 import com.lightning.wallet.ln._
-import fr.acinq.bitcoin.{BinaryData, Btc, Crypto, MilliBtc, MilliSatoshi, Satoshi}
+import com.lightning.wallet.ln.wire.ChannelUpdate
+import fr.acinq.bitcoin.{BinaryData, Block, Btc, Crypto, MilliBtc, MilliSatoshi, Satoshi}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 
 /**
@@ -151,6 +152,39 @@ class PaymentRequestSpec {
       assert(pr.fallbackAddress == Some("bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3"))
       assert(pr.tags.size == 3)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
+    }
+
+    {
+      println("Extra routes")
+      val upd1 = {
+        val sig = "3044022001bbea4b95dddae2b97801cd921718abfd6b3cd1302b0216cdb36563dfb209c10220198ac55b934af18232524a20ecd7a741d808a4e8396ebc38502c2b696cc00f2f01"
+        val chainhash = "06226e46111a0b59caaf126043eb5bbf28c34f3a5e332a1fc7b2b73cf188910f"
+
+        ChannelUpdate(sig, chainhash, 13390952114749440L, 1508747148L, BinaryData.empty, 144, 100, 546000, 10)
+      }
+
+      val upd2 = {
+        val sig = "3043021f7a2797f524cec7aac5d94eef1f74abaa7105cfb04e8e0ece7fda46fd4820f402206768276d1cedb84dbafacb09d71a6b8f971f058c24fde1c9ed980231190e3ce101"
+        val chainhash = "06226e46111a0b59caaf126043eb5bbf28c34f3a5e332a1fc7b2b73cf188910f"
+
+        ChannelUpdate(sig, chainhash, 11091873301069824L ,1508752623L , BinaryData.empty, 144, 100, 546000, 10)
+      }
+
+      val pubkey1: PublicKey = PublicKey("0299439d988cbf31388d59e3d6f9e184e7a0739b8b8fcdc298957216833935f9d3")
+      val pubkey2: PublicKey = PublicKey("02f0b230e53723ccc331db140edc518be1ee5ab29a508104a4be2f5be922c928e8")
+
+      val extra: Vector[ExtraHop] = PaymentHop.buildExtra(Vector(upd1 -> pubkey1, upd2 -> pubkey2), 100000L)
+      val paymentRequest = PaymentRequest(Block.RegtestGenesisBlock.hash, Some(MilliSatoshi(100000L)),
+        BinaryData("0001020304050607080900010203040506070809000102030405060708090102"), priv, "test", None, 3600 * 6, extra)
+
+      val serialized = PaymentRequest write paymentRequest
+      val pr = PaymentRequest read serialized
+
+      val rd = RoutingData(Vector(pr.routingInfo.head.route), Set.empty, Set.empty)
+      val (payloads, firstAmount, firstExpiry) = PaymentInfo.buildPayloads(rd.routes.head, 100000L, 6)
+      assert(payloads == Vector(PerHopPayload(11091873301069824L, 646001, 150), PerHopPayload(13390952114749440L, 100000, 6), PerHopPayload(0, 100000, 6)))
+      assert(firstAmount == 1192007)
+      assert(firstExpiry == 294)
     }
     
   }

@@ -393,7 +393,7 @@ object Commitments {
     val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, localPaymentKey)
     val combined = (sortedHtlcTxs, htlcSigs, commit.htlcSignatures).zipped.toList
 
-    val htlcTxsAndSigs = combined.collect {
+    val htlcTxsAndSigs = combined collect {
       case (htlcTx: HtlcTimeoutTx, localSig, remoteSig) =>
         val check = Scripts checkSpendable Scripts.addSigs(htlcTx, localSig, remoteSig)
         if (check.isDefined) HtlcTxAndSigs(htlcTx, localSig, remoteSig)

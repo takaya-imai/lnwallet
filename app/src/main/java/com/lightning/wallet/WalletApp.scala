@@ -169,29 +169,25 @@ class WalletApp extends Application { me =>
       doProcess(bootstrap)
     }
 
-    // Get routes from maintenance server and form an OutgoingPayment if routes were found
-    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) =
+    // Get routes from maintenance server and form an OutgoingPayment if they exist
+    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) = {
+      val targetNodeId = if (pr.routingInfo.isEmpty) pr.nodeId else pr.routingInfo.head.route.head.nodeId
+      val extraRoute = if (pr.routingInfo.isEmpty) Vector.empty else pr.routingInfo.head.route
 
       alive.headOption match {
-        case Some(chan) if chan.data.announce.nodeId == pr.nodeId =>
-          // A special case where we send a payment directly to our peer
-          val rd = RoutingData(Vector(Vector.empty), Set.empty, Set.empty)
+        case Some(chan) if chan.data.announce.nodeId == targetNodeId =>
+          val rd = RoutingData(Vector(extraRoute), Set.empty, Set.empty)
           Obs just buildPayment(rd, pr, chan)
 
-        case Some(chan) if pr.routingInfo.nonEmpty =>
-          // Payment request conaints an extra routing info which means we should find routes to first node in extra routing
-          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, pr.routingInfo.head.firstNodeId)
-          val rdObs = for (routes <- obs) yield RoutingData(routes.map(_ ++ pr.routingInfo.head.route), badNodes, badChannels)
-          for (rd <- rdObs) yield buildPayment(rd, pr, chan)
-
         case Some(chan) =>
-          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, pr.nodeId)
-          val rdObs = for (routes <- obs) yield RoutingData(routes, badNodes, badChannels)
+          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetNodeId)
+          val rdObs = for (routes <- obs) yield RoutingData(routes.map(_ ++ extraRoute), badNodes, badChannels)
           for (rd <- rdObs) yield buildPayment(rd, pr, chan)
 
         case None =>
           Obs.empty
       }
+    }
   }
 
   abstract class WalletKit extends AbstractKit {

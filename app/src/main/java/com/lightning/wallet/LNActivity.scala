@@ -319,8 +319,11 @@ with SearchBar { me =>
       val rateManager = new RateManager(hint, content)
 
       def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { id =>
-        val (description, hash, stamp) = (inputDescription.getText.toString.trim, Crypto sha256 preimg, 3600 * 6)
-        val paymentRequest = PaymentRequest(chainHash, amount, hash, nodePrivateKey, description, None, stamp)
+        val paymentRequest = PaymentRequest(chainHash, amount, paymentHash = Crypto sha256 preimg, nodePrivateKey,
+          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 60, extra = Vector.empty)
+
+        // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
+        // Received amount is set to 0 msat for now, final amount may be higher than requested
         bag putPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, id, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]

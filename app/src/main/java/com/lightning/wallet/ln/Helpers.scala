@@ -144,11 +144,11 @@ object Helpers { me =>
 
       val localPrivkey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
       val (remoteCommitTx, timeoutTxs, successTxs, remotePubkey, remoteRevPubkey) = makeRemoteTxs(remoteCommit.index,
-        commitments.localParams, commitments.remoteParams, commitments.commitInput,
-        remoteCommit.remotePerCommitmentPoint, remoteCommit.spec)
+        commitments.localParams, commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint,
+        remoteCommit.spec)
 
       val claimSuccessTxs = for {
-        HtlcSuccessTx(_, _, add) <- successTxs
+        HtlcTimeoutTx(_, _, add) <- timeoutTxs
         IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
         claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
@@ -159,7 +159,7 @@ object Helpers { me =>
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
-        HtlcTimeoutTx(_, _, add) <- timeoutTxs
+        HtlcSuccessTx(_, _, add) <- successTxs
         claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
 

@@ -38,7 +38,6 @@ case class DescriptionHashTag(hash: BinaryData) extends Tag {
 case class RoutingInfoTag(route: ExtraPaymentRoute) extends Tag {
   require(route.nonEmpty, "Routing info tag has to contain one or more routes")
   def toInt5s: Int5Seq = encode(Bech32 eight2five route.flatMap(_.pack), 'r')
-  def firstNodeId = route.head.nodeId
 }
 
 object RoutingInfoTag {
@@ -94,6 +93,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   def isFresh: Boolean = {
     val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }
+    println(expiry)
     timestamp + expiry.getOrElse(3600L) > System.currentTimeMillis / 1000L
   }
 
@@ -135,12 +135,14 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 object PaymentRequest {
   type Int5Seq = Seq[Int5]
 
-  def apply(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData, privateKey: PrivateKey,
-            description: String, fallbackAddress: Option[String], expirySeconds: Long): PaymentRequest = {
+  def apply(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData,
+            privateKey: PrivateKey, description: String, fallbackAddress: Option[String],
+            expirySeconds: Long, extra: ExtraPaymentRoute): PaymentRequest = {
 
-    val tags = PaymentHashTag(paymentHash) :: DescriptionTag(description) :: ExpiryTag(expirySeconds) :: Nil
+    val paymentHashTag = PaymentHashTag(paymentHash)
+    val tags = Vector(DescriptionTag(description), ExpiryTag(expirySeconds), paymentHashTag)
     PaymentRequest(getPrefix(chain), amount, System.currentTimeMillis / 1000L, privateKey.publicKey,
-      tags.toVector, BinaryData.empty) sign privateKey
+      if (extra.isEmpty) tags else RoutingInfoTag(extra) +: tags, BinaryData.empty) sign privateKey
   }
 
   def getPrefix(chain: BinaryData) = chain match {
