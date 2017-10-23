@@ -107,6 +107,41 @@ with SearchBar { me =>
     }
   }
 
+  val chanListener = new ChannelListener {
+    // Updates local ui according to changes in channel
+    // Should be removed when activity is stopped
+
+    override def onError = {
+      case _ \ ReserveException(PlainAddHtlc(out), missingSat, reserveSat) =>
+        // Current commit tx fee and channel reserve forbid sending of this payment
+        // Inform user with all the details laid out as cleanly as possible
+
+        val reserve = coloredIn apply Satoshi(reserveSat)
+        val missing = coloredOut apply Satoshi(missingSat)
+        val sending = coloredOut apply MilliSatoshi(out.routing.amountWithFee)
+        onFail(getString(err_ln_fee_overflow).format(reserve, sending, missing).html)
+
+      case _ \ AddException(_: PlainAddHtlc, code) =>
+        // Let user know why payment could not be added
+        onFail(me getString code)
+    }
+
+    override def onBecome = {
+      case (_, norm: NormalData, _, _) if norm.isFinishing => evacuate
+      case (_, _: EndingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
+      case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
+      case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
+    }
+
+    override def onProcess = {
+      case (chan, norm: NormalData, _: CommitSig)
+        // GUARD: notify and vibrate because HTLC is fulfilled
+        if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+        notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
+        updTitle(chan)
+    }
+  }
+
   private[this] var sendPayment: PaymentRequest => Unit = none
   private[this] var makePaymentRequest = anyToRunnable(none)
   private[this] var whenStop = anyToRunnable(super.onStop)
@@ -171,12 +206,12 @@ with SearchBar { me =>
     for (chan <- app.ChannelManager.alive) chan process CMDShutdown
   }
 
-  def manageActive(chan: Channel) = {
-    def updTitle: Runnable = animateTitle {
-      val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
-      denom withSign MilliSatoshi(canSend getOrElse 0L)
-    }
+  def updTitle(chan: Channel) = animateTitle {
+    val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
+    denom withSign MilliSatoshi(canSend getOrElse 0L)
+  }
 
+  def manageActive(chan: Channel) = {
     def onPaymentError(e: Throwable) = e.getMessage match {
       case FROMBLACKLISTED => onFail(me getString err_ln_black)
       case techDetails => onFail(techDetails)
@@ -185,41 +220,6 @@ with SearchBar { me =>
     val onPaymentResult: Option[OutgoingPayment] => Unit = {
       case Some(payment) => chan process PlainAddHtlc(payment)
       case None => onFail(me getString err_ln_no_route)
-    }
-
-    val chanListener = new ChannelListener {
-      // Updates local ui according to changes in channel
-      // Should be removed when activity is stopped
-
-      override def onError = {
-        case _ \ ReserveException(PlainAddHtlc(out), missingSat, reserveSat) =>
-          // Current commit tx fee and channel reserve forbid sending of this payment
-          // Inform user with all the details laid out as cleanly as possible
-
-          val reserve = coloredIn apply Satoshi(reserveSat)
-          val missing = coloredOut apply Satoshi(missingSat)
-          val sending = coloredOut apply MilliSatoshi(out.routing.amountWithFee)
-          onFail(getString(err_ln_fee_overflow).format(reserve, sending, missing).html)
-
-        case _ \ AddException(_: PlainAddHtlc, code) =>
-          // Let user know why payment could not be added
-          onFail(me getString code)
-      }
-
-      override def onBecome = {
-        case (_, norm: NormalData, _, _) if norm.isFinishing => evacuate
-        case (_, _: EndingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
-        case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
-        case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
-      }
-
-      override def onProcess = {
-        case (_, norm: NormalData, _: CommitSig)
-          // GUARD: notify and vibrate because HTLC is fulfilled
-          if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
-          notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
-          updTitle
-      }
     }
 
     list setOnItemClickListener onTap { pos =>
@@ -277,7 +277,7 @@ with SearchBar { me =>
 
     toolbar setOnClickListener onButtonTap {
       wrap(adapter.notifyDataSetChanged)(changeDenom)
-      updTitle
+      updTitle(chan)
     }
 
     sendPayment = pr => {
@@ -318,13 +318,13 @@ with SearchBar { me =>
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { id =>
+      def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { chanId =>
         val paymentRequest = PaymentRequest(chainHash, amount, paymentHash = Crypto sha256 preimg, nodePrivateKey,
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 60, extra = Vector.empty)
 
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
         // Received amount is set to 0 msat for now, final amount may be higher than requested
-        bag putPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, id, HIDDEN)
+        bag putPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, chanId, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }
@@ -351,7 +351,7 @@ with SearchBar { me =>
     chan.listeners += chanListener
     chanListener reloadOnBecome chan
     checkTransData
-    updTitle
+    updTitle(chan)
   }
 
   // DATA READING AND BUTTON ACTIONS

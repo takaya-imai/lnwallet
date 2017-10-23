@@ -186,6 +186,18 @@ class PaymentRequestSpec {
       assert(firstAmount == 1192007)
       assert(firstExpiry == 294)
     }
+
+    {
+      println("expiry is a variable-length unsigned value")
+      val pr = PaymentRequest(Block.RegtestGenesisBlock.hash, Some(MilliSatoshi(100000L)),
+        BinaryData("0001020304050607080900010203040506070809000102030405060708090102"),
+        priv, "test", fallbackAddress = None, expirySeconds = 21600, Vector.empty)
+
+      val serialized = PaymentRequest write pr
+      val pr1 = PaymentRequest read serialized
+      val expiry = pr1.tags.collectFirst { case ex: ExpiryTag => ex.seconds }.get
+      assert(expiry == 21600)
+    }
     
   }
 }

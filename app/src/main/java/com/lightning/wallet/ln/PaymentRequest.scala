@@ -55,8 +55,20 @@ object RoutingInfoTag {
 }
 
 case class ExpiryTag(seconds: Long) extends Tag {
-  override def toInt5s: Int5Seq = Seq(Bech32 map 'x', 0.toByte,
-    2.toByte, (seconds / 32).toByte, (seconds % 32).toByte)
+  // Make sure that size is encoded on 2 int5 values
+
+  override def toInt5s: Int5Seq = {
+    val ints = writeUnsignedLong(seconds)
+    val size = writeUnsignedLong(ints.size)
+
+    val size1 = size.length match {
+      case 0 => Seq(0.toByte, 0.toByte)
+      case 1 => 0.toByte +: size
+      case n => size
+    }
+
+    Bech32.map('x') +: (size1 ++ ints)
+  }
 }
 
 case class FallbackAddressTag(version: Byte, hash: BinaryData) extends Tag {
@@ -93,7 +105,6 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
 
   def isFresh: Boolean = {
     val expiry = tags.collectFirst { case ex: ExpiryTag => ex.seconds }
-    println(expiry)
     timestamp + expiry.getOrElse(3600L) > System.currentTimeMillis / 1000L
   }
 
@@ -180,8 +191,8 @@ object PaymentRequest {
 
   object Timestamp {
     def decode(data: Int5Seq): Long = data.take(7).foldLeft(0L) { case (a, b) => a * 32 + b }
-    def encode(timestamp: Long, acc: Int5Seq = Nil): Int5Seq = if (acc.length == 7) acc else
-      encode(timestamp / 32, (timestamp % 32).toByte +: acc)
+    def encode(timestamp: Long, acc: Int5Seq = Nil): Int5Seq = if (acc.length == 7) acc
+      else encode(timestamp / 32, (timestamp % 32).toByte +: acc)
   }
 
   object Signature {
@@ -228,8 +239,8 @@ object PaymentRequest {
           RoutingInfoTag(path)
 
         case xTag if xTag == Bech32.map('x') =>
-          require(len == 2, s"Invalid length for expiry tag")
-          val expiry = 32  * input(3) + input(4)
+          val ints: Int5Seq = input.slice(3, len + 3)
+          val expiry = readUnsignedLong(len, ints)
           ExpiryTag(expiry)
       }
     }
@@ -256,9 +267,15 @@ object PaymentRequest {
 
   def toInt5s(stream: BitStream, acc: Int5Seq = Nil): Int5Seq =
     if (stream.bitCount == 0) acc else {
-      val (stream1, value) = read5(stream)
+      val stream1 \ value = read5(stream)
       toInt5s(stream1, acc :+ value)
     }
+
+  def writeUnsignedLong(value: Long, acc: Int5Seq = Nil): Int5Seq =
+    if (value == 0) acc else writeUnsignedLong(value / 32, (value % 32).toByte +: acc)
+
+  def readUnsignedLong(length: Int, ints: Int5Seq): Long =
+    ints.take(length).foldLeft(0L) { case acc \ i => acc * 32 + i }
 
   def read(input: String): PaymentRequest = {
     def loop(data: Int5Seq, tags: Seq[Int5Seq] = Nil): Seq[Int5Seq] =
