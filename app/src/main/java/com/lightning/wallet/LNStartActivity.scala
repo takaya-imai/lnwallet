@@ -7,14 +7,6 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
-import scala.util.{Failure, Success}
-import android.view.{Menu, View, ViewGroup}
-import com.lightning.wallet.Utils.{app, denom}
-import fr.acinq.bitcoin.{MilliSatoshi, Script}
-import android.widget.{BaseAdapter, ListView, TextView}
-import com.lightning.wallet.ln.Tools.{none, random, wrap}
-
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
@@ -25,16 +17,29 @@ import org.bitcoinj.script.ScriptBuilder
 import org.bitcoinj.core.Coin
 import android.os.Bundle
 
+import android.widget.{BaseAdapter, Button, ListView, TextView}
+import com.lightning.wallet.ln.Tools.{none, random, wrap}
+import fr.acinq.bitcoin.{MilliSatoshi, Script}
+import com.lightning.wallet.Utils.{app, denom}
+import android.view.{Menu, View, ViewGroup}
+import scala.util.{Failure, Success}
+
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
-  lazy val chansNumber = getResources getStringArray R.array.ln_ops_start_node_channels
   lazy val lnStartNodesList = findViewById(R.id.lnStartNodesList).asInstanceOf[ListView]
-  lazy val lnStartDetails = findViewById(R.id.lnStartDetails).asInstanceOf[TextView]
-  lazy val views = lnStartNodesList :: lnStartDetails :: Nil
+  lazy val lnStartDetailsText = findViewById(R.id.lnStartDetailsText).asInstanceOf[TextView]
+  lazy val lnCancel = findViewById(R.id.lnCancel).asInstanceOf[Button]
+
+  lazy val chansNumber = getResources getStringArray R.array.ln_ops_start_node_channels
+  lazy val views = lnStartNodesList :: findViewById(R.id.lnStartDetails) :: Nil
   lazy val nodeView = getString(ln_ops_start_node_view)
   lazy val notifyWorking = getString(notify_working)
   lazy val selectPeer = getString(ln_select_peer)
   private[this] val adapter = new NodesAdapter
+
+  // May change back pressed action throughout an activity lifecycle
+  private[this] var whenBackPressed = anyToRunnable(super.onBackPressed)
+  override def onBackPressed: Unit = whenBackPressed.run
 
   type AnnounceChansNumVec = Vector[AnnounceChansNum]
   private[this] val worker = new ThrottledWork[String, AnnounceChansNumVec] {
@@ -42,10 +47,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)
     def error(err: Throwable) = Tools errlog err
   }
-
-  // May change back pressed action throughout an activity lifecycle
-  private[this] var whenBackPressed = anyToRunnable(super.onBackPressed)
-  override def onBackPressed: Unit = whenBackPressed.run
 
   def react(query: String) = worker addWork query
   def notifySubTitle(subtitle: String, infoType: Int) = {
@@ -137,8 +138,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       }
     }
 
-    ConnectionManager.listeners += socketOpenListener
+    // Sending CMDShutdown to channel indirectly updates the view
+    lnCancel setOnClickListener onButtonTap(chan process CMDShutdown)
     whenBackPressed = anyToRunnable(chan process CMDShutdown)
+    ConnectionManager.listeners += socketOpenListener
     ConnectionManager requestConnection announce
     me setPeerView position
   }
@@ -161,7 +164,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def setPeerView(pos: Int) = {
     MenuItemCompat collapseActionView searchItem
-    lnStartDetails setText mkNodeView(adapter getItem pos)
+    lnStartDetailsText setText mkNodeView(adapter getItem pos)
     update(notifyWorking, Informer.LNSTATE).flash.run
     setVis(View.GONE, View.VISIBLE)
   }
