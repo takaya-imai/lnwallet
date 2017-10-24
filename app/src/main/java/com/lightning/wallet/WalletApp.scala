@@ -158,9 +158,8 @@ class WalletApp extends Application { me =>
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
         // Collect all the commit outputs and watch them for preimages
-        val commitTxs = cd.localCommit.map(_.commitTx) ++ cd.remoteCommit.map(_.commitTx) ++ cd.nextRemoteCommit.map(_.commitTx)
-        kit.watchScripts(commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
-        cloud.connector.getChildTxs(commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
+        kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
+        cloud.connector.getChildTxs(cd.commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
       }
 
       // Listeners should always be added first
@@ -171,18 +170,17 @@ class WalletApp extends Application { me =>
 
     // Get routes from maintenance server and form an OutgoingPayment if they exist
     def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) = {
-      val targetNodeId = if (pr.routingInfo.isEmpty) pr.nodeId else pr.routingInfo.head.route.head.nodeId
-      val extraRoute = if (pr.routingInfo.isEmpty) Vector.empty else pr.routingInfo.head.route
+      val targetId = if (pr.routingInfo.isEmpty) pr.nodeId else pr.routingInfo.head.route.head.nodeId
+      val extra = if (pr.routingInfo.isEmpty) Vector.empty else pr.routingInfo.head.route
 
       alive.headOption match {
-        case Some(chan) if chan.data.announce.nodeId == targetNodeId =>
-          val rd = RoutingData(Vector(extraRoute), Set.empty, Set.empty)
+        case Some(chan) if chan.data.announce.nodeId == targetId =>
+          val rd = RoutingData(Vector(extra), Set.empty, Set.empty)
           Obs just buildPayment(rd, pr, chan)
 
         case Some(chan) =>
-          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetNodeId)
-          val rdObs = for (routes <- obs) yield RoutingData(routes.map(_ ++ extraRoute), badNodes, badChannels)
-          for (rd <- rdObs) yield buildPayment(rd, pr, chan)
+          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetId)
+          for (routes <- obs) yield buildPayment(RoutingData(routes.map(_ ++ extra), badNodes, badChannels), pr, chan)
 
         case None =>
           Obs.empty

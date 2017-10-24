@@ -5,8 +5,8 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import com.lightning.wallet.Utils.app
+import com.lightning.wallet.ln.Broadcaster.PublishStatus
 import org.bitcoinj.core.Sha256Hash
-
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
@@ -42,7 +42,8 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) =>
-      val txsToBroadcast = close.localCommit.map(_.commitTx) ++ close.myTransactions
-      Obs.from(txsToBroadcast map safeSend).concat.foreach(Tools.log, Tools.errlog)
+      val tier12Publishable = close.tier12States.filter(_.isPublishable).flatMap(_.txs)
+      val all = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ tier12Publishable
+      Obs.from(all map safeSend).concat.foreach(Tools.log, Tools.errlog)
   }
 }

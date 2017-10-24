@@ -320,7 +320,7 @@ with SearchBar { me =>
 
       def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { chanId =>
         val paymentRequest = PaymentRequest(chainHash, amount, paymentHash = Crypto sha256 preimg, nodePrivateKey,
-          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 60, extra = Vector.empty)
+          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
         // Received amount is set to 0 msat for now, final amount may be higher than requested

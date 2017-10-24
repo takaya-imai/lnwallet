@@ -50,7 +50,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           localParams.channelReserveSat, LNParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
-          Generators.perCommitPoint(localParams.shaSeed, index = 0),
+          Generators.perCommitPoint(localParams.shaSeed, index = 0L),
           channelFlags = 1.toByte) // TODO: zero to make private
 
 

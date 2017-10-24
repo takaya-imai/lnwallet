@@ -6,10 +6,8 @@ import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Broadcaster._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
-import com.lightning.wallet.ln.Scripts.InputInfo
 import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Transaction
-import fr.acinq.bitcoin.Satoshi
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
@@ -20,6 +18,7 @@ class LNOpsActivity extends TimerActivity { me =>
   lazy val blocksLeft = getResources getStringArray R.array.ln_ops_chan_unilateral_status_left_blocks
   lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
+  lazy val unilateralClosing = getString(ln_ops_chan_unilateral_closing)
   lazy val bilateralClosing = getString(ln_ops_chan_bilateral_closing)
   lazy val statusLeft = getString(ln_ops_chan_unilateral_status_left)
   lazy val refundStatus = getString(ln_ops_chan_refund_status)
@@ -70,14 +69,14 @@ class LNOpsActivity extends TimerActivity { me =>
       // Updates UI accordingly to changes in channel
 
       override def onBecome = {
+        case (_, c: ClosingData, _, _) if c.mutualClose.nonEmpty || c.tier12States.nonEmpty => me runOnUiThread manageClosing(c)
         case (_, WaitFundingDoneData(_, _, _, tx, commitments), _, _) => me runOnUiThread manageOpening(commitments, tx)
         case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegotiations(norm.commitments)
-        case (_, close: ClosingData, _, _) if close.myTransactions.nonEmpty => me runOnUiThread manageClosing(close)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegotiations(negs.commitments)
         case (_, norm: NormalData, _, _) => me exitTo classOf[LNActivity]
 
         case _ =>
-          // Mutual closing without txs, recovery mode
+          // Closing without txs, recovery mode
           // and other possibly unaccounted states
           me runOnUiThread manageNoActiveChannel
       }
@@ -99,48 +98,50 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   // UI which does not need a channel
-  def humanStatus(opt: DepthAndDeadOpt) = opt match {
+  private val humanStatus: Option[DepthAndDead] => String = {
     case Some(confs \ false) => app.plurOrZero(txsConfs, confs)
     case Some(_ \ true) => txsConfs.last
     case _ => txsConfs.head
   }
 
-  def tier0View(tx: Transaction, input: InputInfo) = {
-    val fee = coloredOut(input.txOut.amount - tx.txOut.map(_.amount).sum)
-    commitStatus.format(humanStatus(LNParams.broadcaster txStatus tx.txid), fee)
+  // We need to show the best closing with most confirmations
+  private def manageClosing(data: ClosingData) = data.allClosings maxBy {
+    case Left(mutualTx) => txStatus(mutualTx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
+    case Right(info) => txStatus(info.commitTx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
+  } match {
+    case Left(mutualTx) =>
+      val mutualFee = coloredOut(data.commitments.commitInput.txOut.amount - mutualTx.txOut.map(_.amount).sum)
+      val mutualTxHumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus mutualTx.txid), mutualFee)
+      lnOpsDescription setText bilateralClosing.format(mutualTxHumanView).html
+      lnOpsAction setOnClickListener onButtonTap(goStartChannel)
+      lnOpsAction setText ln_ops_start
+
+    case Right(info) =>
+      val tier1And2HumanView = info.getState take 3 map {
+        case PublishStatus(Some(_ \ true \ _), _, fee, finalAmt) =>
+          val deadDEtails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
+          getString(ln_ops_chan_unilateral_status_dead).format(deadDEtails, coloredIn apply finalAmt)
+
+        case ps: PublishStatus if ps.isPublishable =>
+          val doneDetails = amountStatus.format(denom formatted ps.finalAmount + ps.finalFee, coloredOut apply ps.finalFee)
+          getString(ln_ops_chan_unilateral_status_done).format(doneDetails, coloredIn apply ps.finalAmount)
+
+        case PublishStatus(Some(parentDepth \ false \ left), _, fee, finalAmt) if parentDepth > 0 =>
+          val leftDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
+          statusLeft.format(app.plurOrZero(blocksLeft, left), leftDetails, coloredIn apply finalAmt)
+
+        case PublishStatus(_, _, fee, finalAmt) =>
+          val waitDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
+          getString(ln_ops_chan_unilateral_status_wait).format(waitDetails, coloredIn apply finalAmt)
+      }
+
+      val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
+      val tier0HumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus info.commitTx.txid), commitFee)
+      val combinedView = tier0HumanView + s"<br><br>$refundStatus<br>" + tier1And2HumanView.mkString("<br><br>")
+      lnOpsDescription setText unilateralClosing.format(combinedView).html
+      lnOpsAction setOnClickListener onButtonTap(goStartChannel)
+      lnOpsAction setText ln_ops_start
   }
-
-  def confirmations(tx: Transaction) = txStatus(tx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
-  def basis(fee: Satoshi, amount: Satoshi) = amountStatus.format(denom formatted amount + fee, coloredOut apply fee)
-
-  // Any number of different closing ways may appear at different times
-  // so we need to select the best closing with most confirmations
-  private def manageClosing(data: ClosingData) =
-
-    data.allClosings maxBy {
-      case Left(mutualTx) => confirmations(mutualTx)
-      case Right(info) => confirmations(info.commitTx)
-    } match {
-      case Left(mutualTx) =>
-        val mutualTxHumanView = tier0View(mutualTx, data.commitments.commitInput)
-        lnOpsDescription setText bilateralClosing.format(mutualTxHumanView).html
-        lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-        lnOpsAction setText ln_ops_start
-
-      case Right(info) =>
-        val tier1And2HumanView = info.getState take 3 map {
-          case (Some(true \ _), fee, amt) => getString(ln_ops_chan_unilateral_status_dead).format(basis(fee, amt), coloredIn apply amt)
-          case (Some(false \ 0L), fee, amt) => getString(ln_ops_chan_unilateral_status_done).format(basis(fee, amt), coloredIn apply amt)
-          case (Some(false \ left), fee, amt) => statusLeft.format(app.plurOrZero(blocksLeft, left), basis(fee, amt), coloredIn apply amt)
-          case (_, fee, amt) => getString(ln_ops_chan_unilateral_status_wait).format(basis(fee, amt), coloredIn apply amt)
-        } mkString "<br><br>"
-
-        val tier0HumanView = tier0View(info.commitTx, data.commitments.commitInput)
-        val combinedView = s"$tier0HumanView<br><br>$refundStatus<br>$tier1And2HumanView"
-        lnOpsDescription setText getString(ln_ops_chan_unilateral_closing).format(combinedView).html
-        lnOpsAction setOnClickListener onButtonTap(goStartChannel)
-        lnOpsAction setText ln_ops_start
-    }
 
   // Offer to create a new channel
   private def manageNoActiveChannel = {

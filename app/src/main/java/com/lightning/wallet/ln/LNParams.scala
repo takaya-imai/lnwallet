@@ -99,14 +99,23 @@ object AddErrorCodes {
 object Broadcaster {
   type TxSeq = Seq[Transaction]
   type DepthAndDead = (Long, Boolean)
-  type ParentDeadAndDelay = (Boolean, Long)
-  // (Parent is dead = true, cumulative delay) final fee, final amount
-  type PublishStatus = (Option[ParentDeadAndDelay], Satoshi, Satoshi)
-  type DepthAndDeadOpt = Option[DepthAndDead]
+  // Tier0 depth and dead = true, tier1 delay
+  type ParentStateAndDelay = (DepthAndDead, Long)
+
+  // Parent status, txs to publish, final fee and final amount a user gets
+  case class PublishStatus(parent: Option[ParentStateAndDelay], txs: TxSeq,
+                           finalFee: Satoshi, finalAmount: Satoshi) {
+
+    def isPublishable: Boolean = parent match {
+      // Parent is confirmed, not dead, delay is cleared
+      case Some(parDepth \ false \ 0L) => parDepth > 0L
+      case _ => false
+    }
+  }
 }
 
 trait Broadcaster extends ChannelListener { me =>
-  def txStatus(txid: BinaryData): DepthAndDeadOpt
+  def txStatus(txid: BinaryData): Option[DepthAndDead]
   def send(tx: Transaction): String
   def feeRatePerKw: Long
   def currentHeight: Int
@@ -115,23 +124,29 @@ trait Broadcaster extends ChannelListener { me =>
     obsOn(me send tx, IOScheduler.apply)
       .onErrorReturn(_.getMessage)
 
-  // Parent status and next tier cltv delay
+  // Parent state and next tier cltv delay
+  // Actual negative delay will be represented as 0L
   def cltv(txWithInputInfo: TransactionWithInputInfo) = for {
-    _ \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
+    parentDepthAndDead <- txStatus(txWithInputInfo.input.outPoint.txid)
     cltvDelay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
-  } yield parentIsDead -> cltvDelay
+  } yield parentDepthAndDead -> cltvDelay
 
-  // Parent status and next tier csv delay
+  // Parent state and next tier csv delay
+  // Actual negative delay will be represented as 0L
   def csv(txWithInputInfo: TransactionWithInputInfo) = for {
     parentDepth \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
     csvDelay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
-  } yield parentIsDead -> csvDelay
+  } yield parentDepth -> parentIsDead -> csvDelay
 
   def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) = for {
     // Calculate cumulative cltv + csv delay for 2nd tier transaction along with 1st tier status
 
-    commitDead \ cltv1 <- me cltv info1
-    tier1Dead \ csv1 <- me csv info2
-    dead = commitDead || tier1Dead
-  } yield (dead, cltv1 + csv1)
+    _ \ tier0Dead \ cltv1 <- me cltv info1
+    tier1Depth \ tier1Dead \ csv1 <- me csv info2
+    parentIsDead = tier0Dead || tier1Dead
+    cumulativeDelay = cltv1 + csv1
+
+  // tier1 state and tier2 cumulative delay
+  // Actual negative delay will be represented as zero
+  } yield tier1Depth -> parentIsDead -> cumulativeDelay
 }

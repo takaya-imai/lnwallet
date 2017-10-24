@@ -80,66 +80,60 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommit: Seq[RevokedCommitPublished] = Nil,
                        startedAt: Long = System.currentTimeMillis) extends EndingData {
 
+  def isOutdated: Boolean = {
+    // Either ALL transactions have enough depth or static timeout
+    val statuses = for (tx <- tier12States.flatMap(_.txs) ++ mutualClose) yield txStatus(tx.txid)
+    val allDeep = statuses forall { case Some(cfs \ false) => cfs > minDepth case _ => false }
+    allDeep || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
+  }
 
-  // Either ALL transactions have enough depth OR static timeout
-  def isOutdated = myTransactions.forall(depthOk) || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
-  def depthOk(tx: Transaction) = txStatus(tx.txid) match { case Some(cfs \ false) => cfs > minDepth case _ => false }
-
-  // Mutual closing and all tier 1-2 txs in case of uncooperative close
-  lazy val myTransactions = mutualClose ++ localCommit.flatMap(_.transactions) ++
-    remoteCommit.flatMap(_.transactions) ++ nextRemoteCommit.flatMap(_.transactions) ++
-    revokedCommit.flatMap(_.transactions)
+  // Every tier12 state txInfo is checked for spendability so if tier12States is empty
+  // this means we have no tier12 txs to spend so this is either o mutual close or nothing
+  def tier12States = localCommit.flatMap(_.getState) ++ remoteCommit.flatMap(_.getState) ++
+    nextRemoteCommit.flatMap(_.getState) ++ revokedCommit.flatMap(_.getState)
 
   lazy val allClosings = mutualClose.map(Left.apply) ++
     localCommit.map(Right.apply) ++ remoteCommit.map(Right.apply) ++
     nextRemoteCommit.map(Right.apply) ++ revokedCommit.map(Right.apply)
+
+  lazy val commitTxs = localCommit.map(_.commitTx) ++
+    remoteCommit.map(_.commitTx) ++ nextRemoteCommit.map(_.commitTx)
 }
 
 sealed trait CommitPublished {
   def getState: Seq[PublishStatus]
-  val transactions: Seq[Transaction]
   val commitTx: Transaction
 }
 
 case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], claimHtlcSuccess: Seq[SuccessAndClaim],
                                 claimHtlcTimeout: Seq[TimeoutAndClaim], commitTx: Transaction) extends CommitPublished {
 
-  val transactions: Seq[Transaction] = claimMainDelayed.map(_.tx) ++
-    claimHtlcSuccess.map(_._1.tx) ++ claimHtlcTimeout.map(_._1.tx) ++
-    claimHtlcSuccess.map(_._2.tx) ++ claimHtlcTimeout.map(_._2.tx)
-
-  def getState: Seq[PublishStatus] = {
-    val mainInfo = for (tier1 <- claimMainDelayed) yield (csv(tier1), tier1 -- tier1, tier1.amount)
-    val successInfo = for (tier1 \ tier2 <- claimHtlcSuccess) yield (csv(tier2), tier1 -- tier2, tier2.amount)
-    val timeoutInfo = for (tier1 \ tier2 <- claimHtlcTimeout) yield (cltvAndCsv(tier1, tier2), tier1 -- tier2, tier2.amount)
-    mainInfo ++ successInfo ++ timeoutInfo
+  def getState = {
+    val main = for (t1 <- claimMainDelayed) yield PublishStatus(csv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    val success = for (t1 \ t2 <- claimHtlcSuccess) yield PublishStatus(csv(t2), Seq(t1.tx, t2.tx), t1 -- t2, t2.amount)
+    val timeout = for (t1 \ t2 <- claimHtlcTimeout) yield PublishStatus(cltvAndCsv(t1, t2), Seq(t1.tx, t2.tx), t1 -- t2, t2.amount)
+    main ++ success ++ timeout
   }
 }
 
 case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcSuccess: Seq[ClaimHtlcSuccessTx],
                                  claimHtlcTimeout: Seq[ClaimHtlcTimeoutTx], commitTx: Transaction) extends CommitPublished {
 
-  val transactions: Seq[Transaction] = claimMain.map(_.tx) ++
-    claimHtlcSuccess.map(_.tx) ++ claimHtlcTimeout.map(_.tx)
-
-  def getState: Seq[PublishStatus] = {
-    val mainInfo = for (tier1 <- claimMain) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
-    val successInfo = for (tier1 <- claimHtlcSuccess) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
-    val timeoutInfo = for (tier1 <- claimHtlcTimeout) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
-    mainInfo ++ successInfo ++ timeoutInfo
+  def getState = {
+    val main = for (t1 <- claimMain) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    val success = for (t1 <- claimHtlcSuccess) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    val timeout = for (t1 <- claimHtlcTimeout) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    main ++ success ++ timeout
   }
 }
 
 case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPenalty: Seq[MainPenaltyTx],
                                   commitTx: Transaction) extends CommitPublished {
 
-  val transactions: Seq[Transaction] =
-    claimMain.map(_.tx) ++ claimPenalty.map(_.tx)
-
-  def getState: Seq[PublishStatus] = {
-    val mainInfo = for (tier1 <- claimMain) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
-    val penaltyInfo = for (tier1 <- claimPenalty) yield (cltv(tier1), tier1 -- tier1, tier1.amount)
-    mainInfo ++ penaltyInfo
+  def getState = {
+    val main = for (t1 <- claimMain) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    val penalty = for (t1 <- claimPenalty) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    main ++ penalty
   }
 }
 

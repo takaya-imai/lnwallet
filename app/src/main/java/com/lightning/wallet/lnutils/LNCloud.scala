@@ -61,7 +61,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     }
 
     // Execute if we are not busy and have available tokens and actions
-    case CloudData(_, SetEx(token @ Tuple3(pnt, clear, sig), _*), SetEx(action, _*), _) \ CMDStart if isFree =>
+    case CloudData(_, ##(token @ Tuple3(pnt, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> pnt, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
       val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
@@ -130,7 +130,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 
   def doProcess(some: Any) = (data, some) match {
     // Execute if we are not busy and have available actions
-    case CloudData(_, _, SetEx(action, _*), _) \ CMDStart if isFree =>
+    case CloudData(_, _, ##(action, _*), _) \ CMDStart if isFree =>
       val go = connector.tell(signed(action.data) ++ action.plus, action.path)
       go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
