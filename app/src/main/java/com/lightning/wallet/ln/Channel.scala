@@ -54,7 +54,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
           localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
           Generators.perCommitPoint(localParams.shaSeed, index = 0L),
-          channelFlags = 1.toByte) // TODO: zero to make private
+          channelFlags = 0.toByte)
 
 
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
@@ -138,16 +138,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // NORMAL MODE
 
 
-      // TODO: remove this
-      case (norm @ NormalData(_, commitments, None, None), remote: AnnouncementSignatures, NORMAL) =>
-        val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(LNParams.chainHash, remote.shortChannelId,
-          LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey, commitments.remoteParams.fundingPubkey,
-          LNParams.globalFeatures)
-
-        me SEND AnnouncementSignatures(commitments.channelId,
-          remote.shortChannelId, localNodeSig, localBitcoinSig)
-
-
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
         if add.channelId == norm.commitments.channelId =>
 
@@ -220,7 +210,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // Fail or fulfill incoming HTLCs
       case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
         for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
-          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag, LNParams.receiveExpiry)
+          me doProcess resolveHtlc(LNParams.nodePrivateKey, add,
+            LNParams.bag, LNParams.receiveExpiry)
 
         // And sign once done
         doProcess(CMDProceed)
@@ -254,8 +245,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         // We received a revocation because we sent a commit sig
         val c1 = Commitments.receiveRevocation(norm.commitments, rev)
-        me UPDATE norm.copy(commitments = c1)
-        doProcess(CMDHTLCProcess)
+        val d1 = me STORE norm.copy(commitments = c1)
+        me UPDATE d1 doProcess CMDHTLCProcess
 
 
       case (norm: NormalData, CMDFeerate(rate), NORMAL)
@@ -291,8 +282,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           norm.remoteShutdown.isEmpty =>
 
         // We got their first shutdown so save it and proceed
-        me UPDATE norm.copy(remoteShutdown = Some apply remote)
-        doProcess(CMDProceed)
+        val d1 = norm.copy(remoteShutdown = Some apply remote)
+        me UPDATE d1 doProcess CMDProceed
 
 
       // GUARD: we can't send our shutdown untill all HTLCs are resolved
@@ -400,7 +391,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
         if cr.channelId == recovery.commitments.channelId =>
 
-        // Ask them to spend their current local commit so we can redeem our balance
         me SEND Error(cr.channelId, "Please be so kind as to spend your local current commit")
         me UPDATE recovery.modify(_.commitments.remoteCommit.index).setTo(cr.nextRemoteRevocationNumber - 1)
           .modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
