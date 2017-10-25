@@ -80,13 +80,13 @@ class ShaChainSpec {
 
       var j: Long = ShaChain.largestIndex - i
       while (j != ShaChain.largestIndex) {
-        val ho = ShaChain.getHash(receiver.hashes, ShaChain moves j)
+        val ho = ShaChain.getHash(receiver.hashes)(ShaChain moves j)
         println("receiveHashes ho.isDefined: " + ho.isDefined)
         val k = (ShaChain.largestIndex - j).toInt
         if (k < 50) println("receiveHashes sameElements: " + ho.map(ho1 => java.util.Arrays.equals(expected(k), ho1)) )
         j = j + 1
       }
-      println("receiveHashes final: " + ShaChain.getHash(receiver.hashes, ShaChain moves ShaChain.largestIndex - i - 1).isEmpty)
+      println("receiveHashes final: " + ShaChain.getHash(receiver.hashes)(ShaChain moves ShaChain.largestIndex - i - 1).isEmpty)
     }
 
     import spray.json._

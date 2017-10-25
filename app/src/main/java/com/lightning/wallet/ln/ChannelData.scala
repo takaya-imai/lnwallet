@@ -92,7 +92,7 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
   def tier12States = localCommit.flatMap(_.getState) ++ remoteCommit.flatMap(_.getState) ++
     nextRemoteCommit.flatMap(_.getState) ++ revokedCommit.flatMap(_.getState)
 
-  lazy val allClosings = mutualClose.map(Left.apply) ++
+  lazy val closings = mutualClose.map(Left.apply) ++
     localCommit.map(Right.apply) ++ remoteCommit.map(Right.apply) ++
     nextRemoteCommit.map(Right.apply) ++ revokedCommit.map(Right.apply)
 

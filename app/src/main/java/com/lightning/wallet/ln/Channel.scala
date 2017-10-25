@@ -5,7 +5,9 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
-import fr.acinq.bitcoin.Crypto.PrivateKey
+
+import com.lightning.wallet.ln.crypto.Sphinx.zeroes
+import com.lightning.wallet.ln.crypto.ShaChain
 import java.util.concurrent.Executors
 import scala.collection.mutable
 import scala.util.Success
@@ -14,6 +16,7 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 
 
@@ -333,7 +336,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We're exiting a sync state but don't have enough locks so we keep waiting
-      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0), SYNC)
+      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0, _, _), SYNC)
         if channelId == wait.commitments.channelId =>
 
         BECOME(wait, WAIT_FUNDING_DONE)
@@ -397,18 +400,21 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
         if cr.channelId == recovery.commitments.channelId =>
 
-        val d1 = recovery.modify(_.commitments.remoteCommit.index) setTo cr.nextRemoteRevocationNumber
-        val d2 = d1.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo null // TODO: use real value
-        me UPDATE d2 SEND Error(cr.channelId, "Balance recovery")
+        // Ask them to spend their current local commit so we can redeem our balance
+        me SEND Error(cr.channelId, "Please be so kind as to spend your local current commit")
+        me UPDATE recovery.modify(_.commitments.remoteCommit.index).setTo(cr.nextRemoteRevocationNumber - 1)
+          .modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
 
 
       // SYNC: ONLINE/OFFLINE
 
 
       case (some: HasCommitments, CMDOnline, SYNC) =>
-        me SEND ChannelReestablish(channelId = some.commitments.channelId,
-          nextLocalCommitmentNumber = some.commitments.localCommit.index + 1,
-          nextRemoteRevocationNumber = some.commitments.remoteCommit.index)
+        val secrets = some.commitments.remotePerCommitmentSecrets
+        val yourLastPerCommitmentSecret = secrets.lastIndex.map(ShaChain.moves).flatMap(ShaChain getHash secrets.hashes) getOrElse zeroes(32)
+        val myCurrentPerCommitmentPoint = Generators.perCommitPoint(some.commitments.localParams.shaSeed, some.commitments.localCommit.index)
+        me SEND ChannelReestablish(some.commitments.channelId, some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index,
+          Scalar(yourLastPerCommitmentSecret), myCurrentPerCommitmentPoint)
 
 
       case (wait: WaitFundingDoneData, CMDOffline, WAIT_FUNDING_DONE) => BECOME(wait, SYNC)

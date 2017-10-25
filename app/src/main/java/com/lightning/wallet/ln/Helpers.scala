@@ -3,9 +3,10 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
-import com.lightning.wallet.ln.crypto.ShaChain._
 import com.lightning.wallet.ln.crypto.Generators._
-import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
+import com.lightning.wallet.ln.crypto.ShaChain
+import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
+
 import scala.util.{Success, Try}
 
 
@@ -37,13 +38,11 @@ object Helpers { me =>
     val remotePubkey = derivePubKey(remoteParams.paymentBasepoint, remotePerCommitmentPoint)
     val remoteDelayedPubkey = derivePubKey(remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
     val remoteRevocationPubkey = revocationPubKey(localParams.revocationSecret.toPoint, remotePerCommitmentPoint)
+    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint, localParams.paymentKey.toPoint,
+      !localParams.isFunder, Satoshi(remoteParams.dustLimitSatoshis), remotePubkey, remoteRevocationPubkey, localParams.toSelfDelay,
+      remoteDelayedPubkey, localPubkey, spec)
 
-    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint,
-      localParams.paymentKey.toPoint, !localParams.isFunder, Satoshi(remoteParams.dustLimitSatoshis),
-      remotePubkey, remoteRevocationPubkey, localParams.toSelfDelay, remoteDelayedPubkey,
-      localPubkey, spec)
-
-    val (htlcTimeoutTxs, htlcSuccessTxs) = Scripts.makeHtlcTxs(commitTx.tx, Satoshi(remoteParams.dustLimitSatoshis),
+    val htlcTimeoutTxs \ htlcSuccessTxs = Scripts.makeHtlcTxs(commitTx.tx, Satoshi(remoteParams.dustLimitSatoshis),
       remoteRevocationPubkey, localParams.toSelfDelay, remotePubkey, remoteDelayedPubkey, localPubkey, spec)
 
     (commitTx, htlcTimeoutTxs, htlcSuccessTxs, remotePubkey, remoteRevocationPubkey)
@@ -142,10 +141,13 @@ object Helpers { me =>
     def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit,
                                    bag: PaymentInfoBag): RemoteCommitPublished = {
 
-      val localPrivkey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
-      val (remoteCommitTx, timeoutTxs, successTxs, remotePubkey, remoteRevPubkey) = makeRemoteTxs(remoteCommit.index,
-        commitments.localParams, commitments.remoteParams, commitments.commitInput, remoteCommit.remotePerCommitmentPoint,
-        remoteCommit.spec)
+      val localPrivkey: PrivateKey =
+        derivePrivKey(commitments.localParams.paymentKey,
+          remoteCommit.remotePerCommitmentPoint)
+
+      val (remoteCommitTx, timeoutTxs, successTxs, remotePubkey, remoteRevPubkey) =
+        makeRemoteTxs(remoteCommit.index, commitments.localParams, commitments.remoteParams,
+          commitments.commitInput, remoteCommit.remotePerCommitmentPoint, remoteCommit.spec)
 
       val claimSuccessTxs = for {
         HtlcTimeoutTx(_, _, add) <- timeoutTxs
@@ -184,10 +186,9 @@ object Helpers { me =>
       val txNumber = Scripts.obscuredCommitTxNumber(number = Scripts.decodeTxNumber(tx.txIn.head.sequence, tx.lockTime),
         !commitments.localParams.isFunder, commitments.remoteParams.paymentBasepoint, commitments.localParams.paymentKey.toPoint)
 
-      val index = moves(largestTxIndex - txNumber)
       val hashes = commitments.remotePerCommitmentSecrets.hashes
-
-      getHash(hashes, index) map { remotePerCommitmentSecret =>
+      val index = ShaChain.moves(ShaChain.largestTxIndex - txNumber)
+      ShaChain.getHash(hashes)(index) map { remotePerCommitmentSecret =>
         val remotePerCommitmentSecretScalar = Scalar(remotePerCommitmentSecret)
         val remotePerCommitmentPoint = remotePerCommitmentSecretScalar.toPoint
 

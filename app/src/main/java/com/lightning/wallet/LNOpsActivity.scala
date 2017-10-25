@@ -105,7 +105,7 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   // We need to show the best closing with most confirmations
-  private def manageClosing(data: ClosingData) = data.allClosings maxBy {
+  private def manageClosing(data: ClosingData) = data.closings maxBy {
     case Left(mutualTx) => txStatus(mutualTx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
     case Right(info) => txStatus(info.commitTx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
   } match {
