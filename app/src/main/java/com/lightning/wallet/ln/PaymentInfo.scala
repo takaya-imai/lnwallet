@@ -43,14 +43,13 @@ case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
 }
 
 trait PaymentInfoBag { me =>
-  def updateFailWaiting: Unit
   def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
   def updateReceived(add: UpdateAddHtlc): Unit
 
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
-  def putPaymentInfo(info: PaymentInfo): Unit
+  def upsertPaymentInfo(info: PaymentInfo): Unit
 
   private def toFulfill(img: BinaryData) = UpdateFulfillHtlc(null, 0L, img)
   def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {

@@ -135,7 +135,6 @@ with SearchBar { me =>
 
     override def onProcess = {
       case (chan, norm: NormalData, _: CommitSig)
-        // GUARD: notify and vibrate because HTLC is fulfilled
         if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
         notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
         updTitle(chan)
@@ -323,8 +322,8 @@ with SearchBar { me =>
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
-        // Received amount is set to 0 msat for now, final amount may be higher than requested
-        bag putPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, chanId, HIDDEN)
+        // Received amount is set to 0 msat for now, incoming amount may be higher than requested here
+        bag upsertPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, chanId, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }

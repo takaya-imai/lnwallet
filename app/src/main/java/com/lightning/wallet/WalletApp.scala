@@ -233,7 +233,6 @@ class WalletApp extends Application { me =>
       ConnectionManager.listeners += ChannelManager.reconnectListener
       startDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.alive
-      bag.updateFailWaiting
       RatesSaver.update
     }
   }

@@ -92,7 +92,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
         to[PaymentRequest](rc string request), rc string chanId, rc int status)
     }
 
-  def putPaymentInfo(info: PaymentInfo) = db txWrap {
+  def upsertPaymentInfo(info: PaymentInfo) = db txWrap {
     val paymentHashString = info.request.paymentHash.toString
     val received = info match { case in: IncomingPayment => in.received.amount.toString case _ => null }
     val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case _ => null }
@@ -106,7 +106,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     RichCursor apply cursor headTry toPaymentInfo
   }
 
-  def updateFailWaiting = db.change(updFailWaitingSql)
   def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
@@ -124,7 +123,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case None =>
       // We may have updated bad nodes or bad channels in routing1
       // Should save them anyway in case of user initiated payment retry
-      me putPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
+      me upsertPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
   }
 
   override def onError = {
@@ -154,7 +153,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case (_, _, cmd: CMDAddHtlc) =>
       // Channel has accepted this payment, now we have to save it
       // Using REPLACE instead of INSERT in SQL to update duplicates
-      me putPaymentInfo cmd.out
+      me upsertPaymentInfo cmd.out
 
     case (chan, norm: NormalData, _: CommitSig) =>
       // spec.fulfilled: update as SUCCESS in a database
@@ -172,5 +171,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       }
 
       uiNotify
+  }
+
+  override def onBecome = {
+    case (_, some: HasCommitments, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
+      // WAITING payments will be either redeemed on-chain or refunded
+      db.change(updFailWaitingSql)
   }
 }
