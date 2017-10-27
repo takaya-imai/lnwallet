@@ -29,9 +29,8 @@ import org.bitcoinj.core.ECKey
 
 abstract class Cloud extends StateMachine[CloudData] {
   // Persisted data exchange with a maintenance server
-
   def checkIfWorks: Obs[Any] = Obs just true
-  protected[this] var isFree: Boolean = true
+  protected[this] var isFree = true
   val connector: Connector
 
   def UPDATE(d1: CloudData) = {
@@ -74,7 +73,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         case _ => Tools errlog serverError
       }
 
-    // Start a new request while payment is in progress
+    // Check if payment is fulfilled and get tokens if it is
     case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
 
       bag getPaymentInfo request.paymentHash match {

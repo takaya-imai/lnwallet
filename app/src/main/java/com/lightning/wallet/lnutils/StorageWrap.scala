@@ -110,7 +110,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
 
-  def resend(chan: Channel, hash: BinaryData, fail: UpdateFailHtlc) = for {
+  def retry(chan: Channel, hash: BinaryData, fail: UpdateFailHtlc) = for {
     outgoing @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(hash)
     routing1 = cutRoutes(fail, routing, pr.nodeId)
   } buildPayment(routing1, pr, chan) match {
@@ -121,6 +121,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       chan process PlainAddHtlc(outgoing1)
 
     case None =>
+      // uiNotify will be called below a bit later
       // We may have updated bad nodes or bad channels in routing1
       // Should save them anyway in case of user initiated payment retry
       me upsertPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
@@ -166,7 +167,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
         for (htlc \ fail <- norm.commitments.localCommit.spec.failed) fail match {
           case _: UpdateFailMalformedHtlc => updateStatus(FAILURE, htlc.add.paymentHash)
-          case fail: UpdateFailHtlc => resend(chan, htlc.add.paymentHash, fail)
+          case fail: UpdateFailHtlc => retry(chan, htlc.add.paymentHash, fail)
         }
       }
 
@@ -174,8 +175,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   override def onBecome = {
-    case (_, some: HasCommitments, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
-      // WAITING payments will be either redeemed on-chain or refunded
+    case (_, _, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
+      // WAITING payments will be either redeemed or refunded at this point
+      // This does not catch a NORMAL -> SYNC case with uncommitted HTLCs
       db.change(updFailWaitingSql)
   }
 }

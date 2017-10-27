@@ -38,6 +38,7 @@ case class DescriptionHashTag(hash: BinaryData) extends Tag {
 case class RoutingInfoTag(route: ExtraPaymentRoute) extends Tag {
   require(route.nonEmpty, "Routing info tag has to contain one or more routes")
   def toInt5s: Int5Seq = encode(Bech32 eight2five route.flatMap(_.pack), 'r')
+  def targetId: PublicKey = route.head.nodeId
 }
 
 object RoutingInfoTag {

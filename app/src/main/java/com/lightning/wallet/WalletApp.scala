@@ -35,7 +35,7 @@ import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.LNParams._
-import com.lightning.wallet.ln.PaymentHop.PublicPaymentRoute
+import com.lightning.wallet.ln.PaymentHop.{PaymentRoute, PublicPaymentRoute}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PublicKey
@@ -152,8 +152,11 @@ class WalletApp extends Application { me =>
     }
 
     def createChannel(bootstrap: ChannelData) = new Channel {
+      val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
       def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
+      // First add listeners, then specifically call doProcess so it runs on UI thread
+      doProcess(bootstrap)
 
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
@@ -161,31 +164,28 @@ class WalletApp extends Application { me =>
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
         cloud.connector.getChildTxs(cd.commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
       }
-
-      // Listeners should always be added first
-      // and only then a doProcess should be called to trigger them
-      val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
-      doProcess(bootstrap)
     }
 
-    // Get routes from maintenance server and form an OutgoingPayment if they exist
-    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) = {
-      val targetId = if (pr.routingInfo.isEmpty) pr.nodeId else pr.routingInfo.head.route.head.nodeId
-      val extra = if (pr.routingInfo.isEmpty) Vector.empty else pr.routingInfo.head.route
+    // Get routes from maintenance server and form an OutgoingPayment if routes exist
+    // If payment request contains extra routing info then we also ask for assisted routes
+    // Once direct route and assisted routes are fetched we combine them into single sequence
+    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) =
 
-      alive.headOption match {
-        case Some(chan) if chan.data.announce.nodeId == targetId =>
-          val rd = RoutingData(Vector(extra), Set.empty, Set.empty)
-          Obs just buildPayment(rd, pr, chan)
+      Obs from alive.headOption flatMap { chan =>
+        def findRoutes(targetId: PublicKey) = chan.data.announce.nodeId match {
+          case directPeerNode if directPeerNode == targetId => Obs just Vector(Vector.empty)
+          case _ => cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetId)
+        }
 
-        case Some(chan) =>
-          val obs = cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetId)
-          for (routes <- obs) yield buildPayment(RoutingData(routes.map(_ ++ extra), badNodes, badChannels), pr, chan)
+        def augmentedRoutes(tag: RoutingInfoTag) = for {
+          publicRoutesPartVector <- findRoutes(tag.targetId)
+        } yield publicRoutesPartVector.flatMap(_ ++ tag.route)
 
-        case None =>
-          Obs.empty
+        val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentedRoutes)
+        findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
+          buildPayment(rd = RoutingData(direct ++ assisted, badNodes, badChannels), pr, chan)
+        }
       }
-    }
   }
 
   abstract class WalletKit extends AbstractKit {

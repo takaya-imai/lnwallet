@@ -3,7 +3,6 @@ package com.lightning.wallet
 import R.string._
 import com.lightning.wallet.Utils._
 import com.journeyapps.barcodescanner._
-
 import com.lightning.wallet.ln.Tools.{none, wrap}
 import com.lightning.wallet.ln.PaymentRequest
 import org.bitcoinj.uri.BitcoinURI
@@ -29,7 +28,7 @@ class ScanActivity extends TimerActivity with BarcodeCallback { me =>
   def tryParseQR(text: String) = try {
     lastAttempt = System.currentTimeMillis
     beeper.playRawResource(R.raw.beep, false)
-    // This may throw which is what we need
+    // This may throw which is fine here
     app.TransData recordValue text
 
     // Find out where to go

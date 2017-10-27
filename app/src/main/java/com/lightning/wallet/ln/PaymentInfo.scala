@@ -51,10 +51,9 @@ trait PaymentInfoBag { me =>
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
   def upsertPaymentInfo(info: PaymentInfo): Unit
 
-  private def toFulfill(img: BinaryData) = UpdateFulfillHtlc(null, 0L, img)
   def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
-    case Seq(_, preimage, _) if preimage.size == 32 => me updatePreimage toFulfill(preimage)
-    case Seq(_, _, _, preimage, _) if preimage.size == 32 => me updatePreimage toFulfill(preimage)
+    case Seq(_, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
+    case Seq(_, _, _, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
   }
 }
 

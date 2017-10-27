@@ -5,8 +5,8 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import com.lightning.wallet.Utils.app
-import com.lightning.wallet.ln.Broadcaster.PublishStatus
 import org.bitcoinj.core.Sha256Hash
+
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import rx.lang.scala.{Observable => Obs}
 
