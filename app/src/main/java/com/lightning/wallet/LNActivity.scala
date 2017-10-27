@@ -142,6 +142,7 @@ with SearchBar { me =>
   }
 
   private[this] var sendPayment: PaymentRequest => Unit = none
+  private[this] var closePaymentChannel = anyToRunnable(none)
   private[this] var makePaymentRequest = anyToRunnable(none)
   private[this] var whenStop = anyToRunnable(super.onStop)
   override def onStop = whenStop.run
@@ -196,13 +197,8 @@ with SearchBar { me =>
   // APP MENU
 
   override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
-    if (menu.getItemId == R.id.actionCloseChannel) closeAllActiveChannels
+    if (menu.getItemId == R.id.actionCloseChannel) closePaymentChannel.run
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
-  }
-
-  def closeAllActiveChannels = checkPass(me getString ln_close) { pass =>
-    // Close all of the channels just in case we have more than one active
-    for (chan <- app.ChannelManager.alive) chan process CMDShutdown
   }
 
   def updTitle(chan: Channel) = animateTitle {
@@ -309,6 +305,18 @@ with SearchBar { me =>
       val ok = alert getButton BUTTON_POSITIVE
       ok setOnClickListener onButtonTap(sendAttempt)
       for (sum <- pr.amount) rateManager setSum Try(sum)
+    }
+
+    closePaymentChannel = anyToRunnable {
+      val nodeView = me getString ln_ops_start_node_view
+      val humanId = chan.data.announce.nodeId.toString grouped 3 mkString "\u0020"
+      val humanAddress = chan.data.announce.addresses.headOption.map(_.getHostString).orNull
+      val nodeDetails = nodeView.format(chan.data.announce.alias, humanAddress, humanId)
+
+      // Close all of the channels just in case we have more than one active
+      checkPass(s"$nodeDetails<br><br>${me getString ln_close}".html) { _ =>
+        for (chan <- app.ChannelManager.alive) chan process CMDShutdown
+      }
     }
 
     makePaymentRequest = anyToRunnable {

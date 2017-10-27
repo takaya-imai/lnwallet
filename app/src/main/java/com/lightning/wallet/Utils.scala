@@ -69,15 +69,13 @@ object Utils {
   val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")
   val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeCNY -> strYuan)
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYuan -> typeCNY)
+  def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
 
   def changeDenom = {
     val index1 = (denoms.indexOf(denom) + 1) % denoms.size
     app.prefs.edit.putInt(AbstractKit.DENOMINATION, index1).commit
     denom = denoms(index1)
   }
-
-  def isMnemonicCorrect(mnemonic: String) =
-    mnemonic.split("\\s+").length > 11
 
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
