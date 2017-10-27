@@ -124,7 +124,7 @@ class WalletApp extends Application { me =>
     // it's needed for reconnection but be vary of this
     def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
     def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
-    def reconnect(cv: ChannelVec) = cv.map(_.data.announce) foreach requestConnection
+    def reconnect(of: ChannelVec) = of.map(_.data.announce) foreach requestConnection
 
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
@@ -177,11 +177,11 @@ class WalletApp extends Application { me =>
           case _ => cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetId)
         }
 
-        def augmentRoutes(tag: RoutingInfoTag) = for {
+        def augmentAssisted(tag: RoutingInfoTag) = for {
           publicRoutesPartVector <- findRoutes(tag.targetId)
         } yield publicRoutesPartVector.flatMap(_ ++ tag.route)
 
-        val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentRoutes)
+        val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentAssisted)
         findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           buildPayment(rd = RoutingData(direct ++ assisted, badNodes, badChannels), pr, chan)
         }

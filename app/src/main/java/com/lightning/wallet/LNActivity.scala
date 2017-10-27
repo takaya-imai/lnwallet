@@ -211,14 +211,22 @@ with SearchBar { me =>
   }
 
   def manageActive(chan: Channel) = {
-    def onPaymentError(e: Throwable) = e.getMessage match {
-      case FROMBLACKLISTED => onFail(me getString err_ln_black)
-      case techDetails => onFail(techDetails)
-    }
+    def pay(rd: RoutingData, pr: PaymentRequest) = {
+      // Show loader, update subtitle, issue routes request to server
+      // then clear loader and process response notifying user of errors
 
-    val onPaymentResult: Option[OutgoingPayment] => Unit = {
-      case Some(payment) => chan process PlainAddHtlc(payment)
-      case None => onFail(me getString err_ln_no_route)
+      def onPaymentError(e: Throwable) = e.getMessage match {
+        case FROMBLACKLISTED => onFail(me getString err_ln_black)
+        case techDetails => onFail(techDetails)
+      }
+
+      val progressBarManager = new ProgressBarManager
+      notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+      app.ChannelManager.outPaymentObs(rd.badNodes, rd.badChannels, pr)
+        .doOnTerminate(progressBarManager.delayedRemove).foreach(onNext = {
+          case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
+          case None => onFail(me getString err_ln_no_route)
+        }, onPaymentError)
     }
 
     list setOnItemClickListener onTap { pos =>
@@ -238,7 +246,7 @@ with SearchBar { me =>
         paymentProof setVisibility View.VISIBLE
 
         paymentProof setOnClickListener onButtonTap {
-          val serializedRequest = PaymentRequest.write(payment.request)
+          val serializedRequest = PaymentRequest write payment.request
           app setBuffer getString(ln_proof).format(serializedRequest,
             payment.preimage.toString)
         }
@@ -259,14 +267,12 @@ with SearchBar { me =>
           paymentDetails setText s"$description<br><br>$humanSent".html
 
           def doManualPaymentRetry = rm(alert) {
-            val progressBarManager = new ProgressBarManager
-            notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-            app.ChannelManager.outPaymentObs(out.routing.badNodes, out.routing.badChannels, out.request)
-              .doOnTerminate(progressBarManager.delayedRemove).foreach(onPaymentResult, onPaymentError)
+            // With bad nodes and channels filtering
+            pay(out.routing, out.request)
           }
 
-          if (out.actualStatus == FAILURE && out.request.isFresh) {
-            // Users may issue a server request to get an updated set of routes for failed but fresh payments
+          if (out.actualStatus != SUCCESS && out.request.isFresh) {
+            // Users may issue another server request to get an updated set of routes for fresh payments
             val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
             paymentRetryAgain setOnClickListener onButtonTap(doManualPaymentRetry)
             paymentRetryAgain setVisibility View.VISIBLE
@@ -295,11 +301,8 @@ with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
 
         case _ => rm(alert) {
-          val progressBarManager = new ProgressBarManager
-          notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-          app.ChannelManager.outPaymentObs(Set.empty, Set.empty, pr)
-            .doOnTerminate(progressBarManager.delayedRemove)
-            .foreach(onPaymentResult, onPaymentError)
+          // Not using any filtering on first request here
+          pay(RoutingData(Vector.empty, Set.empty, Set.empty), pr)
         }
       }
 
