@@ -63,7 +63,6 @@
     <string name="amount_hint_sat"><![CDATA[Amount in Satoshi<br><small>%1$s</small>]]></string>
     <string name="amount_hint_btc"><![CDATA[Amount in Bitcoin<br><small>%1$s</small>]]></string>
     <string name="amount_hint_mbtc"><![CDATA[Amount in mBTC<br><small>%1$s</small>]]></string>
-    <string name="amount_hint_bit"><![CDATA[Amount in Bits<br><small>%1$s</small>]]></string>
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
 
     <string name="dialog_address_absent">Clipboard does not contain an Address</string>

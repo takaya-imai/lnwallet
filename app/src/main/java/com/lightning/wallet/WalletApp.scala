@@ -177,11 +177,11 @@ class WalletApp extends Application { me =>
           case _ => cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetId)
         }
 
-        def augmentedRoutes(tag: RoutingInfoTag) = for {
+        def augmentRoutes(tag: RoutingInfoTag) = for {
           publicRoutesPartVector <- findRoutes(tag.targetId)
         } yield publicRoutesPartVector.flatMap(_ ++ tag.route)
 
-        val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentedRoutes)
+        val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentRoutes)
         findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           buildPayment(rd = RoutingData(direct ++ assisted, badNodes, badChannels), pr, chan)
         }

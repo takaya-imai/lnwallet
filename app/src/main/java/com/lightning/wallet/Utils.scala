@@ -59,7 +59,7 @@ object Utils {
   lazy val appName = app getString app_name
   lazy val sumIn = app getString txs_sum_in
   lazy val sumOut = app getString txs_sum_out
-  lazy val denoms = List(SatDenomination, BitDenomination, MBtcDenomination, BtcDenomination)
+  lazy val denoms = List(SatDenomination, MBtcDenomination, BtcDenomination)
   val textType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
   val passType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
   val coloredOut = (amt: Satoshi) => sumOut.format(denom withSign amt)

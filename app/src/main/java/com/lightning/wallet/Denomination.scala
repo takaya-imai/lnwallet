@@ -11,7 +11,6 @@ import org.bitcoinj.core.Coin
 
 object Denomination {
   val sat2msatFactor = 1000L
-  val bit2msatFactor = 100000L
   val mbtc2msatFactor = 100000000L
   val btc2msatFactor = 100000000000L
   val locale = new java.util.Locale("en", "US")
@@ -41,16 +40,6 @@ object SatDenomination extends Denomination {
   fmt setDecimalFormatSymbols symbols
   def withSign(msat: MilliSatoshi) =
     "ⓢ\u00A0" + formatted(msat)
-}
-
-object BitDenomination extends Denomination {
-  val fmt = new DecimalFormat("###,###,##0.00###")
-  val txt = app getString amount_hint_bit
-  val factor = bit2msatFactor
-
-  fmt setDecimalFormatSymbols symbols
-  def withSign(msat: MilliSatoshi) =
-    formatted(msat) + "\u00A0Bits"
 }
 
 object MBtcDenomination extends Denomination {
