@@ -141,17 +141,17 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   override def onProcess = {
-    case (_, _, add: UpdateAddHtlc) =>
+    case (_, _: NormalData, add: UpdateAddHtlc) =>
       // Payment request may not contain an amount
       // Or an actual incoming amount paid may differ
       // We need to record exactly how much was paid
       me updateReceived add
 
-    case (_, _, fulfill: UpdateFulfillHtlc) =>
+    case (_, _: NormalData, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage right away
       me updatePreimage fulfill
 
-    case (_, _, cmd: CMDAddHtlc) =>
+    case (_, _: NormalData, cmd: CMDAddHtlc) =>
       // Channel has accepted this payment, now we have to save it
       // Using REPLACE instead of INSERT in SQL to update duplicates
       me upsertPaymentInfo cmd.out

@@ -9,10 +9,13 @@ import android.net.Uri
 
 object StorageTable extends Table {
   val (table, key, value) = ("storage", "value", "key")
-  def newSql = s"INSERT OR IGNORE INTO $table ($key, $value) VALUES (?, ?)"
   def updSql = s"UPDATE $table SET $value = ? WHERE $key = ?"
   def selectSql = s"SELECT * FROM $table WHERE $key = ?"
   def killSql = s"DELETE FROM $table WHERE $key = ?"
+
+  def newSql = s"""
+    INSERT OR IGNORE INTO $table
+    ($key, $value) VALUES (?, ?)"""
 
   def createSql = s"""
     CREATE TABLE $table(
@@ -24,10 +27,13 @@ object StorageTable extends Table {
 
 object ChannelTable extends Table {
   val (table, identifier, data) = ("channel", "identifier", "data")
-  def newSql = s"INSERT OR IGNORE INTO $table ($identifier, $data) VALUES (?, ?)"
   def updSql = s"UPDATE $table SET $data = ? WHERE $identifier = ?"
-  def selectAllSql = s"SELECT * FROM $table ORDER BY $id DESC"
   def killSql = s"DELETE FROM $table WHERE $identifier = ?"
+  def selectAllSql = s"SELECT * FROM $table"
+
+  def newSql = s"""
+    INSERT OR IGNORE INTO $table
+    ($identifier, $data) VALUES (?, ?)"""
 
   def createSql = s"""
     CREATE TABLE $table(

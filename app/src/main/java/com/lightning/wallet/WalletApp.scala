@@ -116,15 +116,11 @@ class WalletApp extends Application { me =>
     import ConnectionManager._
     type ChannelVec = Vector[Channel]
 
-    // New NORMAL channels should always be prepended
-    // while new channel in RECOVERY mode should be appended
-    var all: ChannelVec = ChannelWrap.get map createChannel
-
-    // Will also select a channel in RECOVERY mode
-    // it's needed for reconnection but be vary of this
-    def alive: ChannelVec = all.filterNot(_.state == Channel.CLOSING)
-    def from(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id)
-    def reconnect(of: ChannelVec) = of.map(_.data.announce) foreach requestConnection
+    var all: ChannelVec = ChannelWrap.get map createChannel // Receive CMDSpent and CMDBestHeight, nothing else
+    def connected: ChannelVec = all.filter(_.state != Channel.CLOSING) // Those who need a connection to ln peer
+    def alive: ChannelVec = connected.filter(_.state != Channel.REFUNDING) // Those excluding CLOSING and REFUNDING
+    def fromNode(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id) // Those from specific ln peer
+    def reconnect(of: ChannelVec) = of.map(_.data.announce).distinct foreach requestConnection
 
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
@@ -133,22 +129,23 @@ class WalletApp extends Application { me =>
         bag.extractPreimage(spent.tx)
       }
 
-      def height = for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
-      override def onBlocksDownloaded(p: Peer, b: Block, fb: FilteredBlock, left: Int) = if (left < 1) height
-      override def onChainDownloadStarted(p: Peer, left: Int) = if (left < 1) height
+      def tellHeight(left: Int) = if (left < 1) for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
+      override def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, left: Int) = tellHeight(left)
+      override def onChainDownloadStarted(peer: Peer, left: Int) = tellHeight(left)
     }
 
     val socketEventsListener = new ConnectionListener {
-      override def onOperational(id: PublicKey, their: Init) = from(alive, id).foreach(_ process CMDOnline)
-      override def onTerminalError(id: PublicKey) = from(alive, id).foreach(_ process CMDShutdown)
-      override def onDisconnect(id: PublicKey) = from(alive, id).foreach(_ process CMDOffline)
-      override def onMessage(msg: LightningMessage) = alive.foreach(_ process msg)
-    }
+      override def onOperational(id: PublicKey, their: Init) = fromNode(connected, id).foreach(_ process CMDOnline)
+      override def onTerminalError(id: PublicKey) = fromNode(connected, id).foreach(_ process CMDShutdown)
+      override def onMessage(msg: LightningMessage) = connected.foreach(_ process msg)
 
-    val reconnectListener = new ConnectionListener {
-      override def onDisconnect(id: PublicKey) = Obs.just(Tools log s"Reconnecting socket $id")
-        .delay(5.seconds).subscribe(_ => ChannelManager reconnect from(alive, id), Tools.errlog)
+      override def onDisconnect(id: PublicKey) =
+        fromNode(connected, id) match { case needsReconnect =>
+          val delayed = Obs.just(Tools log s"Reconnecting $id").delay(5.seconds)
+          delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
+          needsReconnect.foreach(_ process CMDOffline)
+        }
     }
 
     def createChannel(bootstrap: ChannelData) = new Channel {
@@ -203,10 +200,8 @@ class WalletApp extends Application { me =>
 //      CheckpointManager.checkpoint(params, pts, store, time)
     }
 
-    def decryptSeed(pass: String) = {
-      val scrypt = wallet.getKeyCrypter
-      wallet.getKeyChainSeed.decrypt(scrypt,
-        pass, scrypt deriveKey pass)
+    def decryptSeed(pass: String) = wallet.getKeyCrypter match { case crypter =>
+      wallet.getKeyChainSeed.decrypt(crypter, pass, crypter deriveKey pass)
     }
 
     def setupAndStartDownload = {
@@ -230,9 +225,8 @@ class WalletApp extends Application { me =>
 
       wallet.autosaveToFile(walletFile, 250, MILLISECONDS, null)
       ConnectionManager.listeners += ChannelManager.socketEventsListener
-      ConnectionManager.listeners += ChannelManager.reconnectListener
       startDownload(ChannelManager.chainEventsListener)
-      ChannelManager reconnect ChannelManager.alive
+      ChannelManager reconnect ChannelManager.connected
       RatesSaver.update
     }
   }

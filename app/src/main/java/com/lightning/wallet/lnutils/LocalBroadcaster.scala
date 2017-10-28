@@ -35,9 +35,11 @@ object LocalBroadcaster extends Broadcaster { me =>
     case (_, refund: RefundingData, _, REFUNDING) =>
       app.kit watchFunding refund.commitments
 
-    case (chan, _, SYNC, NORMAL) =>
-      // Will be sent once on app lauch
-      chan process CMDFeerate(feeRatePerKw)
+    case (chan, norm: NormalData, SYNC, NORMAL) =>
+      // Check for fee changes once on channel becoming online
+      val currentFee = norm.commitments.localCommit.spec.feeratePerKw
+      val shouldUpdate = LNParams.shouldUpdateFee(currentFee, feeRatePerKw)
+      if (shouldUpdate) chan.sendFeeUpdate(norm, feeRatePerKw)
   }
 
   override def onProcess = {

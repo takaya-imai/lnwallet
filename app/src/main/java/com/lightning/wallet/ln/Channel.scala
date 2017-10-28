@@ -249,16 +249,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE d1 doProcess CMDHTLCProcess
 
 
-      case (norm: NormalData, CMDFeerate(rate), NORMAL)
-        // GUARD: only send fee updates if the fee gap between nodes is large enough
-        if LNParams.shouldUpdateFee(norm.commitments.localCommit.spec.feeratePerKw, rate) =>
-        Commitments.sendFee(norm.commitments, rate) foreach { case c1 \ updateFeeMessage =>
-          // Periodic fee updates to ensure commit txs could be confirmed on a blockchain
-          me UPDATE norm.copy(commitments = c1) SEND updateFeeMessage
-          doProcess(CMDProceed)
-        }
-
-
       // NORMAL: SHUTDOWN
 
 
@@ -475,6 +465,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     // Change has been successfully processed
     events onProcess Tuple3(me, data, change)
   }
+
+  def sendFeeUpdate(norm: NormalData, rate: Long) =
+    Commitments.sendFee(norm.commitments, rate) foreach { case c1 \ updateFeeMessage =>
+      // Periodic fee updates to ensure commit txs could be confirmed on a blockchain
+      me UPDATE norm.copy(commitments = c1) SEND updateFeeMessage
+      doProcess(CMDProceed)
+    }
 
   private def makeFundingLocked(cs: Commitments) = {
     val point = Generators.perCommitPoint(cs.localParams.shaSeed, index = 1)

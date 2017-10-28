@@ -106,6 +106,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   private def onPeerSelected(position: Int) = hideKeys {
     val (announce: NodeAnnouncement, _) = adapter getItem position
     val chan = app.ChannelManager createChannel InitData(announce)
+    // This channel is not yet in ChannelManager.all so we need
+    // a dedicated listeners below to be added just for it
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(message: LightningMessage) = chan process message
