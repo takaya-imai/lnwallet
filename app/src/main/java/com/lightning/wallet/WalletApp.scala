@@ -35,7 +35,6 @@ import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.LNParams._
-import com.lightning.wallet.ln.PaymentHop.{PaymentRoute, PublicPaymentRoute}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import fr.acinq.bitcoin.Crypto.PublicKey
@@ -175,12 +174,13 @@ class WalletApp extends Application { me =>
         }
 
         def augmentAssisted(tag: RoutingInfoTag) = for {
-          publicRoutesPartVector <- findRoutes(tag.targetId)
-        } yield publicRoutesPartVector.flatMap(_ ++ tag.route)
+          publicRoutes <- findRoutes(tag.route.head.nodeId)
+        } yield publicRoutes.flatMap(_ ++ tag.route)
 
         val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentAssisted)
         findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
-          buildPayment(rd = RoutingData(direct ++ assisted, badNodes, badChannels), pr, chan)
+          val routes = for (route <- direct ++ assisted) yield buildRelativeRoute(route, pr.finalSum.amount)
+          buildPayment(RoutingData(routes, badNodes, badChannels), pr, chan)
         }
       }
   }

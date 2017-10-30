@@ -6,7 +6,7 @@ import fr.acinq.bitcoin.Protocol._
 import fr.acinq.eclair.crypto.BitStream._
 import com.lightning.wallet.ln.PaymentRequest._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import com.lightning.wallet.ln.PaymentHop.ExtraPaymentRoute
+import com.lightning.wallet.ln.PaymentInfo.ExtraPaymentRoute
 import fr.acinq.eclair.crypto.BitStream
 import java.nio.ByteOrder.BIG_ENDIAN
 import java.math.BigInteger
@@ -38,7 +38,6 @@ case class DescriptionHashTag(hash: BinaryData) extends Tag {
 case class RoutingInfoTag(route: ExtraPaymentRoute) extends Tag {
   require(route.nonEmpty, "Routing info tag has to contain one or more routes")
   def toInt5s: Int5Seq = encode(Bech32 eight2five route.flatMap(_.pack), 'r')
-  def targetId: PublicKey = route.head.nodeId
 }
 
 object RoutingInfoTag {

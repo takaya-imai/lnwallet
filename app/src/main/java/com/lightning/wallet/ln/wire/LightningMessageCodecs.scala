@@ -329,19 +329,11 @@ object LightningMessageCodecs { me =>
       (int32 withContext "outgoing_cltv_value") ::
       (ignore(8 * 12) withContext "unused_with_v0_version_on_header")
 
-  private val extraHop =
-    (publicKey withContext "nodeId") ::
-      (int64 withContext "shortChannelId") ::
-      (uint32 withContext "fee") ::
-      (uint16 withContext "cltvExpiryDelta")
-
   private val hop =
     (publicKey withContext "nodeId") ::
-      (publicKey withContext "nextNodeId") ::
       (channelUpdateCodec withContext "lastUpdate")
 
   val perHopPayloadCodec: Codec[PerHopPayload] = perHopPayload.as[PerHopPayload]
-  val extraHopCodec: Codec[ExtraHop] = extraHop.as[ExtraHop]
   val hopCodec: Codec[Hop] = hop.as[Hop]
 
   val lightningMessageCodec =

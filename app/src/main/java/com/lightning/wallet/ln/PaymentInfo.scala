@@ -1,64 +1,29 @@
 package com.lightning.wallet.ln
 
+import java.nio.ByteOrder._
+import fr.acinq.bitcoin.Protocol._
+import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.crypto.Sphinx._
+import com.lightning.wallet.ln.crypto.MultiStreamUtils._
 import com.lightning.wallet.ln.wire.FailureMessageCodecs._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import com.lightning.wallet.ln.Tools.random
+import scala.language.postfixOps
+import scodec.bits.BitVector
+import scodec.Attempt
+
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import scala.util.{Success, Try}
 
-import com.lightning.wallet.ln.PaymentHop.PaymentRoute
-import com.lightning.wallet.ln.Tools.random
-import scodec.bits.BitVector
-import scodec.Attempt
-
-
-trait PaymentInfo {
-  def actualStatus: Int
-  val preimage: BinaryData
-  val request: PaymentRequest
-  val chanId: BinaryData
-  val status: Int
-}
-
-case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData,
-                           request: PaymentRequest, chanId: BinaryData,
-                           status: Int) extends PaymentInfo {
-
-  def actualStatus = status
-}
-
-case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey],
-                       badChannels: Set[Long], onion: SecretsAndPacket = null,
-                       amountWithFee: Long = 0L, expiry: Long = 0L)
-
-case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
-                           request: PaymentRequest, chanId: BinaryData,
-                           status: Int) extends PaymentInfo {
-
-  def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
-}
-
-trait PaymentInfoBag { me =>
-  def updateStatus(status: Int, hash: BinaryData): Unit
-  def updatePreimage(update: UpdateFulfillHtlc): Unit
-  def updateReceived(add: UpdateAddHtlc): Unit
-
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
-  def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
-  def upsertPaymentInfo(info: PaymentInfo): Unit
-
-  def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
-    case Seq(_, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
-    case Seq(_, _, _, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
-  }
-}
 
 object PaymentInfo {
-  // Used for unresolved outgoing payment infos
+  type PublicPaymentRoute = Vector[Hop]
+  type ExtraPaymentRoute = Vector[ExtraHop]
+  // Used as placeholder for unresolved outgoing payments
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
 
@@ -67,16 +32,14 @@ object PaymentInfo {
   final val SUCCESS = 2
   final val FAILURE = 3
 
-  def buildPayloads(hops: PaymentRoute, finalAmountMsat: Long, finalExpiry: Int) = {
-    // First PerHopPayload is for recipient so it has a zero shortChannelId and zero fee
+  def buildRelativeRoute(hops: Vector[PaymentHop], finalAmountMsat: Long) = {
+    val start = RelativeCLTVRoute(Vector apply PerHopPayload(0L, finalAmountMsat, 0),
+      nodeIds = Vector.empty, finalAmountMsat, finalRelativeExpiry = 0)
 
-    val finalPayload = PerHopPayload(0L, finalAmountMsat, finalExpiry)
-    val startValues = (Vector(finalPayload), finalAmountMsat, finalExpiry)
-
-    (startValues /: hops.reverse) {
-      case Tuple3(payloads, amountMsat, expiry) \ hop =>
-        Tuple3(PerHopPayload(hop.shortChannelId, amountMsat, expiry) +: payloads,
-          amountMsat + hop.nextFee(amountMsat), expiry + hop.cltvExpiryDelta)
+    (start /: hops.reverse) {
+      case RelativeCLTVRoute(payloads, nodes, msat, expiry) \ hop =>
+        RelativeCLTVRoute(PerHopPayload(hop.shortChannelId, msat, expiry) +: payloads,
+          hop.nodeId +: nodes, msat + hop.nextFee(msat), expiry + hop.cltvExpiryDelta)
     }
   }
 
@@ -86,19 +49,20 @@ object PaymentInfo {
   }
 
   def buildPayment(rd: RoutingData, pr: PaymentRequest, chan: Channel) = for {
-    // Iff we have routes available AND channel has an id AND request has amount
-    // Build a new OutgoingPayment given previous RoutingData
+    // Build a new OutgoingPayment if we have routes available AND channel has an id
+    // provided RoutingData may have bad nodes and channels which have to be preserved
 
-    route <- rd.routes.headOption
     chanId <- chan.pull(_.channelId)
-    MilliSatoshi(amount) <- pr.amount
+    currentExpiry = LNParams.sendExpiry
+    RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, relFirstExpiry) <- rd.routes.headOption
+    // relPayloads CLTV values start from zero so should be updated when payment is actually being built
+    rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, buildOnion(nodes = nodeIds :+ pr.nodeId,
+      for (payload <- relPayloads) yield payload.modify(_.outgoing_cltv_value).using(currentExpiry+),
+      pr.paymentHash), firstAmount, relFirstExpiry + currentExpiry)
 
-    (payloads, firstAmount, firstExpiry) = buildPayloads(route, amount, LNParams.sendExpiry)
-    onion = buildOnion(nodes = route.map(_.nodeId) :+ pr.nodeId, payloads, assoc = pr.paymentHash)
-    rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, onion, firstAmount, firstExpiry)
+  // Save the rest of unused routes in case we might need them
   } yield OutgoingPayment(rd1, NOIMAGE, pr, chanId, WAITING)
 
-  private def without(rs: Vector[PaymentRoute], test: PaymentHop => Boolean) = rs.filterNot(_ exists test)
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =
     CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
 
@@ -111,13 +75,14 @@ object PaymentInfo {
         rd.copy(routes = Vector.empty)
 
       case ErrorPacket(nodeKey, _: Node) =>
-        // Look for channels left without this node, also remember this node as failed
-        rd.copy(routes = without(rd.routes, _.nodeId == nodeKey), badNodes = rd.badNodes + nodeKey)
+        // Remove routes with this node, also mark this node as failed
+        val routes1 = rd.routes.filterNot(_.nodeIds contains nodeKey)
+        rd.copy(routes = routes1, badNodes = rd.badNodes + nodeKey)
 
       case ErrorPacket(_, message: Update) =>
-        // Node may have other channels left so try them out, also remember this channel as failed
-        val routesWithoutChannel = without(rd.routes, _.shortChannelId == message.update.shortChannelId)
-        rd.copy(routes = routesWithoutChannel, badChannels = rd.badChannels + message.update.shortChannelId)
+        // There may be other operational channels left so try them out, also remember this channel as failed
+        val routes1 = rd.routes.filterNot(_.payloads.map(_.channel_id) contains message.update.shortChannelId)
+        rd.copy(routes = routes1, badChannels = rd.badChannels + message.update.shortChannelId)
 
       // Nothing to cut
     } getOrElse rd
@@ -168,4 +133,72 @@ object PaymentInfo {
     val hash = sha256(add.onionRoutingPacket)
     CMDFailMalformedHtlc(add.id, hash, BADONION)
   }
+}
+
+trait PaymentInfo {
+  def actualStatus: Int
+  val preimage: BinaryData
+  val request: PaymentRequest
+  val chanId: BinaryData
+  val status: Int
+}
+
+case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData,
+                           request: PaymentRequest, chanId: BinaryData,
+                           status: Int) extends PaymentInfo {
+
+  def actualStatus = status
+}
+
+// Fully calculated route metadata with relative CLTV PerHopPayload values which start from zero
+case class RelativeCLTVRoute(payloads: Vector[PerHopPayload], nodeIds: Vector[PublicKey],
+                             finalMsat: Long, finalRelativeExpiry: Int)
+
+case class RoutingData(routes: Vector[RelativeCLTVRoute], badNodes: Set[PublicKey],
+                       badChannels: Set[Long], onion: SecretsAndPacket = null,
+                       amountWithFee: Long = 0L, expiry: Long = 0L)
+
+case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
+                           request: PaymentRequest, chanId: BinaryData,
+                           status: Int) extends PaymentInfo {
+
+  def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
+}
+
+trait PaymentInfoBag { me =>
+  def updateStatus(status: Int, hash: BinaryData): Unit
+  def updatePreimage(update: UpdateFulfillHtlc): Unit
+  def updateReceived(add: UpdateAddHtlc): Unit
+
+  def newPreimage: BinaryData = BinaryData(random getBytes 32)
+  def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
+  def upsertPaymentInfo(info: PaymentInfo): Unit
+
+  def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
+    case Seq(_, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
+    case Seq(_, _, _, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
+  }
+}
+
+trait PaymentHop {
+  def nextFee(msat: Long): Long
+  def shortChannelId: Long
+  def cltvExpiryDelta: Int
+  def nodeId: PublicKey
+}
+
+case class PerHopPayload(channel_id: Long, amt_to_forward: Long, outgoing_cltv_value: Int)
+case class ExtraHop(nodeId: PublicKey, shortChannelId: Long, fee: Long, cltvExpiryDelta: Int) extends PaymentHop {
+  def pack = aconcat(nodeId.toBin.data.toArray, writeUInt64(shortChannelId, BIG_ENDIAN), writeUInt64(fee, BIG_ENDIAN),
+    writeUInt16(cltvExpiryDelta, BIG_ENDIAN).data.toArray, Array.emptyByteArray)
+
+  // Already pre-calculated
+  def nextFee(msat: Long) = fee
+}
+
+case class Hop(nodeId: PublicKey, lastUpdate: ChannelUpdate) extends PaymentHop {
+  // Fee is not pre-calculated for public hops so we need to derive it accoring to rules specified in BOLT 04
+  def nextFee(msat: Long) = lastUpdate.feeBaseMsat + (lastUpdate.feeProportionalMillionths * msat) / 1000000L
+  def cltvExpiryDelta = lastUpdate.cltvExpiryDelta
+  def shortChannelId = lastUpdate.shortChannelId
 }

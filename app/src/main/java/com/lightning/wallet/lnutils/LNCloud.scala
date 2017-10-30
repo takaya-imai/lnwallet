@@ -15,7 +15,7 @@ import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
 import scala.util.{Failure, Success}
 
-import com.lightning.wallet.ln.PaymentHop.PublicPaymentRoute
+import com.lightning.wallet.ln.PaymentInfo.PublicPaymentRoute
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
 import com.lightning.wallet.ln.Broadcaster.TxSeq
