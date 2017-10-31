@@ -179,7 +179,7 @@ class WalletApp extends Application { me =>
 
         val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentAssisted)
         findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
-          val routes = for (route <- direct ++ assisted) yield buildRelativeRoute(route, pr.finalSum.amount)
+          val routes = for (rt <- /*direct ++ */assisted.toVector) yield buildRelativeRoute(rt, pr.finalSum.amount)
           buildPayment(RoutingData(routes, badNodes, badChannels), pr, chan)
         }
       }

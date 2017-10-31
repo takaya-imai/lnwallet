@@ -57,7 +57,7 @@ object PaymentInfo {
     RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, relFirstExpiry) <- rd.routes.headOption
     // relPayloads CLTV values start from zero so should be updated when payment is actually being built
     rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, buildOnion(nodes = nodeIds :+ pr.nodeId,
-      for (payload <- relPayloads) yield payload.modify(_.outgoing_cltv_value).using(currentExpiry+),
+      for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(currentExpiry+),
       pr.paymentHash), firstAmount, relFirstExpiry + currentExpiry)
 
   // Save the rest of unused routes in case we might need them
@@ -81,7 +81,7 @@ object PaymentInfo {
 
       case ErrorPacket(_, message: Update) =>
         // There may be other operational channels left so try them out, also remember this channel as failed
-        val routes1 = rd.routes.filterNot(_.payloads.map(_.channel_id) contains message.update.shortChannelId)
+        val routes1 = rd.routes.filterNot(_.payloads.map(_.shortChannelId) contains message.update.shortChannelId)
         rd.copy(routes = routes1, badChannels = rd.badChannels + message.update.shortChannelId)
 
       // Nothing to cut
@@ -100,7 +100,7 @@ object PaymentInfo {
           // GUARD: not enough time to redeem it on-chain
           failHtlc(sharedSecret, FinalExpiryTooSoon, add)
 
-        case Success(_) if decoded.value.outgoing_cltv_value != add.expiry =>
+        case Success(_) if decoded.value.outgoingCltv != add.expiry =>
           // GUARD: final outgoing CLTV value does not equal the one from message
           failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
 
@@ -166,13 +166,13 @@ case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
 }
 
 trait PaymentInfoBag { me =>
+  def upsertPaymentInfo(info: PaymentInfo): Unit
   def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimage(update: UpdateFulfillHtlc): Unit
   def updateReceived(add: UpdateAddHtlc): Unit
 
   def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
-  def upsertPaymentInfo(info: PaymentInfo): Unit
 
   def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
     case Seq(_, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
@@ -187,7 +187,7 @@ trait PaymentHop {
   def nodeId: PublicKey
 }
 
-case class PerHopPayload(channel_id: Long, amt_to_forward: Long, outgoing_cltv_value: Int)
+case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Int)
 case class ExtraHop(nodeId: PublicKey, shortChannelId: Long, fee: Long, cltvExpiryDelta: Int) extends PaymentHop {
   def pack = aconcat(nodeId.toBin.data.toArray, writeUInt64(shortChannelId, BIG_ENDIAN), writeUInt64(fee, BIG_ENDIAN),
     writeUInt16(cltvExpiryDelta, BIG_ENDIAN).data.toArray, Array.emptyByteArray)

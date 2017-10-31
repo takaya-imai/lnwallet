@@ -7,7 +7,7 @@ import com.lightning.wallet.ln.crypto.Sphinx
 import fr.acinq.eclair.UInt64
 import java.math.BigInteger
 
-import com.lightning.wallet.ln.{ExtraHop, Hop, LightningException, PerHopPayload}
+import com.lightning.wallet.ln.{Hop, LightningException, PerHopPayload}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import fr.acinq.bitcoin.{BinaryData, Crypto}
 import scodec.bits.{BitVector, ByteVector}
@@ -18,7 +18,6 @@ object LightningMessageCodecs { me =>
   type BitVectorAttempt = Attempt[BitVector]
   type LNMessageVector = Vector[LightningMessage]
   type InetSocketAddressList = List[InetSocketAddress]
-
   type AnnounceChansNum = (NodeAnnouncement, Int)
   type AddressPort = (InetAddress, Int)
   type RGB = (Byte, Byte, Byte)
@@ -324,10 +323,10 @@ object LightningMessageCodecs { me =>
 
   private val perHopPayload =
     (constant(ByteVector fromByte 0) withContext "realm") ::
-      (uint64 withContext "channel_id") ::
-      (uint64 withContext "amt_to_forward") ::
-      (int32 withContext "outgoing_cltv_value") ::
-      (ignore(8 * 12) withContext "unused_with_v0_version_on_header")
+      (uint64 withContext "shortChannelId") ::
+      (uint64 withContext "amtToForward") ::
+      (int32 withContext "outgoingCltv") ::
+      (ignore(8 * 12) withContext "unusedWithV0VersionOnHeader")
 
   private val hop =
     (publicKey withContext "nodeId") ::

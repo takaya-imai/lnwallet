@@ -98,16 +98,16 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   // UI which does not need a channel
-  private val humanStatus: Option[DepthAndDead] => String = {
-    case Some(confs \ false) => app.plurOrZero(txsConfs, confs)
-    case Some(_ \ true) => txsConfs.last
+  private val humanStatus: DepthAndDead => String = {
+    case confs \ false => app.plurOrZero(txsConfs, confs)
+    case _ \ true => txsConfs.last
     case _ => txsConfs.head
   }
 
   // We need to show the best closing with most confirmations
   private def manageClosing(data: ClosingData) = data.closings maxBy {
-    case Left(mutualTx) => txStatus(mutualTx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
-    case Right(info) => txStatus(info.commitTx.txid) match { case Some(cfs \ false) => cfs case _ => 0L }
+    case Left(mutualTx) => txStatus(mutualTx.txid) match { case cfs \ _ => cfs }
+    case Right(info) => txStatus(info.commitTx.txid) match { case cfs \ _ => cfs }
   } match {
     case Left(mutualTx) =>
       val mutualFee = coloredOut(data.commitments.commitInput.txOut.amount - mutualTx.txOut.map(_.amount).sum)
@@ -117,23 +117,19 @@ class LNOpsActivity extends TimerActivity { me =>
       lnOpsAction setText ln_ops_start
 
     case Right(info) =>
-      val tier1And2HumanView = info.getState take 3 map {
-        case PublishStatus(Some(_ \ true \ _), _, fee, finalAmt) =>
+      val tier1And2HumanView = info.getState collect {
+        case Show(_ \ true \ _, _, fee, finalAmt) =>
           val deadDEtails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
           getString(ln_ops_chan_unilateral_status_dead).format(deadDEtails, coloredIn apply finalAmt)
 
-        case ps: PublishStatus if ps.isPublishable =>
-          val doneDetails = amountStatus.format(denom formatted ps.finalAmount + ps.finalFee, coloredOut apply ps.finalFee)
-          getString(ln_ops_chan_unilateral_status_done).format(doneDetails, coloredIn apply ps.finalAmount)
+        case show @ Show(_ \ false \ _, _, fee, finalAmt) if show.isPublishable =>
+          val doneDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
+          getString(ln_ops_chan_unilateral_status_done).format(doneDetails, coloredIn apply finalAmt)
 
-        case PublishStatus(Some(parentDepth \ false \ left), _, fee, finalAmt) if parentDepth > 0 =>
+        case Show(_ \ false \ left, _, fee, finalAmt) =>
           val leftDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
           statusLeft.format(app.plurOrZero(blocksLeft, left), leftDetails, coloredIn apply finalAmt)
-
-        case PublishStatus(_, _, fee, finalAmt) =>
-          val waitDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
-          getString(ln_ops_chan_unilateral_status_wait).format(waitDetails, coloredIn apply finalAmt)
-      }
+      } take 3
 
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
       val tier0HumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus info.commitTx.txid), commitFee)

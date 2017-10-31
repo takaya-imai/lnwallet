@@ -5,15 +5,14 @@ import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.LNParams._
-import com.lightning.wallet.ln.Broadcaster._
 import com.lightning.wallet.ln.AddErrorCodes._
-
+import com.lightning.wallet.ln.LNParams.broadcaster._
 import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
-import com.lightning.wallet.ln.LNParams.broadcaster.{cltv, cltvAndCsv, csv, txStatus}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.LNMessageVector
 import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
+import com.lightning.wallet.ln.Broadcaster.TxSeq
 import fr.acinq.eclair.UInt64
 
 
@@ -80,14 +79,13 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
                        startedAt: Long = System.currentTimeMillis) extends EndingData {
 
   def isOutdated: Boolean = {
-    // Either ALL transactions have enough depth or static timeout
-    val statuses = for (tx <- tier12States.flatMap(_.txs) ++ mutualClose) yield txStatus(tx.txid)
-    val allDeep = statuses forall { case Some(cfs \ false) => cfs > minDepth case _ => false }
-    allDeep || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
+    val mutualClosingStates = for (tx <- mutualClose) yield txStatus(tx.txid)
+    val isOk = mutualClosingStates exists { case cfs \ _ => cfs > minDepth }
+    isOk || startedAt + 1000 * 3600 * 24 * 7 < System.currentTimeMillis
   }
 
   // Every tier12 state txInfo is checked for spendability so if tier12States is empty
-  // this means we have no tier12 txs to spend so this is either o mutual close or nothing
+  // this means we have no tier12 txs to spend so this is either a mutual close or nothing
   def tier12States = localCommit.flatMap(_.getState) ++ remoteCommit.flatMap(_.getState) ++
     nextRemoteCommit.flatMap(_.getState) ++ revokedCommit.flatMap(_.getState)
 
@@ -95,7 +93,7 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
     localCommit.map(Right.apply) ++ remoteCommit.map(Right.apply) ++
     nextRemoteCommit.map(Right.apply) ++ revokedCommit.map(Right.apply)
 
-  lazy val commitTxs = localCommit.map(_.commitTx) ++
+  lazy val commitTxs: TxSeq = localCommit.map(_.commitTx) ++
     remoteCommit.map(_.commitTx) ++ nextRemoteCommit.map(_.commitTx)
 }
 
@@ -108,20 +106,20 @@ case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], cla
                                 claimHtlcTimeout: Seq[TimeoutAndClaim], commitTx: Transaction) extends CommitPublished {
 
   def getState = {
-    val main = for (t1 <- claimMainDelayed) yield PublishStatus(csv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
-    val success = for (t1 \ t2 <- claimHtlcSuccess) yield PublishStatus(csv(t2), Seq(t1.tx, t2.tx), t1 -- t2, t2.amount)
-    val timeout = for (t1 \ t2 <- claimHtlcTimeout) yield PublishStatus(cltvAndCsv(t1, t2), Seq(t1.tx, t2.tx), t1 -- t2, t2.amount)
+    val main = for (t1 <- claimMainDelayed) yield Show(csv(t1), t1.tx, t1 -- t1, t1.amount) :: Nil
+    val success = for (t1 \ t2 <- claimHtlcSuccess) yield Hide(cltv(t1), t1.tx) :: Show(cltvCsv(t1, t2), t2.tx, t1 -- t2, t2.amount) :: Nil
+    val timeout = for (t1 \ t2 <- claimHtlcTimeout) yield Hide(cltv(t1), t1.tx) :: Show(cltvCsv(t1, t2), t2.tx, t1 -- t2, t2.amount) :: Nil
     main ++ success ++ timeout
-  }
+  }.flatten
 }
 
 case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcSuccess: Seq[ClaimHtlcSuccessTx],
                                  claimHtlcTimeout: Seq[ClaimHtlcTimeoutTx], commitTx: Transaction) extends CommitPublished {
 
   def getState = {
-    val main = for (t1 <- claimMain) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
-    val success = for (t1 <- claimHtlcSuccess) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
-    val timeout = for (t1 <- claimHtlcTimeout) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    val main = for (t1 <- claimMain) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
+    val success = for (t1 <- claimHtlcSuccess) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
+    val timeout = for (t1 <- claimHtlcTimeout) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
     main ++ success ++ timeout
   }
 }
@@ -130,8 +128,8 @@ case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPena
                                   commitTx: Transaction) extends CommitPublished {
 
   def getState = {
-    val main = for (t1 <- claimMain) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
-    val penalty = for (t1 <- claimPenalty) yield PublishStatus(cltv(t1), Seq(t1.tx), t1 -- t1, t1.amount)
+    val main = for (t1 <- claimMain) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
+    val penalty = for (t1 <- claimPenalty) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
     main ++ penalty
   }
 }

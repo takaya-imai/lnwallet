@@ -179,7 +179,7 @@ class WireSpec {
 
     {
       println("encode/decode per-hop payload")
-      val payload = PerHopPayload(channel_id = 42, amt_to_forward = 142000, outgoing_cltv_value = 500000)
+      val payload = PerHopPayload(shortChannelId = 42, amtToForward = 142000, outgoingCltv = 500000)
       val bin = LightningMessageCodecs.perHopPayloadCodec.encode(payload).require
       println(bin.toByteVector.size == 33)
       val payload1 = LightningMessageCodecs.perHopPayloadCodec.decode(bin).require.value

@@ -29,7 +29,9 @@ object ChannelTable extends Table {
   val (table, identifier, data) = ("channel", "identifier", "data")
   def updSql = s"UPDATE $table SET $data = ? WHERE $identifier = ?"
   def killSql = s"DELETE FROM $table WHERE $identifier = ?"
-  def selectAllSql = s"SELECT * FROM $table"
+
+  // Order is important! New channels should always be on top
+  def selectAllSql = s"SELECT * FROM $table ORDER BY $id DESC"
 
   def newSql = s"""
     INSERT OR IGNORE INTO $table

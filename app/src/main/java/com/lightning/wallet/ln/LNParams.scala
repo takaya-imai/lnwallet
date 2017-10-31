@@ -96,26 +96,29 @@ object AddErrorCodes {
   val ERR_FAILED = err_ln_general
 }
 
-object Broadcaster {
-  type TxSeq = Seq[Transaction]
-  type DepthAndDead = (Long, Boolean)
-  // Tier0 depth and dead = true, tier1 delay
-  type ParentStateAndDelay = (DepthAndDead, Long)
-
-  // Parent status, txs to publish, final fee and final amount a user gets
-  case class PublishStatus(parent: Option[ParentStateAndDelay], txs: TxSeq,
-                           finalFee: Satoshi, finalAmount: Satoshi) {
-
-    def isPublishable: Boolean = parent match {
-      // Parent is confirmed, not dead, delay is cleared
-      case Some(parDepth \ false \ 0L) => parDepth > 0L
-      case _ => false
-    }
+trait PublishStatus {
+  val txn: Transaction
+  val parent: ParentStateAndDelay
+  def isPublishable = parent match {
+    // Parent confirmed, is alive, delay is cleared
+    case parDepth \ false \ 0L => parDepth > 0L
+    case _ => false
   }
 }
 
+case class Hide(parent: ParentStateAndDelay, txn: Transaction) extends PublishStatus
+case class Show(parent: ParentStateAndDelay, txn: Transaction, finalFee: Satoshi,
+                finalAmount: Satoshi) extends PublishStatus
+
+object Broadcaster {
+  type TxSeq = Seq[Transaction]
+  type DepthAndDead = (Int, Boolean)
+  // Tier0 depth and dead = true, tier1 delay
+  type ParentStateAndDelay = (DepthAndDead, Long)
+}
+
 trait Broadcaster extends ChannelListener { me =>
-  def txStatus(txid: BinaryData): Option[DepthAndDead]
+  def txStatus(txid: BinaryData): DepthAndDead
   def send(tx: Transaction): String
   def feeRatePerKw: Long
   def currentHeight: Int
@@ -126,27 +129,27 @@ trait Broadcaster extends ChannelListener { me =>
 
   // Parent state and next tier cltv delay
   // Actual negative delay will be represented as 0L
-  def cltv(txWithInputInfo: TransactionWithInputInfo) = for {
-    parentDepthAndDead <- txStatus(txWithInputInfo.input.outPoint.txid)
-    cltvDelay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
-  } yield parentDepthAndDead -> cltvDelay
+  def cltv(txWithInputInfo: TransactionWithInputInfo) = {
+    val parentDepth \ parentIsDead = txStatus(txWithInputInfo.input.outPoint.txid)
+    val cltvDelay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
+    parentDepth -> parentIsDead -> cltvDelay
+  }
 
   // Parent state and next tier csv delay
   // Actual negative delay will be represented as 0L
-  def csv(txWithInputInfo: TransactionWithInputInfo) = for {
-    parentDepth \ parentIsDead <- txStatus(txWithInputInfo.input.outPoint.txid)
-    csvDelay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
-  } yield parentDepth -> parentIsDead -> csvDelay
+  def csv(txWithInputInfo: TransactionWithInputInfo) = {
+    val parentDepth \ parentIsDead = txStatus(txWithInputInfo.input.outPoint.txid)
+    val csvDelay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
+    parentDepth -> parentIsDead -> csvDelay
+  }
 
-  def cltvAndCsv(info1: TransactionWithInputInfo, info2: TransactionWithInputInfo) = for {
-    // Calculate cumulative cltv + csv delay for 2nd tier transaction along with 1st tier status
+  def cltvCsv(tier1: TransactionWithInputInfo, tier2: TransactionWithInputInfo) = {
+    // Compute combined CLTV + CSV delay for a tier2 tx given tier1 and commit states
 
-    _ \ tier0Dead \ cltv1 <- me cltv info1
-    tier1Depth \ tier1Dead \ csv1 <- me csv info2
-    parentIsDead = tier0Dead || tier1Dead
-    cumulativeDelay = cltv1 + csv1
-
-  // tier1 state and tier2 cumulative delay
-  // Actual negative delay will be represented as zero
-  } yield tier1Depth -> parentIsDead -> cumulativeDelay
+    val _ \ tier0IsDead \ tier1CltvDelay = cltv(tier1)
+    val tier1Depth \ tier1IsDead \ tier2CsvDelay = csv(tier2)
+    val tier2IsDead = tier0IsDead || tier1IsDead
+    val delay = tier1CltvDelay + tier2CsvDelay
+    tier1Depth -> tier2IsDead -> delay
+  }
 }

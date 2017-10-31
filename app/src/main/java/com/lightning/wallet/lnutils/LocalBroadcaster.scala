@@ -3,7 +3,7 @@ package com.lightning.wallet.lnutils
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.lnutils.ImplicitConversions._
-import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
+import org.bitcoinj.core.TransactionConfidence.ConfidenceType._
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Sha256Hash
 
@@ -14,14 +14,14 @@ import rx.lang.scala.{Observable => Obs}
 object LocalBroadcaster extends Broadcaster { me =>
   def feeRatePerKw: Long = RatesSaver.rates.feeLive.value / 2
   def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
-  def txStatus(txid: BinaryData) = txStatus(Sha256Hash wrap txid.toArray)
 
-  // Confirmations and confidence
-  def txStatus(txid: Sha256Hash) = for {
-    tx <- Option(app.kit.wallet getTransaction txid)
-    dead = tx.getConfidence.getConfidenceType == DEAD
-    depth = tx.getConfidence.getDepthInBlocks
-  } yield depth.toLong -> dead
+  def txStatus(txid: BinaryData) = {
+    val wrapped = Sha256Hash wrap txid.toArray
+    Option(app.kit.wallet getTransaction wrapped) map { tx =>
+      val isTxDead = tx.getConfidence.getConfidenceType == DEAD
+      tx.getConfidence.getDepthInBlocks -> isTxDead
+    } getOrElse 0 -> false
+  }
 
   def currentHeight: Int =
     math.max(app.kit.wallet.getLastBlockSeenHeight,
@@ -44,7 +44,7 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onProcess = {
     case (_, close: ClosingData, _: Command) =>
-      val tier12Publishable = close.tier12States.filter(_.isPublishable).flatMap(_.txs)
+      val tier12Publishable = for (ts <- close.tier12States if ts.isPublishable) yield ts.txn
       val all = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ tier12Publishable
       Obs.from(all map safeSend).concat.foreach(Tools.log, Tools.errlog)
   }
