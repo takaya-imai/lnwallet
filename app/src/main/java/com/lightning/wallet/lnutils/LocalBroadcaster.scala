@@ -46,6 +46,6 @@ object LocalBroadcaster extends Broadcaster { me =>
     case (_, close: ClosingData, _: Command) =>
       val tier12Publishable = for (ts <- close.tier12States if ts.isPublishable) yield ts.txn
       val all = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ tier12Publishable
-      Obs.from(all map safeSend).concat.foreach(Tools.log, Tools.errlog)
+      Obs.from(all map safeSend).concat.foreach(Tools.log)
   }
 }

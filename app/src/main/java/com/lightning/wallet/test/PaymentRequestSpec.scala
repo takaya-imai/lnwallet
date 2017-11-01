@@ -165,6 +165,21 @@ class PaymentRequestSpec {
       val expiry = pr1.tags.collectFirst { case ex: ExpiryTag => ex.seconds }.get
       assert(expiry == 21600)
     }
-    
+
+    {
+      println("On mainnet, with fallback (p2wsh) address bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3 and a minimum htlc cltv expiry of 12")
+      val ref = "lnbc20m1pvjluezcqpvpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqhp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqsfp4qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q90qkf3gd7fcqs0ewr7t3xf72ptmc4n38evg0xhy4p64nlg7hgrmq6g997tkrvezs8afs0x0y8v4vs8thwsk6knkvdfvfa7wmhhpcsxcqw0ny48"
+      val pr = PaymentRequest.read(ref)
+      assert(pr.prefix == "lnbc")
+      assert(pr.amount == Some(MilliSatoshi(2000000000L)))
+      assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
+      assert(pr.timestamp == 1496314658L)
+      assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
+      assert(pr.description == Left(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)))
+      assert(pr.fallbackAddress == Some("bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3"))
+      assert(pr.minFinalCtvExpiry == Some(12))
+      assert(pr.tags.size == 4)
+      assert(PaymentRequest.write(pr.sign(priv)) == ref)
+    }
   }
 }

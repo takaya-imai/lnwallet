@@ -12,7 +12,6 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.LNMessageVector
 import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
-import com.lightning.wallet.ln.Broadcaster.TxSeq
 import fr.acinq.eclair.UInt64
 
 
@@ -85,16 +84,13 @@ case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mut
   }
 
   // Every tier12 state txInfo is checked for spendability so if tier12States is empty
-  // this means we have no tier12 txs to spend so this is either a mutual close or nothing
+  // then we have no tier12 txs to spend which means this is either a mutual close or nothing
   def tier12States = localCommit.flatMap(_.getState) ++ remoteCommit.flatMap(_.getState) ++
     nextRemoteCommit.flatMap(_.getState) ++ revokedCommit.flatMap(_.getState)
 
-  lazy val closings = mutualClose.map(Left.apply) ++
-    localCommit.map(Right.apply) ++ remoteCommit.map(Right.apply) ++
+  lazy val commitTxs = localCommit.map(_.commitTx) ++ remoteCommit.map(_.commitTx) ++ nextRemoteCommit.map(_.commitTx)
+  lazy val closings = mutualClose.map(Left.apply) ++ localCommit.map(Right.apply) ++ remoteCommit.map(Right.apply) ++
     nextRemoteCommit.map(Right.apply) ++ revokedCommit.map(Right.apply)
-
-  lazy val commitTxs: TxSeq = localCommit.map(_.commitTx) ++
-    remoteCommit.map(_.commitTx) ++ nextRemoteCommit.map(_.commitTx)
 }
 
 sealed trait CommitPublished {

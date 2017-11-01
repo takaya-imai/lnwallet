@@ -117,7 +117,7 @@ class LNOpsActivity extends TimerActivity { me =>
       lnOpsAction setText ln_ops_start
 
     case Right(info) =>
-      val tier1And2HumanView = info.getState collect {
+      val tier2HumanView = info.getState collect {
         case Show(_ \ true \ _, _, fee, finalAmt) =>
           val deadDEtails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
           getString(ln_ops_chan_unilateral_status_dead).format(deadDEtails, coloredIn apply finalAmt)
@@ -133,7 +133,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
       val tier0HumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus info.commitTx.txid), commitFee)
-      val combinedView = tier0HumanView + s"<br><br>$refundStatus<br>" + tier1And2HumanView.mkString("<br><br>")
+      val combinedView = tier0HumanView + s"<br><br>$refundStatus<br>" + tier2HumanView.mkString("<br><br>")
       lnOpsDescription setText unilateralClosing.format(combinedView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start

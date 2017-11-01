@@ -168,9 +168,9 @@ class WalletApp extends Application { me =>
     def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) =
 
       Obs from alive.headOption flatMap { chan =>
-        def findRoutes(targetId: PublicKey) = chan.data.announce.nodeId match {
-          case directPeerNode if directPeerNode == targetId => Obs just Vector(Vector.empty)
-          case _ => cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, targetId)
+        def findRoutes(target: PublicKey) = chan.data.announce.nodeId match {
+          case directPeerNode if directPeerNode == target => Obs just Vector(Vector.empty)
+          case _ => cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, target)
         }
 
         def augmentAssisted(tag: RoutingInfoTag) = for {
@@ -179,7 +179,7 @@ class WalletApp extends Application { me =>
 
         val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentAssisted)
         findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
-          val routes = for (rt <- /*direct ++ */assisted.toVector) yield buildRelativeRoute(rt, pr.finalSum.amount)
+          val routes = for (rt <- direct ++ assisted) yield buildRelativeRoute(rt, pr.finalSum.amount)
           buildPayment(RoutingData(routes, badNodes, badChannels), pr, chan)
         }
       }

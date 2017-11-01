@@ -55,20 +55,13 @@ object RoutingInfoTag {
 }
 
 case class ExpiryTag(seconds: Long) extends Tag {
-  // Make sure that size is encoded on 2 int5 values
+  def toInt5s = Bech32.map('x') +: (writeSize(ints.size) ++ ints)
+  lazy val ints = writeUnsignedLong(seconds)
+}
 
-  override def toInt5s: Int5Seq = {
-    val ints = writeUnsignedLong(seconds)
-    val size = writeUnsignedLong(ints.size)
-
-    val size1 = size.length match {
-      case 0 => Seq(0.toByte, 0.toByte)
-      case 1 => 0.toByte +: size
-      case n => size
-    }
-
-    Bech32.map('x') +: (size1 ++ ints)
-  }
+case class MinFinalCltvExpiryTag(expiryDelta: Long) extends Tag {
+  def toInt5s: Int5Seq = Bech32.map('c') +: (writeSize(ints.size) ++ ints)
+  lazy val ints = writeUnsignedLong(expiryDelta)
 }
 
 case class FallbackAddressTag(version: Byte, hash: BinaryData) extends Tag {
@@ -99,6 +92,7 @@ object FallbackAddressTag {
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
+  lazy val minFinalCtvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta }
   lazy val paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
   lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
   lazy val finalSum = amount.get
@@ -242,6 +236,11 @@ object PaymentRequest {
           val ints: Int5Seq = input.slice(3, len + 3)
           val expiry = readUnsignedLong(len, ints)
           ExpiryTag(expiry)
+
+        case cTag if cTag == Bech32.map('c') =>
+          val ints: Int5Seq = input.slice(3, len + 3)
+          val expiry = readUnsignedLong(len, ints)
+          MinFinalCltvExpiryTag(expiry)
       }
     }
   }
@@ -270,6 +269,17 @@ object PaymentRequest {
       val stream1 \ value = read5(stream)
       toInt5s(stream1, acc :+ value)
     }
+
+  def writeSize(size: Long): Int5Seq = {
+    val outputData = writeUnsignedLong(size)
+    require(outputData.length <= 2)
+
+    outputData.length match {
+      case 0 => Seq(0.toByte, 0.toByte)
+      case 1 => 0.toByte +: outputData
+      case _ => outputData
+    }
+  }
 
   def writeUnsignedLong(value: Long, acc: Int5Seq = Nil): Int5Seq =
     if (value == 0) acc else writeUnsignedLong(value / 32, (value % 32).toByte +: acc)

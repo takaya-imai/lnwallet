@@ -112,6 +112,7 @@ object ImplicitJsonFormats { me =>
 
   implicit object TagFmt extends JsonFormat[Tag] {
     def read(json: JsValue) = json.asJsObject fields "tag" match {
+      case JsString("MinFinalCltvExpiryTag") => json.convertTo[MinFinalCltvExpiryTag]
       case JsString("FallbackAddressTag") => json.convertTo[FallbackAddressTag]
       case JsString("DescriptionHashTag") => json.convertTo[DescriptionHashTag]
       case JsString("RoutingInfoTag") => json.convertTo[RoutingInfoTag]
@@ -122,6 +123,7 @@ object ImplicitJsonFormats { me =>
     }
 
     def write(internal: Tag) = internal match {
+      case tag: MinFinalCltvExpiryTag => tag.toJson
       case tag: FallbackAddressTag => tag.toJson
       case tag: DescriptionHashTag => tag.toJson
       case tag: RoutingInfoTag => tag.toJson
@@ -148,6 +150,9 @@ object ImplicitJsonFormats { me =>
 
   implicit val expiryTagFmt = taggedJsonFmt(jsonFormat[Long,
     ExpiryTag](ExpiryTag.apply, "seconds"), tag = "ExpiryTag")
+
+  implicit val minFinalCltvExpiryTagFmt = taggedJsonFmt(jsonFormat[Long,
+    MinFinalCltvExpiryTag](MinFinalCltvExpiryTag.apply, "expiryDelta"), tag = "MinFinalCltvExpiryTag")
 
   implicit val fallbackAddressTagFmt = taggedJsonFmt(jsonFormat[Byte, BinaryData,
     FallbackAddressTag](FallbackAddressTag.apply, "version", "hash"), tag = "FallbackAddressTag")

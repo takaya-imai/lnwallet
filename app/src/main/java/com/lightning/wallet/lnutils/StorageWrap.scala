@@ -57,22 +57,22 @@ object ChannelWrap extends ChannelListener {
     case (_, _: NormalData, _: NormalData) =>
       // This happens when channel with null data gets NormalData on app start,
       // we re-send CMDStart just in case if we have any pending cloud actions
-      //cloud doProcess CMDStart
+      cloud doProcess CMDStart
 
     case (_, norm: NormalData, _: CommitSig)
       // GUARD: this may be a storage token HTLC
       if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
       // We should remind cloud to maybe send a scheduled data
       Vibr vibrate Vibr.confirmed
-      //cloud doProcess CMDStart
+      cloud doProcess CMDStart
   }
 
   override def onBecome = {
     case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
       // Once a new channel becomes NORMAL we save it's state on a cloud
-//      val staticChannelState = RefundingData(norm.announce, norm.commitments)
-//      val packed = AES.encode(staticChannelState.toJson.toString, cloudPrivateId)
-//      cloud doProcess CloudAct(packed, Seq("key" -> cloudPublicId.toString), "data/put")
+      val staticChannelState = RefundingData(norm.announce, norm.commitments)
+      val packed = AES.encode(staticChannelState.toJson.toString, cloudPrivateId)
+      cloud doProcess CloudAct(packed, Seq("key" -> cloudPublicId.toString), "data/put")
   }
 }
 
