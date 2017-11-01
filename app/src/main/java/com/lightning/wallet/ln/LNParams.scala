@@ -76,12 +76,11 @@ object LNParams { me =>
 
   // MISC
 
-  def sendExpiry: Int = broadcaster.currentHeight + 6
-  def receiveExpiry: Int = broadcaster.currentHeight + 3
   def makeLocalParams(reserve: Long, finalScriptPubKey: BinaryData, idx: Long) = {
     val Seq(fund, revoke, pay, delay, sha) = for (n <- 0L to 4L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil)
-    LocalParams(maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 5, fund.privateKey,
-      revoke.privateKey, pay.privateKey, delay.privateKey, finalScriptPubKey, shaSeed = sha256(sha.privateKey.toBin), isFunder = true)
+    LocalParams(maxHtlcValueInFlightMsat = UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 5,
+      fund.privateKey, revoke.privateKey, pay.privateKey, delay.privateKey, finalScriptPubKey,
+      shaSeed = sha256(sha.privateKey.toBin), isFunder = true)
   }
 }
 

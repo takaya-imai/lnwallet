@@ -53,14 +53,14 @@ object PaymentInfo {
     // provided RoutingData may have bad nodes and channels which have to be preserved
 
     chanId <- chan.pull(_.channelId)
-    currentExpiry = LNParams.sendExpiry
+    cltvExpiry = LNParams.broadcaster.currentHeight + pr.minFinalCltvExpiry
     RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, relFirstExpiry) <- rd.routes.headOption
     // relPayloads CLTV values start from zero so should be updated when payment is actually being built
     rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, buildOnion(nodes = nodeIds :+ pr.nodeId,
-      for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(currentExpiry+),
-      pr.paymentHash), firstAmount, relFirstExpiry + currentExpiry)
+      for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(cltvExpiry+),
+      pr.paymentHash), firstAmount, relFirstExpiry + cltvExpiry)
 
-  // Save the rest of unused routes in case we might need them
+    // Save the rest of unused routes in case we might need them
   } yield OutgoingPayment(rd1, NOIMAGE, pr, chanId, WAITING)
 
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =

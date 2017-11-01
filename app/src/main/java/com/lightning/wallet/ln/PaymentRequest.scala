@@ -92,8 +92,8 @@ object FallbackAddressTag {
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
-  lazy val minFinalCtvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta }
-  lazy val paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
+  lazy val minFinalCltvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta.toInt } getOrElse 9
+  lazy val paymentHash = tags.collectFirst { case paymentHashTag: PaymentHashTag => paymentHashTag.hash }.get
   lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
   lazy val finalSum = amount.get
 
