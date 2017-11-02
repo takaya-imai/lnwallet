@@ -2,14 +2,13 @@ package com.lightning.wallet.ln
 
 import fr.acinq.bitcoin._
 import com.lightning.wallet.lnutils._
+import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Broadcaster._
 import fr.acinq.bitcoin.DeterministicWallet._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 
-import com.lightning.wallet.ln.Scripts.{TransactionWithInputInfo, csvTimeout}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import scala.util.{Failure, Success}
-
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import rx.lang.scala.schedulers.IOScheduler
@@ -97,23 +96,24 @@ object AddErrorCodes {
 
 trait PublishStatus {
   val txn: Transaction
-  val parent: ParentStateAndDelay
-  def isPublishable = parent match {
-    // Parent confirmed, is alive, delay is cleared
-    case parDepth \ false \ 0L => parDepth > 0L
-    case _ => false
-  }
+  def isPublishable: Boolean
 }
 
-case class Hide(parent: ParentStateAndDelay, txn: Transaction) extends PublishStatus
-case class Show(parent: ParentStateAndDelay, txn: Transaction, finalFee: Satoshi,
-                finalAmount: Satoshi) extends PublishStatus
+trait DelayedPublishStatus extends PublishStatus {
+  // Is publishable iff parent depth > 0, parent not dead, no CLTV or CSV delay
+  def isPublishable = parent match { case pd \ false \ 0L => pd > 0L case _ => false }
+  val parent: (DepthAndDead, Long)
+}
+
+
+case class HideReady(txn: Transaction) extends PublishStatus { def isPublishable = true }
+case class HideDelayed(parent: (DepthAndDead, Long), txn: Transaction) extends DelayedPublishStatus
+case class ShowReady(txn: Transaction, fee: Satoshi, amount: Satoshi) extends PublishStatus { def isPublishable = true }
+case class ShowDelayed(parent: (DepthAndDead, Long), txn: Transaction, fee: Satoshi, amount: Satoshi) extends DelayedPublishStatus
 
 object Broadcaster {
   type TxSeq = Seq[Transaction]
   type DepthAndDead = (Int, Boolean)
-  // Tier0 depth and dead = true, tier1 delay
-  type ParentStateAndDelay = (DepthAndDead, Long)
 }
 
 trait Broadcaster extends ChannelListener { me =>
@@ -128,27 +128,24 @@ trait Broadcaster extends ChannelListener { me =>
 
   // Parent state and next tier cltv delay
   // Actual negative delay will be represented as 0L
-  def cltv(txWithInputInfo: TransactionWithInputInfo) = {
-    val parentDepth \ parentIsDead = txStatus(txWithInputInfo.input.outPoint.txid)
-    val cltvDelay = math.max(txWithInputInfo.tx.lockTime - currentHeight, 0L)
+  def cltv(parent: Transaction, child: Transaction) = {
+    val parentDepth \ parentIsDead = txStatus(parent.txid)
+    val cltvDelay = math.max(cltvBlocks(child) - currentHeight, 0L)
     parentDepth -> parentIsDead -> cltvDelay
   }
 
-  // Parent state and next tier csv delay
+  // Parent state and cltv + next tier csv delay
   // Actual negative delay will be represented as 0L
-  def csv(txWithInputInfo: TransactionWithInputInfo) = {
-    val parentDepth \ parentIsDead = txStatus(txWithInputInfo.input.outPoint.txid)
-    val csvDelay = math.max(csvTimeout(txWithInputInfo.tx) - parentDepth, 0L)
-    parentDepth -> parentIsDead -> csvDelay
+  def csv(parent: Transaction, child: Transaction) = {
+    val parentDepth \ parentIsDead = txStatus(parent.txid)
+    val cltvDelay = math.max(cltvBlocks(parent) - currentHeight, 0L)
+    val csvDelay = math.max(csvTimeout(child) - parentDepth, 0L)
+    parentDepth -> parentIsDead -> (cltvDelay + csvDelay)
   }
 
-  def cltvCsv(tier1: TransactionWithInputInfo, tier2: TransactionWithInputInfo) = {
-    // Compute combined CLTV + CSV delay for a tier2 tx given tier1 and commit states
+  def csvShowDelayed(t1: TransactionWithInputInfo, t2: TransactionWithInputInfo) =
+    ShowDelayed(parent = csv(t1.tx, t2.tx), t2.tx, t1 -- t2, t2.amount)
 
-    val _ \ tier0IsDead \ tier1CltvDelay = cltv(tier1)
-    val tier1Depth \ tier1IsDead \ tier2CsvDelay = csv(tier2)
-    val tier2IsDead = tier0IsDead || tier1IsDead
-    val delay = tier1CltvDelay + tier2CsvDelay
-    tier1Depth -> tier2IsDead -> delay
-  }
+  def cltvShowDelayed(commit: Transaction, t1: TransactionWithInputInfo) =
+    ShowDelayed(parent = cltv(commit, t1.tx), t1.tx, t1 -- t1, t1.amount)
 }

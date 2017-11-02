@@ -1,48 +1,38 @@
 package com.lightning.wallet
 
-import com.lightning.wallet.Utils._
 import R.string._
-import spray.json._
 import org.bitcoinj.core._
-import spray.json.DefaultJsonProtocol._
-import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-
-import collection.JavaConverters.seqAsJavaListConverter
+import com.lightning.wallet.ln._
 import scala.concurrent.duration._
+import com.lightning.wallet.Utils._
+import com.lightning.wallet.ln.Tools._
+import com.lightning.wallet.ln.LNParams._
+import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
+import com.lightning.wallet.lnutils.{ChannelWrap, Notificator, RatesSaver}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
-import org.bitcoinj.wallet.KeyChain.KeyPurpose
+import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import rx.lang.scala.{Observable => Obs}
-import com.lightning.wallet.lnutils.{ChannelWrap, Notificator, RatesSaver, Saver}
+
+import collection.JavaConverters.seqAsJavaListConverter
+import org.spongycastle.crypto.params.KeyParameter
+import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
-import com.lightning.wallet.ln.Tools._
+import fr.acinq.bitcoin.Crypto.PublicKey
 import com.google.protobuf.ByteString
-import org.bitcoinj.wallet.{Protos, Wallet}
+import org.bitcoinj.wallet.Protos
+import scala.collection.mutable
 import android.app.Application
 import android.widget.Toast
 import java.io.File
+
 import java.util.concurrent.TimeUnit.MILLISECONDS
-
 import com.lightning.wallet.ln.Channel.CLOSING
-import com.lightning.wallet.lnutils.ImplicitConversions._
 import Context.CLIPBOARD_SERVICE
-import com.lightning.wallet.ln.PaymentInfo._
-import com.lightning.wallet.ln.wire.{Init, LightningMessage}
-import com.lightning.wallet.lnutils.JsonHttpUtils._
-import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.LNParams._
-import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
-import fr.acinq.bitcoin.Crypto.PublicKey
-import org.bitcoinj.core.listeners.{NewBestBlockListener, PeerConnectedEventListener}
-import org.bitcoinj.net.discovery.DnsDiscovery
-import org.spongycastle.crypto.params.KeyParameter
-
-import scala.collection.mutable
 
 
 class WalletApp extends Application { me =>
@@ -141,7 +131,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) =
         fromNode(connected, id) match { case needsReconnect =>
-          val delayed = Obs.just(Tools log s"Reconnecting $id").delay(5.seconds)
+          val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
           delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
           needsReconnect.foreach(_ process CMDOffline)
         }

@@ -118,17 +118,21 @@ class LNOpsActivity extends TimerActivity { me =>
 
     case Right(info) =>
       val tier2HumanView = info.getState collect {
-        case Show(_ \ true \ _, _, fee, finalAmt) =>
-          val deadDEtails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
-          getString(ln_ops_chan_unilateral_status_dead).format(deadDEtails, coloredIn apply finalAmt)
+        case ShowDelayed(_ \ true \ _, _, fee, amt) =>
+          val deadDEtails = amountStatus.format(denom formatted amt + fee, coloredOut apply fee)
+          getString(ln_ops_chan_unilateral_status_dead).format(deadDEtails, coloredIn apply amt)
 
-        case show @ Show(_ \ false \ _, _, fee, finalAmt) if show.isPublishable =>
-          val doneDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
-          getString(ln_ops_chan_unilateral_status_done).format(doneDetails, coloredIn apply finalAmt)
+        case ShowReady(_, fee, amt) =>
+          val doneDetails = amountStatus.format(denom formatted amt + fee, coloredOut apply fee)
+          getString(ln_ops_chan_unilateral_status_done).format(doneDetails, coloredIn apply amt)
 
-        case Show(_ \ false \ left, _, fee, finalAmt) =>
-          val leftDetails = amountStatus.format(denom formatted finalAmt + fee, coloredOut apply fee)
-          statusLeft.format(app.plurOrZero(blocksLeft, left), leftDetails, coloredIn apply finalAmt)
+        case show @ ShowDelayed(_ \ false \ _, _, fee, amt) if show.isPublishable =>
+          val doneDetails = amountStatus.format(denom formatted amt + fee, coloredOut apply fee)
+          getString(ln_ops_chan_unilateral_status_done).format(doneDetails, coloredIn apply amt)
+
+        case ShowDelayed(_ \ false \ left, _, fee, amt) =>
+          val leftDetails = amountStatus.format(denom formatted amt + fee, coloredOut apply fee)
+          statusLeft.format(app.plurOrZero(blocksLeft, left), leftDetails, coloredIn apply amt)
       } take 3
 
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)

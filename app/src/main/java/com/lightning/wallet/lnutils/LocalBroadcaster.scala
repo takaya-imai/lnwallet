@@ -13,7 +13,7 @@ import rx.lang.scala.{Observable => Obs}
 
 object LocalBroadcaster extends Broadcaster { me =>
   def feeRatePerKw: Long = RatesSaver.rates.feeLive.value / 2
-  def send(tx: Transaction): String = app.kit.blockingSend(tx).toString
+  def send(tx: Transaction) = app.kit.blockingSend(tx).toString
 
   def txStatus(txid: BinaryData) = {
     val wrapped = Sha256Hash wrap txid.toArray
@@ -29,7 +29,7 @@ object LocalBroadcaster extends Broadcaster { me =>
 
   override def onBecome = {
     case (_, wait: WaitFundingDoneData, _, WAIT_FUNDING_DONE) =>
-      safeSend(wait.fundingTx).foreach(Tools.log, Tools.errlog)
+      safeSend(wait.fundingTx).foreach(Tools.log)
       app.kit watchFunding wait.commitments
 
     case (_, refund: RefundingData, _, REFUNDING) =>

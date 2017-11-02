@@ -28,6 +28,9 @@ object Scripts { me =>
       case (true, multisig) => ScriptWitness(BinaryData.empty :: sig1 :: sig2 :: Script.write(multisig) :: Nil)
     }
 
+  def cltvBlocks(tx: Transaction): Long =
+    if (tx.lockTime <= LockTimeThreshold) tx.lockTime else 0
+
   def csvTimeout(tx: Transaction): Long =
     if (tx.version < 2) 0L else tx.txIn.map { in =>
       val isCsvDisabled = (in.sequence & TxIn.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0

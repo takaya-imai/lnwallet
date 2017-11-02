@@ -102,20 +102,20 @@ case class LocalCommitPublished(claimMainDelayed: Seq[ClaimDelayedOutputTx], cla
                                 claimHtlcTimeout: Seq[TimeoutAndClaim], commitTx: Transaction) extends CommitPublished {
 
   def getState = {
-    val main = for (t1 <- claimMainDelayed) yield Show(csv(t1), t1.tx, t1 -- t1, t1.amount) :: Nil
-    val success = for (t1 \ t2 <- claimHtlcSuccess) yield Hide(cltv(t1), t1.tx) :: Show(cltvCsv(t1, t2), t2.tx, t1 -- t2, t2.amount) :: Nil
-    val timeout = for (t1 \ t2 <- claimHtlcTimeout) yield Hide(cltv(t1), t1.tx) :: Show(cltvCsv(t1, t2), t2.tx, t1 -- t2, t2.amount) :: Nil
-    main ++ success ++ timeout
-  }.flatten
+    val main = for (t1 <- claimMainDelayed) yield ShowDelayed(csv(commitTx, t1.tx), t1.tx, t1 -- t1, t1.amount) :: Nil
+    val timeout = for (t1 \ t2 <- claimHtlcTimeout) yield HideDelayed(cltv(commitTx, t1.tx), t1.tx) :: csvShowDelayed(t1, t2) :: Nil
+    val success = for (t1 \ t2 <- claimHtlcSuccess) yield HideReady(t1.tx) :: csvShowDelayed(t1, t2) :: Nil
+    main.flatten ++ success.flatten ++ timeout.flatten
+  }
 }
 
 case class RemoteCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimHtlcSuccess: Seq[ClaimHtlcSuccessTx],
                                  claimHtlcTimeout: Seq[ClaimHtlcTimeoutTx], commitTx: Transaction) extends CommitPublished {
 
   def getState = {
-    val main = for (t1 <- claimMain) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
-    val success = for (t1 <- claimHtlcSuccess) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
-    val timeout = for (t1 <- claimHtlcTimeout) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
+    val main = for (t1 <- claimMain) yield ShowReady(t1.tx, t1 -- t1, t1.amount)
+    val timeout = for (t1 <- claimHtlcTimeout) yield cltvShowDelayed(commitTx, t1)
+    val success = for (t1 <- claimHtlcSuccess) yield ShowReady(t1.tx, t1 -- t1, t1.amount)
     main ++ success ++ timeout
   }
 }
@@ -124,8 +124,8 @@ case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPena
                                   commitTx: Transaction) extends CommitPublished {
 
   def getState = {
-    val main = for (t1 <- claimMain) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
-    val penalty = for (t1 <- claimPenalty) yield Show(cltv(t1), t1.tx, t1 -- t1, t1.amount)
+    val main = for (t1 <- claimMain) yield ShowReady(t1.tx, t1 -- t1, t1.amount)
+    val penalty = for (t1 <- claimPenalty) yield ShowReady(t1.tx, t1 -- t1, t1.amount)
     main ++ penalty
   }
 }
