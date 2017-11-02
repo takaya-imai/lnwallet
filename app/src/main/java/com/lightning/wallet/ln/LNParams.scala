@@ -11,6 +11,7 @@ import scala.util.{Failure, Success}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
+import com.lightning.wallet.lnutils.Connector.CMDStart
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
@@ -49,6 +50,7 @@ object LNParams { me =>
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, sha256(seed).toString)
     cloud = me getCloud CloudDataSaver.tryGetObject
+    cloud doProcess CMDStart
   }
 
   // CLOUD
@@ -104,7 +106,6 @@ trait DelayedPublishStatus extends PublishStatus {
   def isPublishable = parent match { case pd \ false \ 0L => pd > 0L case _ => false }
   val parent: (DepthAndDead, Long)
 }
-
 
 case class HideReady(txn: Transaction) extends PublishStatus { def isPublishable = true }
 case class HideDelayed(parent: (DepthAndDead, Long), txn: Transaction) extends DelayedPublishStatus

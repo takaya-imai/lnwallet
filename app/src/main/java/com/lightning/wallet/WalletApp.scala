@@ -1,16 +1,20 @@
 package com.lightning.wallet
 
 import R.string._
+import spray.json._
 import org.bitcoinj.core._
 import com.lightning.wallet.ln._
 import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.Tools._
+import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+
+import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
-import com.lightning.wallet.lnutils.{ChannelWrap, Notificator, RatesSaver}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
 import com.lightning.wallet.ln.wire.{Init, LightningMessage}
@@ -147,8 +151,11 @@ class WalletApp extends Application { me =>
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
         // Collect all the commit outputs and watch them for preimages
+        // Schedule local tier1-2 txs on server in case if wallet gets lost
+        val toSend = cd.localCommit.flatMap(_.getState).map(_.txn).toJson.toString.hex
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
         cloud.connector.getChildTxs(cd.commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
+        cloud doProcess CloudAct(toSend, Nil, "txs/schedule")
       }
     }
 

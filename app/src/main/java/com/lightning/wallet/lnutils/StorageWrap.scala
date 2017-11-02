@@ -54,11 +54,6 @@ object ChannelWrap extends ChannelListener {
       // Vibrate to show payment is in progress
       Vibr vibrate Vibr.processed
 
-    case (_, _: NormalData, _: NormalData) =>
-      // This happens when channel with null data gets NormalData on app start,
-      // we re-send CMDStart just in case if we have any pending cloud actions
-      cloud doProcess CMDStart
-
     case (_, norm: NormalData, _: CommitSig)
       // GUARD: this may be a storage token HTLC
       if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
