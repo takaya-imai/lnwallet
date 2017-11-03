@@ -12,12 +12,14 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import com.lightning.wallet.ln.Channel.CLOSING
 
 import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
+import com.lightning.wallet.ln.wire.{Init, LightningMessage, UpdateAddHtlc}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
-import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import rx.lang.scala.{Observable => Obs}
 
 import collection.JavaConverters.seqAsJavaListConverter
@@ -33,10 +35,6 @@ import scala.collection.mutable
 import android.app.Application
 import android.widget.Toast
 import java.io.File
-
-import java.util.concurrent.TimeUnit.MILLISECONDS
-import com.lightning.wallet.ln.Channel.CLOSING
-import Context.CLIPBOARD_SERVICE
 
 
 class WalletApp extends Application { me =>
@@ -65,7 +63,7 @@ class WalletApp extends Application { me =>
   def toast(msg: CharSequence): Unit = Toast.makeText(me, msg, Toast.LENGTH_LONG).show
   def isAlive = if (null == kit) false else kit.state match { case STARTING | RUNNING => true case _ => false }
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
-  def clipboardManager = getSystemService(CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
+  def clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE).asInstanceOf[ClipboardManager]
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
   def getTo(base58: String) = Address.fromBase58(params, base58)
 
@@ -123,6 +121,7 @@ class WalletApp extends Application { me =>
       }
 
       override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
+      // No matter how many blocks are left on start we only send a CMD once the last block has been processed
       def tellHeight(left: Int) = if (left < 1) for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
       override def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, left: Int) = tellHeight(left)
       override def onChainDownloadStarted(peer: Peer, left: Int) = tellHeight(left)
@@ -143,6 +142,7 @@ class WalletApp extends Application { me =>
 
     def createChannel(bootstrap: ChannelData) = new Channel {
       val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
+      def CANCELPROPSED(add: UpdateAddHtlc) = bag.updateStatus(FAILURE, add.paymentHash)
       def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
       // First add listeners, then specifically call doProcess so it runs on UI thread
@@ -152,14 +152,13 @@ class WalletApp extends Application { me =>
         BECOME(data1 = STORE(cd), state1 = CLOSING)
         // Collect all the commit outputs and watch them for preimages
         // Schedule local tier1-2 txs on server in case if wallet gets lost
-        val toSend = cd.localCommit.flatMap(_.getState).map(_.txn).toJson.toString.hex
-        kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
         cloud.connector.getChildTxs(cd.commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
-        cloud doProcess CloudAct(toSend, Nil, "txs/schedule")
+        cloud doProcess CloudAct(cd.localCommit.flatMap(_.getState).map(_.txn).toJson.toString.hex, Nil, "txs/schedule")
+        kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
       }
     }
 
-    // Get routes from maintenance server and form an OutgoingPayment if routes exist
+    // Get routes from maintenance server and make an OutgoingPayment if routes exist
     // If payment request contains extra routing info then we also ask for assisted routes
     // Once direct route and assisted routes are fetched we combine them into single sequence
     def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) =

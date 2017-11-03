@@ -14,7 +14,7 @@ import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transactio
 import com.lightning.wallet.ln.PaymentInfo.ExtraPaymentRoute
 import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
-import com.lightning.wallet.lnutils.RatesSaver.RatesMap
+import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
 import com.lightning.wallet.ln.crypto.ShaChain.Index
 import com.lightning.wallet.ln.Broadcaster.TxSeq
 import com.lightning.wallet.ln.Tools.Bytes
@@ -174,7 +174,7 @@ object ImplicitJsonFormats { me =>
   implicit val routingDataFmt = jsonFormat[Vector[RelativeCLTVRoute], Set[PublicKey], Set[Long], SecretsAndPacket, Long, Long,
     RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "onion", "amountWithFee", "expiry")
 
-  implicit val ratesFmt = jsonFormat[Seq[Double], RatesMap, Long,
+  implicit val ratesFmt = jsonFormat[Seq[Double], Fiat2Btc, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
 
   implicit val cloudActFmt = jsonFormat[BinaryData, Seq[HttpParam], String,

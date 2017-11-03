@@ -96,14 +96,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       info.chanId.toString, info.preimage.toString, received, routing)
   }
 
-  def getPaymentInfo(hash: BinaryData) = {
-    val cursor = db.select(selectByHashSql, hash.toString)
-    RichCursor apply cursor headTry toPaymentInfo
-  }
-
   def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
+  def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
 
   def retry(chan: Channel, hash: BinaryData, fail: UpdateFailHtlc) = for {
     outgoing @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(hash)

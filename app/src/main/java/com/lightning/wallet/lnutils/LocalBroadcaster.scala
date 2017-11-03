@@ -36,7 +36,7 @@ object LocalBroadcaster extends Broadcaster { me =>
       app.kit watchFunding refund.commitments
 
     case (chan, norm: NormalData, SYNC, NORMAL) =>
-      // Check for fee changes once on channel becoming online
+      // Check for fee changes once when channel becomes online
       val currentFee = norm.commitments.localCommit.spec.feeratePerKw
       val shouldUpdate = LNParams.shouldUpdateFee(currentFee, feeRatePerKw)
       if (shouldUpdate) chan.sendFeeUpdate(norm, feeRatePerKw)

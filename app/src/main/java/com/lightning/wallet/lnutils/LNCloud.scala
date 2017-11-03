@@ -9,7 +9,6 @@ import com.lightning.wallet.lnutils.Connector._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
 import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
@@ -60,8 +59,8 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     }
 
     // Execute if we are not busy and have available tokens and actions
-    case CloudData(_, ##(token @ Tuple3(pnt, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
-      val params = Seq("point" -> pnt, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
+    case CloudData(_, ##(token @ (point, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
+      val params = Seq("point" -> point, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
       val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
       isFree = false
@@ -81,7 +80,9 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         // Important: payment may fail but we wait until expiration before restarting
         case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
         case Success(info) if info.actualStatus == FAILURE => resetPaymentData
+        // Payment has been rejected by channel so it's not found here
         case Failure(_) => resetPaymentData
+        // WAITING state, do nothing
         case _ =>
       }
 
@@ -155,8 +156,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 }
 
 class Connector(val url: String) {
-  // This is a basic interface for making cloud calls
-  // failover invariant below will fall back to default in case of failure
+  import com.lightning.wallet.ln.wire.LightningMessageCodecs._
   def http(way: String) = post(s"http://$url:9001/v1/$way", true) connectTimeout 15000
 
   def tell(params: Seq[HttpParam], path: String) = ask(path, none, params:_*)

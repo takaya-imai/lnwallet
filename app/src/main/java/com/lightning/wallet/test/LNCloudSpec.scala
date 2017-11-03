@@ -1,15 +1,11 @@
 package com.lightning.wallet.test
 
-import spray.json._
-import DefaultJsonProtocol._
-import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.Utils.app
 import com.lightning.wallet.ln.wire.CommitSig
 import com.lightning.wallet.ln.{Channel, ChannelListener, LNParams, NormalData}
-import com.lightning.wallet.lnutils.{Cloud, CloudAct}
+import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct}
 import com.lightning.wallet.lnutils.Connector._
 import com.lightning.wallet.ln.Tools.random
-import fr.acinq.bitcoin.BinaryData
 
 
 class LNCloudSpec {
@@ -30,7 +26,9 @@ class LNCloudSpec {
     }
 
     chan.listeners += restartListener
-    val set: Set[CloudAct] = List.fill(75)(CloudAct(random getBytes 32, Nil, "check")).toSet
+    chan.listeners -= ChannelWrap
+
+    val set: Set[CloudAct] = List.fill(750)(CloudAct(random getBytes 32, Nil, "check")).toSet
     LNParams.cloud.data = LNParams.cloud.data.copy(acts = set)
     LNParams.cloud doProcess CMDStart
   }

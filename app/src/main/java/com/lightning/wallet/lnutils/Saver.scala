@@ -9,7 +9,7 @@ import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 
 import org.bitcoinj.core.{Coin, Transaction}
 import rx.lang.scala.{Scheduler, Observable => Obs}
-import com.lightning.wallet.lnutils.RatesSaver.RatesMap
+import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
 import com.lightning.wallet.helper.Statistics
 import spray.json.JsonFormat
 import scala.util.Try
@@ -49,9 +49,9 @@ object CloudDataSaver extends Saver {
 }
 
 object RatesSaver extends Saver {
-  type RatesMap = Map[String, Double]
+  type Fiat2Btc = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
-  type Result = (BlockNum2Fee, RatesMap)
+  type Result = (BlockNum2Fee, Fiat2Btc)
   val KEY = "rates4"
 
   private val updatePeriod: FiniteDuration = 20.minutes
@@ -68,7 +68,7 @@ object RatesSaver extends Saver {
   }
 }
 
-case class Rates(feeHistory: Seq[Double], exchange: RatesMap, stamp: Long) {
+case class Rates(feeHistory: Seq[Double], exchange: Fiat2Btc, stamp: Long) {
   lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
   lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else cutOutliers
   lazy val feeRisky = feeLive div 2
