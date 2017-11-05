@@ -62,8 +62,8 @@ object Utils {
   lazy val denoms = List(SatDenomination, MBtcDenomination, BtcDenomination)
   val textType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
   val passType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
-  val coloredOut = (amt: Satoshi) => sumOut.format(denom withSign amt)
-  val coloredIn = (amt: Satoshi) => sumIn.format(denom withSign amt)
+  val coloredOut = (amt: MilliSatoshi) => sumOut.format(denom withSign amt)
+  val coloredIn = (amt: MilliSatoshi) => sumIn.format(denom withSign amt)
 
   // Mapping from text to Android id integer
   val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")

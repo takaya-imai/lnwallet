@@ -33,8 +33,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   }
 
   def SEND(msg: LightningMessage): Unit
-  def CANCELPROPSED(add: UpdateAddHtlc): Unit
   def CLOSEANDWATCH(close: ClosingData): Unit
+  def CANCELPROPOSED(add: UpdateAddHtlc): Unit
   def STORE(content: HasCommitments): HasCommitments
   def UPDATE(d1: ChannelData): Channel = BECOME(d1, state)
   def BECOME(data1: ChannelData, state1: String) = runAnd(me) {
@@ -368,7 +368,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           case _ => throw new LightningException
         }
 
-        for (add <- localDelta) CANCELPROPSED(add)
+        for (add <- localDelta) CANCELPROPOSED(add)
         BECOME(norm.copy(commitments = c1), NORMAL)
         norm.localShutdown foreach SEND
         doProcess(CMDHTLCProcess)

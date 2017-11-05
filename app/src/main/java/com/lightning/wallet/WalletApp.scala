@@ -116,6 +116,11 @@ class WalletApp extends Application { me =>
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
         // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
+        import scala.collection.JavaConverters._
+        println("----------------------------------------------------")
+        for (tx <- app.kit.wallet.getTransactions(true).asScala)
+          println(s"-- ${tx.getHash.toString}")
+
         for (channel <- all) channel process spent
         bag.extractPreimage(spent.tx)
       }
@@ -134,7 +139,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) =
         fromNode(connected, id) match { case needsReconnect =>
-          val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
+          val delayed = Obs.just(Tools log s"Retrying $id").delay(500.seconds)
           delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
           needsReconnect.foreach(_ process CMDOffline)
         }
@@ -142,7 +147,7 @@ class WalletApp extends Application { me =>
 
     def createChannel(bootstrap: ChannelData) = new Channel {
       val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
-      def CANCELPROPSED(add: UpdateAddHtlc) = bag.updateStatus(FAILURE, add.paymentHash)
+      def CANCELPROPOSED(add: UpdateAddHtlc) = bag.updateStatus(FAILURE, add.paymentHash)
       def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
       // First add listeners, then specifically call doProcess so it runs on UI thread
@@ -150,11 +155,16 @@ class WalletApp extends Application { me =>
 
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
-        // Collect all the commit outputs and watch them for preimages
-        // Schedule local tier1-2 txs on server in case if wallet gets lost
+        // Ask server once for txs which may spend our commit txs' outputs to extract preimages
         cloud.connector.getChildTxs(cd.commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
-        cloud doProcess CloudAct(cd.localCommit.flatMap(_.getState).map(_.txn).toJson.toString.hex, Nil, "txs/schedule")
+        // Collect all the commit txs' output publicKeyScripts and watch them locally for payment preimages
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
+
+        if (cd.localCommit.nonEmpty) {
+          // Schedule local tier1-2 txs on server just in case
+          val txsJson = cd.localCommit.head.getState.map(_.txn).toJson
+          cloud doProcess CloudAct(txsJson.toString.hex, Nil, "txs/schedule")
+        }
       }
     }
 
