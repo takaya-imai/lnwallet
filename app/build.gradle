@@ -33,7 +33,6 @@ dependencies {
     compile files('libs/bitcoinj-core-0.15-SNAPSHOT-bundled.jar')
     compile 'net.zetetic:android-database-sqlcipher:3.5.4@aar'
     compile 'fr.acinq:bitcoin-lib_2.11:0.9.13'
-    //compile 'fr.acinq:bitcoinj-core:0.15-rc4'
 
     // Working with data formats
     compile 'com.google.zxing:core:3.3.0'

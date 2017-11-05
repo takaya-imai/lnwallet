@@ -116,11 +116,6 @@ class WalletApp extends Application { me =>
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
         // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
-        import scala.collection.JavaConverters._
-        println("----------------------------------------------------")
-        for (tx <- app.kit.wallet.getTransactions(true).asScala)
-          println(s"-- ${tx.getHash.toString}")
-
         for (channel <- all) channel process spent
         bag.extractPreimage(spent.tx)
       }
@@ -139,7 +134,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) =
         fromNode(connected, id) match { case needsReconnect =>
-          val delayed = Obs.just(Tools log s"Retrying $id").delay(500.seconds)
+          val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
           delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
           needsReconnect.foreach(_ process CMDOffline)
         }
