@@ -168,8 +168,8 @@ class Connector(val url: String) {
     }
 
   def getRates = ask("rates/get", identity)
-  def getDatas(key: String) = ask("data/get", toVec[BinaryData], "key" -> key)
   def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
+  def getBackup(key: String) = ask("data/get", chans => toVec[String](chans) map HEX.decode, "key" -> key)
   def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
 
   def findRoutes(noNodes: Set[PublicKey], noChannels: Set[Long], fromNode: PublicKey, toNode: PublicKey) =
@@ -179,7 +179,7 @@ class Connector(val url: String) {
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
   override def getChildTxs(txs: TxSeq) = super.getChildTxs(txs).onErrorResumeNext(_ => failover getChildTxs txs)
-  override def getDatas(key: String) = super.getDatas(key).onErrorResumeNext(_ => failover getDatas key)
+  override def getBackup(key: String) = super.getBackup(key).onErrorResumeNext(_ => failover getBackup key)
   override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 

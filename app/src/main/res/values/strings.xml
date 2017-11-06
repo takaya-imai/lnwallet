@@ -153,8 +153,8 @@
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
+    <string name="err_address">Failed because neither Bitcoin address nor Lightning payment request has been found</string>
     <string name="err_uri">Failed because request contains a malformed URI which could not be parsed</string>
-    <string name="err_address">Failed because Bitcoin address in a given request is not valid</string>
     <string name="err_neg">Failed because request contains a negative sum amount</string>
     <string name="err_general">Failed because an unexpected error has occurred</string>
 

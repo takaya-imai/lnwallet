@@ -66,8 +66,8 @@ object ChannelWrap extends ChannelListener {
     case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
       // Once a new channel becomes NORMAL we save it's state on a cloud
       val staticChannelState = RefundingData(norm.announce, norm.commitments)
-      val packed = AES.encode(staticChannelState.toJson.toString, cloudPrivateId)
-      cloud doProcess CloudAct(packed, Seq("key" -> cloudPublicId.toString), "data/put")
+      val packed = AES.encode(staticChannelState.toJson.toString, cloudSecret)
+      cloud doProcess CloudAct(packed, Seq("key" -> cloudId.toString), "data/put")
   }
 }
 

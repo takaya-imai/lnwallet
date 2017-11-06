@@ -42,14 +42,12 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
       override def startUp = {
         // Get seed before encryption
         wallet = new Wallet(app.params, true)
-        val seed = wallet.getKeyChainSeed
-        LNParams setup seed.getSeedBytes
-
-        // Encrypt wallet and use checkpoints
-        val (crypter, key) = app newCrypter createPass.getText
         store = new SPVBlockStore(app.params, app.chainFile)
+
+        // Enable checkpoints optimization and encrypt wallet
+        LNParams.setup(wallet.getKeyChainSeed.getSeedBytes)
         useCheckPoints(wallet.getEarliestKeyCreationTime)
-        wallet.encrypt(crypter, key)
+        app.encryptWallet(wallet, createPass.getText)
 
         // These should be initialized after checkpoints
         blockChain = new BlockChain(app.params, wallet, store)
@@ -57,7 +55,6 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
 
         if (app.isAlive) {
           setupAndStartDownload
-          wallet saveToFile app.walletFile
           me exitTo classOf[BtcActivity]
         }
       }

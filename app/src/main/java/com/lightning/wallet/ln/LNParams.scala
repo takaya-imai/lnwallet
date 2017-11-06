@@ -39,8 +39,8 @@ object LNParams { me =>
   lazy val cloudPrivateKey: PrivateKey = extendedCloudKey.privateKey // Sign messages to private maintenance server
   lazy val cloudPublicKey: PublicKey = cloudPrivateKey.publicKey // Check signed messages on private maintenance server
 
-  lazy val cloudPrivateId: BinaryData = sha256(cloudPrivateKey.toBin) // Key for encrypting data on maintenance server
-  lazy val cloudPublicId: BinaryData = sha256(cloudPublicKey.toBin) // Key for retrieving data from maintenance server
+  lazy val cloudSecret: BinaryData = sha256(cloudPrivateKey.toBin) // Secret for encrypting data for maintenance server
+  lazy val cloudId: BinaryData = sha256(cloudPublicKey.toBin) // ID for retrieving data from maintenance server
   lazy val broadcaster: Broadcaster = LocalBroadcaster
   lazy val bag = PaymentInfoWrap
 

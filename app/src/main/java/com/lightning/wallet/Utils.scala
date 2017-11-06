@@ -5,18 +5,22 @@ import android.text._
 import android.view._
 import android.widget._
 import org.bitcoinj.core._
+import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
 import com.lightning.wallet.lnutils._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
+import com.lightning.wallet.lnutils.JsonHttpUtils._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
-import fr.acinq.bitcoin.{Crypto, MilliSatoshi, Satoshi}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
+import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
+import rx.lang.scala.{Observable => Obs}
 import R.id.{typeCNY, typeEUR, typeUSD}
 import java.util.{Timer, TimerTask}
 
@@ -33,7 +37,6 @@ import org.bitcoinj.crypto.KeyCrypterException
 import android.text.method.LinkMovementMethod
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
-import com.lightning.wallet.ln.LNParams
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import com.lightning.wallet.helper.AES
@@ -191,7 +194,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
         def encryptAndExport: Unit = rm(alert1) {
           val packed = AES.encode(wordsText, Crypto sha256 password.binary.data)
-          val exported = s"Encrypted BIP32 mnemonic ${new java.util.Date}: ${packed.toString}"
+          val exported = s"Encrypted BIP32 code ${new java.util.Date}: ${packed.toString}"
           val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
           val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
           me startActivity s1
@@ -209,10 +212,25 @@ trait ToolbarActivity extends TimerActivity { me =>
     val changePass = form.findViewById(R.id.changePass).asInstanceOf[Button]
 
     recoverChannelFunds setOnClickListener onButtonTap {
+      // After wallet data is lost users may recover channel
+      // funds by fetching encrypted static channel params from server
 
       rm(menu) {
-        lazy val dialog = mkChoiceDialog(none, none, dialog_ok, dialog_cancel)
+        lazy val dialog = mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel)
         mkForm(dialog, getString(ln_recover_explain).html, null)
+      }
+
+      def proceed = {
+        // We should filter out local channels to not accidently close an open ones
+        val localChanIds = for (chan <- app.ChannelManager.all) yield chan.pull(_.channelId)
+        val request = LNParams.cloud.connector.getBackup(LNParams.cloudId.toString) flatMap Obs.just
+        val datas = request map AES.decode(LNParams.cloudSecret) map to[RefundingData]
+
+        // Add each non-local channel to manager list and initiate a funds recovery procedure
+        datas.filterNot(localChanIds.flatten contains _.commitments.channelId).foreach(refundingData => {
+          app.ChannelManager.all = app.ChannelManager.all :+ app.ChannelManager.createChannel(refundingData)
+          ConnectionManager requestConnection refundingData.announce
+        }, Tools.errlog)
       }
     }
 
@@ -258,9 +276,8 @@ trait ToolbarActivity extends TimerActivity { me =>
         }
 
         def rotatePass = {
-          app.kit.wallet decrypt oldPass
-          val (crypter, key) = app newCrypter newPass
-          app.kit.wallet.encrypt(crypter, key)
+          app.kit.wallet.decrypt(oldPass)
+          app.encryptWallet(app.kit.wallet, newPass)
         }
       }
 
@@ -284,9 +301,9 @@ trait ToolbarActivity extends TimerActivity { me =>
     def trySave(url1: String) = delayUI {
       val data1 = LNParams.cloud.data.copy(url = url1)
       val cloud1 = LNParams getCloud Success(data1)
-      val result = cloud1.checkIfWorks
 
-      result.subscribe(ok => {
+      cloud1.checkIfWorks.subscribe(done => {
+        // Just send a dummy data with signature
         CloudDataSaver saveObject data1
         app toast ln_backup_success
         LNParams.cloud = cloud1

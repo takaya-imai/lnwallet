@@ -5,7 +5,6 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
-
 import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import com.lightning.wallet.ln.crypto.ShaChain
 import java.util.concurrent.Executors
@@ -383,9 +382,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
         if cr.channelId == recovery.commitments.channelId =>
 
-        me SEND Error(cr.channelId, "Please be so kind as to spend your local current commit")
-        me UPDATE recovery.modify(_.commitments.remoteCommit.index).setTo(cr.nextRemoteRevocationNumber - 1)
-          .modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
+        me SEND Error(cr.channelId, "Please be so kind as to spend your current local commit tx" getBytes "UTF-8")
+        me UPDATE recovery.modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
 
 
       // SYNC: ONLINE/OFFLINE
@@ -431,6 +429,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE FUNDING SPENT
 
 
+      case (RefundingData(announce, commitments, _), CMDSpent(spendTx), REFUNDING) =>
+        // A special case: we have lost our data and now we ask them to spend their current local commit
+        val rcp = Closing.claimRemoteLostCommitTxOutputs(commitments, commitments.remoteCommit, spendTx)
+        BECOME(me STORE ClosingData(announce, commitments, Nil, Nil, rcp :: Nil), CLOSING)
+
+
       case (some: HasCommitments, CMDSpent(spendTx), _)
         // GUARD: something which spends our funding is broadcasted, must react
         if spendTx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
@@ -458,10 +462,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => BECOME(some, CLOSING)
       case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
       case (_: NormalData, add: CMDAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
-
-      case _ =>
-        // Let know if received an unhandled message
-        Tools log s"Channel: unhandled $state : $change"
+      case _ => Tools log s"Channel: unhandled $state : $change"
     }
 
     // Change has been successfully processed
@@ -498,26 +499,25 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def startLocalCurrentClose(some: HasCommitments) =
     // Something went wrong and we decided to spend our CURRENT commit transaction
     Closing.claimCurrentLocalCommitTxOutputs(some.commitments, LNParams.bag) -> some match {
-      case (claim: LocalCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(localCommit = claim :: Nil)
+      case (claim, closingData: ClosingData) => me CLOSEANDWATCH closingData.copy(localCommit = claim :: Nil)
       case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, localCommit = claim :: Nil)
     }
 
   private def startRemoteCurrentClose(some: HasCommitments) =
     // They've decided to spend their CURRENT commit tx, we need to take what's ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, some.commitments.remoteCommit, LNParams.bag) -> some match {
-      case (claim: RemoteCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(remoteCommit = claim :: Nil)
-      case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, remoteCommit = claim :: Nil)
+      case (remoteClaim, closingData: ClosingData) => me CLOSEANDWATCH closingData.copy(remoteCommit = remoteClaim :: Nil)
+      case (remoteClaim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, remoteCommit = remoteClaim :: Nil)
     }
 
   private def startRemoteNextClose(some: HasCommitments, nextRemoteCommit: RemoteCommit) =
     // They've decided to spend their NEXT commit tx, once again we need to take what's ours
     Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, LNParams.bag) -> some match {
-      case (claim: RemoteCommitPublished, closing: ClosingData) => me CLOSEANDWATCH closing.copy(nextRemoteCommit = claim :: Nil)
-      case (claim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, nextRemoteCommit = claim :: Nil)
+      case (remoteClaim, closingData: ClosingData) => me CLOSEANDWATCH closingData.copy(nextRemoteCommit = remoteClaim :: Nil)
+      case (remoteClaim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, nextRemoteCommit = remoteClaim :: Nil)
     }
 
   private def startOtherClose(some: HasCommitments, tx: Transaction) =
-    // They may have spent a REVOKED transaction so we can maybe take all the money
     Closing.claimRevokedRemoteCommitTxOutputs(commitments = some.commitments, tx) -> some match {
       case (Some(claim), close: ClosingData) => BECOME(me STORE close.modify(_.revokedCommit).using(claim +: _), CLOSING)
       case (Some(claim), _) => BECOME(me STORE ClosingData(some.announce, some.commitments, revokedCommit = claim :: Nil), CLOSING)
@@ -537,11 +537,11 @@ object Channel {
   // These states are saved
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
-  val REFUNDING = "Refunding"
   val NORMAL = "Normal"
   val SYNC = "Sync"
 
   // Makes chan inactive
+  val REFUNDING = "Refunding"
   val CLOSING = "Closing"
 }
 

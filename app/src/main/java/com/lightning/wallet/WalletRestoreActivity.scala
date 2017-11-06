@@ -4,6 +4,7 @@ import android.widget._
 import collection.JavaConverters._
 import android.widget.DatePicker._
 import com.lightning.wallet.R.string._
+import org.bitcoinj.wallet.KeyChain.KeyPurpose._
 import com.hootsuite.nachos.terminator.ChipTerminatorHandler._
 import org.bitcoinj.wallet.{DeterministicSeed, KeyChainGroup, Wallet}
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
@@ -57,8 +58,8 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         checkValidity
 
       private def checkValidity = {
-        val mnemonicIsOk = isMnemonicCorrect(getMnemonicText)
         val passIsOk = password.getText.length >= 6
+        val mnemonicIsOk = isMnemonicCorrect(getMnemonicText)
 
         restoreWallet.setEnabled(mnemonicIsOk & passIsOk)
         if (!mnemonicIsOk) restoreWallet setText restore_mnemonic_wrong
@@ -94,17 +95,18 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
       startAsync
 
       def startUp = {
-        val whenTime = datePicker.cal.getTimeInMillis / 1000
-        val seed = new DeterministicSeed(getMnemonicText, null, "", whenTime)
-        val keyChainGroup = new KeyChainGroup(app.params, seed, true)
-        val (crypter, key) = app newCrypter password.getText
-        LNParams setup seed.getSeedBytes
+        val seed = new DeterministicSeed(getMnemonicText,
+          null, "", datePicker.cal.getTimeInMillis / 1000)
 
-        // Recreate encrypted wallet and use checkpoints
+        // Recreate a wallet and use checkpoints
+        wallet = Wallet.fromSeed(app.params, seed, true)
         store = new SPVBlockStore(app.params, app.chainFile)
-        wallet = new Wallet(app.params, keyChainGroup)
-        wallet.encrypt(crypter, key)
-        useCheckPoints(whenTime)
+
+        LNParams.setup(seed.getSeedBytes)
+        useCheckPoints(seed.getCreationTimeSeconds)
+        app.encryptWallet(wallet, password.getText)
+        wallet currentAddress RECEIVE_FUNDS
+        wallet currentAddress CHANGE
 
         // Must be initialized after checkpoints
         blockChain = new BlockChain(app.params, wallet, store)
@@ -112,7 +114,6 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
 
         if (app.isAlive) {
           setupAndStartDownload
-          wallet saveToFile app.walletFile
           exitTo apply classOf[BtcActivity]
         }
       }

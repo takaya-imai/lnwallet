@@ -3,10 +3,9 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Scripts._
+import com.lightning.wallet.ln.crypto.ShaChain._
 import com.lightning.wallet.ln.crypto.Generators._
-import com.lightning.wallet.ln.crypto.ShaChain
-import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
-
+import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import scala.util.{Success, Try}
 
 
@@ -129,7 +128,7 @@ object Helpers { me =>
         delayedClaim <- Scripts checkSpendable makeClaimDelayedOutput(timeout.tx)
       } yield timeout -> delayedClaim
 
-      val claimMainDelayedTx = Scripts checkSpendable {
+      val claimMainDelayedTx = Scripts.checkSpendable {
         // When local commit is spent our main output is also delayed
         makeClaimDelayedOutput(commitments.localCommit.commitTx.tx)
       }
@@ -138,12 +137,8 @@ object Helpers { me =>
         allTimeoutTxs, commitTx = commitments.localCommit.commitTx.tx)
     }
 
-    def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit,
-                                   bag: PaymentInfoBag): RemoteCommitPublished = {
-
-      val localPrivkey: PrivateKey =
-        derivePrivKey(commitments.localParams.paymentKey,
-          remoteCommit.remotePerCommitmentPoint)
+    def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit, bag: PaymentInfoBag) = {
+      val localPrivateKey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
 
       val (remoteCommitTx, timeoutTxs, successTxs, remotePubkey, remoteRevPubkey) =
         makeRemoteTxs(remoteCommit.index, commitments.localParams, commitments.remoteParams,
@@ -152,43 +147,54 @@ object Helpers { me =>
       val claimSuccessTxs = for {
         HtlcTimeoutTx(_, _, add) <- timeoutTxs
         IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
-        claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
+        claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivateKey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
 
-        sig = Scripts.sign(claimHtlcSuccessTx, localPrivkey)
+        sig = Scripts.sign(claimHtlcSuccessTx, localPrivateKey)
         signed = Scripts.addSigs(claimHtlcSuccessTx, sig, preimage)
         claimSuccess <- Scripts checkSpendable signed
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
         HtlcSuccessTx(_, _, add) <- successTxs
-        claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivkey.publicKey, remotePubkey,
+        claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivateKey.publicKey, remotePubkey,
           remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
 
-        sig = Scripts.sign(claimHtlcTimeoutTx, localPrivkey)
+        sig = Scripts.sign(claimHtlcTimeoutTx, localPrivateKey)
         signed = Scripts.addSigs(claimHtlcTimeoutTx, sig)
         claimTimeout <- Scripts checkSpendable signed
       } yield claimTimeout
 
-      val claimMainTx = Scripts checkSpendable {
-        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivkey.publicKey,
+      RemoteCommitPublished(Scripts.checkSpendable {
+        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivateKey.publicKey,
           commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
 
-        val sig = Scripts.sign(txWithInputInfo, localPrivkey)
-        Scripts.addSigs(txWithInputInfo, localPrivkey.publicKey, sig)
-      }
+        val sig = Scripts.sign(txWithInputInfo, localPrivateKey)
+        Scripts.addSigs(txWithInputInfo, localPrivateKey.publicKey, sig)
+      }.toList, claimSuccessTxs.toList, claimTimeoutTxs.toList, remoteCommitTx.tx)
+    }
 
-      RemoteCommitPublished(claimMainTx.toList, claimSuccessTxs.toList,
-        claimTimeoutTxs.toList, commitTx = remoteCommitTx.tx)
+    // Special case when we have lost our data and ask them to spend their local current commit tx
+    def claimRemoteLostCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit, commitTx: Transaction) = {
+      val localPrivateKey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
+
+      RemoteCommitPublished(Scripts.checkSpendable {
+        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(commitTx, localPrivateKey.publicKey,
+          commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
+
+        val sig = Scripts.sign(txWithInputInfo, localPrivateKey)
+        Scripts.addSigs(txWithInputInfo, localPrivateKey.publicKey, sig)
+      }.toList, claimHtlcSuccess = Nil, claimHtlcTimeout = Nil, commitTx)
     }
 
     def claimRevokedRemoteCommitTxOutputs(commitments: Commitments, tx: Transaction) = {
       val txNumber = Scripts.obscuredCommitTxNumber(number = Scripts.decodeTxNumber(tx.txIn.head.sequence, tx.lockTime),
         !commitments.localParams.isFunder, commitments.remoteParams.paymentBasepoint, commitments.localParams.paymentKey.toPoint)
 
+      val index = moves(largestTxIndex - txNumber)
       val hashes = commitments.remotePerCommitmentSecrets.hashes
-      val index = ShaChain.moves(ShaChain.largestTxIndex - txNumber)
-      ShaChain.getHash(hashes)(index) map { remotePerCommitmentSecret =>
+
+      getHash(hashes)(index) map { remotePerCommitmentSecret =>
         val remotePerCommitmentSecretScalar = Scalar(remotePerCommitmentSecret)
         val remotePerCommitmentPoint = remotePerCommitmentSecretScalar.toPoint
 

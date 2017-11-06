@@ -20,17 +20,17 @@ import com.lightning.wallet.ln.wire.{Init, LightningMessage, UpdateAddHtlc}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
+import org.bitcoinj.wallet.{Protos, Wallet}
 import rx.lang.scala.{Observable => Obs}
 
 import collection.JavaConverters.seqAsJavaListConverter
-import org.spongycastle.crypto.params.KeyParameter
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
+import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.Wallet.BalanceType
 import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.google.protobuf.ByteString
-import org.bitcoinj.wallet.Protos
 import scala.collection.mutable
 import android.app.Application
 import android.widget.Toast
@@ -78,11 +78,11 @@ class WalletApp extends Application { me =>
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
   }
 
-  def newCrypter(pass: CharSequence) = getCrypterScrypt(KeyCrypterScrypt.randomSalt, pass)
-  def getCrypterScrypt(salt: Bytes, pass: CharSequence): (KeyCrypterScrypt, KeyParameter) = {
-    val crypterScryptBuilder = Protos.ScryptParameters.newBuilder.setSalt(ByteString copyFrom salt)
-    val crypter = new KeyCrypterScrypt(crypterScryptBuilder.setN(65536).build)
-    Tuple2(crypter, crypter deriveKey pass)
+  def encryptWallet(wallet: Wallet, pass: CharSequence) = {
+    val salt = ByteString copyFrom KeyCrypterScrypt.randomSalt
+    val builder = Protos.ScryptParameters.newBuilder.setSalt(salt)
+    val crypter = new KeyCrypterScrypt(builder.setN(65536).build)
+    wallet.encrypt(crypter, crypter deriveKey pass)
   }
 
   object TransData {
@@ -134,7 +134,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) =
         fromNode(connected, id) match { case needsReconnect =>
-          val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
+          val delayed = Obs.just(Tools log s"Retrying $id").delay(500.seconds)
           delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
           needsReconnect.foreach(_ process CMDOffline)
         }
@@ -216,7 +216,7 @@ class WalletApp extends Application { me =>
       peerGroup addAddress new PeerAddress(app.params,
         InetAddresses forString cloud.connector.url, 8333)
 
-      //peerGroup addPeerDiscovery new DnsDiscovery(params)
+//      peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setMinRequiredProtocolVersion(70015)
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup.setDownloadTxDependencies(0)
