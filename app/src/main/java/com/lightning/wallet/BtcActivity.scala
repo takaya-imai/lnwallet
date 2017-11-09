@@ -203,8 +203,12 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         val wrap = adapter getItem pos
         val marking = if (wrap.nativeValue.isPositive) sumIn else sumOut
         val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
-        val outputs = wrap.payDatas(wrap.nativeValue.isPositive).flatMap(_.toOption).map(_ cute marking)
-        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, outputs.map(_.html).toArray)
+        val outputs = wrap.payDatas(wrap.nativeValue.isPositive).flatMap(_.toOption)
+        val humanViews = for (payData <- outputs) yield payData.cute(marking).html
+
+        // Wire up a popup list
+        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, humanViews.toArray)
+        lst setOnItemClickListener onTap { position => outputs(position - 1).onClick }
         lst setHeaderDividersEnabled false
         lst addHeaderView detailsWrapper
 
@@ -237,6 +241,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         app.kit.wallet addCoinsReceivedEventListener txsTracker
         app.kit.wallet addTransactionConfidenceEventListener txsTracker
         if (txs.isEmpty) mnemonicWarn setVisibility View.VISIBLE
+        mnemonicInfo setText getString(mnemonic_info).html
         adapter set txs
       }
 

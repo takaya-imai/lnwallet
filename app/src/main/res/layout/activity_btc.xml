@@ -19,15 +19,13 @@
             style="@style/StandardLinearLayout">
 
             <TextView
-                style="@style/Info"
+                style="@style/MarginInfo"
                 android:id="@+id/mnemonicInfo"
-                android:layout_width="wrap_content"
-                android:text="@string/mnemonic_info"/>
+                android:layout_width="wrap_content"/>
 
             <Button
                 style="@style/Info"
                 android:onClick="viewMnemonic"
-                android:layout_marginTop="25dp"
                 android:layout_width="wrap_content"
                 android:text="@string/sets_mnemonic"/>
 

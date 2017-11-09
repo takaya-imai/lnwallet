@@ -22,7 +22,6 @@ object AES {
   private[this] val version = 1.toByte
   private[this] val ivLength = 16
 
-
   def encode(plaintext: String, key: Bytes): BinaryData = {
     // Takes any string and returns an encoded string with iv
     // Can be directly sent over internet connection

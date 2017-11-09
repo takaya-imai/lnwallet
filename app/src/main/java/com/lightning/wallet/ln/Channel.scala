@@ -382,8 +382,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
         if cr.channelId == recovery.commitments.channelId =>
 
-        me SEND Error(cr.channelId, "Please be so kind as to spend your current local commit tx" getBytes "UTF-8")
-        me UPDATE recovery.modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
+        val d1 = recovery.modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
+        me UPDATE d1 SEND Error(cr.channelId, "Please be so kind as to spend your local commit" getBytes "UTF-8")
 
 
       // SYNC: ONLINE/OFFLINE
@@ -429,7 +429,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE FUNDING SPENT
 
 
-      case (RefundingData(announce, commitments, _), CMDSpent(spendTx), REFUNDING) =>
+      case (RefundingData(announce, commitments, _), CMDSpent(spendTx), REFUNDING)
+        if spendTx.txIn.exists(_.outPoint == commitments.commitInput.outPoint) =>
+
         // A special case: we have lost our data and now we ask them to spend their current local commit
         val rcp = Closing.claimRemoteLostCommitTxOutputs(commitments, commitments.remoteCommit, spendTx)
         BECOME(me STORE ClosingData(announce, commitments, Nil, Nil, rcp :: Nil), CLOSING)

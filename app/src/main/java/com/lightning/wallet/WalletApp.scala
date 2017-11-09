@@ -108,8 +108,8 @@ class WalletApp extends Application { me =>
     type ChannelVec = Vector[Channel]
 
     var all: ChannelVec = ChannelWrap.get map createChannel // Receive CMDSpent and CMDBestHeight, nothing else
-    def connected: ChannelVec = all.filter(_.state != Channel.CLOSING) // Those who need a connection to ln peer
-    def alive: ChannelVec = connected.filter(_.state != Channel.REFUNDING) // Those excluding CLOSING and REFUNDING
+    def connected: ChannelVec = all.filter(_.state != Channel.CLOSING) // Those who need a connection to LN peer
+    def alive: ChannelVec = all.filter(channel => channel.state != Channel.CLOSING && channel.state != Channel.REFUNDING)
     def fromNode(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id) // Those from specific ln peer
     def reconnect(of: ChannelVec) = of.map(_.data.announce).distinct foreach requestConnection
 
@@ -134,7 +134,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) =
         fromNode(connected, id) match { case needsReconnect =>
-          val delayed = Obs.just(Tools log s"Retrying $id").delay(500.seconds)
+          val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
           delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
           needsReconnect.foreach(_ process CMDOffline)
         }

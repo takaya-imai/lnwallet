@@ -146,13 +146,15 @@ with TimerActivity with ViewSwitch { me =>
     def exitToRestore = me exitTo classOf[WalletRestoreActivity]
     lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, options)
     lst setOnItemClickListener onTap { pos => if (pos == 1) rm(alert)(exitToRestore) else proceed }
+    lst setDividerHeight 0
+    lst setDivider null
 
     def proceed = rm(alert) {
       val form = getLayoutInflater.inflate(R.layout.frag_encrypted_mnemonic, null)
       val encryptedMnemonic = form.findViewById(R.id.encryptedMnemonic).asInstanceOf[EditText]
       val oldWalletPassword = form.findViewById(R.id.oldWalletPassword).asInstanceOf[EditText]
       lazy val dialog = mkChoiceDialog(attempt, none, dialog_ok, dialog_cancel)
-      lazy val alert1 = mkForm(dialog, me getString restore_wallet, form)
+      lazy val alert1 = mkForm(dialog, me getString wallet_restore, form)
       alert1
 
       def attempt: Unit = rm(alert1) {

@@ -6,9 +6,9 @@ import android.widget.DatePicker._
 import com.lightning.wallet.R.string._
 import org.bitcoinj.wallet.KeyChain.KeyPurpose._
 import com.hootsuite.nachos.terminator.ChipTerminatorHandler._
-import org.bitcoinj.wallet.{DeterministicSeed, KeyChainGroup, Wallet}
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
+import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import android.view.{View, ViewGroup}
 
@@ -64,7 +64,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
         restoreWallet.setEnabled(mnemonicIsOk & passIsOk)
         if (!mnemonicIsOk) restoreWallet setText restore_mnemonic_wrong
         else if (!passIsOk) restoreWallet setText password_too_short
-        else restoreWallet setText restore_wallet
+        else restoreWallet setText wallet_restore
       }
     }
 
@@ -114,6 +114,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
 
         if (app.isAlive) {
           setupAndStartDownload
+          wallet saveToFile app.walletFile
           exitTo apply classOf[BtcActivity]
         }
       }

@@ -21,14 +21,28 @@
     <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
     <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Minimal transaction fee</small></small>]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
-    <string name="wallet_create">Create New Bitcoin Wallet</string>
+    <string name="wallet_create">New Bitcoin Wallet</string>
     <string name="wallet_restore">Restore Wallet</string>
     <string name="wallet_empty">Wallet is empty</string>
     <string name="unlock">Unlock Wallet</string>
 
+    <!-- wallet creation and restoring -->
+    <array name="restore_mnemonic_options">
+        <item>Was encrypted using «Encrypt and export» option</item>
+        <item>Is not encrypted\nIt\'s just plain 12 words</item>
+    </array>
+
+    <string name="restore_encrypted">Your encrypted mnemonic</string>
+    <string name="restore_pass">An old wallet password was used for encryption so please provide it here</string>
+    <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
+    <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
+    <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
+    <string name="restore_mnemonic_wrong">Mnemonic must be 12 words long</string>
+    <string name="restore_hint">Your BIP32 mnemonic code</string>
+
     <!-- headers with links -->
     <string name="read_settings"><![CDATA[<small>Got questions or feel lost?<br><a href=https://lightning-wallet.com/>Read a short app manual</a><br><br></small>Wallet settings]]></string>
-    <string name="mnemonic_info">Mnemonic code is super important!\n<a href='https://lightning-wallet.com/#mnemonic-code'>Read about it</a> and be sure to save it\n\nWith mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins</string>
+    <string name="mnemonic_info"><![CDATA[<font color=#E31300>Mnemonic code is super important</font><br><a href=https://lightning-wallet.com/#mnemonic-code>Read about it</a> and be sure to save it<br><br>With mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins]]></string>
     <string name="mnemonic_export_details"><![CDATA[Mnemonic code will be encrypted and exported using <strong>your current wallet password</strong><br><br>You are strongly advised to read a <a href=https://lightning-wallet.com/#mnemonic-code>related section</a> of wallet manual before proceeding with this]]></string>
     <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
     <string name="ln_recover_explain"><![CDATA[<small>Not sure what is this about?<br><a href=https://lightning-wallet.com/>Read more</a> on what funds recovery is and when you might need it</small><br><br>Would you like to start a channel funds recovery?]]></string>
@@ -101,21 +115,6 @@
         <item>Sync: %1$d day behind</item>
         <item>Sync: %1$d days behind</item>
     </array>
-
-    <!-- wallet creation and restoring -->
-    <array name="restore_mnemonic_options">
-        <item>Was encrypted using «Encrypt and export» option</item>
-        <item>Is not encrypted\nIt\'s just plain 12 words</item>
-    </array>
-
-    <string name="restore_encrypted">Your encrypted mnemonic</string>
-    <string name="restore_pass">An old wallet password was used for encryption so please provide it here</string>
-    <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
-    <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
-    <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
-    <string name="restore_mnemonic_wrong">Mnemonic must be 12 words long</string>
-    <string name="restore_hint">Your BIP32 mnemonic code</string>
-    <string name="restore_wallet">Restore Wallet</string>
 
     <!-- activity_btc -->
     <string name="txs_fee_incoming"><![CDATA[<font color=#1BA2E0>Incoming transaction</font><br>%1$s]]></string>

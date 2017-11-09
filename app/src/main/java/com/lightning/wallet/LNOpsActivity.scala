@@ -36,9 +36,16 @@ class LNOpsActivity extends TimerActivity { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
-    app.ChannelManager.all.headOption match {
-      case Some(channel) => manageFirst(channel)
-      case None => manageNoActiveChannel
+    // We may have a REFUNDING channel which turns CLOSING
+    // after we have opened another operational channel
+    // so alive should have a priority here
+
+    app.ChannelManager.alive.headOption match {
+      case Some(aliveChannel) => manageFirst(aliveChannel)
+      case None => app.ChannelManager.all.headOption match {
+        case Some(closingChannel) => manageFirst(closingChannel)
+        case None => manageNoActiveChannel
+      }
     }
   }
 
@@ -76,8 +83,7 @@ class LNOpsActivity extends TimerActivity { me =>
         case (_, norm: NormalData, _, _) => me exitTo classOf[LNActivity]
 
         case _ =>
-          // Closing without txs, recovery mode
-          // and other possibly unaccounted states
+          // Other possibly unaccounted states
           me runOnUiThread manageNoActiveChannel
       }
 

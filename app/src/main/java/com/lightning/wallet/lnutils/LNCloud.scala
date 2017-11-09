@@ -97,7 +97,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   // ADDING NEW TOKENS
 
   def resetPaymentData = me UPDATE data.copy(info = None)
-  def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
+  def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 2500000000L)
   // Send CMDStart only in case if call was successful as we may enter an infinite loop otherwise
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .foreach(plus => me UPDATE data.copy(info = None, tokens = data.tokens ++ plus),

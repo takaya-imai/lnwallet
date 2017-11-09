@@ -14,13 +14,12 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
-import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
-import rx.lang.scala.{Observable => Obs}
 import R.id.{typeCNY, typeEUR, typeUSD}
 import java.util.{Timer, TimerTask}
 
@@ -212,26 +211,26 @@ trait ToolbarActivity extends TimerActivity { me =>
     val changePass = form.findViewById(R.id.changePass).asInstanceOf[Button]
 
     recoverChannelFunds setOnClickListener onButtonTap {
-      // After wallet data is lost users may recover channel
-      // funds by fetching encrypted static channel params from server
+      // After wallet data is lost users may recover channel funds
+      // by fetching encrypted static channel params from server
 
       rm(menu) {
         lazy val dialog = mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel)
         mkForm(dialog, getString(ln_recover_explain).html, null)
       }
 
-      def proceed = {
-        // We should filter out local channels to not accidently close an open ones
-        val localChanIds = for (chan <- app.ChannelManager.all) yield chan.pull(_.channelId)
-        val request = LNParams.cloud.connector.getBackup(LNParams.cloudId.toString) flatMap Obs.just
-        val datas = request map AES.decode(LNParams.cloudSecret) map to[RefundingData]
+      def proceed =
+        LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(vec => {
+          // We should filter out local channels to not accidently close an operational ones
+          val allRefundingData = vec map AES.decode(LNParams.cloudSecret) map to[RefundingData]
+          val localChanIds = app.ChannelManager.all.map(_.pull(_.channelId) getOrElse BinaryData.empty)
+          val nonLocalRefundingData = allRefundingData.filterNot(localChanIds contains _.commitments.channelId)
 
-        // Add each non-local channel to manager list and initiate a funds recovery procedure
-        datas.filterNot(localChanIds.flatten contains _.commitments.channelId).foreach(refundingData => {
-          app.ChannelManager.all = app.ChannelManager.all :+ app.ChannelManager.createChannel(refundingData)
-          ConnectionManager requestConnection refundingData.announce
+          // Should request connections after all the channels have been added
+          val chansToRefund = nonLocalRefundingData map app.ChannelManager.createChannel
+          for (chan <- chansToRefund) app.ChannelManager.all = chan +: app.ChannelManager.all
+          app.ChannelManager reconnect chansToRefund
         }, Tools.errlog)
-      }
     }
 
     setBackupServer setOnClickListener onButtonTap {
@@ -532,6 +531,7 @@ class BtcManager(val man: RateManager) { me =>
 trait PayData {
   def sendRequest: SendRequest
   def destination: String
+  def onClick: Unit
   def cn: Coin
 
   def cute(direction: String): String = coin2MSat(cn) match { case msat =>
@@ -542,17 +542,14 @@ trait PayData {
 
 case class AddrData(cn: Coin, address: Address) extends PayData {
   def link = BitcoinURI.convertToBitcoinURI(address, cn, null, null)
+  def onClick = app.setBuffer(address.toString)
+  def sendRequest = SendRequest.to(address, cn)
   def destination = humanAddr(address)
-
-  def sendRequest = {
-    val isAll = app.kit.currentBalance equals cn
-    if (isAll) SendRequest.emptyWallet(address)
-    else SendRequest.to(address, cn)
-  }
 }
 
 case class P2WSHData(cn: Coin, pay2wsh: Script) extends PayData {
   // This will only be used for funding lightning payment channels
+  def onClick = app.setBuffer(denom withSign cn)
   def destination = app getString txs_p2wsh
 
   def sendRequest = {

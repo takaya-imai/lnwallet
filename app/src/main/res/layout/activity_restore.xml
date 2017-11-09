@@ -50,7 +50,7 @@
             android:id="@+id/restoreWallet"
             android:layout_marginTop="25dp"
             android:layout_width="wrap_content"
-            android:text="@string/restore_wallet"
+            android:text="@string/wallet_restore"
             android:enabled="false"/>
 
     </LinearLayout>
