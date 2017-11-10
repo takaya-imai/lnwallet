@@ -8,8 +8,8 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.helper.AES
@@ -148,9 +148,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       me upsertPaymentInfo cmd.out
 
     case (chan, norm: NormalData, _: CommitSig) =>
-      // spec.fulfilled: update as SUCCESS in a database
-      // spec.failed: try to re-send or update as FAILURE
-      // spec.htlcs: no need to update
+      // fulfilled: update as SUCCESS in a database
+      // failed: try to re-send or update as FAILURE
+      // htlcs: no need to update
 
       db txWrap {
         for (htlc <- norm.commitments.localCommit.spec.fulfilled)

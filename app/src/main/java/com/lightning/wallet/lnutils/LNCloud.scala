@@ -32,7 +32,7 @@ abstract class Cloud extends StateMachine[CloudData] {
   protected[this] var isFree = true
   val connector: Connector
 
-  def UPDATE(d1: CloudData) = {
+  def BECOME(d1: CloudData) = {
     CloudDataSaver saveObject d1
     become(d1, state)
   }
@@ -46,15 +46,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
   def doProcess(some: Any) = (data, some) match {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
-      // Get payment request, then fetch payment routes, then fulfill it
-      paymentRequestAndMemo @ Tuple2(request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
-      Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4)
-      channel <- app.ChannelManager.alive.headOption
+      channel <- app.ChannelManager.alive.headOption // If we actually have an operational channel
+      paymentRequestAndMemo @ (request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4) // Get payment request and memo
+      Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4) // Generate a payment
 
     } if (data.info.isEmpty) {
       // Payment request may arrive in some time after an initialization above,
-      // so we state that it can only be accepted if `data.info` is still empty
-      me UPDATE data.copy(info = Some apply paymentRequestAndMemo)
+      // so we state that it can only be accepted if data.info is still empty
+      me BECOME data.copy(info = Some apply paymentRequestAndMemo)
       channel process SilentAddHtlc(pay)
     }
 
@@ -62,13 +61,13 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     case CloudData(_, ##(token @ (point, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> point, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
       val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
-      go.foreach(ok => me UPDATE data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
+      go.foreach(ok => me BECOME data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
       isFree = false
 
-      // 'data' may change while request is on so we always copy it
+      // data may change while request is on so we always copy it
       def onError(serverError: Throwable) = serverError.getMessage match {
-        case "tokeninvalid" => me UPDATE data.copy(tokens = data.tokens - token)
-        case "tokenused" => me UPDATE data.copy(tokens = data.tokens - token)
+        case "tokeninvalid" => me BECOME data.copy(tokens = data.tokens - token)
+        case "tokenused" => me BECOME data.copy(tokens = data.tokens - token)
         case _ => Tools errlog serverError
       }
 
@@ -88,7 +87,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
     case (_, action: CloudAct) =>
       val actions1 = data.acts + action take 50
-      me UPDATE data.copy(acts = actions1)
+      me BECOME data.copy(acts = actions1)
       me doProcess CMDStart
 
     case _ =>
@@ -96,11 +95,11 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
   // ADDING NEW TOKENS
 
-  def resetPaymentData = me UPDATE data.copy(info = None)
+  def resetPaymentData = me BECOME data.copy(info = None)
   def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 2500000000L)
   // Send CMDStart only in case if call was successful as we may enter an infinite loop otherwise
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
-    .foreach(plus => me UPDATE data.copy(info = None, tokens = data.tokens ++ plus),
+    .foreach(plus => me BECOME data.copy(info = None, tokens = data.tokens ++ plus),
       error => if (error.getMessage == "notfound") resetPaymentData)
 
   // TALKING TO SERVER
@@ -133,12 +132,12 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
     case CloudData(_, _, ##(action, _*), _) \ CMDStart if isFree =>
       val go = connector.tell(signed(action.data) ++ action.plus, action.path)
       go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
-      go.foreach(ok => me UPDATE data.copy(acts = data.acts - action), Tools.errlog)
+      go.foreach(ok => me BECOME data.copy(acts = data.acts - action), Tools.errlog)
       isFree = false
 
     case (_, action: CloudAct) =>
       val actions1 = data.acts + action take 50
-      me UPDATE data.copy(acts = actions1)
+      me BECOME data.copy(acts = actions1)
       me doProcess CMDStart
 
     case _ =>
@@ -157,7 +156,8 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 
 class Connector(val url: String) {
   import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-  def http(way: String) = post(s"http://$url:9001/v1/$way", true) connectTimeout 15000
+  def http(way: String) = post(s"http://$url:9001/v1/$way", true)
+    .connectTimeout(10000)
 
   def tell(params: Seq[HttpParam], path: String) = ask(path, none, params:_*)
   def ask[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
