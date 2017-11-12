@@ -33,7 +33,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
   def SEND(msg: LightningMessage): Unit
   def CLOSEANDWATCH(close: ClosingData): Unit
-  def CANCELPROPOSED(add: UpdateAddHtlc): Unit
   def STORE(content: HasCommitments): HasCommitments
   def UPDATE(d1: ChannelData): Channel = BECOME(d1, state)
   def BECOME(data1: ChannelData, state1: String) = runAnd(me) {
@@ -338,8 +337,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           me SEND makeFundingLocked(norm.commitments)
 
         // First we clean up unacknowledged updates
-        val localDelta = norm.commitments.localChanges.proposed collect { case u: UpdateAddHtlc => u }
-        val remoteDelta = norm.commitments.remoteChanges.proposed collect { case u: UpdateAddHtlc => u }
+        val localDelta = norm.commitments.localChanges.proposed collect { case u: UpdateAddHtlc => true }
+        val remoteDelta = norm.commitments.remoteChanges.proposed collect { case u: UpdateAddHtlc => true }
         val c1 = norm.commitments.modifyAll(_.localChanges.proposed, _.remoteChanges.proposed).setTo(Vector.empty)
           .modify(_.remoteNextHtlcId).using(_ - remoteDelta.size).modify(_.localNextHtlcId).using(_ - localDelta.size)
 
@@ -367,7 +366,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           case _ => throw new LightningException
         }
 
-        for (add <- localDelta) CANCELPROPOSED(add)
         BECOME(norm.copy(commitments = c1), NORMAL)
         norm.localShutdown foreach SEND
         doProcess(CMDHTLCProcess)

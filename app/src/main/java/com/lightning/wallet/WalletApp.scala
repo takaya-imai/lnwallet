@@ -15,14 +15,14 @@ import com.lightning.wallet.lnutils.ImplicitConversions._
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import com.lightning.wallet.ln.Channel.CLOSING
 
-import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
-import com.lightning.wallet.ln.wire.{Init, LightningMessage, UpdateAddHtlc}
-import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
-import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
-import android.content.{ClipData, ClipboardManager, Context}
-import org.bitcoinj.wallet.{Protos, Wallet}
 import rx.lang.scala.{Observable => Obs}
-
+import org.bitcoinj.wallet.{Protos, Wallet}
+import com.lightning.wallet.ln.wire.{Init, LightningMessage}
+import android.content.{ClipData, ClipboardManager, Context}
+import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
+import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
+import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
+import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
 import collection.JavaConverters.seqAsJavaListConverter
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.net.discovery.DnsDiscovery
@@ -142,7 +142,6 @@ class WalletApp extends Application { me =>
 
     def createChannel(bootstrap: ChannelData) = new Channel {
       val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
-      def CANCELPROPOSED(add: UpdateAddHtlc) = bag.updateStatus(FAILURE, add.paymentHash)
       def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
       // First add listeners, then specifically call doProcess so it runs on UI thread
@@ -224,10 +223,11 @@ class WalletApp extends Application { me =>
       peerGroup.setMaxConnections(5)
       peerGroup.addWallet(wallet)
 
-      wallet.autosaveToFile(walletFile, 250, MILLISECONDS, null)
+      wallet.autosaveToFile(walletFile, 400, MILLISECONDS, null)
       ConnectionManager.listeners += ChannelManager.socketEventsListener
-      startDownload(ChannelManager.chainEventsListener)
+      startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.connected
+      db change updFailWaitingSql
       RatesSaver.update
     }
   }

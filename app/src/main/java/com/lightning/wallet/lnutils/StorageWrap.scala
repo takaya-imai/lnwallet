@@ -167,8 +167,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onBecome = {
     case (_, _, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
-      // WAITING payments will be either redeemed or refunded at this point
-      // SYNC with uncommitted HTLCs is handled in Channel.CANCELPROPOSED
-      db.change(updFailWaitingSql)
+      // WAITING will either be redeemed or refunded here
+      db change updFailWaitingSql
   }
 }

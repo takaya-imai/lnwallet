@@ -28,7 +28,7 @@ public abstract class AbstractKit extends AbstractIdleService {
     public volatile SPVBlockStore store;
     public volatile Wallet wallet;
 
-    public void startDownload(final PeerDataEventListener listener) {
+    public void startBlocksDownload(final PeerDataEventListener listener) {
 
         FutureCallback futureListener = new FutureCallback() {
             @Override public void onSuccess(@Nullable Object res) {
