@@ -156,9 +156,7 @@ object LightningMessageCodecs { me =>
   val channelReestablish =
     (binarydata(32) withContext "channelId") ::
       (uint64 withContext "nextLocalCommitmentNumber") ::
-      (uint64 withContext "nextRemoteRevocationNumber") ::
-      (scalar withContext "yourLastPerCommitmentSecret") ::
-      (point withContext "myCurrentPerCommitmentPoint")
+      (uint64 withContext "nextRemoteRevocationNumber")
 
   private val openChannel =
     (binarydata(32) withContext "chainHash") ::

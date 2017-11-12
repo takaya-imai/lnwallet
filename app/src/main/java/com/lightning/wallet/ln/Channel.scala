@@ -317,7 +317,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We're exiting a sync state but don't have enough locks so we keep waiting
-      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0, _, _), SYNC)
+      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0), SYNC)
         if channelId == wait.commitments.channelId =>
 
         BECOME(wait, WAIT_FUNDING_DONE)
@@ -379,22 +379,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
-      case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
-        if cr.channelId == recovery.commitments.channelId =>
-
-        val d1 = recovery.modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
-        me UPDATE d1 SEND Error(cr.channelId, "Please be so kind as to spend your local commit" getBytes "UTF-8")
-
-
       // SYNC: ONLINE/OFFLINE
 
 
       case (some: HasCommitments, CMDOnline, SYNC) =>
-        val secrets = some.commitments.remotePerCommitmentSecrets
-        val yourLastPerCommitmentSecret = secrets.lastIndex.map(ShaChain.moves).flatMap(ShaChain getHash secrets.hashes) getOrElse zeroes(32)
-        val myCurrentPerCommitmentPoint = Generators.perCommitPoint(some.commitments.localParams.shaSeed, some.commitments.localCommit.index)
-        me SEND ChannelReestablish(some.commitments.channelId, some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index,
-          Scalar(yourLastPerCommitmentSecret), myCurrentPerCommitmentPoint)
+        me SEND ChannelReestablish(some.commitments.channelId,
+          some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index)
 
 
       case (wait: WaitFundingDoneData, CMDOffline, WAIT_FUNDING_DONE) => BECOME(wait, SYNC)
