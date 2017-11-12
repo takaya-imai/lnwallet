@@ -142,7 +142,7 @@ object CommitmentSpec {
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
   private def fulfill(cs: CommitmentSpec, in: Boolean, u: UpdateFulfillHtlc) =
-    // Suffices to remember an HTLC only for fulfilled payments
+  // Suffices to remember an HTLC only for fulfilled payments
 
     findHtlcById(cs, u.id, in) match {
       case Some(htlc) if htlc.incoming =>
@@ -157,7 +157,7 @@ object CommitmentSpec {
     }
 
   private def fail(cs: CommitmentSpec, in: Boolean, u: HasHtlcId) =
-    // Should rememeber HTLC and failure reason to reduce routes
+  // Should rememeber HTLC and failure reason to reduce routes
 
     findHtlcById(cs, u.id, in) match {
       case Some(htlc) if htlc.incoming =>
@@ -250,15 +250,17 @@ object Commitments {
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
-      val feesSat = if (c1.localParams.isFunder) Scripts.commitTxFee(Satoshi(c.remoteParams.dustLimitSatoshis), reduced).amount else 0L
+      val feesSat = if (c1.localParams.isFunder) Scripts.commitTxFee(c.remoteParams.dustLimitSat, reduced).amount else 0L
+
+      // WE can't accept more than THEIR reserve + fees
       val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
-      val reserveSat = feesSat + c.remoteParams.channelReserveSatoshis
-      val missingSat = reduced.toRemoteMsat / 1000L - reserveSat
+      val reserveWithFeeSat = feesSat + c.remoteParams.channelReserveSatoshis
+      val missingSat = reduced.toRemoteMsat / 1000L - reserveWithFeeSat
 
       // We should both check if WE can send another HTLC and if PEER can accept another HTLC
-      if (reduced.htlcs.count(_.incoming) > c.remoteParams.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
       if (totalInFlightMsat > c.remoteParams.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (missingSat < 0) throw ReserveException(cmd, missingSat, reserveSat)
+      if (reduced.htlcs.count(_.incoming) > c.remoteParams.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      if (missingSat < 0L) throw ReserveException(cmd, missingSat, reserveWithFeeSat)
       c1 -> add
     }
 
@@ -273,11 +275,12 @@ object Commitments {
       val c1 = addRemoteProposal(c, add).modify(_.remoteNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
       val feesSat = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
+      val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
 
-      // The rest of the guards
+      // We should both check if WE can accept another HTLC and if PEER can send another HTLC
+      if (totalInFlightMsat > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
       if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
-      if (UInt64(reduced.htlcs.map(_.add.amountMsat).sum) > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
-      if (reduced.toRemoteMsat / 1000L - c.localParams.channelReserveSat - feesSat < 0L) throw new LightningException
+      if (reduced.toRemoteMsat / 1000L - (feesSat + c.localParams.channelReserveSat) < 0L) throw new LightningException
       c1
     }
 
@@ -326,10 +329,9 @@ object Commitments {
     val updateFee = UpdateFee(c.channelId, ratePerKw)
     val c1 = addLocalProposal(c, updateFee)
 
-    val reduced = CommitmentSpec.reduce(c1.remoteCommit.spec, c1.remoteChanges.acked, c1.localChanges.proposed)
-    val fees = Scripts.commitTxFee(dustLimit = Satoshi(c1.remoteParams.dustLimitSatoshis), spec = reduced).amount
-    val overflow = reduced.toRemoteMsat / 1000L - c1.remoteParams.channelReserveSatoshis - fees < 0L
-    if (overflow) Some(c1 -> updateFee) else None
+    val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
+    val reserveWithFeeSat = Scripts.commitTxFee(c1.remoteParams.dustLimitSat, reduced).amount + c1.remoteParams.channelReserveSatoshis
+    if (reduced.toRemoteMsat / 1000L - reserveWithFeeSat < 0L) None else Some(c1, updateFee)
   }
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {

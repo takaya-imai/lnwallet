@@ -76,8 +76,8 @@ trait DataReader extends NfcReaderActivity {
 }
 
 class LNActivity extends DataReader
-with ToolbarActivity with ListUpdater
-with SearchBar { me =>
+  with ToolbarActivity with ListUpdater
+  with SearchBar { me =>
 
   val imgMap = Array(await, await, conf1, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
@@ -158,23 +158,23 @@ with SearchBar { me =>
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
 
-    if (app.isAlive) {
-      super.onCreate(savedState)
+  if (app.isAlive) {
+    super.onCreate(savedState)
 
-      // Set action bar, main view content, wire up list events, update title later
-      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
-      add(me getString ln_notify_connecting, Informer.LNSTATE)
-      me startListUpdates adapter
-      me setDetecting true
+    // Set action bar, main view content, wire up list events, update title later
+    wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
+    add(me getString ln_notify_connecting, Informer.LNSTATE)
+    me startListUpdates adapter
+    me setDetecting true
 
-      list setAdapter adapter
-      list setFooterDividersEnabled false
-      paymentsViewProvider reload new String
-      app.kit.wallet addCoinsSentEventListener txTracker
-      app.kit.wallet addCoinsReceivedEventListener txTracker
-      app.kit.wallet addTransactionConfidenceEventListener txTracker
-      app.kit.peerGroup addBlocksDownloadedEventListener catchListener
-    } else me exitTo classOf[MainActivity]
+    list setAdapter adapter
+    list setFooterDividersEnabled false
+    paymentsViewProvider reload new String
+    app.kit.wallet addCoinsSentEventListener txTracker
+    app.kit.wallet addCoinsReceivedEventListener txTracker
+    app.kit.wallet addTransactionConfidenceEventListener txTracker
+    app.kit.peerGroup addBlocksDownloadedEventListener catchListener
+  } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
@@ -220,9 +220,9 @@ with SearchBar { me =>
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
       app.ChannelManager.outPaymentObs(rd.badNodes, rd.badChannels, pr)
         .doOnTerminate(progressBarManager.delayedRemove).foreach(onNext = {
-          case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
-          case None => onFail(me getString err_ln_no_route)
-        }, onPaymentError)
+        case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
+        case None => onFail(me getString err_ln_no_route)
+      }, onPaymentError)
     }
 
     list setOnItemClickListener onTap { pos =>
@@ -233,8 +233,8 @@ with SearchBar { me =>
       val payment = adapter getItem pos
       val description = me getDescription payment.request
       val humanStatus = s"<strong>${paymentStatesMap apply payment.actualStatus}</strong>"
-      paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
       paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
+      paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
 
       if (payment.actualStatus == SUCCESS) {
         // Users may copy request and preimage for fulfilled payments to prove they've happened
@@ -282,16 +282,14 @@ with SearchBar { me =>
     }
 
     sendPayment = pr => {
-      val info = me getDescription pr
-      val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
-      val maxMsat = MilliSatoshi apply math.min(canSend getOrElse 0L, maxHtlcValue.amount)
+      val title = getString(ln_send_title).format(me getDescription pr)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
-      val rateManager = new RateManager(getString(amount_hint_maxamount).format(denom withSign maxMsat), content)
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), getString(ln_send_title).format(info).html, content)
+      val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, content)
+      val rateManager = new RateManager(new String, content)
 
       def sendAttempt = rateManager.result match {
         case Failure(_) => app toast dialog_sum_empty
-        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
+        case Success(ms) if maxHtlcValue < ms => app toast dialog_sum_big
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
@@ -313,18 +311,21 @@ with SearchBar { me =>
       val humanAddress = chan.data.announce.addresses.headOption.map(_.getHostString).orNull
       val nodeDetails = nodeView.format(chan.data.announce.alias, humanAddress, humanId)
 
-      // Close all of the channels just in case we have more than one active
-      checkPass(s"$nodeDetails<br><br>${me getString ln_close}".html) { _ =>
+      // Close all of the channels just in case we have more than one active left
+      checkPass(s"$nodeDetails<br><br>${me getString ln_close}".html) { pass =>
         for (chan <- app.ChannelManager.alive) chan process CMDShutdown
       }
     }
 
     makePaymentRequest = anyToRunnable {
-      val canReceive = chan.pull(_.localCommit.spec.toRemoteMsat)
+      // Peer's balance can't go below their unspendable channel reserve so it should be taken into account here
+      val canReceive = chan.pull(c => c.localCommit.spec.toRemoteMsat - c.remoteParams.channelReserveSatoshis * 1000L)
+      val finalCanReceive = math.min(canReceive.filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
+      val maxMsat = MilliSatoshi(finalCanReceive)
+
       val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
       val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
       val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive, content)
-      val maxMsat = MilliSatoshi apply math.min(canReceive getOrElse 0L, maxHtlcValue.amount)
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 

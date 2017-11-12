@@ -2,8 +2,9 @@ package com.lightning.wallet.ln.wire
 
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
+import fr.acinq.bitcoin.{BinaryData, Satoshi}
+
 import com.lightning.wallet.ln.Tools.fromShortId
-import fr.acinq.bitcoin.BinaryData
 import fr.acinq.eclair.UInt64
 
 
@@ -30,7 +31,10 @@ case class AcceptChannel(temporaryChannelId: BinaryData, dustLimitSatoshis: Long
                          maxHtlcValueInFlightMsat: UInt64, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
                          minimumDepth: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int, fundingPubkey: PublicKey,
                          revocationBasepoint: Point, paymentBasepoint: Point, delayedPaymentBasepoint: Point,
-                         firstPerCommitmentPoint: Point) extends ChannelMessage
+                         firstPerCommitmentPoint: Point) extends ChannelMessage {
+
+  lazy val dustLimitSat = Satoshi(dustLimitSatoshis)
+}
 
 case class FundingCreated(temporaryChannelId: BinaryData, fundingTxid: BinaryData,
                           fundingOutputIndex: Int, signature: BinaryData) extends ChannelMessage

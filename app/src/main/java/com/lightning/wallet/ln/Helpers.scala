@@ -10,7 +10,7 @@ import scala.util.{Success, Try}
 
 
 object Helpers { me =>
-    def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,
+  def makeLocalTxs(commitTxNumber: Long, localParams: LocalParams,
                    remoteParams: AcceptChannel, commitmentInput: InputInfo,
                    localPerCommitmentPoint: Point, spec: CommitmentSpec) = {
 
@@ -37,11 +37,12 @@ object Helpers { me =>
     val remotePubkey = derivePubKey(remoteParams.paymentBasepoint, remotePerCommitmentPoint)
     val remoteDelayedPubkey = derivePubKey(remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
     val remoteRevocationPubkey = revocationPubKey(localParams.revocationSecret.toPoint, remotePerCommitmentPoint)
-    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint, localParams.paymentKey.toPoint,
-      !localParams.isFunder, Satoshi(remoteParams.dustLimitSatoshis), remotePubkey, remoteRevocationPubkey, localParams.toSelfDelay,
-      remoteDelayedPubkey, localPubkey, spec)
 
-    val htlcTimeoutTxs \ htlcSuccessTxs = Scripts.makeHtlcTxs(commitTx.tx, Satoshi(remoteParams.dustLimitSatoshis),
+    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint,
+      localParams.paymentKey.toPoint, !localParams.isFunder, remoteParams.dustLimitSat, remotePubkey,
+      remoteRevocationPubkey, localParams.toSelfDelay, remoteDelayedPubkey, localPubkey, spec)
+
+    val htlcTimeoutTxs \ htlcSuccessTxs = Scripts.makeHtlcTxs(commitTx.tx, remoteParams.dustLimitSat,
       remoteRevocationPubkey, localParams.toSelfDelay, remotePubkey, remoteDelayedPubkey, localPubkey, spec)
 
     (commitTx, htlcTimeoutTxs, htlcSuccessTxs, remotePubkey, remoteRevocationPubkey)
