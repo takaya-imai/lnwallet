@@ -145,7 +145,7 @@
     <string name="err_ln_no_route">Failed because no route to recipient could be found</string>
     <string name="err_ln_fulfilled">Failed because this payment is already fulfilled</string>
 
-    <string name="err_ln_fee_overflow"><![CDATA[Failed because this payment combined with Bitcoin <a href=http://lightning-wallet.com/using-lightning-wallet.html#commit-transaction-fees>commit transaction</a> fee exceeds your unspendable channel reserve<br><br>reserve %1$s<br>sending %2$s<br>missing %3$s]]></string>
+    <string name="err_ln_fee_overflow"><![CDATA[Failed because this payment combined with Bitcoin <a href=http://lightning-wallet.com/using-lightning-wallet.html#commit-transaction-fee>commit transaction</a> fee exceeds your unspendable channel reserve<br><br>reserve %1$s<br>sending %2$s<br>missing %3$s]]></string>
     <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that incoming transactions need to get at least one confirmation to become spendable]]></string>
 
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>
@@ -198,7 +198,7 @@
     <string name="ln_search_nodes">Find peers</string>
     <string name="ln_ops_btc">Back to Bitcoin wallet</string>
     <string name="ln_force_close">Force close channel</string>
-    <string name="ln_ops_chan_none"><a href='http://lightning-wallet.com/using-lightning-wallet.html'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='http://lightning-wallet.com/using-lightning-wallet.html#payment-channel'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
+    <string name="ln_ops_chan_none"><a href='http://lightning-wallet.com/using-lightning-wallet.html#using-lightning-wallet'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='http://lightning-wallet.com/using-lightning-wallet.html#payment-channel'>Payment Channel</a> with a peer of your choice and then fund it with a single Bitcoin transaction</string>
     <string name="ln_ops_chan_bilateral_negotiations"><![CDATA[Finalizing Payment Channel&#8230;<br><font color=#999999>Waiting for a confirmation from peer</font><br><br>Your current channel balance will be refunded to you via a Bitcoin transaction once both of you are ready to mutually close a channel]]></string>
     <string name="ln_ops_chan_opening"><![CDATA[Opening Payment Channel&#8230;<br>Channel capacity is %1$s<br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br><font color=#999999>Funding transaction status</font><br>%3$s]]></string>
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[Finalizing Payment Channel&#8230;<br><font color=#999999>Using <a href=https://http://lightning-wallet.com/using-lightning-wallet.html#forced-channel-closing>forced channel closing</a></font><br><br>%1$s]]></string>
@@ -220,7 +220,7 @@
     </array>
 
     <!-- opening a new channel -->
-    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=http://lightning-wallet.com/using-lightning-wallet.html>Read about Lightning Network</a></small><br><br>Fund a Payment Channel]]></string>
+    <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=http://lightning-wallet.com/using-lightning-wallet.html#using-lightning-wallet>Read about Lightning Network</a></small><br><br>Fund a Payment Channel]]></string>
     <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>
