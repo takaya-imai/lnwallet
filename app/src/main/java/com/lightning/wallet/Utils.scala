@@ -202,8 +202,11 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
 
   def mkSetsForm: Unit = {
+    val leftOps = getResources getStringArray R.array.info_storage_tokens
+    val tokensLeft = app.plurOrZero(leftOps, LNParams.cloud.data.tokens.size)
+
     val form = getLayoutInflater.inflate(R.layout.frag_settings, null)
-    val menu = mkForm(me negBld dialog_cancel, getString(read_settings).html, form)
+    val menu = mkForm(me negBld dialog_cancel, getString(read_settings).format(tokensLeft).html, form)
     val recoverChannelFunds = form.findViewById(R.id.recoverChannelFunds).asInstanceOf[Button]
     val setBackupServer = form.findViewById(R.id.setBackupServer).asInstanceOf[Button]
     val rescanWallet = form.findViewById(R.id.rescanWallet).asInstanceOf[Button]
