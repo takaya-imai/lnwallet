@@ -19,7 +19,7 @@
     <string name="password_info">Without password you are in constant danger of losing your money. Please pick one which is at least 6 characters long</string>
     <string name="ln_chan_details"><![CDATA[Channel capacity %1$s<br>Opened at %2$s<br><small>%3$s</small>]]></string>
     <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
-    <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Minimal transaction fee</small></small>]]></string>
+    <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Standard transaction fee</small></small>]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="wallet_create">New Bitcoin Wallet</string>
     <string name="wallet_restore">Restore Wallet</string>

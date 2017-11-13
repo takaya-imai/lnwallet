@@ -61,7 +61,7 @@ object RatesSaver extends Saver {
     val unsafe = LNParams.cloud.connector.getRates map toVec[Result]
     val periodic = retry(unsafe, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
     initDelay(periodic, rates.stamp, updatePeriod.toMillis) foreach { case newFee \ newFiat +: _ =>
-      val validFees = for (validFee <- newFee("6") +: rates.feeHistory if validFee > 0) yield validFee
+      val validFees = for (validFee <- newFee("4") +: rates.feeHistory if validFee > 0) yield validFee
       rates = Rates(validFees take 6, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
@@ -71,7 +71,7 @@ object RatesSaver extends Saver {
 case class Rates(feeHistory: Seq[Double], exchange: Fiat2Btc, stamp: Long) {
   lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
   lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else cutOutliers
-  lazy val feeRisky = feeLive div 2
+  lazy val feeRisky = feeLive div 3
 
   private[this] lazy val cutOutliers = Coin parseCoin {
     val filtered = statistics.filterWithin(feeHistory, stdDevs = 1)
