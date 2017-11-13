@@ -149,9 +149,9 @@ class WalletApp extends Application { me =>
 
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
-        // Ask server once for txs which may spend our commit txs' outputs to extract preimages
+        // Ask server once for txs which may spend our commit txs outputs to extract preimages
         cloud.connector.getChildTxs(cd.commitTxs).foreach(_ foreach bag.extractPreimage, Tools.errlog)
-        // Collect all the commit txs' output publicKeyScripts and watch them locally for payment preimages
+        // Collect all the commit txs output publicKeyScripts and watch them locally for payment preimages
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
 
         if (cd.localCommit.nonEmpty) {

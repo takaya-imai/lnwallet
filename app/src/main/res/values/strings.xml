@@ -32,6 +32,12 @@
         <item>Is not encrypted\nIt\'s just plain 12 words</item>
     </array>
 
+    <array name="info_storage_tokens">
+        <item>No <a href='http://lightning-wallet.com/storage-tokens.html#storage-tokens'>storage tokens</a> left</item>
+        <item>%1$d <a href='http://lightning-wallet.com/storage-tokens.html#storage-tokens'>storage token</a> left</item>
+        <item>%1$d <a href='http://lightning-wallet.com/storage-tokens.html#storage-tokens'>storage tokens</a> left</item>
+    </array>
+
     <string name="restore_encrypted">Your encrypted mnemonic</string>
     <string name="restore_pass">An old wallet password was used for encryption so please provide it here</string>
     <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
@@ -45,7 +51,7 @@
     <string name="mnemonic_info"><![CDATA[<font color=#E31300>Mnemonic code is super important</font><br><a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>Read about it</a> and be sure to save it<br><br>With mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins]]></string>
     <string name="mnemonic_export_details"><![CDATA[Mnemonic code will be encrypted and exported using <strong>your current wallet password</strong><br><br>You are strongly advised to read a <a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>related section</a> of wallet manual before proceeding with this]]></string>
     <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
-    <string name="ln_recover_explain"><![CDATA[<small>Not sure what is this about?<br><a http://lightning-wallet.com/reimbursing-funds-locked-in-a-lost-payment-channel.html>Read more</a> on what funds recovery is and when you might need it</small><br><br>Would you like to start a channel funds recovery?]]></string>
+    <string name="ln_recover_explain"><![CDATA[<small>Not sure what is this about?<br><a http://lightning-wallet.com/reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel>Read more</a> on what funds recovery is and when you might need it</small><br><br>Would you like to start a channel funds recovery?]]></string>
     <string name="ln_recover_received">Got some payment channels from backup server, now trying to recover funds which may take some time. Successfully recovered channel funds will be refunded to your Bitcoin wallet</string>
 
     <!-- menu and fab -->
@@ -189,7 +195,7 @@
     <!-- setting a private backup server -->
     <string name="ln_backup_success">Backup Server has been set successfully</string>
     <string name="ln_backup_ip">Backup server address\n<small>like 127.0.0.1 or myserver.com</small></string>
-    <string name="ln_backup_key"><![CDATA[<small>Not sure what is this about?<br><a http://lightning-wallet.com/setting-up-your-own-server.html>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
+    <string name="ln_backup_key"><![CDATA[<small>Not sure what is this about?<br><a http://lightning-wallet.com/what-does-olympus-server-do.html#setting-up-your-own-server>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
     <string name="ln_backup_key_error">Could not set a Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server knows your backup public key and try again</string>
     <string name="ln_backup_sig_error">Could not set a Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
     <string name="ln_backup_net_error">Could not set a Backup Server because it is not reachable</string>
