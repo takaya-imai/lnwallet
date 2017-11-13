@@ -23,7 +23,7 @@ object LNParams { me =>
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash
   val maxReserveToFundingRatio = 0.05 // %
-  val reserveToFundingRatio = 0.01 // %
+  val reserveToFundingRatio = 0.025 // %
   val updateFeeMinDiffRatio = 0.25 // %
   val htlcMinimumMsat = 100000L
   val localFeatures = "00"
@@ -66,9 +66,6 @@ object LNParams { me =>
   }
 
   // FEE RELATED
-
-  def exceedsReserve(channelReserveSatoshis: Long, fundingSatoshis: Long): Boolean =
-    channelReserveSatoshis.toDouble / fundingSatoshis > maxReserveToFundingRatio
 
   def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
     val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble

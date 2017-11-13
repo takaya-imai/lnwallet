@@ -59,10 +59,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
         if accept.temporaryChannelId == cmd.temporaryChannelId =>
 
-        // If remote requires us to keep too much in local reserve we should close
-        // otherwise we should wait for user to create a funding transaction in wallet UI
-        val exceedsReserve = LNParams.exceedsReserve(accept.channelReserveSatoshis, cmd.fundingAmountSat)
-        if (exceedsReserve) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
+        val tooHighMinDepth = accept.minimumDepth > 8L
+        val tooLowAcceptedHtlcs = accept.maxAcceptedHtlcs < 1
+        val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 5000000L
+        val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay
+        val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
+        if (tooHighMinDepth || tooLowAcceptedHtlcs || tooHighHtlcMinimumMsat || tooLowSelfDelay || exceedsReserve) BECOME(wait, CLOSING)
+        else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
       // They have accepted our proposal, now let them sign a first commit tx
