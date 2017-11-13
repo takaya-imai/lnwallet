@@ -64,7 +64,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 5000000L
         val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay
         val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
-        if (tooHighMinDepth || tooLowAcceptedHtlcs || tooHighHtlcMinimumMsat || tooLowSelfDelay || exceedsReserve) BECOME(wait, CLOSING)
+        if (tooHighMinDepth | tooLowAcceptedHtlcs | tooHighHtlcMinimumMsat | tooLowSelfDelay | exceedsReserve) BECOME(wait, CLOSING)
         else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
