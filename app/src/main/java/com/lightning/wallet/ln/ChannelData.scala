@@ -330,8 +330,8 @@ object Commitments {
     val c1 = addLocalProposal(c, updateFee)
 
     val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
-    val reserveWithFeeSat = Scripts.commitTxFee(c1.remoteParams.dustLimitSat, reduced).amount + c1.remoteParams.channelReserveSatoshis
-    if (reduced.toRemoteMsat / 1000L - reserveWithFeeSat < 0L) None else Some(c1, updateFee)
+    val remoteWithFeeSat = Scripts.commitTxFee(c1.remoteParams.dustLimitSat, reduced).amount + c1.remoteParams.channelReserveSatoshis
+    if (reduced.toRemoteMsat / 1000L - remoteWithFeeSat < 0L) None else Some(c1, updateFee)
   }
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {

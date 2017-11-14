@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
 import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
 import collection.JavaConverters.seqAsJavaListConverter
+import com.lightning.wallet.lnutils.Connector.CMDStart
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.Wallet.BalanceType
@@ -228,6 +229,7 @@ class WalletApp extends Application { me =>
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.connected
       db change updFailWaitingSql
+      cloud doProcess CMDStart
       RatesSaver.update
     }
   }

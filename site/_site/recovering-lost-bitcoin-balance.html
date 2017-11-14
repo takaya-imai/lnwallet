@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+<!-- Begin Jekyll SEO tag v2.3.0 -->
+<title>Lightning Wallet</title>
+<meta property="og:title" content="Lightning Wallet" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="http://213.133.103.56/recovering-lost-bitcoin-balance.html" />
+<meta property="og:url" content="http://213.133.103.56/recovering-lost-bitcoin-balance.html" />
+<meta property="og:site_name" content="Lightning Wallet" />
+<script type="application/ld+json">
+{"name":null,"description":null,"author":null,"@type":"WebPage","url":"http://213.133.103.56/recovering-lost-bitcoin-balance.html","publisher":null,"image":null,"headline":"Lightning Wallet","dateModified":null,"datePublished":null,"sameAs":null,"mainEntityOfPage":null,"@context":"http://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <meta name="viewport" content="width=device-width">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <a class="title" href="/"><h3>Bitcoin + Lightning Wallet</h3></a>
+        <div class="tip">An Android phone app</div>
+        
+        <h4><font color="red">Essential app guide</font></h4>
+        <div class="tip">An info you need to know <i>before</i> you start using a Lightning Wallet</div>
+        <div><a href="setting-up-bitcoin-wallet.html#setting-up-bitcoin-wallet">Setting up Bitcoin wallet</a></div>
+        <div><a href="using-lightning-wallet.html#using-lightning-wallet">Using Lightning wallet</a></div>
+
+        <h4><font color="red">When something goes wrong</font></h4>
+        <div class="tip">What to do when you no longer have an access to your wallet</div>
+        <div><a href="recovering-lost-bitcoin-balance.html#recovering-lost-bitcoin-balance">Recovering lost Bitcoin balance</a></div>
+        <div><a href="reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel">Reimbursing funds locked in a lost payment channel</a></div>
+
+        <h4>Info on Olympus server</h4>
+        <div class="tip">A helper service for Lightning stuff</div>
+        <div><a href="what-does-olympus-server-do.html#what-does-olympus-server-do">What does Olympus server do</a></div>
+        <div><a href="storage-tokens.html#storage-tokens">Storage tokens</a></div>
+        
+
+      </header>
+
+      <section>
+      <h3 id="recovering-lost-bitcoin-balance"><a href="#recovering-lost-bitcoin-balance"></a>Recovering lost Bitcoin balance</h3>
+
+<p>In a nutshell: you need to have a <a href="setting-up-bitcoin-wallet.html#mnemonic-code">mnemonic code</a> saved <em>before</em> your balance is lost, either as plain 12 words or in encrypted form.</p>
+
+<p>A balance typically gets lost when a wallet password is forgotten or when a phone is no longer accessible for whatever reason. Here are the steps to take:</p>
+
+<ol>
+  <li>
+    <p>If you still have an access to your phone then first of all you should erase all current app data. If you don’t know how to erase an app data then just reinstall an application from scratch. If you no longer have an access to your phone then install an app once again on a new phone.</p>
+  </li>
+  <li>
+    <p>Open a fresh application and you’ll be given an option to restore an existing Bitcoin wallet instead of creating a new one. Choose it and enter your mnemonic code as well as new wallet password. This is it, no more action is required.</p>
+  </li>
+</ol>
+
+<p><em>Important note: restored wallet will appear empty at first and that is completely normal as it needs some time to catch up with network.</em></p>
+
+<h3 id="when-wallet-is-restored-but-the-balance-is-still-zero">When wallet is restored but the balance is still zero</h3>
+
+<p>If you don’t see a balance restored for a long time then first of all you should make sure an app has no connectivity problems. Normally a well connected app displays syncing progress and shows a <em>Bitcoin wallet is online</em> message once syncing is done.</p>
+
+<p>A case when an app is indeed well connected and synced but you still see a zero balance and no transaction history means that your mnemonic contains a typo somewhere.</p>
+
+<p>In order to eliminate a typo you can compare each word in your saved mnemonic code with a <a href="english-bip32.json">list of all possible words</a>. You may use an in-page search to check if every word from your mnemonic is present on a page, in not then fix a typo.</p>
+
+<p>And of course you should enter mnemonic code very carefully when restoring a wallet since an app will accept any string while a single typo is a single word will result in totally different wallet.</p>
+
+<p>Next: <a href="http://lightning-wallet.com/reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel">Reimbursing funds locked in a lost payment channel</a></p>
+
+      </section>
+
+      <footer>
+        <small>
+          Other wallets
+          <div><a href="https://github.com/ACINQ/eclair">Eclair Lightning node</a></div>
+          <div><a href="https://medium.com/@ACINQ/announcing-eclair-wallet-a8d8c136fc7e">Eclair wallet for Android</a></div>
+          <div><a href="https://blog.lightning.engineering/announcement/2017/10/12/test-blitz.html">Lightning Labs desktop wallet</a></div>
+        </small>
+      </footer>
+    </div>
+    <script src="/assets/js/scale.fix.js"></script>
+  </body>
+</html>

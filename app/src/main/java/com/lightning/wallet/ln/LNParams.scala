@@ -11,7 +11,6 @@ import scala.util.{Failure, Success}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
-import com.lightning.wallet.lnutils.Connector.CMDStart
 import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
@@ -23,7 +22,7 @@ object LNParams { me =>
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash
   val maxReserveToFundingRatio = 0.05 // %
-  val reserveToFundingRatio = 0.025 // %
+  val reserveToFundingRatio = 0.04 // %
   val updateFeeMinDiffRatio = 0.25 // %
   val htlcMinimumMsat = 100000L
   val localFeatures = "00"
@@ -50,7 +49,6 @@ object LNParams { me =>
     extendedNodeKey = derivePrivateKey(master, hardened(46) :: hardened(0) :: Nil)
     db = new CipherOpenHelper(app, 1, sha256(seed).toString)
     cloud = me getCloud CloudDataSaver.tryGetObject
-    cloud doProcess CMDStart
   }
 
   // CLOUD
