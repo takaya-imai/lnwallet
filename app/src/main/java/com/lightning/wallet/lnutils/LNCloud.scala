@@ -77,10 +77,16 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       bag getPaymentInfo request.paymentHash match {
         case Success(info) if info.actualStatus == SUCCESS => me resolveSuccess memo
         // Important: payment may fail but we wait until expiration before restarting
-        case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
-        case Success(info) if info.actualStatus == FAILURE => resetPaymentData
-        // Payment has been rejected by channel so it's not found here
-        case Failure(_) => resetPaymentData
+        // case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
+
+        case Success(info) if info.actualStatus == FAILURE => for {
+          channel <- app.ChannelManager.alive.headOption // If we actually have an operational channel
+          Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4)
+          // Here we just retry an old PaymentRequest instead of getting a new one even though it's expired
+        } channel process SilentAddHtlc(pay)
+
+        // First attempt has been rejected
+        case Failure(_) => eraseRequestData
         // WAITING state, do nothing
         case _ =>
       }
@@ -95,12 +101,13 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
   // ADDING NEW TOKENS
 
-  def resetPaymentData = me BECOME data.copy(info = None)
-  def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 2500000000L)
+  def eraseRequestData = me BECOME data.copy(info = None)
+  def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
   // Send CMDStart only in case if call was successful as we may enter an infinite loop otherwise
+  // We only start over if server can't actually find our tokens, otherwise just wait for next try
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
     .foreach(plus => me BECOME data.copy(info = None, tokens = data.tokens ++ plus),
-      error => if (error.getMessage == "notfound") resetPaymentData)
+      error => if (error.getMessage == "notfound") eraseRequestData)
 
   // TALKING TO SERVER
 

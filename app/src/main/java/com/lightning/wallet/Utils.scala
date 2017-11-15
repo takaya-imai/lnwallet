@@ -290,13 +290,13 @@ trait ToolbarActivity extends TimerActivity { me =>
   class SetBackupServer {
     val (view, field) = str2Tuple(LNParams.cloudPrivateKey.publicKey.toString)
     val dialog = mkChoiceDialog(proceed, none, dialog_next, dialog_cancel)
-    val alert = mkForm(dialog, getString(ln_backup_key).html, view)
+    val alert = mkForm(dialog, getString(ln_olympus_key).html, view)
     field setTextIsSelectable true
 
     def proceed: Unit = rm(alert) {
-      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_backup_ip)
+      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_olympus_ip)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
-      mkForm(dialog, me getString sets_backup, view1)
+      mkForm(dialog, me getString sets_olympus, view1)
       field1 setText LNParams.cloud.data.url
     }
 
@@ -307,15 +307,15 @@ trait ToolbarActivity extends TimerActivity { me =>
       cloud1.checkIfWorks.subscribe(done => {
         // Just send a dummy data with signature
         CloudDataSaver saveObject data1
-        app toast ln_backup_success
+        app toast ln_olympus_success
         LNParams.cloud = cloud1
       }, onError)
     }
 
     def onError(error: Throwable) = error.getMessage match {
-      case "keynotfound" => onFail(me getString ln_backup_key_error)
-      case "siginvalid" => onFail(me getString ln_backup_sig_error)
-      case _ => onFail(me getString ln_backup_net_error)
+      case "keynotfound" => onFail(me getString ln_olympus_key_error)
+      case "siginvalid" => onFail(me getString ln_olympus_sig_error)
+      case _ => onFail(me getString ln_olympus_net_error)
     }
   }
 

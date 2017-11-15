@@ -25,7 +25,7 @@
     <Button
         style="@style/TransButton"
         android:id="@+id/setBackupServer"
-        android:text="@string/sets_backup"/>
+        android:text="@string/sets_olympus"/>
 
     <View style="@style/GrayDivider"/>
 

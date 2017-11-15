@@ -211,7 +211,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       def processTx(pass: String, fee: Coin) =
         <(makeTx(pass, fee): fr.acinq.bitcoin.Transaction, onTxFail) { fundTx =>
           val outIndex = Scripts.findPubKeyScriptIndex(fundTx, scriptPubKey)
-          chan process fundTx -> outIndex
+          chan.process(fundTx -> outIndex)
         }
 
       def onTxFail(err: Throwable) =

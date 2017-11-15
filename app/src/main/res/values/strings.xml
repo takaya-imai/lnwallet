@@ -51,15 +51,14 @@
     <string name="mnemonic_info"><![CDATA[<font color=#E31300>Mnemonic code is super important</font><br><a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>Read about it</a> and be sure to save it<br><br>With mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins]]></string>
     <string name="mnemonic_export_details"><![CDATA[Mnemonic code will be encrypted and exported using <strong>your current wallet password</strong><br><br>You are strongly advised to read a <a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>related section</a> of wallet manual before proceeding with this]]></string>
     <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
-    <string name="ln_recover_explain"><![CDATA[<small>Not sure what is this about?<br><a http://lightning-wallet.com/reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel>Read more</a> on what funds recovery is and when you might need it</small><br><br>Would you like to start a channel funds recovery?]]></string>
-    <string name="ln_recover_received">Got some payment channels from backup server, now trying to recover funds which may take some time. Successfully recovered channel funds will be refunded to your Bitcoin wallet</string>
+    <string name="ln_recover_explain"><![CDATA[<small>Not sure what is this about?<br><a href=http://lightning-wallet.com/reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel>Read more</a> on what this is and when you might need it</small><br><br>Would you like to start a channel funds recovery?]]></string>
 
     <!-- menu and fab -->
     <string name="sets_pass_change">Change wallet password</string>
     <string name="sets_chan_recover">Recover channel funds</string>
+    <string name="sets_olympus">Set your Olympus Server</string>
     <string name="sets_mnemonic">View mnemonic code</string>
     <string name="sets_rescan">Rescan blockchain</string>
-    <string name="sets_backup">Set Backup Server</string>
 
     <string name="password_new">New password</string>
     <string name="password_old">Current password</string>
@@ -192,13 +191,13 @@
         <item>Cancelled</item>
     </array>
 
-    <!-- setting a private backup server -->
-    <string name="ln_backup_success">Backup Server has been set successfully</string>
-    <string name="ln_backup_ip">Backup server address\n<small>like 127.0.0.1 or myserver.com</small></string>
-    <string name="ln_backup_key"><![CDATA[<small>Not sure what is this about?<br><a http://lightning-wallet.com/what-does-olympus-server-do.html#setting-up-your-own-server>Read more</a> on why you might want to setup your own Backup Server</small><br><br>Your Backup Public Key]]></string>
-    <string name="ln_backup_key_error">Could not set a Backup Server because your backup public key is not recognized.\n\nMake sure your Backup Server knows your backup public key and try again</string>
-    <string name="ln_backup_sig_error">Could not set a Backup Server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
-    <string name="ln_backup_net_error">Could not set a Backup Server because it is not reachable</string>
+    <!-- setting a private Olympus server -->
+    <string name="ln_olympus_success">Olympus server has been set successfully</string>
+    <string name="ln_olympus_ip">Olympus server address\n<small>like 127.0.0.1 or myserver.com</small></string>
+    <string name="ln_olympus_key"><![CDATA[<small>Not sure what is this about?<br><a href=http://lightning-wallet.com/what-does-olympus-server-do.html#setting-up-your-own-server>Read more</a> on why you might want to setup your own Olympus server</small><br><br>Your Olympus Public Key]]></string>
+    <string name="ln_olympus_key_error">Could not set an Olympus server because your backup public key is not recognized.\n\nMake sure a server knows your backup public key and try again</string>
+    <string name="ln_olympus_sig_error">Could not set an Olympus server because a signature check failed.\n\nMake sure you\'ve used a correct backup public key and try again</string>
+    <string name="ln_olympus_net_error">Could not set an Olympus server because it is not reachable</string>
 
     <!-- activity_ln_ops, activity_ln_start -->
     <string name="ln_search_nodes">Find peers</string>
