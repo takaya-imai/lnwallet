@@ -20,9 +20,9 @@ object LNParams { me =>
   val maxHtlcValue = MilliSatoshi(4194304000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
-  val chainHash = Block.RegtestGenesisBlock.hash
+  val chainHash = Block.TestnetGenesisBlock.hash
   val maxReserveToFundingRatio = 0.05 // %
-  val reserveToFundingRatio = 0.04 // %
+  val reserveToFundingRatio = 0.025 // %
   val updateFeeMinDiffRatio = 0.25 // %
   val htlcMinimumMsat = 100000L
   val localFeatures = "00"
@@ -53,7 +53,7 @@ object LNParams { me =>
 
   // CLOUD
 
-  private val con = new Connector("10.0.2.2")
+  private val con = new Connector("213.133.99.89")
   def getCloud(tryData: TryCloudData) = tryData match {
     case Failure(why) => new PublicCloud(con, bag) { data = CloudDataSaver.empty }
     case Success(saved) if saved.url.isEmpty => new PublicCloud(con, bag) { data = saved }

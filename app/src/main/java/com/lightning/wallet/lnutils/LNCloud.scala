@@ -77,7 +77,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       bag getPaymentInfo request.paymentHash match {
         case Success(info) if info.actualStatus == SUCCESS => me resolveSuccess memo
         // Important: payment may fail but we wait until expiration before restarting
-        // case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
+        case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
 
         case Success(info) if info.actualStatus == FAILURE => for {
           channel <- app.ChannelManager.alive.headOption // If we actually have an operational channel

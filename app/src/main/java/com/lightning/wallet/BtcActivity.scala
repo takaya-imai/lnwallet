@@ -303,10 +303,10 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         Tools log s"Unusable $unusable"
     }
 
-  // Buy bitcoins
+  // Get bitcoins
   private def localBitcoinsAndGlidera = {
-    val msg = getString(buy_info).format(app.kit.currentAddress.toString)
-    mkForm(me negBld dialog_cancel, me getString action_buy, msg.html)
+    val uri = Uri parse "https://testnet.coinfaucet.eu/en/"
+    me startActivity new Intent(Intent.ACTION_VIEW, uri)
   }
 
   def toggle(v: View) = {

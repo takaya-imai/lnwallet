@@ -84,6 +84,7 @@ class LNOpsActivity extends TimerActivity { me =>
 
         case _ =>
           // Other possibly unaccounted states
+          // Most notably, a REFUNDING state too
           me runOnUiThread manageNoActiveChannel
       }
 
