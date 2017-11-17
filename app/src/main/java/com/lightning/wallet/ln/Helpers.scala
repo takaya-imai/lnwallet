@@ -110,7 +110,7 @@ object Helpers { me =>
 
       def makeClaimDelayedOutput(tx: Transaction): ClaimDelayedOutputTx = {
         val claimDelayed = Scripts.makeClaimDelayedOutputTx(tx, localRevocationPubkey, commitments.localParams.toSelfDelay,
-          localDelayedPrivkey.publicKey, commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
+          localDelayedPrivkey.publicKey, commitments.localParams.defaultFinalScriptPubKey, commitments.localCommit.spec.feeratePerKw)
 
         val sig = Scripts.sign(claimDelayed, localDelayedPrivkey)
         Scripts.addSigs(claimDelayed, sig)
@@ -149,7 +149,7 @@ object Helpers { me =>
         HtlcTimeoutTx(_, _, add) <- timeoutTxs
         IncomingPayment(_, preimage, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
         claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivateKey.publicKey, remotePubkey,
-          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
+          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
         sig = Scripts.sign(claimHtlcSuccessTx, localPrivateKey)
         signed = Scripts.addSigs(claimHtlcSuccessTx, sig, preimage)
@@ -159,7 +159,7 @@ object Helpers { me =>
       val claimTimeoutTxs = for {
         HtlcSuccessTx(_, _, add) <- successTxs
         claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivateKey.publicKey, remotePubkey,
-          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, LNParams.broadcaster.feeRatePerKw)
+          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
 
         sig = Scripts.sign(claimHtlcTimeoutTx, localPrivateKey)
         signed = Scripts.addSigs(claimHtlcTimeoutTx, sig)
@@ -168,7 +168,7 @@ object Helpers { me =>
 
       RemoteCommitPublished(Scripts.checkSpendable {
         val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivateKey.publicKey,
-          commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
+          commitments.localParams.defaultFinalScriptPubKey, remoteCommit.spec.feeratePerKw)
 
         val sig = Scripts.sign(txWithInputInfo, localPrivateKey)
         Scripts.addSigs(txWithInputInfo, localPrivateKey.publicKey, sig)

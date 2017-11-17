@@ -11,9 +11,8 @@ import org.bitcoinj.core.listeners._
 import com.lightning.wallet.lnutils._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
-import com.lightning.wallet.lnutils.JsonHttpUtils._
-import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
@@ -30,6 +29,7 @@ import android.widget.AdapterView.OnItemClickListener
 import info.hoang8f.android.segmented.SegmentedGroup
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
+import com.lightning.wallet.lnutils.JsonHttpUtils
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
@@ -223,16 +223,22 @@ trait ToolbarActivity extends TimerActivity { me =>
       }
 
       def proceed =
-        LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(vec => {
-          // We should filter out local channels to not accidently close an operational ones
-          val allRefundingData = vec map AES.decode(LNParams.cloudSecret) map to[RefundingData]
+        LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(serverDataVec => {
+          // We need to filter out local channels so we do not accidently close an operational ones
           val localChanIds = app.ChannelManager.all.map(_.pull(_.channelId) getOrElse BinaryData.empty)
-          val nonLocalRefundingData = allRefundingData.filterNot(localChanIds contains _.commitments.channelId)
+          val listeners = app.ChannelManager.operationalListeners
 
-          // Should request connections after all the channels have been added
-          val chansToRefund = nonLocalRefundingData map app.ChannelManager.createChannel
-          for (chan <- chansToRefund) app.ChannelManager.all = chan +: app.ChannelManager.all
-          app.ChannelManager reconnect chansToRefund
+          for {
+            encoded <- serverDataVec
+            jsonDecoded = AES.decode(LNParams.cloudSecret)(encoded)
+            refundingData = JsonHttpUtils.to[RefundingData](jsonDecoded)
+            if !localChanIds.contains(refundingData.commitments.channelId)
+            chan = app.ChannelManager.createChannel(listeners, refundingData)
+            isAdded = app.kit watchFunding refundingData.commitments
+          } app.ChannelManager.all +:= chan
+
+          // Request connections after these channels are added
+          app.ChannelManager reconnect app.ChannelManager.connected
         }, Tools.errlog)
     }
 
@@ -244,7 +250,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     rescanWallet setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_rescan) { _ =>
         mkForm(mkChoiceDialog(go, none, dialog_ok, dialog_cancel)
-          .setMessage(sets_rescan_ok), null, null)
+          .setMessage(sets_rescan_ok), title = null, content = null)
       }
 
       def go = try {
@@ -321,38 +327,45 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   abstract class TxProcessor {
     def onTxFail(exc: Throwable): Unit
-    def processTx(password: String, fee: Coin)
+    def processTx(pass: String, fee: Coin)
     val pay: PayData
 
     def chooseFee: Unit =
       passPlus(getString(step_2).format(pay cute sumOut).html) { password =>
-        <(makeTx(password, RatesSaver.rates.feeRisky), onTxFail) { feeEstimate =>
-          val riskyFinalFee: MilliSatoshi = RatesSaver.rates.feeRisky multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
-          val liveFinalFee: MilliSatoshi = RatesSaver.rates.feeLive multiply feeEstimate.unsafeBitcoinSerialize.length div 1000L
-          val feeRisky = getString(fee_risky) format humanFiat(sumOut format denom.withSign(riskyFinalFee), riskyFinalFee, " ")
-          val feeLive = getString(fee_live) format humanFiat(sumOut format denom.withSign(liveFinalFee), liveFinalFee, " ")
+        <(makeTx(password, RatesSaver.rates.feeLive), onTxFail) { estimateTx =>
+          // Get live final fee and set a risky final fee to be 3 times less
+
+          val liveFinalFee = coin2MSat(estimateTx.getFee)
+          val riskyFinalFee = MilliSatoshi(liveFinalFee.amount / 3)
+
+          val markedLiveFinalFee = sumOut format denom.withSign(liveFinalFee)
+          val markedRiskyFinalFee = sumOut format denom.withSign(riskyFinalFee)
+
+          val feeLive = getString(fee_live) format humanFiat(markedLiveFinalFee, liveFinalFee, " ")
+          val feeRisky = getString(fee_risky) format humanFiat(markedRiskyFinalFee, riskyFinalFee, " ")
+          val feesOptions = Array(feeRisky.html, feeLive.html)
+
+          // Prepare popup interface with fee options
+          val opts = new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, feesOptions)
           val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
           val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
-          val slot = android.R.layout.select_dialog_singlechoice
-          val feesOptions = Array(feeRisky.html, feeLive.html)
-          val opts = new ArrayAdapter(me, slot, feesOptions)
 
           def proceed = lst.getCheckedItemPosition match {
-            case 0 => processTx(password, RatesSaver.rates.feeRisky)
+            case 0 => processTx(password, RatesSaver.rates.feeLive div 3)
             case _ => processTx(password, RatesSaver.rates.feeLive)
           }
 
-          lst setAdapter opts
+          lst.setAdapter(opts)
           lst.setItemChecked(0, true)
           lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
           lazy val alert = mkForm(dialog, getString(step_3).format(pay cute sumOut).html, form)
           alert
         }
-    }
+      }
 
-    def makeTx(password: String, fee: Coin) = {
+    def makeTx(pass: String, fee: Coin) = {
       val crypter = app.kit.wallet.getKeyCrypter
-      val keyParameter = crypter deriveKey password
+      val keyParameter = crypter deriveKey pass
       val request = pay.sendRequest
 
       request.feePerKb = fee

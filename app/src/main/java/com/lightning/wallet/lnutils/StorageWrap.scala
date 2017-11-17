@@ -8,13 +8,12 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
-import com.lightning.wallet.Vibr
+import fr.acinq.bitcoin.MilliSatoshi
+import fr.acinq.bitcoin.BinaryData
 import net.sqlcipher.Cursor
 
 
@@ -50,15 +49,9 @@ object ChannelWrap extends ChannelListener {
     case (_, close: EndingData, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
 
-    case (_, _: NormalData, cmd: PlainAddHtlc) =>
-      // Vibrate to show payment is in progress
-      Vibr vibrate Vibr.processed
-
     case (_, norm: NormalData, _: CommitSig)
-      // GUARD: this may be a storage token HTLC
-      if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
       // We should remind cloud to maybe send a scheduled data
-      Vibr vibrate Vibr.confirmed
+      if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
       cloud doProcess CMDStart
   }
 
@@ -133,8 +126,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onProcess = {
     case (_, _: NormalData, add: UpdateAddHtlc) =>
-      // Payment request may not contain an amount
-      // Or an actual incoming amount paid may differ
+      // Actual incoming amount paid may be different
       // We need to record exactly how much was paid
       me updateReceived add
 
@@ -146,6 +138,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       // Channel has accepted this payment, now we have to save it
       // Using REPLACE instead of INSERT in SQL to update duplicates
       me upsertPaymentInfo cmd.out
+      uiNotify
 
     case (chan, norm: NormalData, _: CommitSig) =>
       // fulfilled: update as SUCCESS in a database

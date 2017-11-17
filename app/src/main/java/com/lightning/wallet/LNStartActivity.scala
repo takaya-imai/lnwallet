@@ -11,17 +11,17 @@ import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
 import com.lightning.wallet.lnutils.RatesSaver
-import android.support.v4.view.MenuItemCompat
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
+import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
-
 import android.widget.{BaseAdapter, Button, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
-import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import com.lightning.wallet.Utils.{app, denom}
 import android.view.{Menu, View, ViewGroup}
+
+import scala.collection.mutable
 import scala.util.{Failure, Success}
 
 
@@ -33,8 +33,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   lazy val chansNumber = getResources getStringArray R.array.ln_ops_start_node_channels
   lazy val views = lnStartNodesList :: findViewById(R.id.lnStartDetails) :: Nil
   lazy val nodeView = getString(ln_ops_start_node_view)
-  lazy val notifyWorking = getString(notify_working)
-  lazy val selectPeer = getString(ln_select_peer)
   private[this] val adapter = new NodesAdapter
 
   // May change back pressed action throughout an activity lifecycle
@@ -49,11 +47,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def react(query: String) = worker addWork query
-  def notifySubTitle(subtitle: String, infoType: Int) = {
-    // Title will never be updated so just update subtitle
-    timer.schedule(delete(infoType), 10000)
-    add(subtitle, infoType).flash.run
-  }
+  def notifySubTitle(subtitle: String, infoType: Int) = none
 
   // Adapter for btc tx list
   class NodesAdapter extends BaseAdapter {
@@ -70,31 +64,19 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     def getCount = nodes.size
   }
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedState: Bundle) =
+  override def onCreate(savedState: Bundle) = {
+    // Initialize this activity, method is run once
 
-    if (app.isAlive) {
-      super.onCreate(savedState)
+    super.onCreate(savedState)
+    // Set action bar, main view content, title text and animate subtitle
+    wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
+    add(me getString ln_select_peer, Informer.LNSTATE).flash.run
+    animateTitle(me getString ln_ops_start)
 
-      // Set action bar, main view content, animate title
-      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
-      add(me getString ln_select_peer, Informer.LNSTATE).flash.run
-      animateTitle(me getString ln_ops_start)
-
-      // Wire up list and load peers with empty query string
-      lnStartNodesList setOnItemClickListener onTap(onPeerSelected)
-      lnStartNodesList setAdapter adapter
-      react(new String)
-
-      app.kit.wallet addCoinsSentEventListener txTracker
-      app.kit.wallet addCoinsReceivedEventListener txTracker
-      app.kit.wallet addTransactionConfidenceEventListener txTracker
-    } else me exitTo classOf[MainActivity]
-
-  override def onDestroy = wrap(super.onDestroy) {
-    app.kit.wallet removeCoinsSentEventListener txTracker
-    app.kit.wallet removeCoinsReceivedEventListener txTracker
-    app.kit.wallet removeTransactionConfidenceEventListener txTracker
+    // Wire up list and load peers with empty query string
+    lnStartNodesList setOnItemClickListener onTap(onPeerSelected)
+    lnStartNodesList setAdapter adapter
+    react(new String)
   }
 
   override def onCreateOptionsMenu(menu: Menu) = {
@@ -103,49 +85,68 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     true
   }
 
-  private def onPeerSelected(position: Int) = hideKeys {
-    val (announce: NodeAnnouncement, _) = adapter getItem position
-    val chan = app.ChannelManager createChannel InitData(announce)
-    // This channel is not yet in ChannelManager.all so we need
-    // a dedicated listeners below to be added just for it
+  private def onPeerSelected(pos: Int) = hideKeys {
+    val annChanNum @ (announce, _) = adapter getItem pos
+    val selectedNodeView = mkNodeView(annChanNum)
+    val initData = InitData(announce)
+
+    // This channel does not yet receive blockchain and peer events
+    val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, initData)
 
     val socketOpenListener = new ConnectionListener {
-      override def onMessage(message: LightningMessage) = chan process message
-      override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan process CMDShutdown
-      override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) chan process CMDShutdown
+      override def onMessage(message: LightningMessage) = freshChan process message
+      override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) freshChan process CMDShutdown
+      override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) freshChan process CMDShutdown
       override def onOperational(nodeId: PublicKey, their: Init) = if (nodeId == announce.nodeId)
-        me runOnUiThread askForFunding(chan, their)
+        // Peer is reachable so now we ask user to provide a funding
+        me runOnUiThread askForFunding(freshChan, their)
     }
 
-    chan.listeners += new ChannelListener { chanOpenListener =>
-      // Updates UI accordingly to internal changes in channel
+//    val chanOpenListener = new ChannelListener {
+//      override def onBecome = {
+//        case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
+//          // Peer has agreed to open a channel so now we ask user for a tx feerate
+//          me runOnUiThread askForFeerate(freshChan, cmd, accept)
+//
+//        case (_, _, _, CLOSING) =>
+//          // Something went wrong, back off
+//          me runOnUiThread detachChannel
+//
+//        case (_, wait: WaitFundingDoneData, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
+//          // We have just got their FundingSigned so we can proceed with tx broadcasting
+//          // We wait until at least one peer confirms our funding and only then we proceed
+//          // User may press back or cancel here but it won't affect anything at this point
+//
+//          app.kit blockingSend wait.fundingTx
+//          app.kit watchFunding wait.commitments
+//          freshChan STORE wait
+//
+//          freshChan.listeners -= chanOpenListener
+//          ConnectionManager.listeners -= socketOpenListener
+//          freshChan.listeners ++= app.ChannelManager.operationalListeners
+//          app.ChannelManager.all +:= freshChan
+//          me exitTo classOf[LNOpsActivity]
+//
+//      }
+//    }
 
-      override def onBecome = {
-        case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
-          // Peer has agreed to open a channel so now we ask user for a tx feerate
-          me runOnUiThread askForFeerate(chan, cmd, accept)
-
-        case (_, _, _, CLOSING) =>
-          // Disconnect, remote Error, back button pressed
-          ConnectionManager.listeners -= socketOpenListener
-          chan.listeners -= chanOpenListener
-          me runOnUiThread setListView
-
-        case (_, _, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-          // Channel has just been saved to db so we can proceed
-          app.ChannelManager.all = chan +: app.ChannelManager.all
-          ConnectionManager.listeners -= socketOpenListener
-          chan.listeners -= chanOpenListener
-          me exitTo classOf[LNOpsActivity]
-      }
+    def detachChannel: Unit = {
+      //freshChan.listeners -= chanOpenListener
+      ConnectionManager.listeners -= socketOpenListener
+      whenBackPressed = anyToRunnable(super.onBackPressed)
+      setVis(View.VISIBLE, View.GONE)
+      app toast ln_ops_start_abort
+      getSupportActionBar.show
     }
 
-    // Sending CMDShutdown to channel indirectly updates the view
-    lnCancel setOnClickListener onButtonTap(chan process CMDShutdown)
-    whenBackPressed = anyToRunnable(chan process CMDShutdown)
+    //freshChan.listeners += chanOpenListener
     ConnectionManager.listeners += socketOpenListener
+    lnCancel setOnClickListener onButtonTap(detachChannel)
+    whenBackPressed = anyToRunnable(detachChannel)
     ConnectionManager requestConnection announce
-    me setPeerView position
+    lnStartDetailsText setText selectedNodeView
+    setVis(View.GONE, View.VISIBLE)
+    getSupportActionBar.hide
   }
 
   // UI utilities
@@ -157,24 +158,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     nodeView.format(announce.alias, humanConnections, humanId).html
   }
 
-  private def setListView = {
-    whenBackPressed = anyToRunnable(super.onBackPressed)
-    update(selectPeer, Informer.LNSTATE).flash.run
-    setVis(View.VISIBLE, View.GONE)
-    app toast ln_ops_start_abort
-  }
-
-  private def setPeerView(pos: Int) = {
-    MenuItemCompat collapseActionView searchItem
-    lnStartDetailsText setText mkNodeView(adapter getItem pos)
-    update(notifyWorking, Informer.LNSTATE).flash.run
-    setVis(View.GONE, View.VISIBLE)
-  }
-
   def askForFunding(chan: Channel, their: Init) = {
     val walletBalance = denom withSign app.kit.currentBalance
     val maxCapacity = denom withSign LNParams.maxChannelCapacity
-    val minCapacity: MilliSatoshi = RatesSaver.rates.feeLive multiply 4
+    val minCapacity = coin2MSat(RatesSaver.rates.feeLive multiply 4)
 
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)

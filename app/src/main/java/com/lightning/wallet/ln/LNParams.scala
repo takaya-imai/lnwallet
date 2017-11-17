@@ -5,13 +5,11 @@ import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.Broadcaster._
 import fr.acinq.bitcoin.DeterministicWallet._
-import com.lightning.wallet.lnutils.JsonHttpUtils._
 
 import scala.util.{Failure, Success}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
 import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
-import rx.lang.scala.schedulers.IOScheduler
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
 
@@ -21,9 +19,10 @@ object LNParams { me =>
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.TestnetGenesisBlock.hash
-  val maxReserveToFundingRatio = 0.05 // %
-  val reserveToFundingRatio = 0.025 // %
-  val updateFeeMinDiffRatio = 0.25 // %
+  val maxReserveToFundingRatio = 0.05 // 5%
+  val reserveToFundingRatio = 0.025 // 2.5%
+  val maxFeerateMismatchRatio = 1.5 // 150%
+  val updateFeeMinDiffRatio = 0.25 // 25%
   val htlcMinimumMsat = 100000L
   val localFeatures = "00"
   val globalFeatures = ""
@@ -65,9 +64,13 @@ object LNParams { me =>
 
   // FEE RELATED
 
-  def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long): Boolean = {
-    val feeRatio = (networkFeeratePerKw - commitmentFeeratePerKw) / commitmentFeeratePerKw.toDouble
-    networkFeeratePerKw > 0 && Math.abs(feeRatio) > updateFeeMinDiffRatio
+  def feeRateMismatch(remoteFeeratePerKw: Long, localFeeratePerKw: Long) = Math abs {
+    2.0 * (remoteFeeratePerKw - localFeeratePerKw) / (localFeeratePerKw + remoteFeeratePerKw)
+  }
+
+  def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long) = {
+    val newFeeMismatch = feeRateMismatch(networkFeeratePerKw, commitmentFeeratePerKw)
+    newFeeMismatch > updateFeeMinDiffRatio && newFeeMismatch <= maxFeerateMismatchRatio
   }
 
   // MISC
@@ -86,7 +89,6 @@ object AddErrorCodes {
   val ERR_REMOTE_AMOUNT_LOW = err_ln_remote_amount_low
   val ERR_TOO_MANY_HTLC = err_ln_too_many
   val ERR_FULFILLED = err_ln_fulfilled
-  val ERR_IN_FLIGHT = err_ln_inflight
   val ERR_OFFLINE = err_ln_offline
   val ERR_FAILED = err_ln_general
 }
@@ -114,13 +116,8 @@ object Broadcaster {
 
 trait Broadcaster extends ChannelListener { me =>
   def txStatus(txid: BinaryData): DepthAndDead
-  def send(tx: Transaction): String
   def feeRatePerKw: Long
   def currentHeight: Int
-
-  def safeSend(tx: Transaction) =
-    obsOn(me send tx, IOScheduler.apply)
-      .onErrorReturn(_.getMessage)
 
   // Parent state and next tier cltv delay
   // Actual negative delay will be represented as 0L

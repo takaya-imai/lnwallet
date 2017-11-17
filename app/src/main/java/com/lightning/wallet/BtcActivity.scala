@@ -173,7 +173,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   def notifySubTitle(sub: String, infoType: Int) = {
     // Here we update not just subtitle but also a title
     wrap(updTitle)(add(sub, infoType).flash.run)
-    timer.schedule(delete(infoType), 10000)
+    timer.schedule(delete(infoType), 8000)
   }
 
   // Initialize this activity, method is run once
@@ -213,8 +213,9 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         lst addHeaderView detailsWrapper
 
         outside setOnClickListener onButtonTap {
-          val uri = "https://blockexplorer.com/tx/" + wrap.tx.getHashAsString
-          me startActivity new Intent(Intent.ACTION_VIEW, Uri parse uri)
+          val blockcypher = "https://live.blockcypher.com/btc-testnet/tx/"
+          val uri = Uri.parse(blockcypher + wrap.tx.getHashAsString)
+          me startActivity new Intent(Intent.ACTION_VIEW, uri)
         }
 
         wrap.fee match {
@@ -353,14 +354,15 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
+
           override def processTx(pass: String, fee: Coin) = {
-            <(app.kit blockingSend makeTx(pass, fee), onTxFail)(none)
+            <(app.kit blockingSend makeTx(pass, fee), onTxFail)(Tools.log)
             add(me getString tx_announcing, Informer.BTCEVENT).flash.run
           }
 
           override def onTxFail(err: Throwable) =
             mkForm(mkChoiceDialog(me delayUI sendBtcTxPopup.set(ok, pay.address), none,
-              dialog_ok, dialog_cancel), null, messageWhenMakingTx apply err)
+              dialog_ok, dialog_cancel), title = null, messageWhenMakingTx apply err)
         }
 
         // Initiate the spending sequence

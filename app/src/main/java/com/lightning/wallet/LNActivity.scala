@@ -92,17 +92,15 @@ class LNActivity extends DataReader
     def getHolder(view: View) = new TxViewHolder(view) {
 
       def fillView(info: PaymentInfo) = {
-        val timestamp = new Date(info.request.timestamp * 1000)
-        val purpose = info.request.description.right.toSeq.mkString
-
-        val marking = info match {
+        val markedPaymentSum = info match {
           case in: IncomingPayment => sumIn.format(denom formatted in.received)
           case out => sumOut.format(denom formatted out.request.finalSum * -1)
         }
 
+        val timestamp = new Date(info.request.timestamp * 1000)
         transactWhen setText when(System.currentTimeMillis, timestamp).html
         transactCircle setImageResource imgMap(info.actualStatus)
-        transactSum setText s"$marking\u00A0$purpose".html
+        transactSum setText markedPaymentSum.html
       }
     }
   }
@@ -137,7 +135,7 @@ class LNActivity extends DataReader
       case (chan, norm: NormalData, _: CommitSig)
         if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
         notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
-        updTitle(chan)
+        me updTitle chan
     }
   }
 
@@ -151,30 +149,30 @@ class LNActivity extends DataReader
   def react(qs: String) = paymentsViewProvider reload qs
   def notifySubTitle(subtitle: String, infoType: Int) = {
     // Title will updated separately so just update subtitle
-    timer.schedule(delete(infoType), 10000)
+    timer.schedule(delete(infoType), 8000)
     add(subtitle, infoType).flash.run
   }
 
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
 
-  if (app.isAlive) {
-    super.onCreate(savedState)
+    if (app.isAlive) {
+      super.onCreate(savedState)
 
-    // Set action bar, main view content, wire up list events, update title later
-    wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
-    add(me getString ln_notify_connecting, Informer.LNSTATE)
-    me startListUpdates adapter
-    me setDetecting true
+      // Set action bar, main view content, wire up list events, update title later
+      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
+      add(me getString ln_notify_connecting, Informer.LNSTATE)
+      me startListUpdates adapter
+      me setDetecting true
 
-    list setAdapter adapter
-    list setFooterDividersEnabled false
-    paymentsViewProvider reload new String
-    app.kit.wallet addCoinsSentEventListener txTracker
-    app.kit.wallet addCoinsReceivedEventListener txTracker
-    app.kit.wallet addTransactionConfidenceEventListener txTracker
-    app.kit.peerGroup addBlocksDownloadedEventListener catchListener
-  } else me exitTo classOf[MainActivity]
+      list setAdapter adapter
+      list setFooterDividersEnabled false
+      paymentsViewProvider reload new String
+      app.kit.wallet addCoinsSentEventListener txTracker
+      app.kit.wallet addCoinsReceivedEventListener txTracker
+      app.kit.wallet addTransactionConfidenceEventListener txTracker
+      app.kit.peerGroup addBlocksDownloadedEventListener catchListener
+    } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
@@ -233,8 +231,9 @@ class LNActivity extends DataReader
       val payment = adapter getItem pos
       val description = me getDescription payment.request
       val humanStatus = s"<strong>${paymentStatesMap apply payment.actualStatus}</strong>"
-      paymentHash.setText(payment.request.paymentHash.toString grouped 8 mkString "\u0020")
+      val payHash = payment.request.paymentHash.toString.grouped(32).map(_ grouped 8 mkString "\u00A0")
       paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
+      paymentHash setText payHash.mkString("\n")
 
       if (payment.actualStatus == SUCCESS) {
         // Users may copy request and preimage for fulfilled payments to prove they've happened
@@ -278,7 +277,7 @@ class LNActivity extends DataReader
 
     toolbar setOnClickListener onButtonTap {
       wrap(adapter.notifyDataSetChanged)(changeDenom)
-      updTitle(chan)
+      me updTitle chan
     }
 
     sendPayment = pr => {
@@ -334,7 +333,7 @@ class LNActivity extends DataReader
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
-        // Received amount is set to 0 msat for now, incoming amount may be higher than requested here
+        // Received amount is set to 0 msat as incoming amount may be higher than requested here
         bag upsertPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, chanId, HIDDEN)
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
@@ -359,10 +358,11 @@ class LNActivity extends DataReader
       super.onStop
     }
 
+    checkTransData
+    // Call checkTransData first
     chan.listeners += chanListener
     chanListener reloadOnBecome chan
-    checkTransData
-    updTitle(chan)
+    me updTitle chan
   }
 
   // DATA READING AND BUTTON ACTIONS

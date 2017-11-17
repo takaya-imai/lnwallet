@@ -15,13 +15,18 @@
         android:id="@+id/lnStartDetails"
         android:visibility="gone">
 
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_launcher"/>
+
         <TextView
-            style="@style/Info"
+            style="@style/MarginInfo"
             android:id="@+id/lnStartDetailsText"
             android:layout_width="wrap_content"/>
 
         <Button
-            style="@style/MarginInfo"
+            style="@style/Info"
             android:id="@+id/lnCancel"
             android:layout_width="wrap_content"
             android:text="@string/dialog_cancel"/>

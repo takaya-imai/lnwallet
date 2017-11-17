@@ -6,11 +6,12 @@ import scala.concurrent.duration._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-
-import org.bitcoinj.core.{Coin, Transaction}
 import rx.lang.scala.{Scheduler, Observable => Obs}
+
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
+import org.bitcoinj.core.Transaction.DEFAULT_TX_FEE
 import com.lightning.wallet.helper.Statistics
+import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
 
@@ -59,23 +60,20 @@ object RatesSaver extends Saver {
 
   def update = {
     val unsafe = LNParams.cloud.connector.getRates map toVec[Result]
-    val periodic = retry(unsafe, pickInc, 2 to 6 by 2).repeatWhen(_ delay updatePeriod)
+    val periodic = retry(unsafe, pickInc, 2 to 4 by 2).repeatWhen(_ delay updatePeriod)
     initDelay(periodic, rates.stamp, updatePeriod.toMillis) foreach { case newFee \ newFiat +: _ =>
       val validFees = for (validFee <- newFee("4") +: rates.feeHistory if validFee > 0) yield validFee
-      rates = Rates(validFees take 6, newFiat, System.currentTimeMillis)
+      rates = Rates(validFees take 4, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }
 }
 
 case class Rates(feeHistory: Seq[Double], exchange: Fiat2Btc, stamp: Long) {
-  lazy val statistics = new Statistics[Double] { def extract(item: Double) = item }
-  lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else cutOutliers
-  lazy val feeRisky = feeLive div 3
-
-  private[this] lazy val cutOutliers = Coin parseCoin {
-    val filtered = statistics.filterWithin(feeHistory, stdDevs = 1)
+  lazy val feeLive = if (feeHistory.isEmpty) DEFAULT_TX_FEE else Coin parseCoin {
+    val statistics = new Statistics[Double] { def extract(item: Double) = item }
+    val withoutOutliers = statistics.filterWithin(feeHistory, stdDevs = 1)
     val formatter = new java.text.DecimalFormat("##.00000000")
-    formatter.format(statistics mean filtered)
+    formatter.format(statistics mean withoutOutliers)
   }
 }

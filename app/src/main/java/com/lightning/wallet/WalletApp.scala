@@ -12,19 +12,10 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
-import java.util.concurrent.TimeUnit.MILLISECONDS
-import com.lightning.wallet.ln.Channel.CLOSING
-
-import rx.lang.scala.{Observable => Obs}
-import org.bitcoinj.wallet.{Protos, Wallet}
-import com.lightning.wallet.ln.wire.{Init, LightningMessage}
-import android.content.{ClipData, ClipboardManager, Context}
-import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
-import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
-import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
-import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
 import collection.JavaConverters.seqAsJavaListConverter
 import com.lightning.wallet.lnutils.Connector.CMDStart
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import com.lightning.wallet.ln.Channel.CLOSING
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.net.discovery.DnsDiscovery
 import org.bitcoinj.wallet.Wallet.BalanceType
@@ -36,6 +27,15 @@ import scala.collection.mutable
 import android.app.Application
 import android.widget.Toast
 import java.io.File
+
+import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
+import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
+import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
+import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
+import com.lightning.wallet.ln.wire.{Init, LightningMessage}
+import android.content.{ClipData, ClipboardManager, Context}
+import org.bitcoinj.wallet.{Protos, Wallet}
+import rx.lang.scala.{Observable => Obs}
 
 
 class WalletApp extends Application { me =>
@@ -108,11 +108,13 @@ class WalletApp extends Application { me =>
     import ConnectionManager._
     type ChannelVec = Vector[Channel]
 
-    var all: ChannelVec = ChannelWrap.get map createChannel // Receive CMDSpent and CMDBestHeight, nothing else
-    def connected: ChannelVec = all.filter(_.state != Channel.CLOSING) // Those who need a connection to LN peer
-    def alive: ChannelVec = all.filter(channel => channel.state != Channel.CLOSING && channel.state != Channel.REFUNDING)
-    def fromNode(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id) // Those from specific ln peer
-    def reconnect(of: ChannelVec) = of.map(_.data.announce).distinct foreach requestConnection
+    val operationalListeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
+    // Obtain a vector of saved channels which receive CMDSpent, CMDBestHeight and nothing else
+    var all: ChannelVec = for (data <- ChannelWrap.get) yield createChannel(operationalListeners, data)
+
+    def connected: ChannelVec = all.filter(_.state != Channel.CLOSING) // Need a connection to LN peer
+    def alive: ChannelVec = all.filter(chan => chan.state != Channel.CLOSING && chan.state != Channel.REFUNDING)
+    def fromNode(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id) // From specific peer
 
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
@@ -141,11 +143,12 @@ class WalletApp extends Application { me =>
         }
     }
 
-    def createChannel(bootstrap: ChannelData) = new Channel {
-      val listeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
+    def reconnect(of: ChannelVec) = of.map(_.data.announce).distinct foreach requestConnection
+    def createChannel(interested: mutable.Set[ChannelListener], bootstrap: ChannelData) = new Channel {
       def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
       // First add listeners, then specifically call doProcess so it runs on UI thread
+      val listeners = interested
       doProcess(bootstrap)
 
       def CLOSEANDWATCH(cd: ClosingData) = {
@@ -188,7 +191,7 @@ class WalletApp extends Application { me =>
 
   abstract class WalletKit extends AbstractKit {
     type ScriptSeq = Seq[org.bitcoinj.script.Script]
-    def blockingSend(tx: Transaction) = peerGroup.broadcastTransaction(tx, 1).broadcast.get
+    def blockingSend(tx: Transaction) = peerGroup.broadcastTransaction(tx, 1).broadcast.get.toString
     def watchFunding(cs: Commitments) = watchScripts(cs.commitInput.txOut.publicKeyScript :: Nil)
     def watchScripts(scripts: ScriptSeq) = app.kit.wallet addWatchedScripts scripts.asJava
     def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
@@ -208,14 +211,11 @@ class WalletApp extends Application { me =>
     def setupAndStartDownload = {
       wallet addTransactionConfidenceEventListener ChannelManager.chainEventsListener
       wallet addCoinsSentEventListener ChannelManager.chainEventsListener
-      wallet addTransactionConfidenceEventListener Vibr.generalTracker
-      wallet addCoinsReceivedEventListener Vibr.generalTracker
-      wallet addCoinsSentEventListener Vibr.generalTracker
+      wallet.autosaveToFile(walletFile, 400, MILLISECONDS, null)
       wallet.watchMode = true
 
-      peerGroup addAddress new PeerAddress(app.params,
-        InetAddresses forString cloud.connector.url, 8333)
-
+      val trustedNode = InetAddresses forString cloud.connector.url
+      peerGroup addAddress new PeerAddress(app.params, trustedNode, 8333)
       peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setMinRequiredProtocolVersion(70015)
       peerGroup.setUserAgent(appName, "0.01")
@@ -224,7 +224,6 @@ class WalletApp extends Application { me =>
       peerGroup.setMaxConnections(5)
       peerGroup.addWallet(wallet)
 
-      wallet.autosaveToFile(walletFile, 400, MILLISECONDS, null)
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.connected
@@ -232,19 +231,5 @@ class WalletApp extends Application { me =>
       cloud doProcess CMDStart
       RatesSaver.update
     }
-  }
-}
-
-object Vibr {
-  type Pattern = Array[Long]
-  def vibrate(pattern: Pattern) = if (null != vib && vib.hasVibrator) vib.vibrate(pattern, -1)
-  lazy val vib = app.getSystemService(Context.VIBRATOR_SERVICE).asInstanceOf[android.os.Vibrator]
-  val confirmed = Array(0L, 75, 250, 75, 250)
-  val processed = Array(0L, 85, 200)
-
-  val generalTracker = new TxTracker {
-    override def txConfirmed(tx: Transaction) = vibrate(confirmed)
-    override def coinsReceived(tx: Transaction) = vibrate(processed)
-    override def coinsSent(tx: Transaction) = vibrate(processed)
   }
 }

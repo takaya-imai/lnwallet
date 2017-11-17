@@ -49,7 +49,6 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       channel <- app.ChannelManager.alive.headOption // If we actually have an operational channel
       paymentRequestAndMemo @ (request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4) // Get payment request and memo
       Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4) // Generate a payment
-
     } if (data.info.isEmpty) {
       // Payment request may arrive in some time after an initialization above,
       // so we state that it can only be accepted if data.info is still empty

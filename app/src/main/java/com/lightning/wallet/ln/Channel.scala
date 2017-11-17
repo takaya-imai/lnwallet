@@ -5,8 +5,6 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
-import com.lightning.wallet.ln.crypto.Sphinx.zeroes
-import com.lightning.wallet.ln.crypto.ShaChain
 import java.util.concurrent.Executors
 import scala.collection.mutable
 import scala.util.Success
@@ -15,8 +13,8 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+import fr.acinq.bitcoin.Crypto.PrivateKey
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -61,7 +59,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val tooHighMinDepth = accept.minimumDepth > 8L
         val tooLowAcceptedHtlcs = accept.maxAcceptedHtlcs < 1
-        val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 5000000L
+        val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 2500000L
         val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay
         val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
         if (tooHighMinDepth | tooLowAcceptedHtlcs | tooHighHtlcMinimumMsat | tooLowSelfDelay | exceedsReserve) BECOME(wait, CLOSING)
@@ -100,8 +98,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
             remoteNextHtlcId = 0, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
             remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
-          BECOME(me STORE WaitFundingDoneData(wait.announce, our = None,
-            their = None, wait.fundingTx, commitments), WAIT_FUNDING_DONE)
+          BECOME(WaitFundingDoneData(wait.announce, our = None, their = None,
+            wait.fundingTx, commitments), state1 = WAIT_FUNDING_DONE)
         }
 
 
@@ -181,21 +179,17 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE norm.copy(commitments = c1)
 
 
-      // We only can add new HTLCs when mutual shutdown process is not active
-      case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL) =>
+      case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL)
+        // GUARD: we can only accept a new HTLC when mutual shutdown is not active AND this HTLC is not already in-flight
+        if !Commitments.actualRemoteCommit(commitments).spec.htlcs.exists(_.add.paymentHash == cmd.out.request.paymentHash) =>
 
-        val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
-        val inFlight = Commitments.actualRemoteCommit(commitments).spec
-          .htlcs.exists(_.add.paymentHash == cmd.out.request.paymentHash)
-
-        if (inFlight) throw AddException(cmd, ERR_IN_FLIGHT)
-        else LNParams.bag getPaymentInfo updateAddHtlc.paymentHash match {
+        LNParams.bag getPaymentInfo cmd.out.request.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
           case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
           case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
-            // This may be a FAILED outgoing payment which is fine
+            val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
             doProcess(CMDProceed)
         }
@@ -328,7 +322,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We're exiting a sync state but don't have enough locks so we keep waiting
-      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0, _, _), SYNC)
+      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0), SYNC)
         if channelId == wait.commitments.channelId =>
 
         BECOME(wait, WAIT_FUNDING_DONE)
@@ -389,22 +383,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
-      case (recovery: RefundingData, cr: ChannelReestablish, REFUNDING)
-        if cr.channelId == recovery.commitments.channelId =>
-
-        val d1 = recovery.modify(_.commitments.remoteCommit.remotePerCommitmentPoint).setTo(cr.myCurrentPerCommitmentPoint)
-        me UPDATE d1 SEND Error(cr.channelId, "Please be so kind as to spend your local commit" getBytes "UTF-8")
-
-
       // SYNC: ONLINE/OFFLINE
 
 
       case (some: HasCommitments, CMDOnline, SYNC) =>
-        val secrets = some.commitments.remotePerCommitmentSecrets
-        val yourLastPerCommitmentSecret = secrets.lastIndex.map(ShaChain.moves).flatMap(ShaChain getHash secrets.hashes) getOrElse zeroes(32)
-        val myCurrentPerCommitmentPoint = Generators.perCommitPoint(some.commitments.localParams.shaSeed, some.commitments.localCommit.index)
-        me SEND ChannelReestablish(some.commitments.channelId, some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index,
-          Scalar(yourLastPerCommitmentSecret), myCurrentPerCommitmentPoint)
+        me SEND ChannelReestablish(some.commitments.channelId,
+          some.commitments.localCommit.index + 1,
+          some.commitments.remoteCommit.index)
 
 
       case (wait: WaitFundingDoneData, CMDOffline, WAIT_FUNDING_DONE) => BECOME(wait, SYNC)
@@ -481,12 +466,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     events onProcess Tuple3(me, data, change)
   }
 
-  def sendFeeUpdate(norm: NormalData, rate: Long) =
-    Commitments.sendFee(norm.commitments, rate) foreach { case c1 \ updateFeeMessage =>
-      // Periodic fee updates to ensure commit txs could be confirmed on a blockchain
-      me UPDATE norm.copy(commitments = c1) SEND updateFeeMessage
-      doProcess(CMDProceed)
-    }
+  def sendFeeUpdate(norm: NormalData, updatedFeeRate: Long) = {
+    val c1 \ msg = Commitments.sendFee(norm.commitments, updatedFeeRate)
+    me UPDATE norm.copy(commitments = c1) SEND msg
+    doProcess(CMDProceed)
+  }
 
   private def makeFundingLocked(cs: Commitments) = {
     val point = Generators.perCommitPoint(cs.localParams.shaSeed, index = 1)
