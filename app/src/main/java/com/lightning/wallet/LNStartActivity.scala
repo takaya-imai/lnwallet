@@ -10,18 +10,18 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
-import com.lightning.wallet.lnutils.RatesSaver
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
+import scala.collection.mutable
 import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
+
 import android.widget.{BaseAdapter, Button, ListView, TextView}
+import com.lightning.wallet.lnutils.{ChannelWrap, RatesSaver}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.Utils.{app, denom}
 import android.view.{Menu, View, ViewGroup}
-
-import scala.collection.mutable
 import scala.util.{Failure, Success}
 
 
@@ -66,11 +66,11 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   override def onCreate(savedState: Bundle) = {
     // Initialize this activity, method is run once
+    // Set action bar, main view content, title text
 
     super.onCreate(savedState)
-    // Set action bar, main view content, title text and animate subtitle
     wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
-    add(me getString ln_select_peer, Informer.LNSTATE).flash.run
+    add(text = me getString ln_select_peer, tag = Informer.LNSTATE).flash.run
     animateTitle(me getString ln_ops_start)
 
     // Wire up list and load peers with empty query string
@@ -90,7 +90,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val selectedNodeView = mkNodeView(annChanNum)
     val initData = InitData(announce)
 
-    // This channel does not yet receive blockchain and peer events
+    // This channel receives neither blockchain nor peer events just yet
     val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, initData)
 
     val socketOpenListener = new ConnectionListener {
@@ -102,36 +102,35 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         me runOnUiThread askForFunding(freshChan, their)
     }
 
-//    val chanOpenListener = new ChannelListener {
-//      override def onBecome = {
-//        case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
-//          // Peer has agreed to open a channel so now we ask user for a tx feerate
-//          me runOnUiThread askForFeerate(freshChan, cmd, accept)
-//
-//        case (_, _, _, CLOSING) =>
-//          // Something went wrong, back off
-//          me runOnUiThread detachChannel
-//
-//        case (_, wait: WaitFundingDoneData, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-//          // We have just got their FundingSigned so we can proceed with tx broadcasting
-//          // We wait until at least one peer confirms our funding and only then we proceed
-//          // User may press back or cancel here but it won't affect anything at this point
-//
-//          app.kit blockingSend wait.fundingTx
-//          app.kit watchFunding wait.commitments
-//          freshChan STORE wait
-//
-//          freshChan.listeners -= chanOpenListener
-//          ConnectionManager.listeners -= socketOpenListener
-//          freshChan.listeners ++= app.ChannelManager.operationalListeners
-//          app.ChannelManager.all +:= freshChan
-//          me exitTo classOf[LNOpsActivity]
-//
-//      }
-//    }
+    lazy val chanOpenListener = new ChannelListener {
+      // Updates UI accordingly to changes in fresh channel
+      // should account for user cancelling at late stages
+
+      override def onBecome = {
+        case (_, WaitFundingData(_, cmd, accept), WAIT_FOR_ACCEPT, WAIT_FOR_FUNDING) =>
+          // Peer has agreed to open a channel so now we ask user for a tx feerate
+          me runOnUiThread askForFeerate(freshChan, cmd, accept)
+
+        case (_, _, _, CLOSING) =>
+          // Something went wrong, back off
+          // like disconnect or remote error
+          me runOnUiThread detachChannel
+
+        case (_, wait: WaitFundingDoneData, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
+          // We have just got their FundingSigned and channel is definitely saved at this point
+          // so we proceed with removing local listeners, adding global ones and funding tx sending
+
+          freshChan.listeners -= this
+          ConnectionManager.listeners -= socketOpenListener
+          // User may press cancel at this point but it won't affect anything
+          freshChan.listeners ++= app.ChannelManager.operationalListeners
+          app.ChannelManager.all +:= freshChan
+          me exitTo classOf[LNOpsActivity]
+      }
+    }
 
     def detachChannel: Unit = {
-      //freshChan.listeners -= chanOpenListener
+      freshChan.listeners -= chanOpenListener
       ConnectionManager.listeners -= socketOpenListener
       whenBackPressed = anyToRunnable(super.onBackPressed)
       setVis(View.VISIBLE, View.GONE)
@@ -139,8 +138,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       getSupportActionBar.show
     }
 
-    //freshChan.listeners += chanOpenListener
     ConnectionManager.listeners += socketOpenListener
+    // We need ChannelWrap here to process inner channel errors
+    freshChan.listeners ++= Set(chanOpenListener, ChannelWrap)
     lnCancel setOnClickListener onButtonTap(detachChannel)
     whenBackPressed = anyToRunnable(detachChannel)
     ConnectionManager requestConnection announce
@@ -161,7 +161,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   def askForFunding(chan: Channel, their: Init) = {
     val walletBalance = denom withSign app.kit.currentBalance
     val maxCapacity = denom withSign LNParams.maxChannelCapacity
-    val minCapacity = coin2MSat(RatesSaver.rates.feeLive multiply 4)
+    val minCapacity = coin2MSat(RatesSaver.rates.feeLive multiply 3)
 
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)

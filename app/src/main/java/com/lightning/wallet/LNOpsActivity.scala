@@ -74,18 +74,27 @@ class LNOpsActivity extends TimerActivity { me =>
 
     val chanOpsListener = new ChannelListener {
       // Updates UI accordingly to changes in channel
+      // also repeatedly broadcasts a funding transaction
 
       override def onBecome = {
-        case (_, c: ClosingData, _, _) if c.mutualClose.nonEmpty || c.tier12States.nonEmpty => me runOnUiThread manageClosing(c)
-        case (_, WaitFundingDoneData(_, _, _, tx, commitments), _, _) => me runOnUiThread manageOpening(commitments, tx)
+        case (_, close: ClosingData, _, _)
+          // GUARD: either a cooperative or uncooperative close
+          // actual tx broadcastings are handled in LocalBroadcaster
+          if close.mutualClose.nonEmpty || close.tier12States.nonEmpty =>
+          me runOnUiThread manageClosing(close)
+
+        case (_, WaitFundingDoneData(_, _, _, tx, commitments), _, _) =>
+          // Channel is saved so we repeatedly send our funding on each launch
+          // we put it here instead of LocalBroadcaster so it does not interfere
+          // when user cancels channel creation at final stages in LNStartActivity
+          me runOnUiThread manageOpening(commitments, tx)
+          app.kit watchFunding commitments
+          app.kit blockingSend tx
+
         case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegotiations(norm.commitments)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegotiations(negs.commitments)
         case (_, norm: NormalData, _, _) => me exitTo classOf[LNActivity]
-
-        case _ =>
-          // Other possibly unaccounted states
-          // Most notably, a REFUNDING state too
-          me runOnUiThread manageNoActiveChannel
+        case _ => me runOnUiThread manageNoActiveChannel
       }
 
       override def onProcess = {

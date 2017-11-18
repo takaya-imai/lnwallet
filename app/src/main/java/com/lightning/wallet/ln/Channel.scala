@@ -98,8 +98,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
             remoteNextHtlcId = 0, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
             remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
-          BECOME(WaitFundingDoneData(wait.announce, our = None, their = None,
-            wait.fundingTx, commitments), state1 = WAIT_FUNDING_DONE)
+          BECOME(me STORE WaitFundingDoneData(wait.announce, our = None,
+            their = None, wait.fundingTx, commitments), WAIT_FUNDING_DONE)
         }
 
 

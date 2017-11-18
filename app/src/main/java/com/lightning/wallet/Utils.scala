@@ -99,35 +99,6 @@ trait ToolbarActivity extends TimerActivity { me =>
   lazy val toolbar = findViewById(R.id.toolbar).asInstanceOf[Toolbar]
   lazy val flash = uiTask(getSupportActionBar setSubtitle infos.head.value)
 
-  // Informer CRUD
-  def delete(tag: Int) = uiTask {
-    infos = infos.filterNot(_.tag == tag)
-    getSupportActionBar setSubtitle infos.head.value
-  }
-
-  def add(text: String, tag: Int) = runAnd(me) {
-    infos = new Informer(text, tag) :: infos
-  }
-
-  def update(text: String, tag: Int) = runAnd(me) {
-    for (info <- infos if info.tag == tag) info.value = text
-  }
-
-  def animateTitle(nextText: String) = new Runnable { self =>
-    private[this] val currentText = getSupportActionBar.getTitle.toString
-    private[this] val maxLength = math.max(nextText.length, currentText.length)
-
-    for (an <- currentAnimation) an.cancel
-    currentAnimation = Some apply uiTask(self)
-    timer.schedule(currentAnimation.get, 0, 75)
-
-    private[this] var index = 1
-    override def run = getSupportActionBar match { case bar =>
-      bar setTitle s"${nextText take index}${currentText drop index}".trim
-      if (index < maxLength) index += 1 else for (an <- currentAnimation) an.cancel
-    }
-  }
-
   val catchListener = new BlocksListener {
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
       def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, blocksLeft: Int) = {
@@ -161,6 +132,35 @@ trait ToolbarActivity extends TimerActivity { me =>
     override def coinsSent(tx: Transaction) = notifySubTitle(me getString tx_sent, Informer.BTCEVENT)
     override def coinsReceived(tx: Transaction) = notifySubTitle(me getString tx_received, Informer.BTCEVENT)
     override def txConfirmed(tx: Transaction) = notifySubTitle(me getString tx_confirmed, Informer.TXCONFIRMED)
+  }
+
+  // Informer CRUD
+  def delete(tag: Int) = uiTask {
+    infos = infos.filterNot(_.tag == tag)
+    getSupportActionBar setSubtitle infos.head.value
+  }
+
+  def add(text: String, tag: Int) = runAnd(me) {
+    infos = new Informer(text, tag) :: infos
+  }
+
+  def update(text: String, tag: Int) = runAnd(me) {
+    for (info <- infos if info.tag == tag) info.value = text
+  }
+
+  def animateTitle(nextText: String) = new Runnable { self =>
+    private[this] val currentText = getSupportActionBar.getTitle.toString
+    private[this] val maxLength = math.max(nextText.length, currentText.length)
+
+    for (an <- currentAnimation) an.cancel
+    currentAnimation = Some apply uiTask(self)
+    timer.schedule(currentAnimation.get, 0, 75)
+
+    private[this] var index = 1
+    override def run = getSupportActionBar match { case bar =>
+      bar setTitle s"${nextText take index}${currentText drop index}".trim
+      if (index < maxLength) index += 1 else for (an <- currentAnimation) an.cancel
+    }
   }
 
   // Password checking popup

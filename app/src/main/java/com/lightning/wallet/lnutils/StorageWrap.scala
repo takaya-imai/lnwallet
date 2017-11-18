@@ -160,7 +160,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
   override def onBecome = {
     case (_, _, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
-      // WAITING will either be redeemed or refunded here
+      // WAITING will either be redeemed or refunded later
       db change updFailWaitingSql
   }
 }
