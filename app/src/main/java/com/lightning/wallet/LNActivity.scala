@@ -133,6 +133,7 @@ class LNActivity extends DataReader
 
     override def onProcess = {
       case (chan, norm: NormalData, _: CommitSig)
+        // GUARD: Update UI once we have some fulfilled HTLCs
         if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
         notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
         me updTitle chan

@@ -114,14 +114,16 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         case (_, _, _, CLOSING) =>
           // Something went wrong, back off
           // like disconnect or remote error
-          me runOnUiThread detachChannel
+          me runOnUiThread cancelChannel
 
         case (_, wait: WaitFundingDoneData, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
           // We have just got their FundingSigned and channel is definitely saved at this point
-          // so we proceed with removing local listeners, adding global ones and funding tx sending
-
-          freshChan.listeners -= this
+          // First we remove local listeners, then we try to save a channel to database here
           ConnectionManager.listeners -= socketOpenListener
+          freshChan.listeners -= this
+
+          freshChan STORE wait
+          // Error while saving will halt any further progress here
           // User may press cancel at this point but it won't affect anything
           freshChan.listeners ++= app.ChannelManager.operationalListeners
           app.ChannelManager.all +:= freshChan
@@ -129,7 +131,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       }
     }
 
-    def detachChannel: Unit = {
+    def cancelChannel: Unit = {
       freshChan.listeners -= chanOpenListener
       ConnectionManager.listeners -= socketOpenListener
       whenBackPressed = anyToRunnable(super.onBackPressed)
@@ -141,8 +143,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     ConnectionManager.listeners += socketOpenListener
     // We need ChannelWrap here to process inner channel errors
     freshChan.listeners ++= Set(chanOpenListener, ChannelWrap)
-    lnCancel setOnClickListener onButtonTap(detachChannel)
-    whenBackPressed = anyToRunnable(detachChannel)
+    lnCancel setOnClickListener onButtonTap(cancelChannel)
+    whenBackPressed = anyToRunnable(cancelChannel)
     ConnectionManager requestConnection announce
     lnStartDetailsText setText selectedNodeView
     setVis(View.GONE, View.VISIBLE)

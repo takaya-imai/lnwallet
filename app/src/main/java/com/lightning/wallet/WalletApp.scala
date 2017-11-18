@@ -158,10 +158,9 @@ class WalletApp extends Application { me =>
         // Collect all the commit txs output publicKeyScripts and watch them locally for payment preimages
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
 
-        if (cd.localCommit.nonEmpty) {
-          // Schedule local tier1-2 txs on server just in case
-          val txsJson = cd.localCommit.head.getState.map(_.txn).toJson
-          cloud doProcess CloudAct(txsJson.toString.hex, Nil, "txs/schedule")
+        cd.tier12States.map(_.txn) match {
+          case Nil => Tools log "Channel does not have tier 1-2 transactions"
+          case txs => cloud doProcess CloudAct(txs.toJson.toString.hex, Nil, "txs/schedule")
         }
       }
     }

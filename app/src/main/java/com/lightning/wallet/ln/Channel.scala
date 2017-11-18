@@ -98,8 +98,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
             remoteNextHtlcId = 0, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
             remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
-          BECOME(me STORE WaitFundingDoneData(wait.announce, our = None,
-            their = None, wait.fundingTx, commitments), WAIT_FUNDING_DONE)
+          BECOME(WaitFundingDoneData(wait.announce, None, None,
+            wait.fundingTx, commitments), WAIT_FUNDING_DONE)
         }
 
 
@@ -524,13 +524,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 }
 
 object Channel {
-  // Ephemeral (chan not saved)
   val WAIT_FOR_INIT = "WaitForInit"
   val WAIT_FOR_ACCEPT = "WaitForAccept"
   val WAIT_FOR_FUNDING = "WaitForFunding"
   val WAIT_FUNDING_SIGNED = "WaitFundingSigned"
-
-  // These states are saved
   val WAIT_FUNDING_DONE = "WaitFundingDone"
   val NEGOTIATIONS = "Negotiations"
   val NORMAL = "Normal"

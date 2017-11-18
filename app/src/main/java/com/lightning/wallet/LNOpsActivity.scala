@@ -56,19 +56,19 @@ class LNOpsActivity extends TimerActivity { me =>
       val balance = coloredIn(c.commitInput.txOut.amount)
 
       lnOpsAction setText ln_force_close
-      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClose)
       lnOpsDescription setText getString(ln_ops_chan_opening).format(balance,
         app.plurOrZero(txsConfs, threshold), openStatus).html
     }
 
     def manageNegotiations(c: Commitments) = {
       val description = getString(ln_ops_chan_bilateral_negotiations)
-      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClosing)
+      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClose)
       lnOpsDescription setText description.html
       lnOpsAction setText ln_force_close
     }
 
-    def warnAboutUnilateralClosing =
+    def warnAboutUnilateralClose =
       mkForm(mkChoiceDialog(chan process CMDShutdown, none, ln_force_close,
         dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
 
