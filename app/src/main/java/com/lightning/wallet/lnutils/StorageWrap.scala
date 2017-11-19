@@ -14,6 +14,7 @@ import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.MilliSatoshi
 import fr.acinq.bitcoin.BinaryData
+import scala.collection.mutable
 import net.sqlcipher.Cursor
 
 
@@ -93,28 +94,12 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
   def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
-
-  def retry(chan: Channel, hash: BinaryData, fail: UpdateFailHtlc) = for {
-    outgoing @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(hash)
-    routing1 = cutRoutes(fail, routing, pr.nodeId)
-  } buildPayment(routing1, pr, chan) match {
-
-    case Some(outgoing1) =>
-      // Accepted: routing info will be updated in onProcess
-      // Not accepted: status will change to FAILURE in onError
-      chan process PlainAddHtlc(outgoing1)
-
-    case None =>
-      // uiNotify will be called below a bit later
-      // We may have updated bad nodes or bad channels in routing1
-      // Should save them anyway in case of user initiated payment retry
-      me upsertPaymentInfo outgoing.copy(routing = routing1, status = FAILURE)
-  }
+  val serverCallAttempts = mutable.Map.empty[BinaryData, Int] withDefaultValue 0
 
   override def onError = {
     case (_, ex: CMDException) =>
       // Useless most of the time but needed for retry add failures
-      // CMDException should still be used or channel may be closed
+      // CMDException should still be used or channel will be closed
       updateStatus(FAILURE, ex.cmd.out.request.paymentHash)
       uiNotify
 
@@ -142,16 +127,41 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
     case (chan, norm: NormalData, _: CommitSig) =>
       // fulfilled: update as SUCCESS in a database
-      // failed: try to re-send or update as FAILURE
+      // failed: re-try or update as FAILURE
       // htlcs: no need to update
 
       db txWrap {
         for (htlc <- norm.commitments.localCommit.spec.fulfilled)
           updateStatus(SUCCESS, htlc.add.paymentHash)
 
-        for (htlc \ fail <- norm.commitments.localCommit.spec.failed) fail match {
+        for (htlc \ some <- norm.commitments.localCommit.spec.failed) some match {
+          // Malformed payment is a special case returned by our peer so just fail it
           case _: UpdateFailMalformedHtlc => updateStatus(FAILURE, htlc.add.paymentHash)
-          case fail: UpdateFailHtlc => retry(chan, htlc.add.paymentHash, fail)
+
+          case fail: UpdateFailHtlc => for {
+            // Attempt to parse a failure and reduce affected local payment routes
+            out @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(htlc.add.paymentHash)
+            rd1 @ RoutingData(_, badNodes, badChannels, _, _, _) = cutRoutes(fail, routing, pr.nodeId)
+            // When no more routes can be obtained we fail a payment with an updated bad nodes and channels
+            saveFailed = (err: Throwable) => me upsertPaymentInfo out.copy(routing = rd1, status = FAILURE)
+          } buildPayment(rd1, pr, chan) match {
+
+            case Some(outgoing1) =>
+              // There are still routes left and we have just used one
+              // if accepted by channel: routing info will be upserted in onProcess
+              // if not accepted by channel: status will change to FAILURE in onError
+              chan process PlainAddHtlc(outgoing1)
+
+            case None =>
+              // No more spare routes left, save new bad nodes and channels
+              // and ask server for new routes if we are within call limits
+              me upsertPaymentInfo out.copy(routing = rd1, status = FAILURE)
+
+              if (serverCallAttempts(htlc.add.paymentHash) < 5)
+                app.ChannelManager.outPaymentObs(badNodes, badChannels, pr)
+                  .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
+                  .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
+          }
         }
       }
 

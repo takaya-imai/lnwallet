@@ -5,6 +5,7 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
+import fr.acinq.bitcoin.Crypto.PrivateKey
 import java.util.concurrent.Executors
 import scala.collection.mutable
 import scala.util.Success
@@ -14,7 +15,6 @@ import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
-import fr.acinq.bitcoin.Crypto.PrivateKey
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -424,14 +424,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE FUNDING SPENT
 
 
-      case (RefundingData(announce, commitments, _), CMDSpent(spendTx), REFUNDING)
-        if spendTx.txIn.exists(_.outPoint == commitments.commitInput.outPoint) =>
-
-        // A special case: we have lost our data and now we ask them to spend their current local commit
-        val rcp = Closing.claimRemoteLostCommitTxOutputs(commitments, commitments.remoteCommit, spendTx)
-        BECOME(me STORE ClosingData(announce, commitments, Nil, Nil, rcp :: Nil), CLOSING)
-
-
       case (some: HasCommitments, CMDSpent(spendTx), _)
         // GUARD: something which spends our funding is broadcasted, must react
         if spendTx.txIn.exists(_.outPoint == some.commitments.commitInput.outPoint) =>
@@ -447,7 +439,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
       case (null, closing: ClosingData, null) => BECOME(closing, CLOSING)
-      case (null, recovery: RefundingData, null) => BECOME(recovery, REFUNDING)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)

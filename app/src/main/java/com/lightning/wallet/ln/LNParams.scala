@@ -70,7 +70,7 @@ object LNParams { me =>
 
   def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long) = {
     val newFeeMismatch = feeRateMismatch(networkFeeratePerKw, commitmentFeeratePerKw)
-    newFeeMismatch > updateFeeMinDiffRatio && newFeeMismatch <= maxFeerateMismatchRatio
+    newFeeMismatch > updateFeeMinDiffRatio && newFeeMismatch < maxFeerateMismatchRatio
   }
 
   // MISC

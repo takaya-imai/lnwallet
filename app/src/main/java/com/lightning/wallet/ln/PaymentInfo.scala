@@ -74,15 +74,15 @@ object PaymentInfo {
         // Permanent error from a final node, nothing we can do
         rd.copy(routes = Vector.empty)
 
-      case ErrorPacket(nodeKey, _: Node) =>
-        // Remove routes with this node, also mark this node as failed
-        val routes1 = rd.routes.filterNot(_.nodeIds contains nodeKey)
-        rd.copy(routes = routes1, badNodes = rd.badNodes + nodeKey)
-
       case ErrorPacket(_, message: Update) =>
         // There may be other operational channels left so try them out, also remember this channel as failed
         val routes1 = rd.routes.filterNot(_.payloads.map(_.shortChannelId) contains message.update.shortChannelId)
         rd.copy(routes = routes1, badChannels = rd.badChannels + message.update.shortChannelId)
+
+      case ErrorPacket(nodeKey, _: Node) =>
+        // Remove routes with this node, also mark this node as failed
+        val routes1 = rd.routes.filterNot(_.nodeIds contains nodeKey)
+        rd.copy(routes = routes1, badNodes = rd.badNodes + nodeKey)
 
       // Nothing to cut
     } getOrElse rd
@@ -150,7 +150,8 @@ case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData,
   def actualStatus = status
 }
 
-// Fully calculated route metadata with relative CLTV PerHopPayload values which start from zero
+// Route metadata with relative CLTV PerHopPayload values which start from zero
+case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Int)
 case class RelativeCLTVRoute(payloads: Vector[PerHopPayload], nodeIds: Vector[PublicKey],
                              finalMsat: Long, finalRelativeExpiry: Int)
 
@@ -187,7 +188,6 @@ trait PaymentHop {
   def nodeId: PublicKey
 }
 
-case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Int)
 case class ExtraHop(nodeId: PublicKey, shortChannelId: Long, fee: Long, cltvExpiryDelta: Int) extends PaymentHop {
   def pack = aconcat(nodeId.toBin.data.toArray, writeUInt64(shortChannelId, BIG_ENDIAN), writeUInt64(fee, BIG_ENDIAN),
     writeUInt16(cltvExpiryDelta, BIG_ENDIAN).data.toArray, Array.emptyByteArray)

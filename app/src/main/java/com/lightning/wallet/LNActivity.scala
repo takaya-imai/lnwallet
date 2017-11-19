@@ -106,7 +106,7 @@ with SearchBar { me =>
   }
 
   val chanListener = new ChannelListener {
-    // Updates local ui according to changes in channel
+    // Updates local UI according to changes in channel
     // Should be removed when activity is stopped
 
     override def onError = {
@@ -219,9 +219,9 @@ with SearchBar { me =>
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
       app.ChannelManager.outPaymentObs(rd.badNodes, rd.badChannels, pr)
         .doOnTerminate(progressBarManager.delayedRemove).foreach(onNext = {
-        case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
-        case None => onFail(me getString err_ln_no_route)
-      }, onPaymentError)
+          case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
+          case None => onFail(me getString err_ln_no_route)
+        }, onPaymentError)
     }
 
     list setOnItemClickListener onTap { pos =>
