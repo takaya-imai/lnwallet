@@ -156,18 +156,17 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     override def coinsReceived(tx: Transaction): Unit = me runOnUiThread tell(tx)
     override def txConfirmed(tx: Transaction) = me runOnUiThread adapter.notifyDataSetChanged
 
-    def tell(wrap: TxWrap) = if (!wrap.nativeValue.isZero) {
-      // Only update interface if this is not a watched transaction
-      // and ESTIMATED_SPENDABLE takes care of correct balance
-
-      mnemonicWarn setVisibility View.GONE
-      adapter.set(wrap +: adapter.availableItems)
-      adapter.notifyDataSetChanged
-    }
+    def tell(wrap: TxWrap) =
+      if (!wrap.nativeValue.isZero) {
+        mnemonicWarn setVisibility View.GONE
+        adapter.set(wrap +: adapter.availableItems)
+        adapter.notifyDataSetChanged
+      }
   }
 
   def updTitle = coin2MSat(app.kit.currentBalance) match { case msat =>
-    animateTitle(if (msat.amount < 1) walletEmpty else denom withSign msat)
+    val text = if (msat.amount < 1) walletEmpty else denom withSign msat
+    animateTitle(text)
   }
 
   def notifySubTitle(sub: String, infoType: Int) = {
@@ -292,8 +291,8 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
       case uri: BitcoinURI =>
         app.TransData.value = null
-        val tryAmount = Try(uri.getAmount: MilliSatoshi)
-        sendBtcTxPopup.set(tryAmount, uri.getAddress)
+        val amt: TryMSat = Try(uri.getAmount)
+        sendBtcTxPopup.set(amt, uri.getAddress)
 
       case adr: Address =>
         app.TransData.value = null

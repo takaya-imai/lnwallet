@@ -423,7 +423,7 @@ trait TimerActivity extends AppCompatActivity { me =>
     passAsk -> secretInputField
   }
 
-  def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 225)
+  def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 200)
   def rm(previous: Dialog)(fun: => Unit): Unit = wrap(previous.dismiss)(me delayUI fun)
   def mkErrorUiUnsafeForm(error: CharSequence): Unit = mkForm(me negBld dialog_ok, null, error)
   def onFail(error: CharSequence): Unit = me runOnUiThread mkErrorUiUnsafeForm(error)

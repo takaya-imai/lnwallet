@@ -11,19 +11,22 @@ import fr.acinq.bitcoin.Transaction
 import android.widget.Button
 import android.os.Bundle
 import android.view.View
+import java.util.Date
 
 
-class LNOpsActivity extends TimerActivity { me =>
-  lazy val txsConfs = getResources getStringArray R.array.txs_confs
-  lazy val blocksLeft = getResources getStringArray R.array.ln_ops_chan_unilateral_status_left_blocks
-  lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
+class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
+  lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
+  lazy val blocksLeft = getResources getStringArray R.array.ln_ops_chan_unilateral_status_left_blocks
+  lazy val txsConfs = getResources getStringArray R.array.txs_confs
+
   lazy val unilateralClosing = getString(ln_ops_chan_unilateral_closing)
   lazy val bilateralClosing = getString(ln_ops_chan_bilateral_closing)
   lazy val statusLeft = getString(ln_ops_chan_unilateral_status_left)
   lazy val refundStatus = getString(ln_ops_chan_refund_status)
   lazy val amountStatus = getString(ln_ops_chan_amount_status)
   lazy val commitStatus = getString(ln_ops_chan_commit_status)
+
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
   def goStartChannel = me exitTo classOf[LNStartActivity]
 
@@ -121,6 +124,7 @@ class LNOpsActivity extends TimerActivity { me =>
   }
 
   // We need to show the best closing with most confirmations
+  // we may have a cooperative and uncooperative closings at once
   private def manageClosing(data: ClosingData) = data.closings maxBy {
     case Left(mutualTx) => txStatus(mutualTx.txid) match { case cfs \ _ => cfs }
     case Right(info) => txStatus(info.commitTx.txid) match { case cfs \ _ => cfs }
@@ -151,10 +155,12 @@ class LNOpsActivity extends TimerActivity { me =>
           statusLeft.format(app.plurOrZero(blocksLeft, left), leftDetails, coloredIn apply amt)
       } take 3
 
+      val timestamp = new Date(data.startedAt)
+      val startedAtHumanView = when(System.currentTimeMillis, timestamp)
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
       val tier0HumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus info.commitTx.txid), commitFee)
       val combinedView = tier0HumanView + s"<br><br>$refundStatus<br>" + tier2HumanView.mkString("<br><br>")
-      lnOpsDescription setText unilateralClosing.format(combinedView).html
+      lnOpsDescription setText unilateralClosing.format(startedAtHumanView, combinedView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start
   }

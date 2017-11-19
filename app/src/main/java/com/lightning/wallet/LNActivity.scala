@@ -76,8 +76,8 @@ trait DataReader extends NfcReaderActivity {
 }
 
 class LNActivity extends DataReader
-  with ToolbarActivity with ListUpdater
-  with SearchBar { me =>
+with ToolbarActivity with ListUpdater
+with SearchBar { me =>
 
   val imgMap = Array(await, await, conf1, dead)
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
