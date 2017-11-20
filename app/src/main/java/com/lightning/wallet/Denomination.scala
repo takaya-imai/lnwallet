@@ -11,20 +11,19 @@ import org.bitcoinj.core.Coin
 
 object Denomination {
   val sat2msatFactor = 1000L
-  val mbtc2msatFactor = 100000000L
   val btc2msatFactor = 100000000000L
   val locale = new java.util.Locale("en", "US")
   val symbols = new DecimalFormatSymbols(locale)
   val formatFiat = new DecimalFormat("#,###,###.##")
   formatFiat setDecimalFormatSymbols symbols
 
+  def btcBigDecimal2MSat(btc: BigDecimal) = MilliSatoshi apply (btc * btc2msatFactor).toLong
   implicit def mSat2Coin(msat: MilliSatoshi): Coin = Coin.valueOf(msat.amount / sat2msatFactor)
-  implicit def coin2MSat(cn: Coin): MilliSatoshi = MilliSatoshi(amount = cn.value * sat2msatFactor)
-  def btcBigDecimal2MSat(btc: BigDecimal) = MilliSatoshi(amount = (btc * btc2msatFactor).toLong)
+  implicit def coin2MSat(cn: Coin): MilliSatoshi = MilliSatoshi(cn.value * sat2msatFactor)
 }
 
 trait Denomination {
-  def rawString2MSat(raw: String) = MilliSatoshi(amount = (BigDecimal(raw) * factor).toLong)
+  def rawString2MSat(raw: String) = MilliSatoshi apply (BigDecimal(raw) * factor).toLong
   def formatted(msat: MilliSatoshi) = fmt format BigDecimal(msat.amount) / factor
   def withSign(msat: MilliSatoshi): String
   val fmt: DecimalFormat
@@ -45,7 +44,7 @@ object SatDenomination extends Denomination {
 object MBtcDenomination extends Denomination {
   val fmt = new DecimalFormat("###,##0.00######")
   val txt = app getString amount_hint_mbtc
-  val factor = mbtc2msatFactor
+  val factor = 100000000L
 
   fmt setDecimalFormatSymbols symbols
   def withSign(msat: MilliSatoshi) =

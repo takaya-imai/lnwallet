@@ -74,6 +74,16 @@ object PaymentInfo {
         // Permanent error from a final node, nothing we can do
         rd.copy(routes = Vector.empty)
 
+      case ErrorPacket(nodeKey, UnknownNextPeer) =>
+        val _ \ nodeIds = rd.onion.sharedSecrets.unzip
+
+        nodeIds drop 1 zip nodeIds collectFirst {
+          case faultyId \ prevId if prevId == nodeKey =>
+            // Remove routes with next node, also mark next node as failed
+            val routes1 = rd.routes.filterNot(_.nodeIds contains faultyId)
+            rd.copy(routes = routes1, badNodes = rd.badNodes + faultyId)
+        } getOrElse rd
+
       case ErrorPacket(_, message: Update) =>
         // There may be other operational channels left so try them out, also remember this channel as failed
         val routes1 = rd.routes.filterNot(_.payloads.map(_.shortChannelId) contains message.update.shortChannelId)

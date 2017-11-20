@@ -78,7 +78,7 @@ with TimerActivity with ViewSwitch { me =>
   def readNdefMessage(msg: Message) = try {
     val asText = readFirstTextNdefMessage(msg)
     app.TransData recordValue asText
-    app toast nfc_got
+    next
 
   } catch { case _: Throwable =>
     // Could not process a message

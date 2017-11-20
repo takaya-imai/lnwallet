@@ -12,6 +12,8 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+
+import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
 import collection.JavaConverters.seqAsJavaListConverter
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import java.util.concurrent.TimeUnit.MILLISECONDS
@@ -28,7 +30,6 @@ import android.app.Application
 import android.widget.Toast
 import java.io.File
 
-import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
 import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
@@ -88,8 +89,7 @@ class WalletApp extends Application { me =>
 
   object TransData {
     var value: Any = _
-    val ln = "lightning:"
-
+    val lnRequest = "lightning:([a-fA-F0-9]+)".r
     def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
       case _: org.bitcoinj.core.WrongNetworkException => err(err_different_net)
       case _: org.bitcoinj.core.AddressFormatException => err(err_address)
@@ -100,9 +100,9 @@ class WalletApp extends Application { me =>
 
     def recordValue(rawText: String) = value = rawText match {
       case raw if raw startsWith "bitcoin" => new BitcoinURI(params, raw)
-      case raw if raw startsWith ln => PaymentRequest.read(raw stripPrefix ln)
-      case raw if raw startsWith "lnbc" => PaymentRequest.read(raw)
-      case raw if raw startsWith "lntb" => PaymentRequest.read(raw)
+      case raw if raw startsWith "lnbc" => PaymentRequest read raw
+      case raw if raw startsWith "lntb" => PaymentRequest read raw
+      case lnRequest(raw) => PaymentRequest read raw
       case raw => getTo(raw)
     }
   }
@@ -186,6 +186,8 @@ class WalletApp extends Application { me =>
         val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentAssisted)
         findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           val routes = for (rt <- direct ++ assisted) yield buildRelativeRoute(rt, pr.finalSum.amount)
+
+          println(routes.maxBy(_.nodeIds.size).nodeIds)
           buildPayment(RoutingData(routes, badNodes, badChannels), pr, chan)
         }
       }

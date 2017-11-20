@@ -7,7 +7,8 @@ import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.AddErrorCodes._
 import com.lightning.wallet.ln.LNParams.broadcaster._
-import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
+
+import fr.acinq.bitcoin.{BinaryData, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.LNMessageVector
@@ -252,7 +253,7 @@ object Commitments {
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val feesSat = if (c1.localParams.isFunder) Scripts.commitTxFee(c.remoteParams.dustLimitSat, reduced).amount else 0L
 
-      // WE can't accept more than THEIR reserve + fees
+      // WE can't send more than THEIR reserve + fees
       val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
       val reserveWithFeeSat = feesSat + c.remoteParams.channelReserveSatoshis
       val missingSat = reduced.toRemoteMsat / 1000L - reserveWithFeeSat
