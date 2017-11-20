@@ -180,7 +180,6 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
     if (app.isAlive) {
       super.onCreate(savedInstanceState)
-
       // Set action bar, main view content, animate title, wire up list events
       wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
       wrap(updTitle)(add(me getString constListener.status, Informer.PEER).flash.run)

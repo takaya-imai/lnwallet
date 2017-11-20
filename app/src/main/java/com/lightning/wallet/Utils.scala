@@ -335,9 +335,8 @@ trait ToolbarActivity extends TimerActivity { me =>
         <(makeTx(password, RatesSaver.rates.feeLive), onTxFail) { estimateTx =>
           // Get live final fee and set a risky final fee to be 3 times less
 
-          val liveFinalFee = coin2MSat(estimateTx.getFee)
-          val riskyFinalFee = MilliSatoshi(liveFinalFee.amount / 3)
-
+          val liveFinalFee: MilliSatoshi = estimateTx.getFee
+          val riskyFinalFee: MilliSatoshi = liveFinalFee / 3 // Msat to Sat
           val markedLiveFinalFee = sumOut format denom.withSign(liveFinalFee)
           val markedRiskyFinalFee = sumOut format denom.withSign(riskyFinalFee)
 
@@ -423,7 +422,7 @@ trait TimerActivity extends AppCompatActivity { me =>
     passAsk -> secretInputField
   }
 
-  def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 200)
+  def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 225)
   def rm(previous: Dialog)(fun: => Unit): Unit = wrap(previous.dismiss)(me delayUI fun)
   def mkErrorUiUnsafeForm(error: CharSequence): Unit = mkForm(me negBld dialog_ok, null, error)
   def onFail(error: CharSequence): Unit = me runOnUiThread mkErrorUiUnsafeForm(error)

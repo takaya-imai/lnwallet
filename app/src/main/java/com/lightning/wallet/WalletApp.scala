@@ -88,6 +88,8 @@ class WalletApp extends Application { me =>
 
   object TransData {
     var value: Any = _
+    val ln = "lightning:"
+
     def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
       case _: org.bitcoinj.core.WrongNetworkException => err(err_different_net)
       case _: org.bitcoinj.core.AddressFormatException => err(err_address)
@@ -98,8 +100,9 @@ class WalletApp extends Application { me =>
 
     def recordValue(rawText: String) = value = rawText match {
       case raw if raw startsWith "bitcoin" => new BitcoinURI(params, raw)
-      case raw if raw startsWith "lnbc" => PaymentRequest read raw
-      case raw if raw startsWith "lntb" => PaymentRequest read raw
+      case raw if raw startsWith ln => PaymentRequest.read(raw stripPrefix ln)
+      case raw if raw startsWith "lnbc" => PaymentRequest.read(raw)
+      case raw if raw startsWith "lntb" => PaymentRequest.read(raw)
       case raw => getTo(raw)
     }
   }

@@ -142,8 +142,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
             // Attempt to parse a failure and reduce affected local payment routes
             out @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(htlc.add.paymentHash)
             rd1 @ RoutingData(_, badNodes, badChannels, _, _, _) = cutRoutes(fail, routing, pr.nodeId)
-            // When no more routes can be obtained we fail a payment with an updated bad nodes and channels
-            saveFailed = (err: Throwable) => me upsertPaymentInfo out.copy(routing = rd1, status = FAILURE)
+            // Try to build another outgoing payment using the rest of available routes
           } buildPayment(rd1, pr, chan) match {
 
             case Some(outgoing1) =>
