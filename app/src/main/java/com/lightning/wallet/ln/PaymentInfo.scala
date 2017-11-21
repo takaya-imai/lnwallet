@@ -34,7 +34,7 @@ object PaymentInfo {
 
   def buildRelativeRoute(hops: Vector[PaymentHop], finalAmountMsat: Long) = {
     val start = RelativeCLTVRoute(Vector apply PerHopPayload(0L, finalAmountMsat, 0),
-      nodeIds = Vector.empty, finalAmountMsat, finalRelativeExpiry = 0)
+      nodeIds = Vector.empty, finalMsat = finalAmountMsat, finalRelativeExpiry = 0)
 
     (start /: hops.reverse) {
       case RelativeCLTVRoute(payloads, nodes, msat, expiry) \ hop =>
@@ -48,29 +48,33 @@ object PaymentInfo {
     makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assoc)
   }
 
-  def buildPayment(rd: RoutingData, pr: PaymentRequest, chan: Channel) = for {
-    // Build a new OutgoingPayment if we have routes available AND channel has an id
+  def completeRoutingData(rd: RoutingData) = for {
+    // Build a new RoutingData if we have routes available
     // provided RoutingData may have bad nodes and channels which have to be preserved
+    RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, firstExpiry) <- rd.routes.headOption
+    absoluteExpiry = LNParams.broadcaster.currentHeight + rd.pr.minFinalCltvExpiry.getOrElse(default = 9)
+    absolutePayloads = for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(absoluteExpiry+)
+    // First expiry is also relative so it should be updated with absolute part just like payloads above
+  } yield rd.copy(onion = buildOnion(nodeIds :+ rd.pr.nodeId, absolutePayloads, rd.pr.paymentHash),
+    routes = rd.routes.tail, amountWithFee = firstAmount, expiry = firstExpiry + absoluteExpiry)
 
-    chanId <- chan.pull(_.channelId)
-    cltvExpiry = LNParams.broadcaster.currentHeight + pr.minFinalCltvExpiry
-    RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, relFirstExpiry) <- rd.routes.headOption
-    // relPayloads CLTV values start from zero so should be updated when payment is actually being built
-    rd1 = RoutingData(rd.routes.tail, rd.badNodes, rd.badChannels, buildOnion(nodes = nodeIds :+ pr.nodeId,
-      for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(cltvExpiry+),
-      pr.paymentHash), firstAmount, relFirstExpiry + cltvExpiry)
+  def emptyRd(pr: PaymentRequest) = {
+    val packet = Packet(Array.empty, Array.empty, Array.empty, Array.empty)
+    RoutingData(routes = Vector.empty, badNodes = Set.empty, badChannels = Set.empty, pr,
+      SecretsAndPacket(sharedSecrets = Vector.empty, packet), amountWithFee = 0L, expiry = 0L)
+  }
 
-    // Save the rest of unused routes in case we might need them
-  } yield OutgoingPayment(rd1, NOIMAGE, pr, chanId, WAITING)
+  private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) = {
+    // Will send an error onion packet which contains a detailed description back to payment sender
+    val reason = createErrorPacket(sharedSecret, failure)
+    CMDFailHtlc(add.id, reason)
+  }
 
-  private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) =
-    CMDFailHtlc(reason = createErrorPacket(sharedSecret, failure), id = add.id)
-
-  // Additionally reduce remaining routes and remember failed nodes and channels
-  def cutRoutes(fail: UpdateFailHtlc, rd: RoutingData, finalNodeId: PublicKey) =
-
+  // Reduce remaining routes
+  // and remember failed nodes and channels
+  def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
     parseErrorPacket(rd.onion.sharedSecrets, fail.reason) collect {
-      case ErrorPacket(nodeKey, _: Perm) if finalNodeId == nodeKey =>
+      case ErrorPacket(nodeKey, _: Perm) if rd.pr.nodeId == nodeKey =>
         // Permanent error from a final node, nothing we can do
         rd.copy(routes = Vector.empty)
 
@@ -114,15 +118,15 @@ object PaymentInfo {
           // GUARD: final outgoing CLTV value does not equal the one from message
           failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
 
-        case Success(pay) if pay.request.amount.exists(add.amountMsat > _.amount * 2) =>
-          // GUARD: they have sent too much funds, this is a protective measure against that
+        case Success(pay) if MilliSatoshi(add.amountMsat) > pay.amount * 2 =>
+          // GUARD: they have sent too much funds, this is a protective measure
           failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
-        case Success(pay) if pay.request.amount.exists(add.amountMsat < _.amount) =>
-          // GUARD: amount is less than what we requested, we won't accept such payment
+        case Success(pay) if MilliSatoshi(add.amountMsat) < pay.amount =>
+          // GUARD: amount is less than requested, we will not accept it
           failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
-        case Success(pay: IncomingPayment) =>
+        case Success(pay) if pay.incoming == 1 =>
           // We have a valid *incoming* payment
           CMDFulfillHtlc(add.id, pay.preimage)
 
@@ -145,49 +149,40 @@ object PaymentInfo {
   }
 }
 
-trait PaymentInfo {
-  def actualStatus: Int
-  val preimage: BinaryData
-  val request: PaymentRequest
-  val chanId: BinaryData
-  val status: Int
+// Used on UI to quickly display payment details
+case class PaymentInfo(hash: BinaryData, incoming: Int,
+                       preimage: BinaryData, amount: MilliSatoshi,
+                       status: Int, stamp: Long, text: String) {
+
+  def actualStatus = incoming match {
+    // Once we have a preimage it is a SUCCESS
+    // but only if this is an outgoing payment
+    case 1 if preimage != NOIMAGE => SUCCESS
+    case _ => status
+  }
 }
 
-case class IncomingPayment(received: MilliSatoshi, preimage: BinaryData,
-                           request: PaymentRequest, chanId: BinaryData,
-                           status: Int) extends PaymentInfo {
-
-  def actualStatus = status
-}
-
-// Route metadata with relative CLTV PerHopPayload values which start from zero
+// Route metadata with relative CLTV PerHopPayload values which start from zero!
 case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Int)
 case class RelativeCLTVRoute(payloads: Vector[PerHopPayload], nodeIds: Vector[PublicKey],
                              finalMsat: Long, finalRelativeExpiry: Int)
 
-case class RoutingData(routes: Vector[RelativeCLTVRoute], badNodes: Set[PublicKey],
-                       badChannels: Set[Long], onion: SecretsAndPacket = null,
-                       amountWithFee: Long = 0L, expiry: Long = 0L)
-
-case class OutgoingPayment(routing: RoutingData, preimage: BinaryData,
-                           request: PaymentRequest, chanId: BinaryData,
-                           status: Int) extends PaymentInfo {
-
-  def actualStatus = if (preimage != NOIMAGE) SUCCESS else status
-}
+// Used by outgoing payments to store routes, onion, bad nodes and channels
+case class RoutingData(routes: Vector[RelativeCLTVRoute], badNodes: Set[PublicKey], badChannels: Set[Long],
+                       pr: PaymentRequest, onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
 
 trait PaymentInfoBag { me =>
+  def upsertRoutingData(rd: RoutingData): Unit
   def upsertPaymentInfo(info: PaymentInfo): Unit
-  def updateStatus(status: Int, hash: BinaryData): Unit
-  def updatePreimage(update: UpdateFulfillHtlc): Unit
-  def updateReceived(add: UpdateAddHtlc): Unit
-
-  def newPreimage: BinaryData = BinaryData(random getBytes 32)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
+  def getRoutingData(hash: BinaryData): Try[RoutingData]
+  def updateStatus(status: Int, hash: BinaryData): Unit
+  def updatePreimg(update: UpdateFulfillHtlc): Unit
+  def updateAmount(add: UpdateAddHtlc): Unit
 
   def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
-    case Seq(_, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
-    case Seq(_, _, _, preimg, _) if preimg.size == 32 => me updatePreimage UpdateFulfillHtlc(null, 0L, preimg)
+    case Seq(_, pre, _) if pre.size == 32 => me updatePreimg UpdateFulfillHtlc(null, 0L, pre)
+    case Seq(_, _, _, pre, _) if pre.size == 32 => me updatePreimg UpdateFulfillHtlc(null, 0L, pre)
   }
 }
 

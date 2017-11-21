@@ -12,10 +12,9 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
-
-import com.lightning.wallet.lnutils.PaymentInfoTable.updFailWaitingSql
 import collection.JavaConverters.seqAsJavaListConverter
 import com.lightning.wallet.lnutils.Connector.CMDStart
+import com.lightning.wallet.lnutils.PaymentInfoTable
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import com.lightning.wallet.ln.Channel.CLOSING
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
@@ -77,6 +76,7 @@ class WalletApp extends Application { me =>
   }
 
   def setBuffer(text: String) = wrap(me toast copied_to_clipboard) {
+    // Set clipboard contents to given text and notify user via toast
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
   }
 
@@ -162,33 +162,33 @@ class WalletApp extends Application { me =>
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
 
         cd.tier12States.map(_.txn) match {
-          case Nil => Tools log "Channel does not have tier 1-2 transactions"
+          case Nil => Tools log "Channel does not currently have tier 1-2 transactions"
           case txs => cloud doProcess CloudAct(txs.toJson.toString.hex, Nil, "txs/schedule")
         }
       }
     }
 
-    // Get routes from maintenance server and make an OutgoingPayment if routes exist
+    // Get routes from maintenance server and update RoutingData if they exist
     // If payment request contains extra routing info then we also ask for assisted routes
     // Once direct route and assisted routes are fetched we combine them into single sequence
-    def outPaymentObs(badNodes: Set[PublicKey], badChannels: Set[Long], pr: PaymentRequest) =
 
+    def outPaymentObs(rd: RoutingData) =
       Obs from alive.headOption flatMap { chan =>
         def findRoutes(target: PublicKey) = chan.data.announce.nodeId match {
-          case directPeerNode if directPeerNode == target => Obs just Vector(Vector.empty)
-          case _ => cloud.connector.findRoutes(badNodes, badChannels, chan.data.announce.nodeId, target)
+          case directPeerNodeId if directPeerNodeId == target => Obs just Vector(Vector.empty)
+          case _ => cloud.connector.findRoutes(rd.badNodes, rd.badChannels, chan.data.announce.nodeId, target)
         }
 
         def augmentAssisted(tag: RoutingInfoTag) = for {
           publicRoutes <- findRoutes(tag.route.head.nodeId)
         } yield publicRoutes.flatMap(_ ++ tag.route)
 
-        val allAssisted = Obs.zip(Obs from pr.routingInfo map augmentAssisted)
-        findRoutes(pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
-          val routes = for (rt <- direct ++ assisted) yield buildRelativeRoute(rt, pr.finalSum.amount)
-
-          println(routes.maxBy(_.nodeIds.size).nodeIds)
-          buildPayment(RoutingData(routes, badNodes, badChannels), pr, chan)
+        val allAssisted = Obs.zip(Obs from rd.pr.routingInfo map augmentAssisted)
+        findRoutes(rd.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
+          val routes = for (rt <- direct ++ assisted) yield buildRelativeRoute(rt, rd.pr.finalSum.amount)
+          // Our routing data has updated routes, now use the first one to build an onion
+          val rd1 = rd.copy(routes = routes)
+          completeRoutingData(rd1)
         }
       }
   }
@@ -231,7 +231,7 @@ class WalletApp extends Application { me =>
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.connected
-      db change updFailWaitingSql
+      db change PaymentInfoTable.updFailWaitingSql
       cloud doProcess CMDStart
       RatesSaver.update
     }

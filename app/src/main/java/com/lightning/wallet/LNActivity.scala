@@ -13,6 +13,7 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import com.lightning.wallet.ln.Tools.{none, random}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import scala.util.{Failure, Success, Try}
 
@@ -26,10 +27,11 @@ import com.github.clans.fab.FloatingActionMenu
 import com.lightning.wallet.ln.wire.CommitSig
 import android.support.v4.view.MenuItemCompat
 import android.view.ViewGroup.LayoutParams
-import com.lightning.wallet.ln.Tools.none
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
+import scala.language.postfixOps
+import android.app.AlertDialog
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
@@ -75,29 +77,26 @@ trait DataReader extends NfcReaderActivity {
   }
 }
 
-class LNActivity extends DataReader
-with ToolbarActivity with ListUpdater
-with SearchBar { me =>
-
-  val imgMap = Array(await, await, conf1, dead)
-  lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
+class LNActivity extends DataReader with ToolbarActivity with ListUpdater with SearchBar { me =>
   lazy val layoutInflater = app.getSystemService(LAYOUT_INFLATER_SERVICE).asInstanceOf[LayoutInflater]
   lazy val viewParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+  lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val container = findViewById(R.id.container).asInstanceOf[RelativeLayout]
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
+  val imgMap = Array(await, await, conf1, dead)
 
   lazy val adapter = new CutAdapter[PaymentInfo] {
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
 
       def fillView(info: PaymentInfo) = {
-        val markedPaymentSum = info match {
-          case in: IncomingPayment => sumIn.format(denom formatted in.received)
-          case out => sumOut.format(denom formatted out.request.finalSum * -1)
+        val timestamp = new Date(info.stamp)
+        val markedPaymentSum = info.incoming match {
+          case 1 => sumIn.format(denom formatted info.amount)
+          case _ => sumOut.format(denom formatted info.amount * -1)
         }
 
-        val timestamp = new Date(info.request.timestamp * 1000)
         transactWhen setText when(System.currentTimeMillis, timestamp).html
         transactCircle setImageResource imgMap(info.actualStatus)
         transactSum setText markedPaymentSum.html
@@ -114,10 +113,11 @@ with SearchBar { me =>
         // Current commit tx fee and channel reserve forbid sending of this payment
         // Inform user with all the details laid out as cleanly as possible
 
+        val message = me getString err_ln_fee_overflow
         val reserve = coloredIn apply Satoshi(reserveSat)
         val missing = coloredOut apply Satoshi(missingSat)
-        val sending = coloredOut apply MilliSatoshi(out.routing.amountWithFee)
-        onFail(getString(err_ln_fee_overflow).format(reserve, sending, missing).html)
+        val sending = coloredOut apply MilliSatoshi(out.amountWithFee)
+        onFail(error = message.format(reserve, sending, missing).html)
 
       case _ \ AddException(_: PlainAddHtlc, code) =>
         // Let user know why payment could not be added
@@ -206,73 +206,66 @@ with SearchBar { me =>
   }
 
   def manageActive(chan: Channel) = {
-    def pay(rd: RoutingData, pr: PaymentRequest) = {
-      // Show loader, update subtitle, issue routes request to server
-      // then clear loader and process response notifying user of errors
-
-      def onPaymentError(e: Throwable) = e.getMessage match {
+    val pay = (manualRequestRoutingData: RoutingData) => {
+      def onPaymentError(er: Throwable) = er.getMessage match {
         case FROMBLACKLISTED => onFail(me getString err_ln_black)
         case techDetails => onFail(techDetails)
       }
 
       val progressBarManager = new ProgressBarManager
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-      app.ChannelManager.outPaymentObs(rd.badNodes, rd.badChannels, pr)
+      app.ChannelManager.outPaymentObs(rd = manualRequestRoutingData)
         .doOnTerminate(progressBarManager.delayedRemove).foreach(onNext = {
+          // Must account for a special kind of error when no routes are found
           case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
           case None => onFail(me getString err_ln_no_route)
         }, onPaymentError)
     }
 
     list setOnItemClickListener onTap { pos =>
+      val info @ PaymentInfo(hash, incoming, preimg, amount, _, _, _) = adapter getItem pos
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
+      val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
+      val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
-      val payment = adapter getItem pos
-      val description = me getDescription payment.request
-      val humanStatus = s"<strong>${paymentStatesMap apply payment.actualStatus}</strong>"
-      val payHash = payment.request.paymentHash.toString.grouped(32).map(_ grouped 8 mkString "\u00A0")
-      paymentHash setOnClickListener onButtonTap(app setBuffer payment.request.paymentHash.toString)
-      paymentHash setText payHash.mkString("\n")
+      bag getRoutingData hash foreach { rd =>
+        val description = me getDescription rd.pr
+        val humanHash = hash.toString.grouped(32).map(_ grouped 8 mkString "\u00A0")
+        val humanStatus = s"<strong>${paymentStatesMap apply info.actualStatus}</strong>"
+        paymentHash setOnClickListener onButtonTap(app setBuffer hash.toString)
+        paymentHash setText humanHash.mkString("\n")
 
-      if (payment.actualStatus == SUCCESS) {
-        // Users may copy request and preimage for fulfilled payments to prove they've happened
-        val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
-        paymentProof setVisibility View.VISIBLE
-
-        paymentProof setOnClickListener onButtonTap {
-          val serializedRequest = PaymentRequest write payment.request
-          app setBuffer getString(ln_proof).format(serializedRequest,
-            payment.preimage.toString)
+        if (info.actualStatus == SUCCESS) {
+          paymentProof setVisibility View.VISIBLE
+          paymentProof setOnClickListener onButtonTap {
+            // Users may copy request and preimage to prove it
+            val serialzied: String = PaymentRequest.write(pr = rd.pr)
+            app setBuffer getString(ln_proof).format(serialzied, preimg.toString)
+          }
         }
-      }
 
-      payment match {
-        case in: IncomingPayment =>
+        if (incoming == 1) {
+          val humanReceived = humanFiat(coloredIn(amount), amount)
           val title = getString(ln_incoming_title).format(humanStatus)
-          val humanReceived = humanFiat(coloredIn(in.received), in.received)
           paymentDetails setText s"$description<br><br>$humanReceived".html
           mkForm(me negBld dialog_ok, title.html, detailsWrapper)
-
-        case out: OutgoingPayment =>
-          val humanSent = humanFiat(coloredOut(out.request.finalSum), out.request.finalSum)
-          val fee = MilliSatoshi(out.routing.amountWithFee - out.request.finalSum.amount)
+        } else {
+          val humanSent = humanFiat(coloredOut(amount), amount)
+          val fee = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
           val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
-          val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+          val alert: AlertDialog = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanSent".html
 
-          def doManualPaymentRetry = rm(alert) {
-            // With bad nodes and channels filtering
-            pay(out.routing, out.request)
-          }
-
-          if (out.actualStatus != SUCCESS && out.request.isFresh) {
-            // Users may issue another server request to get an updated set of routes for fresh payments
-            val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
-            paymentRetryAgain setOnClickListener onButtonTap(doManualPaymentRetry)
+          def retry = rm(alert) { pay apply rd }
+          if (info.actualStatus != SUCCESS && rd.pr.isFresh) {
+            // Users may issue new request to get an updated set of routes
+            // routing data will likely contain bad nodes and channels here
+            paymentRetryAgain setOnClickListener onButtonTap(retry)
             paymentRetryAgain setVisibility View.VISIBLE
           }
+        }
       }
     }
 
@@ -293,11 +286,7 @@ with SearchBar { me =>
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
-
-        case _ => rm(alert) {
-          // Not using any filtering on first request here
-          pay(RoutingData(Vector.empty, Set.empty, Set.empty), pr)
-        }
+        case _ => rm(alert) { pay compose emptyRd apply pr }
       }
 
       val ok = alert getButton BUTTON_POSITIVE
@@ -333,9 +322,11 @@ with SearchBar { me =>
         val paymentRequest = PaymentRequest(chainHash, amount, paymentHash = Crypto sha256 preimg, nodePrivateKey,
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
+        bag upsertRoutingData emptyRd(paymentRequest)
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
-        // Received amount is set to 0 msat as incoming amount may be higher than requested here
-        bag upsertPaymentInfo IncomingPayment(MilliSatoshi(0L), preimg, paymentRequest, chanId, HIDDEN)
+        bag upsertPaymentInfo PaymentInfo(hash = paymentRequest.paymentHash, incoming = 1, preimg,
+          paymentRequest.finalSum, HIDDEN, System.currentTimeMillis, paymentRequest.textDescription)
+
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }
@@ -346,7 +337,7 @@ with SearchBar { me =>
 
         case result => rm(alert) {
           notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
-          <(proceed(result.toOption, bag.newPreimage), onFail)(none)
+          <(proceed(result.toOption, random getBytes 32), onFail)(none)
         }
       }
 
@@ -377,9 +368,9 @@ with SearchBar { me =>
       if (pr.isFresh) sendPayment(pr)
       else onFail(me getString err_ln_old)
 
-    case unusable =>
+    case otherwise =>
       app.TransData.value = null
-      Tools log s"Unusable $unusable"
+      Tools log s"Unusable $otherwise"
   }
 
   // Reactions to menu
@@ -413,7 +404,7 @@ with SearchBar { me =>
   class PaymentsViewProvider extends ReactCallback(me) { self =>
     def onCreateLoader(id: Int, bundle: Bundle) = if (lastQuery.isEmpty) recent else search
     def search = new ExtendedPaymentInfoLoader { def getCursor = bag byQuery lastQuery }
-    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag.recentPayments }
+    def recent = new ExtendedPaymentInfoLoader { def getCursor = bag byRecent }
     val observeTablePath = db sqlPath PaymentInfoTable.table
     var lastQuery = new String
 

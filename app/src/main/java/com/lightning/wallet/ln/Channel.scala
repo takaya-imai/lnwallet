@@ -181,12 +181,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL)
         // GUARD: we can only accept a new HTLC when mutual shutdown is not active AND this HTLC is not already in-flight
-        if !Commitments.actualRemoteCommit(commitments).spec.htlcs.exists(_.add.paymentHash == cmd.out.request.paymentHash) =>
+        if !Commitments.actualRemoteCommit(commitments).spec.htlcs.exists(_.add.paymentHash == cmd.rd.pr.paymentHash) =>
 
-        LNParams.bag getPaymentInfo cmd.out.request.paymentHash match {
+        LNParams.bag getPaymentInfo cmd.rd.pr.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
-          case Success(out: OutgoingPayment) if out.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(_: IncomingPayment) => throw AddException(cmd, ERR_FAILED)
+          case Success(pay: PaymentInfo) if pay.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
+          case Success(pay: PaymentInfo) if pay.incoming != 1 => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
             val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)

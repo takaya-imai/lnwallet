@@ -46,11 +46,11 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
   def doProcess(some: Any) = (data, some) match {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
-      channel <- app.ChannelManager.alive.headOption // If we actually have an operational channel
-      paymentRequestAndMemo @ (request, _) <- retry(getRequestAndMemo, pickInc, 3 to 4) // Get payment request and memo
-      Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4) // Generate a payment
+      channel <- app.ChannelManager.alive.headOption // If we have a channel
+      paymentRequestAndMemo @ (pr, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
+      Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRd(pr), pickInc, 3 to 4)
     } if (data.info.isEmpty) {
-      // Payment request may arrive in some time after an initialization above,
+      // Server response may arrive in some time after an initialization above
       // so we state that it can only be accepted if data.info is still empty
       me BECOME data.copy(info = Some apply paymentRequestAndMemo)
       channel process SilentAddHtlc(pay)
@@ -74,14 +74,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
 
       bag getPaymentInfo request.paymentHash match {
-        case Success(info) if info.actualStatus == SUCCESS => me resolveSuccess memo
+        case Success(pay) if pay.actualStatus == SUCCESS => me resolveSuccess memo
         // Important: payment may fail but we wait until expiration before restarting
-        case Success(info) if info.actualStatus == FAILURE && info.request.isFresh =>
+        case Success(pay) if pay.actualStatus == FAILURE && request.isFresh =>
 
         case Success(info) if info.actualStatus == FAILURE => for {
-          channel <- app.ChannelManager.alive.headOption // If we actually have an operational channel
-          Some(pay) <- retry(app.ChannelManager.outPaymentObs(Set.empty, Set.empty, request), pickInc, 3 to 4)
-          // Here we just retry an old PaymentRequest instead of getting a new one even though it's expired
+          channel <- app.ChannelManager.alive.headOption // If we have a channel
+          Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRd(request), pickInc, 3 to 4)
+          // Here we just retry an old request instead of getting a new one even though it's expired
         } channel process SilentAddHtlc(pay)
 
         // First attempt has been rejected
@@ -123,9 +123,9 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
     }
 
-  def getClearTokens(memo: BlindMemo) =
-    connector.ask("blindtokens/redeem", _.map(json2String(_).bigInteger),
-      "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
+  def getClearTokens(memo: BlindMemo) = connector.ask("blindtokens/redeem",
+    ts => for (clearToken <- ts) yield json2String(clearToken).bigInteger,
+    "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
 }
 
 // Users may supply their own cloud with key based authentication

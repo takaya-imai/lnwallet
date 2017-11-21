@@ -171,8 +171,9 @@ object ImplicitJsonFormats { me =>
   implicit val relativeCLTVRouteFmt = jsonFormat[Vector[PerHopPayload], Vector[PublicKey], Long, Int,
     RelativeCLTVRoute](RelativeCLTVRoute.apply, "payloads", "nodeIds", "finalMsat", "finalRelativeExpiry")
 
-  implicit val routingDataFmt = jsonFormat[Vector[RelativeCLTVRoute], Set[PublicKey], Set[Long], SecretsAndPacket, Long, Long,
-    RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "onion", "amountWithFee", "expiry")
+  implicit val routingDataFmt =
+    jsonFormat[Vector[RelativeCLTVRoute], Set[PublicKey], Set[Long], PaymentRequest, SecretsAndPacket, Long, Long,
+      RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "pr", "onion", "amountWithFee", "expiry")
 
   implicit val ratesFmt = jsonFormat[Seq[Double], Fiat2Btc, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")

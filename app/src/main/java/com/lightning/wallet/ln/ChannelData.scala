@@ -33,9 +33,9 @@ case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) exte
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
-sealed trait CMDAddHtlc extends Command { val out: OutgoingPayment }
-case class SilentAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
-case class PlainAddHtlc(out: OutgoingPayment) extends CMDAddHtlc
+sealed trait CMDAddHtlc extends Command { val rd: RoutingData }
+case class SilentAddHtlc(rd: RoutingData) extends CMDAddHtlc
+case class PlainAddHtlc(rd: RoutingData) extends CMDAddHtlc
 
 // CHANNEL DATA
 
@@ -239,15 +239,15 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.out.routing.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
-    else if (cmd.out.request.amount.get > maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
-    else if (cmd.out.request.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
+    if (cmd.rd.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
+    else if (cmd.rd.amountWithFee > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
+    else if (cmd.rd.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
 
       // Let's compute the current commitment
       // *as seen by them* with this change taken into account
-      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.out.routing.amountWithFee,
-        cmd.out.request.paymentHash, cmd.out.routing.expiry, cmd.out.routing.onion.packet.serialize)
+      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rd.amountWithFee,
+        cmd.rd.pr.paymentHash, cmd.rd.expiry, cmd.rd.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
@@ -271,9 +271,8 @@ object Commitments {
     else if (add.paymentHash.size != 32) throw new LightningException
     else {
 
-      // Let's compute the current commitment
-      // *as seen by us* with this change taken into account
       val c1 = addRemoteProposal(c, add).modify(_.remoteNextHtlcId).using(_ + 1)
+      // Let's compute the current commitment *as seen by us* with this change taken into account
       val reduced = CommitmentSpec.reduce(c1.localCommit.spec, c1.localChanges.acked, c1.remoteChanges.proposed)
       val feesSat = if (c.localParams.isFunder) 0L else Scripts.commitTxFee(dustLimit, reduced).amount
       val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
@@ -319,7 +318,7 @@ object Commitments {
   def receiveFailMalformed(c: Commitments, fail: UpdateFailMalformedHtlc) = {
     val found = getHtlcCrossSigned(c, incomingRelativeToLocal = false, fail.id)
     val notBadOnion = (fail.failureCode & FailureMessageCodecs.BADONION) == 0
-    // A receiving node MUST fail the channel if the BADONION bit is not set
+    // A receiving node MUST fail a channel if BADONION bit is not set
 
     if (notBadOnion) throw new LightningException
     if (found.isEmpty) throw new LightningException

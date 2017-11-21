@@ -65,42 +65,39 @@ object ChannelWrap extends ChannelListener {
   }
 }
 
-import com.lightning.wallet.lnutils.PaymentInfoTable._
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
-  // Incoming and outgoing payments are discerned by presence of routing info
-  def uiNotify = app.getContentResolver.notifyChange(db sqlPath table, null)
-  def byQuery(query: String): Cursor = db.select(searchSql, s"$query*")
-  def recentPayments: Cursor = db select selectRecentSql
+  def uiNotify = app.getContentResolver.notifyChange(db sqlPath PaymentInfoTable.table, null)
+  def getRoutingData(hash: BinaryData) = RichCursor apply db.select(RoutingDataTable.selectSql, hash.toString) headTry toRoutingData
+  def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(PaymentInfoTable.selectSql, hash.toString) headTry toPaymentInfo
+  def byQuery(query: String): Cursor = db.select(PaymentInfoTable.searchSql, s"$query*")
+  def byRecent: Cursor = db select PaymentInfoTable.selectRecentSql
 
-  def toPaymentInfo(rc: RichCursor) =
-    Option(rc string routing) map to[RoutingData] match {
-      case Some(routes) => OutgoingPayment(routes, rc string preimage,
-        to[PaymentRequest](rc string request), rc string chanId, rc int status)
+  def toRoutingData(rc: RichCursor) = to[RoutingData](rc string RoutingDataTable.routing)
+  def toPaymentInfo(rc: RichCursor) = PaymentInfo(rc string PaymentInfoTable.hash, rc int PaymentInfoTable.incoming,
+    rc string PaymentInfoTable.preimage, MilliSatoshi(rc long PaymentInfoTable.amount), rc int PaymentInfoTable.status,
+    rc long PaymentInfoTable.stamp, rc string PaymentInfoTable.text)
 
-      case None => IncomingPayment(MilliSatoshi(rc long received), rc string preimage,
-        to[PaymentRequest](rc string request), rc string chanId, rc int status)
-    }
-
-  def upsertPaymentInfo(info: PaymentInfo) = db txWrap {
-    val paymentHashString = info.request.paymentHash.toString
-    val received = info match { case in: IncomingPayment => in.received.amount.toString case _ => null }
-    val routing = info match { case out: OutgoingPayment => out.routing.toJson.toString case _ => null }
-    db.change(newVirtualSql, s"${info.request.description} $paymentHashString", paymentHashString)
-    db.change(newSql, paymentHashString, info.request.toJson.toString, info.status.toString,
-      info.chanId.toString, info.preimage.toString, received, routing)
+  def upsertRoutingData(rd: RoutingData) = {
+    // Always use REPLACE instead of INSERT INTO for RoutingData and PaymentInfo
+    db.change(RoutingDataTable.newSql, rd.pr.paymentHash.toString, rd.toJson.toString)
   }
 
-  def updateStatus(status: Int, hash: BinaryData) = db.change(updStatusSql, status.toString, hash.toString)
-  def updateReceived(add: UpdateAddHtlc) = db.change(updReceivedSql, add.amountMsat.toString, add.paymentHash.toString)
-  def updatePreimage(upd: UpdateFulfillHtlc) = db.change(updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
-  def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(selectByHashSql, hash.toString) headTry toPaymentInfo
+  def upsertPaymentInfo(info: PaymentInfo) = {
+    db.change(PaymentInfoTable.newVirtualSql, s"${info.text} ${info.hash.toString}", info.hash.toString)
+    db.change(PaymentInfoTable.newSql, info.hash.toString, info.incoming.toString, info.preimage.toString,
+      info.amount.amount.toString, info.status.toString, System.currentTimeMillis.toString)
+  }
+
+  def updatePreimg(upd: UpdateFulfillHtlc) = db.change(PaymentInfoTable.updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
+  def updateAmount(add: UpdateAddHtlc) = db.change(PaymentInfoTable.updAmountSql, add.amountMsat.toString, add.paymentHash.toString)
+  def updateStatus(status: Int, hash: BinaryData) = db.change(PaymentInfoTable.updStatusSql, status.toString, hash.toString)
   val serverCallAttempts = mutable.Map.empty[BinaryData, Int] withDefaultValue 0
 
   override def onError = {
-    case (_, ex: CMDException) =>
+    case (_, exception: CMDException) =>
       // Useless most of the time but needed for retry add failures
       // CMDException should still be used or channel will be closed
-      updateStatus(FAILURE, ex.cmd.out.request.paymentHash)
+      updateStatus(FAILURE, exception.cmd.rd.pr.paymentHash)
       uiNotify
 
     case chan \ error =>
@@ -113,16 +110,22 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case (_, _: NormalData, add: UpdateAddHtlc) =>
       // Actual incoming amount paid may be different
       // We need to record exactly how much was paid
-      me updateReceived add
+      me updateAmount add
 
     case (_, _: NormalData, fulfill: UpdateFulfillHtlc) =>
-      // We need to save a preimage right away
-      me updatePreimage fulfill
+      // We need to save a preimage as soon as we receive it
+      me updatePreimg fulfill
 
     case (_, _: NormalData, cmd: CMDAddHtlc) =>
-      // Channel has accepted this payment, now we have to save it
-      // Using REPLACE instead of INSERT in SQL to update duplicates
-      me upsertPaymentInfo cmd.out
+      // Channel has accepted a possible payment retry
+      // must insert or update related routing data
+
+      db txWrap {
+        me upsertRoutingData cmd.rd
+        me upsertPaymentInfo PaymentInfo(cmd.rd.pr.paymentHash, incoming = 0, NOIMAGE,
+          cmd.rd.pr.finalSum, WAITING, System.currentTimeMillis, cmd.rd.pr.textDescription)
+      }
+
       uiNotify
 
     case (chan, norm: NormalData, _: CommitSig) =>
@@ -139,25 +142,26 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
           case _: UpdateFailMalformedHtlc => updateStatus(FAILURE, htlc.add.paymentHash)
 
           case fail: UpdateFailHtlc => for {
-            // Attempt to parse a failure and reduce affected local payment routes
-            out @ OutgoingPayment(routing, _, pr, _, _) <- getPaymentInfo(htlc.add.paymentHash)
-            rd1 @ RoutingData(_, badNodes, badChannels, _, _, _) = cutRoutes(fail, routing, pr.nodeId)
-            // Try to build another outgoing payment using the rest of available routes
-          } buildPayment(rd1, pr, chan) match {
+            // Cut local routes, add failed nodes and channels
+            oldRoutingData <- getRoutingData(htlc.add.paymentHash)
+            updatedRoutingData = cutRoutes(fail)(oldRoutingData)
+            // Try to use the rest of available local routes
+          } completeRoutingData(updatedRoutingData) match {
 
-            case Some(outgoing1) =>
+            case Some(updatedRoutingData1) =>
               // There are still routes left and we have just used one
-              // if accepted by channel: routing info will be upserted in onProcess
-              // if not accepted by channel: status will change to FAILURE in onError
-              chan process PlainAddHtlc(outgoing1)
+              // if accepted: routing info will be upserted in onProcess
+              // if not accepted: status will change to FAILURE in onError
+              chan process PlainAddHtlc(updatedRoutingData1)
 
             case None =>
               // No more spare routes left, save new bad nodes and channels
               // and ask server for new routes if we are within call limits
-              me upsertPaymentInfo out.copy(routing = rd1, status = FAILURE)
+              updateStatus(FAILURE, htlc.add.paymentHash)
+              me upsertRoutingData updatedRoutingData
 
               if (serverCallAttempts(htlc.add.paymentHash) < 5)
-                app.ChannelManager.outPaymentObs(badNodes, badChannels, pr)
+                app.ChannelManager.outPaymentObs(updatedRoutingData)
                   .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
                   .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
           }
@@ -170,6 +174,6 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   override def onBecome = {
     case (_, _, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
       // WAITING will either be redeemed or refunded later
-      db change updFailWaitingSql
+      db change PaymentInfoTable.updFailWaitingSql
   }
 }
