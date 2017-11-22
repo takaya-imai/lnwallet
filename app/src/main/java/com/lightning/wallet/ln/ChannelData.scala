@@ -378,27 +378,27 @@ object Commitments {
         c.remoteParams, c.commitInput, localPerCommitmentPoint, spec)
 
     val sortedHtlcTxs = (htlcTimeoutTxs ++ htlcSuccessTxs).sortBy(_.input.outPoint.index)
-    val signedCommitTx = Scripts.addSigs(localCommitTx, c.localParams.fundingPrivKey.publicKey,
-      c.remoteParams.fundingPubkey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey),
-      remoteSig = commit.signature)
+    val signedLocalCommitTx = Scripts.addSigs(localCommitTx, c.localParams.fundingPrivKey.publicKey,
+      c.remoteParams.fundingPubkey, Scripts.sign(localCommitTx, c.localParams.fundingPrivKey), commit.signature)
 
     if (commit.htlcSignatures.size != sortedHtlcTxs.size) throw new LightningException
-    if (Scripts.checkSpendable(signedCommitTx).isEmpty) throw new LightningException
-
+    if (Scripts.checkSpendable(signedLocalCommitTx).isEmpty) throw new LightningException
     val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, localHtlcKey)
     val combined = (sortedHtlcTxs, htlcSigs, commit.htlcSignatures).zipped.toList
 
     val htlcTxsAndSigs = combined collect {
       case (htlcTx: HtlcTimeoutTx, localSig, remoteSig) =>
         val check = Scripts checkSpendable Scripts.addSigs(htlcTx, localSig, remoteSig)
-        if (check.isDefined) HtlcTxAndSigs(htlcTx, localSig, remoteSig) else throw new LightningException
+        if (check.isDefined) HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        else throw new LightningException
 
       case (htlcTx: HtlcSuccessTx, localSig, remoteSig) =>
         val sigValid = Scripts.checkSig(htlcTx, remoteSig, remoteHtlcPubkey)
-        if (sigValid) HtlcTxAndSigs(htlcTx, localSig, remoteSig) else throw new LightningException
+        if (sigValid) HtlcTxAndSigs(htlcTx, localSig, remoteSig)
+        else throw new LightningException
     }
 
-    val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx)
+    val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedLocalCommitTx)
     val remoteChanges1 = c.remoteChanges.copy(proposed = Vector.empty, acked = c.remoteChanges.acked ++ c.remoteChanges.proposed)
     val c1 = c.copy(localChanges = c.localChanges.copy(acked = Vector.empty), remoteChanges = remoteChanges1, localCommit = localCommit1)
     val revokeAndAck = RevokeAndAck(c.channelId, localPerCommitmentSecret, localNextPerCommitmentPoint)
