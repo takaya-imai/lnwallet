@@ -84,10 +84,9 @@ object Helpers { me =>
 
       require(isValidFinalScriptPubkey(localScriptPubkey), "Invalid localScriptPubkey")
       require(isValidFinalScriptPubkey(remoteScriptPubkey), "Invalid remoteScriptPubkey")
-
-      val dustLimitSat = math.max(LNParams.dustLimit.amount, commitments.remoteParams.dustLimitSatoshis)
       val closingTx = makeFunderClosingTx(commitments.commitInput, localScriptPubkey, remoteScriptPubkey,
-        Satoshi(dustLimitSat), closingFee, commitments.localCommit.spec)
+        if (LNParams.dustLimit < commitments.remoteParams.dustLimitSat) commitments.remoteParams.dustLimitSat
+        else LNParams.dustLimit, closingFee, commitments.localCommit.spec)
 
       val localClosingSig = Scripts.sign(closingTx, commitments.localParams.fundingPrivKey)
       val closingSigned = ClosingSigned(commitments.channelId, closingFee.amount, localClosingSig)

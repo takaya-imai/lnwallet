@@ -331,7 +331,7 @@ object Scripts { me =>
 
   // Concrete templates
 
-  def makeHtlcTxs(commitTx: Transaction, localDustLimit: Satoshi, localRevPubkey: PublicKey,
+  def makeHtlcTxs(commitTx: Transaction, dustLimit: Satoshi, localRevPubkey: PublicKey,
                   toLocalDelay: Int, localDelayedPaymentPubkey: PublicKey, localHtlcPubkey: PublicKey,
                   remoteHtlcPubkey: PublicKey, spec: CommitmentSpec) = {
 
@@ -352,8 +352,8 @@ object Scripts { me =>
     }
 
     // Dusty HTLCs are filtered out and thus go to fees
-    val htlcTimeoutTxs = trimOfferedHtlcs(localDustLimit, spec) map makeHtlcTimeoutTx
-    val htlcSuccessTxs = trimReceivedHtlcs(localDustLimit, spec) map makeHtlcSuccessTx
+    val htlcTimeoutTxs = trimOfferedHtlcs(dustLimit, spec) map makeHtlcTimeoutTx
+    val htlcSuccessTxs = trimReceivedHtlcs(dustLimit, spec) map makeHtlcSuccessTx
     htlcTimeoutTxs -> htlcSuccessTxs
   }
 
