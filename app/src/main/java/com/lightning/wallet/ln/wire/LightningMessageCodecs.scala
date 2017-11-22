@@ -174,6 +174,7 @@ object LightningMessageCodecs { me =>
       (point withContext "revocationBasepoint") ::
       (point withContext "paymentBasepoint") ::
       (point withContext "delayedPaymentBasepoint") ::
+      (point withContext "htlcBasepoint") ::
       (point withContext "firstPerCommitmentPoint") ::
       (byte withContext "channelFlags")
 
@@ -190,6 +191,7 @@ object LightningMessageCodecs { me =>
       (point withContext "revocationBasepoint") ::
       (point withContext "paymentBasepoint") ::
       (point withContext "delayedPaymentBasepoint") ::
+      (point withContext "htlcBasepoint") ::
       (point withContext "firstPerCommitmentPoint")
 
   val acceptChannelCodec: Codec[AcceptChannel] =

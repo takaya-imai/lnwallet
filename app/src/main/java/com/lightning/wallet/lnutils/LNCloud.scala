@@ -78,7 +78,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         // Important: payment may fail but we wait until expiration before restarting
         case Success(pay) if pay.actualStatus == FAILURE && request.isFresh =>
 
-        case Success(info) if info.actualStatus == FAILURE => for {
+        case Success(pay) if pay.actualStatus == FAILURE => for {
           operationalChannel <- app.ChannelManager.all.find(_.isOperational)
           // Here we just retry an old request instead of getting a new one even though it's expired
           Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(request), pickInc, 3 to 4)

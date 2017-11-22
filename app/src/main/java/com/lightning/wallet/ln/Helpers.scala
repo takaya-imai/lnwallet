@@ -14,17 +14,20 @@ object Helpers { me =>
                    remoteParams: AcceptChannel, commitmentInput: InputInfo,
                    localPerCommitmentPoint: Point, spec: CommitmentSpec) = {
 
-    val remotePubkey = derivePubKey(remoteParams.paymentBasepoint, localPerCommitmentPoint)
-    val localPubkey = derivePubKey(localParams.paymentKey.toPoint, localPerCommitmentPoint)
-    val localDelayedPubkey = derivePubKey(localParams.delayedPaymentKey.toPoint, localPerCommitmentPoint)
+    val localHtlcPubkey = derivePubKey(localParams.htlcBasepoint, localPerCommitmentPoint)
+    val localDelayedPaymentPubkey = derivePubKey(localParams.delayedPaymentBasepoint, localPerCommitmentPoint)
     val localRevocationPubkey = revocationPubKey(remoteParams.revocationBasepoint, localPerCommitmentPoint)
+    val remotePaymentPubkey = derivePubKey(remoteParams.paymentBasepoint, localPerCommitmentPoint)
+    val remoteHtlcPubkey = derivePubKey(remoteParams.htlcBasepoint, localPerCommitmentPoint)
 
-    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, localParams.paymentKey.toPoint,
-      remoteParams.paymentBasepoint, localParams.isFunder, LNParams.dustLimit, localPubkey, localRevocationPubkey,
-      remoteParams.toSelfDelay, localDelayedPubkey, remotePubkey, spec)
+    val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, localParams.paymentBasepoint,
+      remoteParams.paymentBasepoint, localParams.isFunder, LNParams.dustLimit, localRevocationPubkey,
+      remoteParams.toSelfDelay, localDelayedPaymentPubkey, remotePaymentPubkey, localHtlcPubkey,
+      remoteHtlcPubkey, spec)
 
-    val (htlcTimeoutTxs, htlcSuccessTxs) = Scripts.makeHtlcTxs(commitTx.tx, LNParams.dustLimit,
-      localRevocationPubkey, remoteParams.toSelfDelay, localPubkey, localDelayedPubkey, remotePubkey, spec)
+    val htlcTimeoutTxs \ htlcSuccessTxs = Scripts.makeHtlcTxs(commitTx.tx, LNParams.dustLimit,
+      localRevocationPubkey, remoteParams.toSelfDelay, localDelayedPaymentPubkey, localHtlcPubkey,
+      remoteHtlcPubkey, spec)
 
     (commitTx, htlcTimeoutTxs, htlcSuccessTxs)
   }
@@ -33,19 +36,23 @@ object Helpers { me =>
                     remoteParams: AcceptChannel, commitmentInput: InputInfo,
                     remotePerCommitmentPoint: Point, spec: CommitmentSpec) = {
 
-    val localPubkey = derivePubKey(localParams.paymentKey.toPoint, remotePerCommitmentPoint)
-    val remotePubkey = derivePubKey(remoteParams.paymentBasepoint, remotePerCommitmentPoint)
-    val remoteDelayedPubkey = derivePubKey(remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
-    val remoteRevocationPubkey = revocationPubKey(localParams.revocationSecret.toPoint, remotePerCommitmentPoint)
+    val localHtlcPubkey = derivePubKey(localParams.htlcBasepoint, remotePerCommitmentPoint)
+    val localPaymentPubkey = derivePubKey(localParams.paymentBasepoint, remotePerCommitmentPoint)
+    val remoteRevocationPubkey = revocationPubKey(localParams.revocationBasepoint, remotePerCommitmentPoint)
+    val remoteDelayedPaymentPubkey = derivePubKey(remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
+    val remoteHtlcPubkey = derivePubKey(remoteParams.htlcBasepoint, remotePerCommitmentPoint)
 
     val commitTx = Scripts.makeCommitTx(commitmentInput, commitTxNumber, remoteParams.paymentBasepoint,
-      localParams.paymentKey.toPoint, !localParams.isFunder, remoteParams.dustLimitSat, remotePubkey,
-      remoteRevocationPubkey, localParams.toSelfDelay, remoteDelayedPubkey, localPubkey, spec)
+      localParams.paymentBasepoint, !localParams.isFunder, remoteParams.dustLimitSat, remoteRevocationPubkey,
+      localParams.toSelfDelay, remoteDelayedPaymentPubkey, localPaymentPubkey, remoteHtlcPubkey,
+      localHtlcPubkey, spec)
 
     val htlcTimeoutTxs \ htlcSuccessTxs = Scripts.makeHtlcTxs(commitTx.tx, remoteParams.dustLimitSat,
-      remoteRevocationPubkey, localParams.toSelfDelay, remotePubkey, remoteDelayedPubkey, localPubkey, spec)
+      remoteRevocationPubkey, localParams.toSelfDelay, remoteDelayedPaymentPubkey, remoteHtlcPubkey,
+      localHtlcPubkey, spec)
 
-    (commitTx, htlcTimeoutTxs, htlcSuccessTxs, remotePubkey, remoteRevocationPubkey)
+    (commitTx, htlcTimeoutTxs, htlcSuccessTxs,
+      remoteHtlcPubkey, remoteRevocationPubkey)
   }
 
   object Closing {
@@ -91,8 +98,8 @@ object Helpers { me =>
                             dustLimit: Satoshi, closingFee: Satoshi, spec: CommitmentSpec): ClosingTx = {
 
       require(spec.htlcs.isEmpty, "No HTLCs allowed")
-      val toRemoteAmount = Satoshi(spec.toRemoteMsat / 1000L)
-      val toLocalAmount = Satoshi(spec.toLocalMsat / 1000L) - closingFee
+      val toRemoteAmount: Satoshi = MilliSatoshi(spec.toRemoteMsat)
+      val toLocalAmount: Satoshi = MilliSatoshi(spec.toLocalMsat) - closingFee
       val toLocalOutput = if (toLocalAmount < dustLimit) Nil else TxOut(toLocalAmount, localScriptPubKey) :: Nil
       val toRemoteOutput = if (toRemoteAmount < dustLimit) Nil else TxOut(toRemoteAmount, remoteScriptPubKey) :: Nil
       val input = TxIn(commitTxInput.outPoint, Array.emptyByteArray, sequence = 0xffffffffL) :: Nil
@@ -139,58 +146,61 @@ object Helpers { me =>
     }
 
     def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit, bag: PaymentInfoBag) = {
-      val localPrivateKey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
+      val localPaymentPrivkey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
+      val localHtlcPrivkey = derivePrivKey(commitments.localParams.htlcKey, remoteCommit.remotePerCommitmentPoint)
 
-      val (remoteCommitTx, timeoutTxs, successTxs, remotePubkey, remoteRevPubkey) =
+      val (remoteCommitTx, timeoutTxs, successTxs, remoteHtlcPubkey, remoteRevocationPubkey) =
         makeRemoteTxs(remoteCommit.index, commitments.localParams, commitments.remoteParams,
           commitments.commitInput, remoteCommit.remotePerCommitmentPoint, remoteCommit.spec)
 
       val claimSuccessTxs = for {
         HtlcTimeoutTx(_, _, add) <- timeoutTxs
         PaymentInfo(_, 1, preimage, _, _, _, _) <- bag.getPaymentInfo(add.paymentHash).toOption
-        claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localPrivateKey.publicKey, remotePubkey,
-          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
+        claimHtlcSuccessTx = Scripts.makeClaimHtlcSuccessTx(remoteCommitTx.tx, localHtlcPrivkey.publicKey,
+          remoteHtlcPubkey, remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey,
+          add, remoteCommit.spec.feeratePerKw)
 
-        sig = Scripts.sign(claimHtlcSuccessTx, localPrivateKey)
+        sig = Scripts.sign(claimHtlcSuccessTx, localHtlcPrivkey)
         signed = Scripts.addSigs(claimHtlcSuccessTx, sig, preimage)
         claimSuccess <- Scripts checkSpendable signed
       } yield claimSuccess
 
       val claimTimeoutTxs = for {
         HtlcSuccessTx(_, _, add) <- successTxs
-        claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localPrivateKey.publicKey, remotePubkey,
-          remoteRevPubkey, commitments.localParams.defaultFinalScriptPubKey, add, remoteCommit.spec.feeratePerKw)
+        claimHtlcTimeoutTx = Scripts.makeClaimHtlcTimeoutTx(remoteCommitTx.tx, localHtlcPrivkey.publicKey,
+          remoteHtlcPubkey, remoteRevocationPubkey, commitments.localParams.defaultFinalScriptPubKey,
+          add, remoteCommit.spec.feeratePerKw)
 
-        sig = Scripts.sign(claimHtlcTimeoutTx, localPrivateKey)
+        sig = Scripts.sign(claimHtlcTimeoutTx, localHtlcPrivkey)
         signed = Scripts.addSigs(claimHtlcTimeoutTx, sig)
         claimTimeout <- Scripts checkSpendable signed
       } yield claimTimeout
 
       RemoteCommitPublished(Scripts.checkSpendable {
-        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPrivateKey.publicKey,
+        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPaymentPrivkey.publicKey,
           commitments.localParams.defaultFinalScriptPubKey, remoteCommit.spec.feeratePerKw)
 
-        val sig = Scripts.sign(txWithInputInfo, localPrivateKey)
-        Scripts.addSigs(txWithInputInfo, localPrivateKey.publicKey, sig)
+        val sig = Scripts.sign(txWithInputInfo, localPaymentPrivkey)
+        Scripts.addSigs(txWithInputInfo, localPaymentPrivkey.publicKey, sig)
       }.toList, claimSuccessTxs.toList, claimTimeoutTxs.toList, remoteCommitTx.tx)
     }
 
     // Special case when we have lost our data and ask them to spend their local current commit tx
     def claimRemoteLostCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit, commitTx: Transaction) = {
-      val localPrivateKey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
+      val localPaymentPrivkey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
 
       RemoteCommitPublished(Scripts.checkSpendable {
-        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(commitTx, localPrivateKey.publicKey,
+        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(commitTx, localPaymentPrivkey.publicKey,
           commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
 
-        val sig = Scripts.sign(txWithInputInfo, localPrivateKey)
-        Scripts.addSigs(txWithInputInfo, localPrivateKey.publicKey, sig)
+        val sig = Scripts.sign(txWithInputInfo, localPaymentPrivkey)
+        Scripts.addSigs(txWithInputInfo, localPaymentPrivkey.publicKey, sig)
       }.toList, claimHtlcSuccess = Nil, claimHtlcTimeout = Nil, commitTx)
     }
 
     def claimRevokedRemoteCommitTxOutputs(commitments: Commitments, tx: Transaction) = {
       val txNumber = Scripts.obscuredCommitTxNumber(number = Scripts.decodeTxNumber(tx.txIn.head.sequence, tx.lockTime),
-        !commitments.localParams.isFunder, commitments.remoteParams.paymentBasepoint, commitments.localParams.paymentKey.toPoint)
+        !commitments.localParams.isFunder, commitments.remoteParams.paymentBasepoint, commitments.localParams.paymentBasepoint)
 
       val index = moves(largestTxIndex - txNumber)
       val hashes = commitments.remotePerCommitmentSecrets.hashes
@@ -199,7 +209,7 @@ object Helpers { me =>
         val remotePerCommitmentSecretScalar = Scalar(remotePerCommitmentSecret)
         val remotePerCommitmentPoint = remotePerCommitmentSecretScalar.toPoint
 
-        val remoteDelayedPubkey = derivePubKey(commitments.remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
+        val remoteDelayedPaymentPubkey = derivePubKey(commitments.remoteParams.delayedPaymentBasepoint, remotePerCommitmentPoint)
         val remoteRevocationPrivkey = revocationPrivKey(commitments.localParams.revocationSecret, remotePerCommitmentSecretScalar)
         val localPrivkey = derivePrivKey(commitments.localParams.paymentKey, remotePerCommitmentPoint)
 
@@ -214,7 +224,7 @@ object Helpers { me =>
         val claimPenaltyTx = Scripts checkSpendable {
           val txinfo = Scripts.makeMainPenaltyTx(tx, remoteRevocationPrivkey.publicKey,
             commitments.localParams.defaultFinalScriptPubKey, commitments.remoteParams.toSelfDelay,
-            remoteDelayedPubkey, LNParams.broadcaster.feeRatePerKw)
+            remoteDelayedPaymentPubkey, LNParams.broadcaster.feeRatePerKw)
 
           val sig = Scripts.sign(txinfo, remoteRevocationPrivkey)
           Scripts.addSigs(txinfo, sig)
@@ -246,11 +256,11 @@ object Helpers { me =>
       val commitmentInput: InputInfo = makeFundingInputInfo(fundingTxHash, fundingTxOutputIndex,
         Satoshi(cmd.fundingAmountSat), cmd.localParams.fundingPrivKey.publicKey, remoteParams.fundingPubkey)
 
-      val localPerCommitmentPoint = perCommitPoint(cmd.localParams.shaSeed, 0)
+      val localPerCommitmentPoint = perCommitPoint(cmd.localParams.shaSeed, 0L)
       val localSpec = CommitmentSpec(Set.empty, Set.empty, Set.empty, cmd.initialFeeratePerKw, toLocalMsat, cmd.pushMsat)
       val remoteSpec = CommitmentSpec(Set.empty, Set.empty, Set.empty, cmd.initialFeeratePerKw, cmd.pushMsat, toLocalMsat)
-      val (localCommitTx, _, _) = makeLocalTxs(0, cmd.localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
-      val (remoteCommitTx, _, _, _, _) = makeRemoteTxs(0, cmd.localParams, remoteParams, commitmentInput, remoteFirstPoint, remoteSpec)
+      val (localCommitTx, _, _) = makeLocalTxs(0L, cmd.localParams, remoteParams, commitmentInput, localPerCommitmentPoint, localSpec)
+      val (remoteCommitTx, _, _, _, _) = makeRemoteTxs(0L, cmd.localParams, remoteParams, commitmentInput, remoteFirstPoint, remoteSpec)
       (localSpec, localCommitTx, remoteSpec, remoteCommitTx)
     }
   }

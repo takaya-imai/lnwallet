@@ -49,10 +49,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
           tempId, fundingSat, pushMsat, LNParams.dustLimit.amount, localParams.maxHtlcValueInFlightMsat,
           localParams.channelReserveSat, LNParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
-          localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationSecret.toPoint,
-          localParams.paymentKey.toPoint, localParams.delayedPaymentKey.toPoint,
-          Generators.perCommitPoint(localParams.shaSeed, index = 0L),
-          channelFlags = 1.toByte) // Public channel
+          localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationBasepoint,
+          localParams.paymentBasepoint, localParams.delayedPaymentBasepoint, localParams.htlcBasepoint,
+          Generators.perCommitPoint(localParams.shaSeed, index = 0L), channelFlags = 1.toByte)
 
 
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)

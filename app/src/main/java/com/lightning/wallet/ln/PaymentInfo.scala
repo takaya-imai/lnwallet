@@ -114,15 +114,15 @@ object PaymentInfo {
           failHtlc(sharedSecret, FinalExpiryTooSoon, add)
 
         case Success(_) if decoded.value.outgoingCltv != add.expiry =>
-          // GUARD: final outgoing CLTV value does not equal the one from message
+          // GUARD: final outgoing CLTV does not equal the one from message
           failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
 
-        case Success(pay) if MilliSatoshi(add.amountMsat) > pay.amount * 2 =>
-          // GUARD: they have sent too much funds, this is a protective measure
+        case Success(pay) if add.amount > pay.amount * 2 =>
+          // GUARD: they have sent too much funds, reject it
           failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
-        case Success(pay) if MilliSatoshi(add.amountMsat) < pay.amount =>
-          // GUARD: amount is less than requested, we will not accept it
+        case Success(pay) if add.amount < pay.amount =>
+          // GUARD: amount is less than requested, reject it
           failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
         case Success(pay) if pay.incoming == 1 =>
@@ -156,7 +156,9 @@ case class PaymentInfo(hash: BinaryData, incoming: Int,
   def actualStatus = incoming match {
     // Once we have a preimage it is a SUCCESS
     // but only if this is an outgoing payment
-    case 1 if preimage != NOIMAGE => SUCCESS
+    case 0 if preimage != NOIMAGE => SUCCESS
+    // Incoming payment always has preimage
+    // so we should always look at status
     case _ => status
   }
 }

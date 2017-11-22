@@ -206,8 +206,14 @@ object CommitmentSpec {
 }
 
 case class LocalParams(maxHtlcValueInFlightMsat: UInt64, channelReserveSat: Long, toSelfDelay: Int, maxAcceptedHtlcs: Int,
-                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: PrivateKey, delayedPaymentKey: Scalar,
-                       defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean)
+                       fundingPrivKey: PrivateKey, revocationSecret: Scalar, paymentKey: Scalar, delayedPaymentKey: Scalar,
+                       htlcKey: Scalar, defaultFinalScriptPubKey: BinaryData, shaSeed: BinaryData, isFunder: Boolean) {
+
+  lazy val delayedPaymentBasepoint = delayedPaymentKey.toPoint
+  lazy val revocationBasepoint = revocationSecret.toPoint
+  lazy val paymentBasepoint = paymentKey.toPoint
+  lazy val htlcBasepoint = htlcKey.toPoint
+}
 
 case class WaitingForRevocation(nextRemoteCommit: RemoteCommit, sent: CommitSig, localCommitIndexSnapshot: Long)
 case class LocalCommit(index: Long, spec: CommitmentSpec, htlcTxsAndSigs: Seq[HtlcTxAndSigs], commitTx: CommitTx)
@@ -336,7 +342,7 @@ object Commitments {
 
   def sendCommit(c: Commitments, remoteNextPerCommitmentPoint: Point) = {
     val spec = CommitmentSpec.reduce(c.remoteCommit.spec, c.remoteChanges.acked, c.localChanges.proposed)
-    val paymentKey = Generators.derivePrivKey(c.localParams.paymentKey, remoteNextPerCommitmentPoint)
+    val htlcKey = Generators.derivePrivKey(c.localParams.htlcKey, remoteNextPerCommitmentPoint)
 
     val (remoteCommitTx, htlcTimeoutTxs, htlcSuccessTxs, _, _) =
       Helpers.makeRemoteTxs(c.remoteCommit.index + 1, c.localParams,
@@ -344,7 +350,7 @@ object Commitments {
 
     // Generate signatures
     val sortedHtlcTxs = (htlcTimeoutTxs ++ htlcSuccessTxs).sortBy(_.input.outPoint.index)
-    val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, paymentKey)
+    val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, htlcKey)
 
     // Update commitment data
     val remoteChanges1 = c.remoteChanges.copy(acked = Vector.empty, signed = c.remoteChanges.acked)
@@ -364,8 +370,8 @@ object Commitments {
     val localPerCommitmentSecret = Generators.perCommitSecret(c.localParams.shaSeed, c.localCommit.index)
     val localPerCommitmentPoint = Generators.perCommitPoint(c.localParams.shaSeed, c.localCommit.index + 1)
     val localNextPerCommitmentPoint = Generators.perCommitPoint(c.localParams.shaSeed, c.localCommit.index + 2)
-    val remotePaymentPubkey = Generators.derivePubKey(c.remoteParams.paymentBasepoint, localPerCommitmentPoint)
-    val localPaymentKey = Generators.derivePrivKey(c.localParams.paymentKey, localPerCommitmentPoint)
+    val remoteHtlcPubkey = Generators.derivePubKey(c.remoteParams.htlcBasepoint, localPerCommitmentPoint)
+    val localHtlcKey = Generators.derivePrivKey(c.localParams.htlcKey, localPerCommitmentPoint)
 
     val (localCommitTx, htlcTimeoutTxs, htlcSuccessTxs) =
       Helpers.makeLocalTxs(c.localCommit.index + 1, c.localParams,
@@ -379,19 +385,17 @@ object Commitments {
     if (commit.htlcSignatures.size != sortedHtlcTxs.size) throw new LightningException
     if (Scripts.checkSpendable(signedCommitTx).isEmpty) throw new LightningException
 
-    val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, localPaymentKey)
+    val htlcSigs = for (info <- sortedHtlcTxs) yield Scripts.sign(info, localHtlcKey)
     val combined = (sortedHtlcTxs, htlcSigs, commit.htlcSignatures).zipped.toList
 
     val htlcTxsAndSigs = combined collect {
       case (htlcTx: HtlcTimeoutTx, localSig, remoteSig) =>
         val check = Scripts checkSpendable Scripts.addSigs(htlcTx, localSig, remoteSig)
-        if (check.isDefined) HtlcTxAndSigs(htlcTx, localSig, remoteSig)
-        else throw new LightningException
+        if (check.isDefined) HtlcTxAndSigs(htlcTx, localSig, remoteSig) else throw new LightningException
 
       case (htlcTx: HtlcSuccessTx, localSig, remoteSig) =>
-        val sigValid = Scripts.checkSig(htlcTx, remoteSig, remotePaymentPubkey)
-        if (sigValid) HtlcTxAndSigs(htlcTx, localSig, remoteSig)
-        else throw new LightningException
+        val sigValid = Scripts.checkSig(htlcTx, remoteSig, remoteHtlcPubkey)
+        if (sigValid) HtlcTxAndSigs(htlcTx, localSig, remoteSig) else throw new LightningException
     }
 
     val localCommit1 = LocalCommit(c.localCommit.index + 1, spec, htlcTxsAndSigs, signedCommitTx)
