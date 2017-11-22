@@ -12,7 +12,7 @@ class LNCloudSpec {
 
   def allTests = {
     // This test requires an operational channel
-    val chan: Channel = app.ChannelManager.alive.head
+    val chan: Channel = app.ChannelManager.all.find(_.isOperational).get
 
     val restartListener = new ChannelListener {
       override def onProcess = {

@@ -125,8 +125,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     override def onBecome = {
-      case (_, norm: NormalData, _, _) if norm.isFinishing => evacuate
-      case (_, _: EndingData | _: NegotiationsData | _: WaitFundingDoneData, _, _) => evacuate
+      case (chan, _, _, _) if !chan.isOperational => evacuate
       case (_, _: NormalData, _, SYNC) => update(me getString ln_notify_connecting, Informer.LNSTATE).flash.run
       case (_, _: NormalData, _, NORMAL) => update(me getString ln_notify_operational, Informer.LNSTATE).flash.run
     }
@@ -190,7 +189,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
   override def onResume: Unit = wrap(super.onResume) {
     app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
-    app.ChannelManager.alive.headOption map manageActive getOrElse evacuate
+    app.ChannelManager.all.find(_.isOperational) map manageActive getOrElse evacuate
   }
 
   // APP MENU
@@ -201,7 +200,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   def updTitle(chan: Channel) = animateTitle {
-    val canSend = chan.pull(_.localCommit.spec.toLocalMsat)
+    val canSend = chan(_.localCommit.spec.toLocalMsat)
     denom withSign MilliSatoshi(canSend getOrElse 0L)
   }
 
@@ -286,7 +285,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
-        case _ => rm(alert) { pay compose emptyRd apply pr }
+        case _ => rm(alert) { pay compose emptyRD apply pr }
       }
 
       val ok = alert getButton BUTTON_POSITIVE
@@ -302,13 +301,13 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
       // Close all of the channels just in case we have more than one active left
       checkPass(s"$nodeDetails<br><br>${me getString ln_close}".html) { pass =>
-        for (chan <- app.ChannelManager.alive) chan process CMDShutdown
+        for (chan <- app.ChannelManager.notClosing) chan process CMDShutdown
       }
     }
 
     makePaymentRequest = anyToRunnable {
       // Peer's balance can't go below their unspendable channel reserve so it should be taken into account here
-      val canReceive = chan.pull(c => c.localCommit.spec.toRemoteMsat - c.remoteParams.channelReserveSatoshis * 1000L)
+      val canReceive = chan(c => c.localCommit.spec.toRemoteMsat - c.remoteParams.channelReserveSatoshis * 1000L)
       val finalCanReceive = math.min(canReceive.filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
       val maxMsat = MilliSatoshi(finalCanReceive)
 
@@ -318,11 +317,11 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = chan.pull(_.channelId) foreach { chanId =>
-        val paymentRequest = PaymentRequest(chainHash, amount, paymentHash = Crypto sha256 preimg, nodePrivateKey,
+      def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = {
+        val paymentRequest = PaymentRequest(chainHash, amount, Crypto sha256 preimg, nodePrivateKey,
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
-        bag upsertRoutingData emptyRd(paymentRequest)
+        bag upsertRoutingData emptyRD(paymentRequest)
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
         bag upsertPaymentInfo PaymentInfo(hash = paymentRequest.paymentHash, incoming = 1, preimg,
           paymentRequest.finalSum, HIDDEN, System.currentTimeMillis, paymentRequest.textDescription)

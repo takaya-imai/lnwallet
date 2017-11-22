@@ -38,8 +38,8 @@
         <item><![CDATA[%1$d <a href=http://lightning-wallet.com/storage-tokens.html#storage-tokens>storage tokens</a> left]]></item>
     </array>
 
+    <string name="restore_pass">Old wallet password</string>
     <string name="restore_encrypted">Your encrypted mnemonic</string>
-    <string name="restore_pass">An old wallet password was used for encryption so please provide it here</string>
     <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
     <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
     <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
@@ -149,8 +149,7 @@
     <string name="err_ln_fulfilled">Failed because this payment is already fulfilled</string>
 
     <string name="err_ln_fee_overflow"><![CDATA[Failed because this payment combined with Bitcoin <a href=http://lightning-wallet.com/using-lightning-wallet.html#commit-transaction-fee>commit transaction</a> fee exceeds your unspendable channel reserve<br><br>reserve %1$s<br>sending %2$s<br>missing %3$s]]></string>
-    <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that incoming transactions need to get at least one confirmation to become spendable]]></string>
-
+    <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that Bitcoin transactions need to get at least one confirmation to become spendable]]></string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
     <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
@@ -202,11 +201,11 @@
     <string name="ln_ops_btc">Back to Bitcoin</string>
 
     <string name="ln_ops_chan_none"><a href='http://lightning-wallet.com/using-lightning-wallet.html#using-lightning-wallet'>Lightning Network</a> allows for a very fast, secure and trustless Bitcoin transactions with a near zero fees\n\nUsing Lightning Network requires you to open a <a href='http://lightning-wallet.com/using-lightning-wallet.html#payment-channel'>Payment Channel</a> with a peer of your choice and then fund it with Bitcoin transaction</string>
-    <string name="ln_ops_chan_bilateral_negotiations"><![CDATA[Finalizing Payment Channel&#8230;<br>Waiting for peer\'s confirmation<br><br>Your current channel balance will be refunded to you via a Bitcoin transaction once both of you are ready to mutually close a channel]]></string>
-    <string name="ln_ops_chan_opening"><![CDATA[Opening Payment Channel&#8230;<br>Channel capacity is %1$s<br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br><font color=#999999>Funding transaction status</font><br>%3$s]]></string>
-    <string name="ln_ops_chan_unilateral_warn"><![CDATA[<a href=http://lightning-wallet.com/using-lightning-wallet.html#forced-channel-closing>Forced channel closing</a> is much more expensive and time consuming than a mutually agreed one]]></string>
+    <string name="ln_ops_chan_unilateral_warn">Channel termination at this point will result in an uncooperative <![CDATA[<a href=http://lightning-wallet.com/using-lightning-wallet.html#forced-channel-closing>forced closing</a> which is expensive and time consuming<br><br>Are you sure you want to proceed anyway?]]></string>
+    <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Channel capacity is %1$s<br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br><font color=#999999>Funding transaction status</font><br>%3$s]]></string>
+    <string name="ln_ops_chan_bilateral_negotiations"><![CDATA[Closing a Payment Channel&#8230;<br>Waiting for peer\'s confirmation<br><br>Your current channel balance will be refunded to you via a Bitcoin transaction once both of you are ready to mutually close a channel]]></string>
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[<a href=http://lightning-wallet.com/using-lightning-wallet.html#forced-channel-closing>Forced channel closing</a><br>%1$s<br><br>%2$s]]></string>
-    <string name="ln_ops_chan_bilateral_closing"><![CDATA[Finalizing Payment Channel&#8230;<br><br>Remaining channel balance has been refunded to your Bitcoin wallet<br><br>%1$s]]></string>
+    <string name="ln_ops_chan_bilateral_closing"><![CDATA[Closing a Payment Channel&#8230;<br><br>Remaining channel balance has been refunded to your Bitcoin wallet<br><br>%1$s]]></string>
 
     <string name="ln_ops_chan_amount_status">%1$s - %2$s fee</string>
     <string name="ln_ops_chan_refund_status"><![CDATA[<font color=#999999>Your pending refunds</font>]]></string>

@@ -114,10 +114,8 @@ class WalletApp extends Application { me =>
     val operationalListeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
     // Obtain a vector of saved channels which receive CMDSpent, CMDBestHeight and nothing else
     var all: ChannelVec = for (data <- ChannelWrap.get) yield createChannel(operationalListeners, data)
-
-    def connected: ChannelVec = all.filter(_.state != Channel.CLOSING) // Need a connection to LN peer
-    def alive: ChannelVec = all.filter(chan => chan.state != Channel.CLOSING && chan.state != Channel.REFUNDING)
-    def fromNode(of: ChannelVec, id: PublicKey) = of.filter(_.data.announce.nodeId == id) // From specific peer
+    def fromNode(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
+    def notClosing: ChannelVec = all.filter(_.state != Channel.CLOSING)
 
     val chainEventsListener = new TxTracker with BlocksListener {
       override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
@@ -126,7 +124,7 @@ class WalletApp extends Application { me =>
         bag.extractPreimage(spent.tx)
       }
 
-      override def txConfirmed(tx: Transaction) = for (chan <- alive) chan process CMDConfirmed(tx)
+      override def txConfirmed(tx: Transaction) = for (chan <- notClosing) chan process CMDConfirmed(tx)
       // No matter how many blocks are left on start we only send a CMD once the last block has been processed
       def tellHeight(left: Int) = if (left < 1) for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
       override def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, left: Int) = tellHeight(left)
@@ -134,12 +132,12 @@ class WalletApp extends Application { me =>
     }
 
     val socketEventsListener = new ConnectionListener {
-      override def onOperational(id: PublicKey, their: Init) = fromNode(connected, id).foreach(_ process CMDOnline)
-      override def onTerminalError(id: PublicKey) = fromNode(connected, id).foreach(_ process CMDShutdown)
-      override def onMessage(msg: LightningMessage) = connected.foreach(_ process msg)
+      override def onOperational(id: PublicKey, their: Init) = fromNode(notClosing, id).foreach(_ process CMDOnline)
+      override def onTerminalError(id: PublicKey) = fromNode(notClosing, id).foreach(_ process CMDShutdown)
+      override def onMessage(msg: LightningMessage) = notClosing.foreach(_ process msg)
 
       override def onDisconnect(id: PublicKey) =
-        fromNode(connected, id) match { case needsReconnect =>
+        fromNode(notClosing, id) match { case needsReconnect =>
           val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
           delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
           needsReconnect.foreach(_ process CMDOffline)
@@ -173,7 +171,7 @@ class WalletApp extends Application { me =>
     // Once direct route and assisted routes are fetched we combine them into single sequence
 
     def outPaymentObs(rd: RoutingData) =
-      Obs from alive.headOption flatMap { chan =>
+      Obs from all.find(_.isOperational) flatMap { chan =>
         def findRoutes(target: PublicKey) = chan.data.announce.nodeId match {
           case directPeerNodeId if directPeerNodeId == target => Obs just Vector(Vector.empty)
           case _ => cloud.connector.findRoutes(rd.badNodes, rd.badChannels, chan.data.announce.nodeId, target)
@@ -230,7 +228,7 @@ class WalletApp extends Application { me =>
 
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       startBlocksDownload(ChannelManager.chainEventsListener)
-      ChannelManager reconnect ChannelManager.connected
+      ChannelManager reconnect ChannelManager.notClosing
       db change PaymentInfoTable.updFailWaitingSql
       cloud doProcess CMDStart
       RatesSaver.update

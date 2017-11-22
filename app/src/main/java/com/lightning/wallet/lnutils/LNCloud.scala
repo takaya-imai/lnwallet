@@ -46,14 +46,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
   def doProcess(some: Any) = (data, some) match {
     case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
-      channel <- app.ChannelManager.alive.headOption // If we have a channel
+      operationalChannel <- app.ChannelManager.all.find(_.isOperational)
       paymentRequestAndMemo @ (pr, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
-      Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRd(pr), pickInc, 3 to 4)
+      Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
     } if (data.info.isEmpty) {
       // Server response may arrive in some time after an initialization above
       // so we state that it can only be accepted if data.info is still empty
       me BECOME data.copy(info = Some apply paymentRequestAndMemo)
-      channel process SilentAddHtlc(pay)
+      operationalChannel process SilentAddHtlc(pay)
     }
 
     // Execute if we are not busy and have available tokens and actions
@@ -79,10 +79,10 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         case Success(pay) if pay.actualStatus == FAILURE && request.isFresh =>
 
         case Success(info) if info.actualStatus == FAILURE => for {
-          channel <- app.ChannelManager.alive.headOption // If we have a channel
-          Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRd(request), pickInc, 3 to 4)
+          operationalChannel <- app.ChannelManager.all.find(_.isOperational)
           // Here we just retry an old request instead of getting a new one even though it's expired
-        } channel process SilentAddHtlc(pay)
+          Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(request), pickInc, 3 to 4)
+        } operationalChannel process SilentAddHtlc(pay)
 
         // First attempt has been rejected
         case Failure(_) => eraseRequestData

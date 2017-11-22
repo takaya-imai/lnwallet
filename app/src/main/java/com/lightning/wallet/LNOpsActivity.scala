@@ -39,16 +39,12 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
-    // We may have a REFUNDING channel which turns CLOSING
-    // after we have opened another operational channel
-    // so alive should have a priority here
 
-    app.ChannelManager.alive.headOption match {
-      case Some(aliveChannel) => manageFirst(aliveChannel)
-      case None => app.ChannelManager.all.headOption match {
-        case Some(closingChannel) => manageFirst(closingChannel)
-        case None => manageNoActiveChannel
-      }
+    // Clear TransData here
+    app.TransData.value = null
+    app.ChannelManager.all.headOption match {
+      case Some(channel) => manageFirst(channel)
+      case None => manageNoActiveChannel
     }
   }
 
@@ -96,7 +92,7 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
 
         case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegotiations(norm.commitments)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegotiations(negs.commitments)
-        case (_, norm: NormalData, _, _) => me exitTo classOf[LNActivity]
+        case _ if chan.isOperational => me exitTo classOf[LNActivity]
         case _ => me runOnUiThread manageNoActiveChannel
       }
 

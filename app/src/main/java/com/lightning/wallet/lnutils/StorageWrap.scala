@@ -85,7 +85,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def upsertPaymentInfo(info: PaymentInfo) = {
     db.change(PaymentInfoTable.newVirtualSql, s"${info.text} ${info.hash.toString}", info.hash.toString)
     db.change(PaymentInfoTable.newSql, info.hash.toString, info.incoming.toString, info.preimage.toString,
-      info.amount.amount.toString, info.status.toString, System.currentTimeMillis.toString)
+      info.amount.amount.toString, info.status.toString, info.text, System.currentTimeMillis.toString)
   }
 
   def updatePreimg(upd: UpdateFulfillHtlc) = db.change(PaymentInfoTable.updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)

@@ -19,8 +19,9 @@ import fr.acinq.bitcoin.{Satoshi, Transaction}
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
   implicit val context: ExecutionContextExecutor = ExecutionContext fromExecutor Executors.newSingleThreadExecutor
-  def pull[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
+  def apply[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
   def process(change: Any) = Future(me doProcess change) onFailure { case err => events onError me -> err }
+  def isOperational = data match { case norm: NormalData => !norm.isFinishing case other => false }
   val listeners: mutable.Set[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -186,7 +187,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         LNParams.bag getPaymentInfo cmd.rd.pr.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
           case Success(pay: PaymentInfo) if pay.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(pay: PaymentInfo) if pay.incoming != 1 => throw AddException(cmd, ERR_FAILED)
+          case Success(pay: PaymentInfo) if pay.incoming == 1 => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
             val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)

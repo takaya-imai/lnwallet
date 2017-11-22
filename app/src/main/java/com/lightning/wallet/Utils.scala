@@ -225,7 +225,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       def proceed =
         LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(serverDataVec => {
           // We need to filter out local channels so we do not accidently close an operational ones
-          val localChanIds = app.ChannelManager.all.map(_.pull(_.channelId) getOrElse BinaryData.empty)
+          val localChanIds = app.ChannelManager.all.map(_(_.channelId) getOrElse BinaryData.empty)
           val listeners = app.ChannelManager.operationalListeners
 
           for {
@@ -238,7 +238,7 @@ trait ToolbarActivity extends TimerActivity { me =>
           } app.ChannelManager.all +:= chan
 
           // Request connections after these channels are added
-          app.ChannelManager reconnect app.ChannelManager.connected
+          app.ChannelManager reconnect app.ChannelManager.notClosing
         }, Tools.errlog)
     }
 

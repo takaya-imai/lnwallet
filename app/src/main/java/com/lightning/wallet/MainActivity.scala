@@ -30,9 +30,8 @@ trait ViewSwitch {
   }
 }
 
-class MainActivity extends NfcReaderActivity
-with TimerActivity with ViewSwitch { me =>
-
+class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
+  lazy val mnemonicOptions = getResources getStringArray R.array.restore_mnemonic_options
   lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
   lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
   lazy val greet = me clickableTextField findViewById(R.id.mainGreetings)
@@ -106,7 +105,7 @@ with TimerActivity with ViewSwitch { me =>
 
       case (true, false, _) =>
         // Launch of a previously closed app
-        // Also happens if app has become inactive
+        // Also happens if app has became inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
         <<(prepareKit, throw _)(none)
 
@@ -116,8 +115,9 @@ with TimerActivity with ViewSwitch { me =>
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 
-      case (true, true, false) =>
-        // This is not right!
+      case _ =>
+        // Just should not ever happen
+        // and when it does we just exit
         System exit 0
     }
 
@@ -139,13 +139,10 @@ with TimerActivity with ViewSwitch { me =>
       dialog_cancel).setMessage(messageCode).create)
 
   def goRestoreWallet(view: View) = {
-    val options: Array[String] = getResources getStringArray R.array.restore_mnemonic_options
     val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
-    val alert = mkForm(me negBld dialog_cancel, me getString restore_hint, lst)
-
-    def exitToRestore = me exitTo classOf[WalletRestoreActivity]
-    lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, options)
-    lst setOnItemClickListener onTap { pos => if (pos == 1) rm(alert)(exitToRestore) else proceed }
+    val alert = mkForm(builder = me negBld dialog_cancel, title = me getString restore_hint, lst)
+    lst setOnItemClickListener onTap { pos => if (pos == 1) rm(alert)(exitRestoreWallet) else proceed }
+    lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, mnemonicOptions)
     lst setDividerHeight 0
     lst setDivider null
 
@@ -168,11 +165,11 @@ with TimerActivity with ViewSwitch { me =>
         val plain = AES.decode(hash.toArray)(packed.toArray)
         require(isMnemonicCorrect(plain), "Wrong password")
         app.TransData.value = plain
-        exitToRestore
+        exitRestoreWallet
       }
     }
   }
 
-  def goCreateWallet(view: View) =
-    me exitTo classOf[WalletCreateActivity]
+  def exitRestoreWallet = me exitTo classOf[WalletRestoreActivity]
+  def goCreateWallet(view: View) = me exitTo classOf[WalletCreateActivity]
 }

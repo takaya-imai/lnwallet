@@ -69,7 +69,7 @@ object PaymentInfoTable extends Table {
       $preimage STRING NOT NULL,
       $amount INTEGER NOT NULL,
       $status STRING NOT NULL,
-      $stamp INTEGER NOT NULL
+      $stamp INTEGER NOT NULL,
       $text STRING NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status);
@@ -94,7 +94,7 @@ object RoutingDataTable extends Table {
 
 trait Table { val (id, fts) = "_id" -> "fts4" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata.db", null, version) { me =>
+extends SQLiteOpenHelper(context, "lndata1.db", null, version) { me =>
 
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)

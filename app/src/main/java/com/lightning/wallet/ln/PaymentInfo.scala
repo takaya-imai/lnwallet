@@ -58,10 +58,9 @@ object PaymentInfo {
   } yield rd.copy(onion = buildOnion(nodeIds :+ rd.pr.nodeId, absolutePayloads, rd.pr.paymentHash),
     routes = rd.routes.tail, amountWithFee = firstAmount, expiry = firstExpiry + absoluteExpiry)
 
-  def emptyRd(pr: PaymentRequest) = {
-    val packet = Packet(Array.empty, Array.empty, Array.empty, Array.empty)
-    RoutingData(routes = Vector.empty, badNodes = Set.empty, badChannels = Set.empty, pr,
-      SecretsAndPacket(sharedSecrets = Vector.empty, packet), amountWithFee = 0L, expiry = 0L)
+  def emptyRD(pr: PaymentRequest) = {
+    val packet = Packet(Array.empty, random getBytes 33, random getBytes DataLength, random getBytes MacLength)
+    RoutingData(Vector.empty, Set.empty, Set.empty, pr, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
   }
 
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) = {
