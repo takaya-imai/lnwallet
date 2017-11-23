@@ -15,9 +15,11 @@ import com.lightning.wallet.ln.PaymentInfo.ExtraPaymentRoute
 import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
+import com.lightning.wallet.ln.PaymentRequest.Int5Seq
 import com.lightning.wallet.ln.crypto.ShaChain.Index
 import com.lightning.wallet.ln.Broadcaster.TxSeq
 import com.lightning.wallet.ln.Tools.Bytes
+import fr.acinq.bitcoin.Bech32.Int5
 import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
 import java.math.BigInteger
@@ -113,22 +115,22 @@ object ImplicitJsonFormats { me =>
   implicit object TagFmt extends JsonFormat[Tag] {
     def read(json: JsValue) = json.asJsObject fields "tag" match {
       case JsString("MinFinalCltvExpiryTag") => json.convertTo[MinFinalCltvExpiryTag]
-      case JsString("FallbackAddressTag") => json.convertTo[FallbackAddressTag]
       case JsString("DescriptionHashTag") => json.convertTo[DescriptionHashTag]
       case JsString("RoutingInfoTag") => json.convertTo[RoutingInfoTag]
       case JsString("PaymentHashTag") => json.convertTo[PaymentHashTag]
       case JsString("DescriptionTag") => json.convertTo[DescriptionTag]
+      case JsString("UnknownTag") => json.convertTo[UnknownTag]
       case JsString("ExpiryTag") => json.convertTo[ExpiryTag]
       case _ => throw new RuntimeException
     }
 
     def write(internal: Tag) = internal match {
       case tag: MinFinalCltvExpiryTag => tag.toJson
-      case tag: FallbackAddressTag => tag.toJson
       case tag: DescriptionHashTag => tag.toJson
       case tag: RoutingInfoTag => tag.toJson
       case tag: PaymentHashTag => tag.toJson
       case tag: DescriptionTag => tag.toJson
+      case tag: UnknownTag => tag.toJson
       case tag: ExpiryTag => tag.toJson
     }
   }
@@ -148,14 +150,14 @@ object ImplicitJsonFormats { me =>
   implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[ExtraPaymentRoute,
     RoutingInfoTag](RoutingInfoTag.apply, "route"), tag = "RoutingInfoTag")
 
-  implicit val expiryTagFmt = taggedJsonFmt(jsonFormat[Long,
-    ExpiryTag](ExpiryTag.apply, "seconds"), tag = "ExpiryTag")
-
   implicit val minFinalCltvExpiryTagFmt = taggedJsonFmt(jsonFormat[Long,
     MinFinalCltvExpiryTag](MinFinalCltvExpiryTag.apply, "expiryDelta"), tag = "MinFinalCltvExpiryTag")
 
-  implicit val fallbackAddressTagFmt = taggedJsonFmt(jsonFormat[Byte, BinaryData,
-    FallbackAddressTag](FallbackAddressTag.apply, "version", "hash"), tag = "FallbackAddressTag")
+  implicit val unknownTagFmt = taggedJsonFmt(jsonFormat[Int5, Int5Seq,
+    UnknownTag](UnknownTag.apply, "tag", "int5s"), tag = "UnknownTag")
+
+  implicit val expiryTagFmt = taggedJsonFmt(jsonFormat[Long,
+    ExpiryTag](ExpiryTag.apply, "seconds"), tag = "ExpiryTag")
 
   implicit val paymentRequestFmt = jsonFormat[String, Option[MilliSatoshi], Long, PublicKey, Vector[Tag], BinaryData,
     PaymentRequest](PaymentRequest.apply, "prefix", "amount", "timestamp", "nodeId", "tags", "signature")

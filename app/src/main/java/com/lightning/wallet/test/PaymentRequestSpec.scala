@@ -49,7 +49,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == None)
       assert(pr.tags.size == 2)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -63,7 +62,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == None)
       assert(pr.tags.size == 3)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -77,7 +75,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == None)
       assert(pr.tags.size == 2)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -91,7 +88,7 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == Some("mk2QpYatsKicvFVuTAQLBryyccRXMUaGHP"))
+      assert(pr.tags.collect { case u: UnknownTag => u }.size == 1) // fallback address
       assert(pr.tags.size == 3)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -105,7 +102,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == Some("1RustyRX2oai4EYYDpQGWvEL62BBGqN9T"))
       assert(pr.routingInfo.head == RoutingInfoTag(Vector(ExtraHop(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), 72623859790382856L, 20, 3), ExtraHop(PublicKey("039e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), 217304205466536202L, 30, 4))))
       assert(pr.tags.size == 4)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
@@ -120,7 +116,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == Some("3EktnHQD7RiAE6uzMj2ZifT9YgRrkSgzQX"))
       assert(pr.tags.size == 3)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -134,7 +129,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == Some("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"))
       assert(pr.tags.size == 3)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -149,7 +143,6 @@ class PaymentRequestSpec {
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.fallbackAddress == Some("bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3"))
       assert(pr.tags.size == 3)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }
@@ -176,7 +169,6 @@ class PaymentRequestSpec {
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
       assert(pr.description == Left(Crypto.sha256("One piece of chocolate cake, one icecream cone, one pickle, one slice of swiss cheese, one slice of salami, one lollypop, one piece of cherry pie, one sausage, one cupcake, and one slice of watermelon".getBytes)))
-      assert(pr.fallbackAddress == Some("bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3"))
       assert(pr.minFinalCltvExpiry == Some(12))
       assert(pr.tags.size == 4)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
