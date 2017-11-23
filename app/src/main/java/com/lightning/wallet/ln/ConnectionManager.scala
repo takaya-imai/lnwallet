@@ -46,8 +46,10 @@ object ConnectionManager {
     val socket: Socket = new Socket
 
     val work = Future {
+      // TODO: remove in production
+      val location1 = new InetSocketAddress("10.0.2.2", location.getPort)
       val buffer = new Bytes(BUFFER_SIZE)
-      socket.connect(location, 7500)
+      socket.connect(location1, 7500)
       handler.init
 
       while (true) {

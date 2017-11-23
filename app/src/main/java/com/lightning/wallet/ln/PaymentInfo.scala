@@ -74,9 +74,12 @@ object PaymentInfo {
     rd.copy(routes = updatedRoutes, badNodes = rd.badNodes + faultyId)
   }
 
-  def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
-    parseErrorPacket(rd.onion.sharedSecrets, fail.reason) collect {
-     // Reduce remaining routes and remember failed nodes and channels
+  def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) = {
+    val x = parseErrorPacket(rd.onion.sharedSecrets, fail.reason)
+    println(x)
+
+    x collect {
+      // Reduce remaining routes and remember failed nodes and channels
 
       case ErrorPacket(nodeKey, UnknownNextPeer) =>
         val _ \ nodeIds = rd.onion.sharedSecrets.unzip
@@ -98,6 +101,7 @@ object PaymentInfo {
       // Nothing to cut
       // try the next route
     } getOrElse rd
+  }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
   def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Int) = Try {

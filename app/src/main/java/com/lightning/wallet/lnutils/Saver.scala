@@ -11,7 +11,6 @@ import rx.lang.scala.{Scheduler, Observable => Obs}
 import org.bitcoinj.core.{Coin, Transaction}
 
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
-import com.lightning.wallet.helper.Statistics
 import spray.json.JsonFormat
 import scala.util.Try
 
@@ -70,9 +69,6 @@ object RatesSaver extends Saver {
 }
 
 case class Rates(feeHistory: Seq[Double], exchange: Fiat2Btc, stamp: Long) {
-  lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else {
-    val statistics = new Statistics[Double] { def extract(item: Double) = item }
-    val withoutOutliers = statistics.filterWithin(feeHistory, stdDevs = 2)
-    btcBigDecimal2MSat(statistics mean withoutOutliers): Coin
-  }
+  lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else
+    btcBigDecimal2MSat(feeHistory.sum / feeHistory.size): Coin
 }
