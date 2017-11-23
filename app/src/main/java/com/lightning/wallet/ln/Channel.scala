@@ -539,8 +539,8 @@ object Channel {
   val NORMAL = "Normal"
   val SYNC = "Sync"
 
-  // Makes chan inactive
   val REFUNDING = "Refunding"
+  // No tears, only dreams now
   val CLOSING = "Closing"
 }
 

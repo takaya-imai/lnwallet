@@ -88,9 +88,25 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       info.amount.amount.toString, info.status.toString, info.text, System.currentTimeMillis.toString)
   }
 
-  def updatePreimg(upd: UpdateFulfillHtlc) = db.change(PaymentInfoTable.updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
-  def updateAmount(add: UpdateAddHtlc) = db.change(PaymentInfoTable.updAmountSql, add.amountMsat.toString, add.paymentHash.toString)
-  def updateStatus(status: Int, hash: BinaryData) = db.change(PaymentInfoTable.updStatusSql, status.toString, hash.toString)
+  def updateStatus(status: Int, hash: BinaryData) = {
+    // Can become HIDDEN -> SUCCESS or WAITING -> FAILURE or SUCCESS
+    db.change(PaymentInfoTable.updStatusSql, status.toString, hash.toString)
+  }
+
+  def updatePreimg(upd: UpdateFulfillHtlc) = {
+    // Incoming payment is in fact fulfilled once we get a preimage
+    // so we should save a preimage right away without waiting for peer's next commitment sig
+    db.change(PaymentInfoTable.updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
+  }
+
+  def updateIncoming(add: UpdateAddHtlc) = {
+    // Incoming payment may provide a larger amount than what we requested
+    // so an actual incoming sum should be updated along with timestamp
+    db.change(PaymentInfoTable.updIncomingSql, add.amountMsat.toString,
+      System.currentTimeMillis.toString, add.paymentHash.toString)
+  }
+
+  // Records a number of retry attempts for a given outgoing payment hash
   val serverCallAttempts = mutable.Map.empty[BinaryData, Int] withDefaultValue 0
 
   override def onError = {
@@ -110,7 +126,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     case (_, _: NormalData, add: UpdateAddHtlc) =>
       // Actual incoming amount paid may be different
       // We need to record exactly how much was paid
-      me updateAmount add
+      me updateIncoming add
 
     case (_, _: NormalData, fulfill: UpdateFulfillHtlc) =>
       // We need to save a preimage as soon as we receive it

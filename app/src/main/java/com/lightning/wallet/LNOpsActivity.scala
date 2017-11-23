@@ -26,7 +26,6 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   lazy val refundStatus = getString(ln_ops_chan_refund_status)
   lazy val amountStatus = getString(ln_ops_chan_amount_status)
   lazy val commitStatus = getString(ln_ops_chan_commit_status)
-
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
   def goStartChannel = me exitTo classOf[LNStartActivity]
 
@@ -42,10 +41,8 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
 
     // Clear TransData here
     app.TransData.value = null
-    app.ChannelManager.all.headOption match {
-      case Some(channel) => manageFirst(channel)
-      case None => manageNoActiveChannel
-    }
+    val chanOpt = app.ChannelManager.notRefunding.headOption
+    chanOpt map manageFirst getOrElse manageNoActiveChannel
   }
 
   private def manageFirst(chan: Channel) = {

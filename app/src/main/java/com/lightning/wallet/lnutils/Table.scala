@@ -26,9 +26,9 @@ object StorageTable extends Table {
 }
 
 object ChannelTable extends Table {
-  // Order is important! New channels should always be on top
   val (table, identifier, data) = ("channel", "identifier", "data")
   def updSql = s"UPDATE $table SET $data = ? WHERE $identifier = ?"
+  // Order is important! New channels should always appear on top
   def selectAllSql = s"SELECT * FROM $table ORDER BY $id DESC"
   def killSql = s"DELETE FROM $table WHERE $identifier = ?"
 
@@ -56,8 +56,8 @@ object PaymentInfoTable extends Table {
   def selectSql = s"SELECT * FROM $table WHERE $hash = ?"
 
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def updAmountSql = s"UPDATE $table SET $amount = ? WHERE $hash = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
+  def updIncomingSql = s"UPDATE $table SET $amount = ?, $stamp = ? WHERE $hash = ?"
   def updFailWaitingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
   def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 

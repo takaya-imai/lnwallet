@@ -115,6 +115,7 @@ class WalletApp extends Application { me =>
     // Obtain a vector of saved channels which receive CMDSpent, CMDBestHeight and nothing else
     var all: ChannelVec = for (data <- ChannelWrap.get) yield createChannel(operationalListeners, data)
     def fromNode(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
+    def notRefunding: ChannelVec = all.filter(_.state != Channel.REFUNDING)
     def notClosing: ChannelVec = all.filter(_.state != Channel.CLOSING)
 
     val chainEventsListener = new TxTracker with BlocksListener {

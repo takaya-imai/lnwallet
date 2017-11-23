@@ -23,6 +23,7 @@ import scala.util.{Success, Try}
 object PaymentInfo {
   type PublicPaymentRoute = Vector[Hop]
   type ExtraPaymentRoute = Vector[ExtraHop]
+
   // Used as placeholder for unresolved outgoing payments
   val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
@@ -74,12 +75,9 @@ object PaymentInfo {
     rd.copy(routes = updatedRoutes, badNodes = rd.badNodes + faultyId)
   }
 
-  def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) = {
-    val x = parseErrorPacket(rd.onion.sharedSecrets, fail.reason)
-    println(x)
-
-    x collect {
-      // Reduce remaining routes and remember failed nodes and channels
+  def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
+    parseErrorPacket(rd.onion.sharedSecrets, fail.reason) collect {
+      // Reduce remaining routes and remember bad nodes and channels
 
       case ErrorPacket(nodeKey, UnknownNextPeer) =>
         val _ \ nodeIds = rd.onion.sharedSecrets.unzip
@@ -101,7 +99,6 @@ object PaymentInfo {
       // Nothing to cut
       // try the next route
     } getOrElse rd
-  }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
   def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Int) = Try {
@@ -182,7 +179,7 @@ trait PaymentInfoBag { me =>
   def getRoutingData(hash: BinaryData): Try[RoutingData]
   def updateStatus(status: Int, hash: BinaryData): Unit
   def updatePreimg(update: UpdateFulfillHtlc): Unit
-  def updateAmount(add: UpdateAddHtlc): Unit
+  def updateIncoming(add: UpdateAddHtlc): Unit
 
   def extractPreimage(tx: Transaction): Unit = tx.txIn.map(_.witness.stack) collect {
     case Seq(_, pre, _) if pre.size == 32 => me updatePreimg UpdateFulfillHtlc(null, 0L, pre)

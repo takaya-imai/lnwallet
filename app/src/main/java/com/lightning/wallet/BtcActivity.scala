@@ -22,18 +22,18 @@ import android.content.DialogInterface.BUTTON_POSITIVE
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.text.format.DateFormat
-import fr.acinq.bitcoin.MilliSatoshi
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
 import android.graphics.Typeface
 import android.content.Intent
 import android.os.Bundle
 import android.net.Uri
+import java.util.Date
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
   import R.layout.{frag_transfer_line_wide, frag_transfer_line_narrow}
-  lazy val time = (dt: java.util.Date) => new SimpleDateFormat(timeString) format dt
+  val time: Date => String = date => new SimpleDateFormat(timeString) format date
   lazy val bigFont = FontSystem.getFloat(getContentResolver, FontSystem.FONT_SCALE, 1) > 1
 
   // Should be accessed after activity is initialized
