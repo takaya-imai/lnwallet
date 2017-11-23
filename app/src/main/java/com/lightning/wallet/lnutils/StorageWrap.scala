@@ -144,24 +144,29 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
           case fail: UpdateFailHtlc => for {
             // Cut local routes, add failed nodes and channels
             oldRoutingData <- getRoutingData(htlc.add.paymentHash)
-            updatedRoutingData = cutRoutes(fail)(oldRoutingData)
+            reducedRoutingData = cutRoutes(fail)(oldRoutingData)
             // Try to use the rest of available local routes
-          } completeRoutingData(updatedRoutingData) match {
+          } completeRoutingData(reducedRoutingData) match {
 
-            case Some(updatedRoutingData1) =>
+            case Some(updatedRoutingData) =>
               // There are still routes left and we have just used one
               // if accepted: routing info will be upserted in onProcess
               // if not accepted: status will change to FAILURE in onError
-              chan process PlainAddHtlc(updatedRoutingData1)
+              chan process PlainAddHtlc(updatedRoutingData)
 
             case None =>
-              // No more spare routes left, save new bad nodes and channels
-              // and ask server for new routes if we are within call limits
+              // No more spare routes left
               updateStatus(FAILURE, htlc.add.paymentHash)
-              me upsertRoutingData updatedRoutingData
+              me upsertRoutingData reducedRoutingData
 
-              if (serverCallAttempts(htlc.add.paymentHash) < 5)
-                app.ChannelManager.outPaymentObs(updatedRoutingData)
+              // Ask server for new routes if all conditions are met
+              val peerIsBad = reducedRoutingData.badNodes contains chan.data.announce.nodeId
+              val recipientIsBad = reducedRoutingData.badNodes contains oldRoutingData.pr.nodeId
+              val nothingExcluded = reducedRoutingData.badNodes.isEmpty && reducedRoutingData.badChannels.isEmpty
+              val nope = peerIsBad | recipientIsBad | nothingExcluded | serverCallAttempts(htlc.add.paymentHash) > 4
+
+              if (!nope)
+                app.ChannelManager.outPaymentObs(reducedRoutingData)
                   .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
                   .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
           }

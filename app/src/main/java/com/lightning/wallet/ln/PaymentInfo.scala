@@ -69,22 +69,22 @@ object PaymentInfo {
     CMDFailHtlc(add.id, reason)
   }
 
-  // Reduce remaining routes
-  // and remember failed nodes and channels
+  private def withoutNode(faultyId: PublicKey, rd: RoutingData) = {
+    val updatedRoutes = rd.routes.filterNot(_.nodeIds contains faultyId)
+    rd.copy(routes = updatedRoutes, badNodes = rd.badNodes + faultyId)
+  }
+
   def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
     parseErrorPacket(rd.onion.sharedSecrets, fail.reason) collect {
-      case ErrorPacket(nodeKey, _: Perm) if rd.pr.nodeId == nodeKey =>
-        // Permanent error from a final node, nothing we can do
-        rd.copy(routes = Vector.empty)
+     // Reduce remaining routes and remember failed nodes and channels
 
       case ErrorPacket(nodeKey, UnknownNextPeer) =>
         val _ \ nodeIds = rd.onion.sharedSecrets.unzip
 
         nodeIds drop 1 zip nodeIds collectFirst {
-          case faultyId \ prevId if prevId == nodeKey =>
-            // Remove routes with next node, also mark next node as failed
-            val routes1 = rd.routes.filterNot(_.nodeIds contains faultyId)
-            rd.copy(routes = routes1, badNodes = rd.badNodes + faultyId)
+          case nextId \ prevId if prevId == nodeKey =>
+            // Remove all the routes containing next node
+            withoutNode(nextId, rd)
         } getOrElse rd
 
       case ErrorPacket(_, message: Update) =>
@@ -92,12 +92,11 @@ object PaymentInfo {
         val routes1 = rd.routes.filterNot(_.payloads.map(_.shortChannelId) contains message.update.shortChannelId)
         rd.copy(routes = routes1, badChannels = rd.badChannels + message.update.shortChannelId)
 
-      case ErrorPacket(nodeKey, _: Node) =>
-        // Remove routes with this node, also mark this node as failed
-        val routes1 = rd.routes.filterNot(_.nodeIds contains nodeKey)
-        rd.copy(routes = routes1, badNodes = rd.badNodes + nodeKey)
+      case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(nodeKey, rd)
+      case ErrorPacket(nodeKey, _: Node) => withoutNode(nodeKey, rd)
 
       // Nothing to cut
+      // try the next route
     } getOrElse rd
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them

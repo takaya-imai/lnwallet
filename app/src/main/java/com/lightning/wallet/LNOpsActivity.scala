@@ -60,7 +60,7 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
         app.plurOrZero(txsConfs, threshold), openStatus).html
     }
 
-    def manageNegotiations(c: Commitments) = {
+    def manageNegs(c: Commitments) = {
       val description = getString(ln_ops_chan_bilateral_negotiations)
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClose)
       lnOpsDescription setText description.html
@@ -90,8 +90,8 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
           app.kit watchFunding commitments
           app.kit blockingSend tx
 
-        case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegotiations(norm.commitments)
-        case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegotiations(negs.commitments)
+        case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegs(norm.commitments)
+        case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegs(negs.commitments)
         case _ if chan.isOperational => me exitTo classOf[LNActivity]
         case _ => me runOnUiThread manageNoActiveChannel
       }

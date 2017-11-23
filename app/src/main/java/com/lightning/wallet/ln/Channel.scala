@@ -57,7 +57,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
         if accept.temporaryChannelId == cmd.temporaryChannelId =>
 
-        val tooHighMinDepth = accept.minimumDepth > 8L
+        val tooHighMinDepth = accept.minimumDepth > 6L
         val tooLowAcceptedHtlcs = accept.maxAcceptedHtlcs < 1
         val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 2500000L
         val tooHighDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5
@@ -75,7 +75,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
         val fundingCreated = FundingCreated(cmd.temporaryChannelId, fundTx.hash, outIndex, localSigOfRemoteTx)
-        val firstRemoteCommit = RemoteCommit(index = 0, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
+        val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
 
         BECOME(WaitFundingSignedData(announce, cmd.localParams,
           Tools.toLongId(fundTx.hash, outIndex), accept, fundTx, localSpec,
