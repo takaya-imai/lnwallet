@@ -98,8 +98,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         }
 
         transactWhen setText when(System.currentTimeMillis, timestamp).html
+        transactSum setText s"$markedPaymentSum\u00A0${info.text}".html
         transactCircle setImageResource imgMap(info.actualStatus)
-        transactSum setText markedPaymentSum.html
       }
     }
   }
