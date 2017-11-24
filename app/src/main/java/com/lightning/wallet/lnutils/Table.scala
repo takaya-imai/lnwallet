@@ -55,9 +55,11 @@ object PaymentInfoTable extends Table {
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
   def selectSql = s"SELECT * FROM $table WHERE $hash = ?"
 
+  // We only update an incoming record if proposed amount is greater or equals the one we originally requested
+  def updIncomingSql(amt: Long) = s"UPDATE $table SET $amount = $amt, $stamp = ? WHERE $hash = ? AND $amt >= $amount"
+
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
   def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
-  def updIncomingSql = s"UPDATE $table SET $amount = ?, $stamp = ? WHERE $hash = ?"
   def updFailWaitingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
   def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 
