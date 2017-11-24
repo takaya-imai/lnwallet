@@ -208,8 +208,8 @@
     <string name="ln_ops_chan_bilateral_closing"><![CDATA[Closing a Payment Channel&#8230;<br><br>Remaining channel balance has been refunded to your Bitcoin wallet<br><br>%1$s]]></string>
 
     <string name="ln_ops_chan_amount_status">%1$s - %2$s fee</string>
-    <string name="ln_ops_chan_refund_status"><![CDATA[<font color=#999999>Your pending refunds</font>]]></string>
-    <string name="ln_ops_chan_commit_status"><![CDATA[<font color=#999999>Closing transaction status</font><br>%1$s<br>%2$s fee]]></string>
+    <string name="ln_ops_chan_refund_status"><![CDATA[<br><br><font color=#999999>Your pending refunds</font><br>]]></string>
+    <string name="ln_ops_chan_commit_status"><![CDATA[<a href=https://live.blockcypher.com/btc-testnet/tx/%1$s>Closing transaction status</a><br>%2$s<br>%3$s fee]]></string>
 
     <string name="ln_ops_chan_unilateral_status_dead"><![CDATA[%1$s<br>= %2$s cancelled]]></string>
     <string name="ln_ops_chan_unilateral_status_done"><![CDATA[%1$s<br>= %2$s received]]></string>

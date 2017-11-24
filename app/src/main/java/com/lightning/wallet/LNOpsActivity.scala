@@ -123,8 +123,10 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
     case Right(info) => txStatus(info.commitTx.txid) match { case cfs \ _ => cfs }
   } match {
     case Left(mutualTx) =>
+      val mutualTxHumanStatus = humanStatus(LNParams.broadcaster txStatus mutualTx.txid)
       val mutualFee = coloredOut(data.commitments.commitInput.txOut.amount - mutualTx.txOut.map(_.amount).sum)
-      val mutualTxHumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus mutualTx.txid), mutualFee)
+      val mutualTxHumanView = commitStatus.format(mutualTx.txid.toString, mutualTxHumanStatus, mutualFee)
+
       lnOpsDescription setText bilateralClosing.format(mutualTxHumanView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start
@@ -148,11 +150,13 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
           statusLeft.format(app.plurOrZero(blocksLeft, left), leftDetails, coloredIn apply amt)
       } take 3
 
-      val startedAtHumanView = time apply new Date(data.startedAt)
+      val startedAtView = time apply new Date(data.startedAt)
+      val commitHumanStatus = humanStatus(LNParams.broadcaster txStatus info.commitTx.txid)
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
-      val tier0HumanView = commitStatus.format(humanStatus(LNParams.broadcaster txStatus info.commitTx.txid), commitFee)
-      val combinedView = tier0HumanView + s"<br><br>$refundStatus<br>" + tier2HumanView.mkString("<br><br>")
-      lnOpsDescription setText unilateralClosing.format(startedAtHumanView, combinedView).html
+      val commitTxHumanView = commitStatus.format(info.commitTx.txid, commitHumanStatus, commitFee)
+      val combinedView = commitTxHumanView + refundStatus + tier2HumanView.mkString("<br><br>")
+
+      lnOpsDescription setText unilateralClosing.format(startedAtView, combinedView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start
   }
