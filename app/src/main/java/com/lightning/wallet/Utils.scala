@@ -165,7 +165,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   // Password checking popup
   def passPlus(title: CharSequence)(next: String => Unit) = {
-    val (passAsk, secret) = generatePasswordPromptView(passType, password_old)
+    val (passAsk, secret) = generatePasswordPromptView(passType, password_current)
     mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
 
     def infoAndNext = {

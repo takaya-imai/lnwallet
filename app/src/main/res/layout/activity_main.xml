@@ -48,7 +48,7 @@
 
         <TextView
             style="@style/Info"
-            android:text="@string/password_old"
+            android:text="@string/password_current"
             android:layout_width="wrap_content"/>
 
         <Button

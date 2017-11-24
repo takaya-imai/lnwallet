@@ -306,8 +306,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     makePaymentRequest = anyToRunnable {
-      // Peer's balance can't go below their unspendable channel reserve so it should be taken into account here
-      val canReceive = chan(c => c.localCommit.spec.toRemoteMsat - c.remoteParams.channelReserveSatoshis * 1000L)
+      // Somewhat counterintuitive: localParams.channelReserveSat is THEIR unspendable reseve
+      // peer's balance can't go below their unspendable reserve so it should be taken into account here
+      val canReceive = chan(c => c.localCommit.spec.toRemoteMsat - c.localParams.channelReserveSat * 1000L)
       val finalCanReceive = math.min(canReceive.filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
       val maxMsat = MilliSatoshi(finalCanReceive)
 

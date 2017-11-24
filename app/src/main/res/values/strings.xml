@@ -38,12 +38,12 @@
         <item><![CDATA[%1$d <a href=http://lightning-wallet.com/storage-tokens.html#storage-tokens>storage tokens</a> left]]></item>
     </array>
 
-    <string name="restore_pass">Old wallet password</string>
-    <string name="restore_encrypted">Your encrypted mnemonic</string>
+    <string name="restore_pass">Old wallet password\n<small>the one you had in a previous wallet\nwhen mnemonic was encrypted</small></string>
     <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
     <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
     <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
     <string name="restore_mnemonic_wrong">Mnemonic must be 12 words long</string>
+    <string name="restore_encrypted">Your encrypted mnemonic</string>
     <string name="restore_hint">Your BIP32 mnemonic code</string>
 
     <!-- headers with links -->
@@ -61,7 +61,7 @@
     <string name="sets_rescan">Rescan blockchain</string>
 
     <string name="password_new">New password</string>
-    <string name="password_old">Current password</string>
+    <string name="password_current">Current password</string>
     <string name="password_wrong">Wrong wallet password</string>
     <string name="password_too_short">Password is too short</string>
 
