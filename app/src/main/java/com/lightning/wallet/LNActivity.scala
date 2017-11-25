@@ -323,9 +323,11 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
         bag upsertRoutingData emptyRD(paymentRequest)
-        // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
+        // Amount of 0 is a special case which means they can pay whatever they want
+        // unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
         bag upsertPaymentInfo PaymentInfo(hash = paymentRequest.paymentHash, incoming = 1, preimg,
-          paymentRequest.finalSum, HIDDEN, System.currentTimeMillis, paymentRequest.textDescription)
+          paymentRequest.amount getOrElse MilliSatoshi(0), HIDDEN, System.currentTimeMillis,
+          paymentRequest.description.right getOrElse new String)
 
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
@@ -336,6 +338,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
 
         case result => rm(alert) {
+          // Payment request may contain no amount
           notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
           <(proceed(result.toOption, random getBytes 32), onFail)(none)
         }

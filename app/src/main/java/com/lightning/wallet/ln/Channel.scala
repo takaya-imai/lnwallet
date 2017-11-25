@@ -5,15 +5,15 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
+import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import java.util.concurrent.Executors
-
 import scala.collection.mutable
 import scala.util.Success
-import com.lightning.wallet.ln.crypto.Sphinx.zeroes
+
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
 
@@ -261,7 +261,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       case (norm @ NormalData(_, commitments, our, their), CMDShutdown, NORMAL) =>
-        val nope = our.isDefined || their.isDefined || Commitments.localHasUnsignedOutgoing(commitments)
+        val nope = our.isDefined | their.isDefined | Commitments.localHasUnsignedOutgoing(commitments)
         if (nope) startLocalCurrentClose(norm) else me startShutdown norm
 
 

@@ -73,7 +73,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
   lazy val minFinalCltvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta.toInt }
   lazy val paymentHash = tags.collectFirst { case paymentHashTag: PaymentHashTag => paymentHashTag.hash }.get
   lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
-  lazy val textDescription = description.right getOrElse new String
+  // Amount MUST be present if this is an outgoing payment
   lazy val finalSum = amount.get
 
   def isFresh: Boolean = {

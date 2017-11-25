@@ -137,8 +137,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
 
       db txWrap {
         me upsertRoutingData cmd.rd
-        me upsertPaymentInfo PaymentInfo(cmd.rd.pr.paymentHash, incoming = 0, NOIMAGE,
-          cmd.rd.pr.finalSum, WAITING, System.currentTimeMillis, cmd.rd.pr.textDescription)
+        me upsertPaymentInfo PaymentInfo(cmd.rd.pr.paymentHash, incoming = 0,
+          NOIMAGE, cmd.rd.pr.finalSum, WAITING, System.currentTimeMillis,
+          cmd.rd.pr.description.right getOrElse new String)
       }
 
       uiNotify

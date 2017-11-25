@@ -184,17 +184,20 @@ trait ToolbarActivity extends TimerActivity { me =>
     <(app.kit decryptSeed password, _ => tellGenError) { seed =>
       val wordsText = TextUtils.join("\u0020", seed.getMnemonicCode)
       lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
-      lazy val alert: AlertDialog = mkForm(dialog, getString(sets_noscreen).html, wordsText)
+      lazy val alert = mkForm(dialog, getString(sets_noscreen).html, wordsText)
       alert
 
       def warnUser: Unit = rm(alert) {
         lazy val dialog1 = mkChoiceDialog(encryptAndExport, none, dialog_ok, dialog_cancel)
-        lazy val alert1: AlertDialog = mkForm(dialog1, null, getString(mnemonic_export_details).html)
+        lazy val alert1 = mkForm(dialog1, null, getString(mnemonic_export_details).html)
         alert1
 
         def encryptAndExport: Unit = rm(alert1) {
           val packed = AES.encode(wordsText, Crypto sha256 password.binary.data)
           val exported = s"Encrypted BIP32 code ${new java.util.Date}: ${packed.toString}"
+
+          println(exported)
+
           val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
           val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
           me startActivity s1
