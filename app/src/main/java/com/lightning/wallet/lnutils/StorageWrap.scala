@@ -47,7 +47,7 @@ object ChannelWrap extends ChannelListener {
   }
 
   override def onProcess = {
-    case (_, close: EndingData, _: CMDBestHeight) if close.isOutdated =>
+    case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
 
     case (_, norm: NormalData, _: CommitSig)
@@ -59,9 +59,8 @@ object ChannelWrap extends ChannelListener {
   override def onBecome = {
     case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
       // Once a new channel becomes NORMAL we save it's state on a cloud
-      val staticChannelState = RefundingData(norm.announce, norm.commitments)
-      val packed = AES.encode(staticChannelState.toJson.toString, cloudSecret)
-      cloud doProcess CloudAct(packed, Seq("key" -> cloudId.toString), "data/put")
+      val state = ClosingData(norm.announce, norm.commitments, isRefunding = true).toJson.toString
+      cloud doProcess CloudAct(AES.encode(state, cloudSecret), Seq("key" -> cloudId.toString), "data/put")
   }
 }
 

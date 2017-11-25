@@ -307,7 +307,6 @@ object ImplicitJsonFormats { me =>
     def read(json: JsValue) = json.asJsObject fields "tag" match {
       case JsString("WaitFundingDoneData") => json.convertTo[WaitFundingDoneData]
       case JsString("NegotiationsData") => json.convertTo[NegotiationsData]
-      case JsString("RefundingData") => json.convertTo[RefundingData]
       case JsString("ClosingData") => json.convertTo[ClosingData]
       case JsString("NormalData") => json.convertTo[NormalData]
       case _ => throw new RuntimeException
@@ -316,20 +315,16 @@ object ImplicitJsonFormats { me =>
     def write(internal: HasCommitments) = internal match {
       case hasCommitments: WaitFundingDoneData => hasCommitments.toJson
       case hasCommitments: NegotiationsData => hasCommitments.toJson
-      case hasCommitments: RefundingData => hasCommitments.toJson
       case hasCommitments: ClosingData => hasCommitments.toJson
       case hasCommitments: NormalData => hasCommitments.toJson
       case _ => throw new RuntimeException
     }
   }
 
-  implicit val refundingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, Long,
-    RefundingData](RefundingData.apply, "announce", "commitments", "startedAt"), tag = "RefundingData")
-
   implicit val closingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, TxSeq,
-    Seq[LocalCommitPublished], Seq[RemoteCommitPublished], Seq[RemoteCommitPublished], Seq[RevokedCommitPublished], Long,
+    Seq[LocalCommitPublished], Seq[RemoteCommitPublished], Seq[RemoteCommitPublished], Seq[RevokedCommitPublished], Boolean, Long,
     ClosingData](ClosingData.apply, "announce", "commitments", "mutualClose", "localCommit", "remoteCommit", "nextRemoteCommit",
-    "revokedCommits", "startedAt"), tag = "ClosingData")
+    "revokedCommits", "isRefunding", "startedAt"), tag = "ClosingData")
 
   implicit val negotiationsDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, ClosingSigned, Shutdown, Shutdown,
     NegotiationsData](NegotiationsData.apply, "announce", "commitments", "localClosingSigned", "localShutdown",

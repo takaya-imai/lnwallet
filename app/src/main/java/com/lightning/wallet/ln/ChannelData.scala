@@ -65,18 +65,10 @@ case class NormalData(announce: NodeAnnouncement,
 case class NegotiationsData(announce: NodeAnnouncement, commitments: Commitments, localClosingSigned: ClosingSigned,
                             localShutdown: Shutdown, remoteShutdown: Shutdown) extends HasCommitments
 
-
-sealed trait EndingData extends HasCommitments { def isOutdated: Boolean }
-case class RefundingData(announce: NodeAnnouncement, commitments: Commitments,
-                         startedAt: Long = System.currentTimeMillis) extends EndingData {
-
-  def isOutdated = startedAt + 1000 * 3600 * 2 < System.currentTimeMillis
-}
-
 case class ClosingData(announce: NodeAnnouncement, commitments: Commitments, mutualClose: Seq[Transaction] = Nil,
                        localCommit: Seq[LocalCommitPublished] = Nil, remoteCommit: Seq[RemoteCommitPublished] = Nil,
                        nextRemoteCommit: Seq[RemoteCommitPublished] = Nil, revokedCommit: Seq[RevokedCommitPublished] = Nil,
-                       startedAt: Long = System.currentTimeMillis) extends EndingData {
+                       isRefunding: Boolean = false, startedAt: Long = System.currentTimeMillis) extends HasCommitments {
 
   def isOutdated: Boolean = {
     val mutualClosingStates = for (tx <- mutualClose) yield txStatus(tx.txid)

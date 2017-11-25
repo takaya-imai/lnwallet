@@ -5,13 +5,14 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
-import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import java.util.concurrent.Executors
+
 import scala.collection.mutable
 import scala.util.Success
-
+import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
-import com.lightning.wallet.ln.crypto.{Generators, ShaHashesWithIndex}
+import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
@@ -324,7 +325,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // We're exiting a sync state but don't have enough locks so we keep waiting
-      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0), SYNC)
+      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0, _, _), SYNC)
         if channelId == wait.commitments.channelId =>
 
         BECOME(wait, WAIT_FUNDING_DONE)
@@ -385,13 +386,22 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
+      case (close: ClosingData, cr: ChannelReestablish, REFUNDING)
+        // GUARD: we have lost our state and wait for their `myCurrentPerCommitmentPoint`
+        if cr.channelId == close.commitments.channelId && cr.myCurrentPerCommitmentPoint.isDefined =>
+        val d1 = close.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo cr.myCurrentPerCommitmentPoint.get
+        me UPDATE d1 SEND Error(cr.channelId, "Please be so kind as to spend your local commit" getBytes "UTF-8")
+
+
       // SYNC: ONLINE/OFFLINE
 
 
       case (some: HasCommitments, CMDOnline, SYNC) =>
-        me SEND ChannelReestablish(some.commitments.channelId,
-          some.commitments.localCommit.index + 1,
-          some.commitments.remoteCommit.index)
+        val secrets = some.commitments.remotePerCommitmentSecrets
+        val yourLastPerCommitmentSecret = secrets.lastIndex.map(ShaChain.moves).flatMap(ShaChain getHash secrets.hashes) getOrElse zeroes(32)
+        val myCurrentPerCommitmentPoint = Generators.perCommitPoint(some.commitments.localParams.shaSeed, some.commitments.localCommit.index)
+        me SEND ChannelReestablish(some.commitments.channelId, some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index,
+          Some apply Scalar(yourLastPerCommitmentSecret), Some apply myCurrentPerCommitmentPoint)
 
 
       case (wait: WaitFundingDoneData, CMDOffline, WAIT_FUNDING_DONE) => BECOME(wait, SYNC)
@@ -424,6 +434,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       // HANDLE FUNDING SPENT
+
+
+      case (close: ClosingData, CMDSpent(spendTx), REFUNDING)
+        // GUARD: we have lost our state and asked them to spend their local commit
+        if spendTx.txIn.exists(_.outPoint == close.commitments.commitInput.outPoint) =>
+
+        // `commitments.remoteCommit` has to be updated with their `myCurrentPerCommitmentPoint` at this point
+        val rcp = Closing.claimRemoteMainOutput(close.commitments, close.commitments.remoteCommit, spendTx)
+        val d1 = me STORE close.copy(remoteCommit = rcp :: Nil)
+        me UPDATE d1
 
 
       case (close: ClosingData, CMDSpent(spendTx), _)
@@ -461,8 +481,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE INITIALIZATION
 
 
+      case (null, close: ClosingData, null) =>
+        // REFUNDING should always stay REFUNDING
+        if (close.isRefunding) BECOME(close, REFUNDING)
+        else BECOME(close, CLOSING)
+
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
-      case (null, closing: ClosingData, null) => BECOME(closing, CLOSING)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)
@@ -493,7 +517,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   }
 
   private def startNormalChannelMode(wait: HasCommitments, their: FundingLocked) = {
-    val c1 = wait.commitments.copy(remoteNextCommitInfo = Right apply their.nextPerCommitmentPoint)
+    val c1 = wait.commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
     BECOME(me STORE NormalData(wait.announce, c1), NORMAL)
   }
 
@@ -539,8 +563,8 @@ object Channel {
   val NORMAL = "Normal"
   val SYNC = "Sync"
 
-  val REFUNDING = "Refunding"
   // No tears, only dreams now
+  val REFUNDING = "Refunding"
   val CLOSING = "Closing"
 }
 

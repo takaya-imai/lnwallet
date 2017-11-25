@@ -144,8 +144,8 @@ object Helpers { me =>
         allTimeoutTxs, commitTx = commitments.localCommit.commitTx.tx)
     }
 
+    // remoteCommit may refer to their current or next RemoteCommit, hence it is a separate parameter
     def claimRemoteCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit, bag: PaymentInfoBag) = {
-      val localPaymentPrivkey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
       val localHtlcPrivkey = derivePrivKey(commitments.localParams.htlcKey, remoteCommit.remotePerCommitmentPoint)
 
       val (remoteCommitTx, timeoutTxs, successTxs, remoteHtlcPubkey, remoteRevocationPubkey) =
@@ -175,17 +175,12 @@ object Helpers { me =>
         claimTimeout <- Scripts checkSpendable signed
       } yield claimTimeout
 
-      RemoteCommitPublished(Scripts.checkSpendable {
-        val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(remoteCommitTx.tx, localPaymentPrivkey.publicKey,
-          commitments.localParams.defaultFinalScriptPubKey, remoteCommit.spec.feeratePerKw)
-
-        val sig = Scripts.sign(txWithInputInfo, localPaymentPrivkey)
-        Scripts.addSigs(txWithInputInfo, localPaymentPrivkey.publicKey, sig)
-      }.toList, claimSuccessTxs.toList, claimTimeoutTxs.toList, remoteCommitTx.tx)
+      val main = claimRemoteMainOutput(commitments, remoteCommit, remoteCommitTx.tx)
+      main.copy(claimHtlcSuccess = claimSuccessTxs.toList, claimHtlcTimeout = claimTimeoutTxs.toList)
     }
 
     // Special case when we have lost our data and ask them to spend their local current commit tx
-    def claimRemoteLostCommitTxOutputs(commitments: Commitments, remoteCommit: RemoteCommit, commitTx: Transaction) = {
+    def claimRemoteMainOutput(commitments: Commitments, remoteCommit: RemoteCommit, commitTx: Transaction) = {
       val localPaymentPrivkey = derivePrivKey(commitments.localParams.paymentKey, remoteCommit.remotePerCommitmentPoint)
 
       RemoteCommitPublished(Scripts.checkSpendable {

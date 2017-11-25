@@ -8,11 +8,12 @@ import org.bitcoinj.core._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
-import com.lightning.wallet.lnutils._
 import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
+
+import com.lightning.wallet.lnutils.{RatesSaver, CloudDataSaver}
 import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
@@ -26,10 +27,10 @@ import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
 import org.bitcoinj.wallet.Wallet.CouldNotAdjustDownwards
 import android.widget.RadioGroup.OnCheckedChangeListener
 import android.widget.AdapterView.OnItemClickListener
+import com.lightning.wallet.lnutils.JsonHttpUtils.to
 import info.hoang8f.android.segmented.SegmentedGroup
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
-import com.lightning.wallet.lnutils.JsonHttpUtils
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
@@ -224,17 +225,20 @@ trait ToolbarActivity extends TimerActivity { me =>
 
       def proceed =
         LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(serverDataVec => {
-          // We need to filter out local channels so we do not accidently close an operational ones
-          val localChanIds = app.ChannelManager.all.map(_(_.channelId) getOrElse BinaryData.empty)
+          // Need to filter out local channels so we do not accidently close an operational ones
+          val localCommits = app.ChannelManager.all.flatMap(_ apply identity)
           val listeners = app.ChannelManager.operationalListeners
 
           for {
             encoded <- serverDataVec
             jsonDecoded = AES.decode(LNParams.cloudSecret)(encoded)
-            refundingData = JsonHttpUtils.to[RefundingData](jsonDecoded)
-            if !localChanIds.contains(refundingData.commitments.channelId)
-            chan = app.ChannelManager.createChannel(listeners, refundingData)
-            isAdded = app.kit watchFunding refundingData.commitments
+            // This may be some garbage so omit this one if it fails
+            closingData <- Try apply jsonDecoded map to[ClosingData]
+
+            // Now throw it away if it is already present in list of local channels
+            if !localCommits.exists(_.channelId == closingData.commitments.channelId)
+            chan = app.ChannelManager.createChannel(listeners, closingData)
+            isAdded = app.kit watchFunding closingData.commitments
           } app.ChannelManager.all +:= chan
 
           // Request connections after these channels are added
