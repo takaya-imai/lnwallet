@@ -195,9 +195,6 @@ trait ToolbarActivity extends TimerActivity { me =>
         def encryptAndExport: Unit = rm(alert1) {
           val packed = AES.encode(wordsText, Crypto sha256 password.binary.data)
           val exported = s"Encrypted BIP32 code ${new java.util.Date}: ${packed.toString}"
-
-          println(exported)
-
           val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
           val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
           me startActivity s1

@@ -49,7 +49,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
           tempId, fundingSat, pushMsat, LNParams.dustLimit.amount, localParams.maxHtlcValueInFlightMsat,
-          localParams.channelReserveSat, LNParams.htlcMinimumMsat, initialFeeratePerKw, localParams.toSelfDelay,
+          localParams.channelReserveSat, LNParams.minHtlcValue.amount, initialFeeratePerKw, localParams.toSelfDelay,
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationBasepoint,
           localParams.paymentBasepoint, localParams.delayedPaymentBasepoint, localParams.htlcBasepoint,
           Generators.perCommitPoint(localParams.shaSeed, index = 0L), channelFlags = 1.toByte)
@@ -64,7 +64,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val tooHighDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5
         val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay
 
-        val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
+        // channel reserve satoshis + commit tx fee + htlc fee SHOULD BE <= min channel capacity
+        val exceedsReserve = accept.channelReserveSatoshis > LNParams.minChannelCapacity.amount * 0.7 // 175,000 Satoshi
         val nope = tooHighMinDepth | tooLowAcceptedHtlcs | tooHighHtlcMinimumMsat | tooHighDustLimit | tooLowSelfDelay | exceedsReserve
         if (nope) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 

@@ -10,6 +10,7 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import com.lightning.wallet.helper.ThrottledWork
+import com.lightning.wallet.lnutils.ChannelWrap
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
 import scala.collection.mutable
@@ -18,7 +19,6 @@ import org.bitcoinj.core.Coin
 import android.os.Bundle
 
 import android.widget.{BaseAdapter, Button, ListView, TextView}
-import com.lightning.wallet.lnutils.{ChannelWrap, RatesSaver}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.Utils.{app, denom}
 import android.view.{Menu, View, ViewGroup}
@@ -161,23 +161,21 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFunding(chan: Channel, their: Init) = {
-    val walletBalance = denom withSign app.kit.currentBalance
-    val maxCapacity = denom withSign LNParams.maxChannelCapacity
-    val minCapacity = coin2MSat(RatesSaver.rates.feeLive multiply 3)
-
+    // Make room for something a user can actually spend
+    val minUserCapacity = LNParams.minChannelCapacity * 2
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
-    val extra = getString(amount_hint_newchan).format(denom withSign minCapacity, maxCapacity, walletBalance)
-    val rateManager = new RateManager(extra, content)
+    val rateManager = new RateManager(getString(amount_hint_newchan).format(denom withSign minUserCapacity,
+      denom withSign LNParams.maxChannelCapacity, denom withSign app.kit.currentBalance), content)
 
     def askAttempt = rateManager.result match {
       case Failure(_) => app toast dialog_sum_empty
-      case Success(ms) if ms.amount < minCapacity.amount => app toast dialog_sum_small
-      case Success(ms) if ms.amount > LNParams.maxChannelCapacity.amount => app toast dialog_sum_big
+      case Success(ms) if ms < minUserCapacity => app toast dialog_sum_small
+      case Success(ms) if ms > LNParams.maxChannelCapacity => app toast dialog_sum_big
 
       case Success(ms) => rm(alert) {
         val amountSat = ms.amount / sat2msatFactor
-        val chanReserveSat = (amountSat * LNParams.reserveToFundingRatio).toLong
+        val chanReserveSat = (amountSat * LNParams.theirReserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
         val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
         chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)

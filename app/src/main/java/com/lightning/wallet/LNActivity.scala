@@ -20,6 +20,7 @@ import scala.util.{Failure, Success, Try}
 import fr.castorflex.android.smoothprogressbar.SmoothProgressDrawable
 import fr.castorflex.android.smoothprogressbar.SmoothProgressBar
 import android.support.v7.widget.SearchView.OnQueryTextListener
+import com.lightning.wallet.Denomination.sat2msatFactor
 import android.content.Context.LAYOUT_INFLATER_SERVICE
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
@@ -31,7 +32,6 @@ import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
 import scala.language.postfixOps
-import android.app.AlertDialog
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
@@ -254,7 +254,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           val humanSent = humanFiat(coloredOut(amount), amount)
           val fee = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
           val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
-          val alert: AlertDialog = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+          val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
           paymentDetails setText s"$description<br><br>$humanSent".html
 
           def retry = rm(alert) { pay apply rd }
@@ -274,16 +274,22 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     sendPayment = pr => {
+      // our balance can't go below min channel capacity imposed by wallet
+      val canSend = chan(_.localCommit.spec.toLocalMsat - minChannelCapacity.amount)
+      val finalCanSend = math.min(canSend.filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
+      val maxMsat = MilliSatoshi(finalCanSend)
+
       val title = getString(ln_send_title).format(me getDescription pr)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
       val alert = mkForm(negPosBld(dialog_cancel, dialog_pay), title.html, content)
-      val rateManager = new RateManager(new String, content)
+      val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
+      val rateManager = new RateManager(hint, content)
 
       def sendAttempt = rateManager.result match {
         case Failure(_) => app toast dialog_sum_empty
-        case Success(ms) if maxHtlcValue < ms => app toast dialog_sum_big
+        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
+        case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
-        case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
         case _ => rm(alert) { pay compose emptyRD apply pr }
       }
@@ -307,8 +313,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
     makePaymentRequest = anyToRunnable {
       // Somewhat counterintuitive: localParams.channelReserveSat is THEIR unspendable reseve
-      // peer's balance can't go below their unspendable reserve so it should be taken into account here
-      val canReceive = chan(c => c.localCommit.spec.toRemoteMsat - c.localParams.channelReserveSat * 1000L)
+      // peer's balance can't go below their unspendable channel reserve so it should be taken into account here
+      val canReceive = chan(c => c.localCommit.spec.toRemoteMsat - c.localParams.channelReserveSat * sat2msatFactor)
       val finalCanReceive = math.min(canReceive.filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
       val maxMsat = MilliSatoshi(finalCanReceive)
 
@@ -335,7 +341,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
       def receiveAttempt = rateManager.result match {
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
-        case Success(ms) if htlcMinimumMsat > ms.amount => app toast dialog_sum_small
+        case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
 
         case result => rm(alert) {
           // Payment request may contain no amount

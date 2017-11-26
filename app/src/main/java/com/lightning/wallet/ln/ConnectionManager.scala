@@ -70,6 +70,8 @@ object ConnectionManager {
         savedInit = their
 
       case error: Error =>
+        // For now we treat any Error as connection level one
+        // since a user may only have one open channel per node
         val decoded = new String(error.data.toArray)
         Tools log s"Got remote Error: $decoded"
         events onTerminalError nodeId

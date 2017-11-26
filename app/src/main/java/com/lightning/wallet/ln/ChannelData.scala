@@ -264,7 +264,7 @@ object Commitments {
     }
 
   def receiveAdd(c: Commitments, add: UpdateAddHtlc) =
-    if (add.amountMsat < htlcMinimumMsat) throw new LightningException
+    if (add.amountMsat < minHtlcValue.amount) throw new LightningException
     else if (add.id != c.remoteNextHtlcId) throw new LightningException
     else if (add.paymentHash.size != 32) throw new LightningException
     else {

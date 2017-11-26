@@ -15,15 +15,15 @@ import fr.acinq.eclair.UInt64
 
 
 object LNParams { me =>
+  val minHtlcValue = MilliSatoshi(500L)
   val maxHtlcValue = MilliSatoshi(4194304000L)
+  val minChannelCapacity = MilliSatoshi(250000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash
-  val maxReserveToFundingRatio = 0.05 // 5%
-  val reserveToFundingRatio = 0.025 // 2.5%
+  val theirReserveToFundingRatio = 0.01 // 1%
   val maxFeerateMismatchRatio = 1.5 // 150%
   val updateFeeMinDiffRatio = 0.25 // 25%
-  val htlcMinimumMsat = 100000L
   val localFeatures = "00"
   val globalFeatures = ""
   val minDepth = 1
