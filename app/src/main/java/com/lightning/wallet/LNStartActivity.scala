@@ -161,8 +161,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFunding(chan: Channel, their: Init) = {
+    val minUserCapacity = LNParams.minChannelMargin * 2
     // Make room for something a user can actually spend
-    val minUserCapacity = LNParams.minChannelCapacity * 2
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
     val rateManager = new RateManager(getString(amount_hint_newchan).format(denom withSign minUserCapacity,
@@ -175,9 +175,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       case Success(ms) => rm(alert) {
         val amountSat = ms.amount / sat2msatFactor
-        val chanReserveSat = (amountSat * LNParams.theirReserveToFundingRatio).toLong
+        val theirReserveSat = (amountSat * LNParams.theirReserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
-        val localParams = LNParams.makeLocalParams(chanReserveSat, finalPubKeyScript, System.currentTimeMillis)
+        val localParams = LNParams.makeLocalParams(theirReserveSat, finalPubKeyScript, System.currentTimeMillis)
         chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
       }
     }

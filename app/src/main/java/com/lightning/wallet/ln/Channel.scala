@@ -64,8 +64,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val tooHighDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5
         val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay
 
-        // channel reserve satoshis + commit tx fee + htlc fee SHOULD BE <= min channel capacity
-        val exceedsReserve = accept.channelReserveSatoshis > LNParams.minChannelCapacity.amount * 0.7 // 175,000 Satoshi
+        val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
         val nope = tooHighMinDepth | tooLowAcceptedHtlcs | tooHighHtlcMinimumMsat | tooHighDustLimit | tooLowSelfDelay | exceedsReserve
         if (nope) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 

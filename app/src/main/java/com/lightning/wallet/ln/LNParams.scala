@@ -17,11 +17,12 @@ import fr.acinq.eclair.UInt64
 object LNParams { me =>
   val minHtlcValue = MilliSatoshi(500L)
   val maxHtlcValue = MilliSatoshi(4194304000L)
-  val minChannelCapacity = MilliSatoshi(250000000L)
+  val minChannelMargin = MilliSatoshi(150000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash
   val theirReserveToFundingRatio = 0.01 // 1%
+  val maxReserveToFundingRatio = 0.05 // 5%
   val maxFeerateMismatchRatio = 1.5 // 150%
   val updateFeeMinDiffRatio = 0.25 // 25%
   val localFeatures = "00"
@@ -77,7 +78,7 @@ object LNParams { me =>
 
   def makeLocalParams(reserve: Long, finalScriptPubKey: BinaryData, idx: Long) = {
     val Seq(fund, revoke, pay, delay, htlc, sha) = for (n <- 0L to 5L) yield derivePrivateKey(extendedNodeKey, idx :: n :: Nil)
-    LocalParams(UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 5, fund.privateKey, revoke.privateKey,
+    LocalParams(UInt64(Long.MaxValue), reserve, toSelfDelay = 144, maxAcceptedHtlcs = 4, fund.privateKey, revoke.privateKey,
       pay.privateKey, delay.privateKey, htlc.privateKey, finalScriptPubKey, sha256(sha.privateKey.toBin), isFunder = true)
   }
 }
