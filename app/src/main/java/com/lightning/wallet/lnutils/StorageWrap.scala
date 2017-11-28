@@ -10,7 +10,6 @@ import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
-import com.lightning.wallet.helper.AES
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.MilliSatoshi
 import fr.acinq.bitcoin.BinaryData
@@ -54,13 +53,6 @@ object ChannelWrap extends ChannelListener {
       // We should remind cloud to maybe send a scheduled data
       if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
       cloud doProcess CMDStart
-  }
-
-  override def onBecome = {
-    case (_, norm: NormalData, WAIT_FUNDING_DONE, NORMAL) =>
-      // Once a new channel becomes NORMAL we save it's state on a cloud
-      val state = ClosingData(norm.announce, norm.commitments, isRefunding = true).toJson.toString
-      cloud doProcess CloudAct(AES.encode(state, cloudSecret), Seq("key" -> cloudId.toString), "data/put")
   }
 }
 

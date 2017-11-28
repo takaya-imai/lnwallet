@@ -225,24 +225,22 @@ trait ToolbarActivity extends TimerActivity { me =>
 
       def proceed =
         LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(serverDataVec => {
-          // Need to filter out local channels so we do not accidently close an operational ones
+          import app.ChannelManager.{operationalListeners, all, notClosing, reconnect, createChannel}
           val localCommits = app.ChannelManager.all.flatMap(_ apply identity)
-          val listeners = app.ChannelManager.operationalListeners
 
           for {
             encoded <- serverDataVec
             jsonDecoded = AES.decode(LNParams.cloudSecret)(encoded)
             // This may be some garbage so omit this one if it fails
-            closingData <- Try apply jsonDecoded map to[ClosingData]
-
+            refundingData <- Try apply jsonDecoded map to[RefundingData]
             // Now throw it away if it is already present in list of local channels
-            if !localCommits.exists(_.channelId == closingData.commitments.channelId)
-            chan = app.ChannelManager.createChannel(listeners, closingData)
-            isAdded = app.kit watchFunding closingData.commitments
-          } app.ChannelManager.all +:= chan
+            if !localCommits.exists(_.channelId == refundingData.commitments.channelId)
+            refundingChannel = createChannel(operationalListeners, refundingData)
+            isAdded = app.kit watchFunding refundingData.commitments
+          } all +:= refundingChannel
 
-          // Request connections after these channels are added
-          app.ChannelManager reconnect app.ChannelManager.notClosing
+          // Request connections
+          reconnect(notClosing)
         }, Tools.errlog)
     }
 

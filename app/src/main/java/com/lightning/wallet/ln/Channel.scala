@@ -45,7 +45,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
       case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempId,
-        initialFeeratePerKw, pushMsat, _, fundingSat), WAIT_FOR_INIT) =>
+      initialFeeratePerKw, pushMsat, _, fundingSat), WAIT_FOR_INIT) =>
 
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
           tempId, fundingSat, pushMsat, LNParams.dustLimit.amount, localParams.maxHtlcValueInFlightMsat,
@@ -59,13 +59,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if accept.temporaryChannelId == cmd.temporaryChannelId =>
 
         val tooHighMinDepth = accept.minimumDepth > 6L
-        val tooLowAcceptedHtlcs = accept.maxAcceptedHtlcs < 1
         val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 2500000L
-        val tooHighDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5
-        val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay
-
+        val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay * 0.75
+        val wrongAcceptedHtlcs = accept.maxAcceptedHtlcs < 1 | accept.maxAcceptedHtlcs > 483
+        val wrongDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5 | accept.dustLimitSatoshis < 546L
         val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
-        val nope = tooHighMinDepth | tooLowAcceptedHtlcs | tooHighHtlcMinimumMsat | tooHighDustLimit | tooLowSelfDelay | exceedsReserve
+        val nope = tooHighMinDepth | wrongAcceptedHtlcs | tooHighHtlcMinimumMsat | wrongDustLimit | tooLowSelfDelay | exceedsReserve
         if (nope) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
@@ -77,10 +76,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val localSigOfRemoteTx = Scripts.sign(remoteCommitTx, cmd.localParams.fundingPrivKey)
         val fundingCreated = FundingCreated(cmd.temporaryChannelId, fundTx.hash, outIndex, localSigOfRemoteTx)
         val firstRemoteCommit = RemoteCommit(0L, remoteSpec, remoteCommitTx.tx.txid, accept.firstPerCommitmentPoint)
-
-        BECOME(WaitFundingSignedData(announce, cmd.localParams,
-          Tools.toLongId(fundTx.hash, outIndex), accept, fundTx, localSpec,
-          localCommitTx, firstRemoteCommit), WAIT_FUNDING_SIGNED) SEND fundingCreated
+        BECOME(WaitFundingSignedData(announce, cmd.localParams, Tools.toLongId(fundTx.hash, outIndex), accept, fundTx,
+          localSpec, localCommitTx, firstRemoteCommit), WAIT_FUNDING_SIGNED) SEND fundingCreated
 
 
       // They have signed our first commit tx, we can broadcast a funding tx
@@ -112,7 +109,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We have not yet sent a FundingLocked but just got one from them so we save it and keep waiting
       case (wait @ WaitFundingDoneData(_, None, _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
         if their.channelId == wait.commitments.channelId =>
-        me UPDATE wait.copy(their = Some apply their)
+
+        // Not storing since they will re-send on restart
+        val d1 = wait.modify(_.their) setTo Some(their)
+        me UPDATE d1
 
 
       // We have already sent them a FundingLocked and now we got one from them so we can enter normal state now
@@ -126,8 +126,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
-        val d1 = me STORE wait.copy(our = Some apply our)
-        me UPDATE d1 SEND our
+        val d1 = wait.modify(_.our) setTo Some(our)
+        me UPDATE STORE(d1) SEND our
 
 
       // We got our lock when their is already present so we can safely enter normal state now
@@ -312,7 +312,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(norm)
 
 
-      // SYNC MODE
+      // SYNC and REFUNDING MODE
+
+
+      case (ref: RefundingData, cr: ChannelReestablish, REFUNDING)
+        // GUARD: we have lost our state and wait for their `myCurrentPerCommitmentPoint`
+        if cr.channelId == ref.commitments.channelId && cr.myCurrentPerCommitmentPoint.isDefined =>
+        // Save `myCurrentPerCommitmentPoint` and send an Error which should cause them to spend their current local commit
+        val d1 = ref.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo cr.myCurrentPerCommitmentPoint.get
+        val error = Error(cr.channelId, "Please be so kind as to spend your current local commit" getBytes "UTF-8")
+        me UPDATE STORE(d1) SEND error
 
 
       // We may get this message any time so just save it here
@@ -320,21 +329,24 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
-        val wait1 = me STORE wait.copy(our = Some apply our)
-        me UPDATE wait1
+        val wait1 = wait.modify(_.our) setTo Some(our)
+        me UPDATE STORE(wait1)
 
 
-      // We're exiting a sync state but don't have enough locks so we keep waiting
-      case (wait: WaitFundingDoneData, ChannelReestablish(channelId, 1, 0, _, _), SYNC)
-        if channelId == wait.commitments.channelId =>
+      // We're exiting a sync state while waiting for their FundingLocked
+      case (wait: WaitFundingDoneData, cr: ChannelReestablish, SYNC)
+        if cr.channelId == wait.commitments.channelId =>
 
         BECOME(wait, WAIT_FUNDING_DONE)
         wait.our foreach SEND
 
 
-      case (neg: NegotiationsData, channelReestablish: ChannelReestablish, SYNC)
-        if channelReestablish.channelId == neg.commitments.channelId =>
-        BECOME(neg, NEGOTIATIONS) SEND neg.localClosingSigned
+      // No in-flight HTLCs here, just proceed with negotiations
+      case (neg: NegotiationsData, cr: ChannelReestablish, SYNC)
+        if cr.channelId == neg.commitments.channelId =>
+
+        BECOME(neg, NEGOTIATIONS)
+        me SEND neg.localClosingSigned
 
 
       case (norm: NormalData, cr: ChannelReestablish, SYNC)
@@ -386,13 +398,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         startLocalCurrentClose(some)
 
 
-      case (close: ClosingData, cr: ChannelReestablish, REFUNDING)
-        // GUARD: we have lost our state and wait for their `myCurrentPerCommitmentPoint`
-        if cr.channelId == close.commitments.channelId && cr.myCurrentPerCommitmentPoint.isDefined =>
-        val d1 = close.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo cr.myCurrentPerCommitmentPoint.get
-        me UPDATE d1 SEND Error(cr.channelId, "Please be so kind as to spend your local commit" getBytes "UTF-8")
-
-
       // SYNC: ONLINE/OFFLINE
 
 
@@ -436,13 +441,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE FUNDING SPENT
 
 
-      case (close: ClosingData, CMDSpent(spendTx), REFUNDING)
+      case (ref: RefundingData, CMDSpent(spendTx), REFUNDING)
         // GUARD: we have lost our state and asked them to spend their local commit
-        if spendTx.txIn.exists(_.outPoint == close.commitments.commitInput.outPoint) =>
-
-        // `commitments.remoteCommit` has to be updated with their `myCurrentPerCommitmentPoint` at this point
-        val rcp = Closing.claimRemoteMainOutput(close.commitments, close.commitments.remoteCommit, spendTx)
-        val d1 = me STORE close.copy(remoteCommit = rcp :: Nil)
+        if spendTx.txIn.exists(_.outPoint == ref.commitments.commitInput.outPoint) =>
+        // `commitments.remoteCommit` has to be updated to their `myCurrentPerCommitmentPoint` at this point
+        val rcp = Closing.claimRemoteMainOutput(ref.commitments, ref.commitments.remoteCommit, spendTx)
+        val d1 = me STORE ClosingData(ref.announce, ref.commitments, remoteCommit = rcp :: Nil)
         me UPDATE d1
 
 
@@ -481,14 +485,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE INITIALIZATION
 
 
-      case (null, close: ClosingData, null) =>
-        // REFUNDING should always stay REFUNDING
-        if (close.isRefunding) BECOME(close, REFUNDING)
-        else BECOME(close, CLOSING)
-
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
+      case (null, ref: RefundingData, null) => BECOME(ref, REFUNDING)
+      case (null, close: ClosingData, null) => BECOME(close, CLOSING)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)
 
 
@@ -512,7 +513,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   }
 
   private def makeFundingLocked(cs: Commitments) = {
-    val point = Generators.perCommitPoint(cs.localParams.shaSeed, index = 1)
+    val point = Generators.perCommitPoint(cs.localParams.shaSeed, 1L)
     FundingLocked(cs.channelId, nextPerCommitmentPoint = point)
   }
 

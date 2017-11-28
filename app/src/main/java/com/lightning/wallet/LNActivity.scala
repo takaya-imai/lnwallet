@@ -229,7 +229,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
-      bag getRoutingData hash foreach { rd =>
+      for (rd <- bag getRoutingData hash) {
         val description = me getDescription rd.pr
         val humanHash = hash.toString.grouped(32).map(_ grouped 8 mkString "\u00A0")
         val humanStatus = s"<strong>${paymentStatesMap apply info.actualStatus}</strong>"
@@ -239,9 +239,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         if (info.actualStatus == SUCCESS) {
           paymentProof setVisibility View.VISIBLE
           paymentProof setOnClickListener onButtonTap {
-            // Users may copy request and preimage to prove it
-            val serialzied: String = PaymentRequest.write(pr = rd.pr)
-            app setBuffer getString(ln_proof).format(serialzied, preimg.toString)
+            // Signed payment request along with a preimage provides a proof of payment
+            app setBuffer getString(ln_proof).format(PaymentRequest write rd.pr, preimg.toString)
           }
         }
 

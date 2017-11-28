@@ -91,7 +91,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       }
 
     case (_, action: CloudAct) =>
-      val actions1 = data.acts + action take 50
+      val actions1 = data.acts + action
       me BECOME data.copy(acts = actions1)
       me doProcess CMDStart
 
@@ -142,7 +142,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
       isFree = false
 
     case (_, action: CloudAct) =>
-      val actions1 = data.acts + action take 50
+      val actions1 = data.acts + action
       me BECOME data.copy(acts = actions1)
       me doProcess CMDStart
 

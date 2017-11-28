@@ -1,28 +1,30 @@
 package com.lightning.wallet
 
+import spray.json._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.Denomination._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import android.widget.{BaseAdapter, Button, ListView, TextView}
+import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct}
+import com.lightning.wallet.ln.Tools.{none, random, wrap}
+import com.lightning.wallet.helper.{AES, ThrottledWork}
+import com.lightning.wallet.Utils.{app, denom}
+import android.view.{Menu, View, ViewGroup}
+import scala.util.{Failure, Success}
+
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
-import com.lightning.wallet.helper.ThrottledWork
-import com.lightning.wallet.lnutils.ChannelWrap
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
 import scala.collection.mutable
 import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
-
-import android.widget.{BaseAdapter, Button, ListView, TextView}
-import com.lightning.wallet.ln.Tools.{none, random, wrap}
-import com.lightning.wallet.Utils.{app, denom}
-import android.view.{Menu, View, ViewGroup}
-import scala.util.{Failure, Success}
 
 
 class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { me =>
@@ -117,14 +119,17 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           me runOnUiThread cancelChannel
 
         case (_, wait: WaitFundingDoneData, WAIT_FUNDING_SIGNED, WAIT_FUNDING_DONE) =>
-          // We have just got their FundingSigned and channel is definitely saved at this point
-          // First we remove local listeners, then we try to save a channel to database here
+          // First we remove local listeners, then we try to save a channel to database
           ConnectionManager.listeners -= socketOpenListener
           freshChan.listeners -= this
 
           freshChan STORE wait
           // Error while saving will halt any further progress here
           // User may press cancel at this point but it won't affect anything
+          val state = RefundingData(wait.announce, wait.commitments, wait.fundingTx).toJson.toString
+          // Attempt to save a channel backup right away, in worst case it will be saved once channel becomes NORMAL if there are no tokens
+          LNParams.cloud doProcess CloudAct(AES.encode(state, LNParams.cloudSecret), Seq("key" -> LNParams.cloudId.toString), "data/put")
+          // Make this a fully established channel by attaching operational listeners and adding it to list
           freshChan.listeners ++= app.ChannelManager.operationalListeners
           app.ChannelManager.all +:= freshChan
           me exitTo classOf[LNOpsActivity]
