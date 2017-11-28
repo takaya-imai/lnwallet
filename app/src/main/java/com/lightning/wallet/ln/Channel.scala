@@ -45,7 +45,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   def doProcess(change: Any) = {
     Tuple3(data, change, state) match {
       case (InitData(announce), cmd @ CMDOpenChannel(localParams, tempId,
-      initialFeeratePerKw, pushMsat, _, fundingSat), WAIT_FOR_INIT) =>
+        initialFeeratePerKw, pushMsat, _, fundingSat), WAIT_FOR_INIT) =>
 
         BECOME(WaitAcceptData(announce, cmd), WAIT_FOR_ACCEPT) SEND OpenChannel(LNParams.chainHash,
           tempId, fundingSat, pushMsat, LNParams.dustLimit.amount, localParams.maxHtlcValueInFlightMsat,
@@ -485,11 +485,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // HANDLE INITIALIZATION
 
 
+      case (null, ref: RefundingData, null) => BECOME(ref, REFUNDING)
+      case (null, close: ClosingData, null) => BECOME(close, CLOSING)
       case (null, init: InitData, null) => BECOME(init, WAIT_FOR_INIT)
       case (null, wait: WaitFundingDoneData, null) => BECOME(wait, SYNC)
       case (null, negs: NegotiationsData, null) => BECOME(negs, SYNC)
-      case (null, ref: RefundingData, null) => BECOME(ref, REFUNDING)
-      case (null, close: ClosingData, null) => BECOME(close, CLOSING)
       case (null, norm: NormalData, null) => BECOME(norm, SYNC)
 
 

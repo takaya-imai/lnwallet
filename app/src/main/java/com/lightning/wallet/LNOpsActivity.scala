@@ -79,13 +79,13 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
           if close.mutualClose.nonEmpty || close.tier12States.nonEmpty =>
           me runOnUiThread manageClosing(close)
 
-        case (_, WaitFundingDoneData(_, _, _, tx, commitments), _, _) =>
+        case (_, wait: WaitFundingDoneData, _, _) =>
           // Channel is saved so we repeatedly send our funding on each launch
           // we put it here instead of LocalBroadcaster so it does not interfere
           // when user cancels channel creation at final stages in LNStartActivity
-          me runOnUiThread manageOpening(commitments, tx)
-          app.kit watchFunding commitments
-          app.kit blockingSend tx
+          me runOnUiThread manageOpening(wait.commitments, wait.fundingTx)
+          app.kit watchFunding wait.commitments
+          app.kit blockingSend wait.fundingTx
 
         case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegs(norm.commitments)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegs(negs.commitments)
@@ -126,7 +126,6 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
       val mutualTxHumanStatus = humanStatus(LNParams.broadcaster txStatus mutualTx.txid)
       val mutualFee = coloredOut(data.commitments.commitInput.txOut.amount - mutualTx.txOut.map(_.amount).sum)
       val mutualTxHumanView = commitStatus.format(mutualTx.txid.toString, mutualTxHumanStatus, mutualFee)
-
       lnOpsDescription setText bilateralClosing.format(mutualTxHumanView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start
@@ -153,9 +152,8 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
       val startedAtView = time apply new Date(data.startedAt)
       val commitHumanStatus = humanStatus(LNParams.broadcaster txStatus info.commitTx.txid)
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
-      val commitTxHumanView = commitStatus.format(info.commitTx.txid, commitHumanStatus, commitFee)
+      val commitTxHumanView = commitStatus.format(args = info.commitTx.txid, commitHumanStatus, commitFee)
       val combinedView = commitTxHumanView + refundStatus + tier2HumanView.mkString("<br><br>")
-
       lnOpsDescription setText unilateralClosing.format(startedAtView, combinedView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)
       lnOpsAction setText ln_ops_start

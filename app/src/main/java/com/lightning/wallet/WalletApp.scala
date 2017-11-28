@@ -13,7 +13,6 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import collection.JavaConverters.seqAsJavaListConverter
-import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.lnutils.PaymentInfoTable
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import com.lightning.wallet.ln.Channel.CLOSING
@@ -231,7 +230,6 @@ class WalletApp extends Application { me =>
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.notClosing
       db change PaymentInfoTable.updFailWaitingSql
-      cloud doProcess CMDStart
       RatesSaver.update
     }
   }

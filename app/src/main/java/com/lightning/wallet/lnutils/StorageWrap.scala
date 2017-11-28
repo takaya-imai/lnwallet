@@ -47,11 +47,14 @@ object ChannelWrap extends ChannelListener {
 
   override def onProcess = {
     case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
+      // Mutual tx has enough confirmations or hard timeout has passed out
       db.change(ChannelTable.killSql, close.commitments.channelId.toString)
+  }
 
-    case (_, norm: NormalData, _: CommitSig)
-      // We should remind cloud to maybe send a scheduled data
-      if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
+  override def onBecome = {
+    case (_, norm: NormalData, WAIT_FUNDING_DONE | SYNC, NORMAL) =>
+      // Once channel becomes NORMAL we tell cloud to maybe send data
+      // We may need to send LN payment and SYNC -> NORMAL is best place
       cloud doProcess CMDStart
   }
 }
