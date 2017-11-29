@@ -17,7 +17,7 @@ import fr.acinq.eclair.UInt64
 object LNParams { me =>
   val minHtlcValue = MilliSatoshi(500L)
   val maxHtlcValue = MilliSatoshi(4194304000L)
-  val minChannelMargin = MilliSatoshi(150000000L)
+  val minChannelMargin = MilliSatoshi(125000000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
   val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.RegtestGenesisBlock.hash

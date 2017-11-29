@@ -187,7 +187,7 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   override def onNfcFeatureFound = wrap(startPushing)(super.onNfcFeatureFound)
   def onNfcStateChange(ok: Boolean) = if (ok) onNfcStateEnabled else onNfcStateDisabled
   def onNfcPushStateChange(ok: Boolean) = if (ok) onNfcPushStateEnabled else onNfcPushStateDisabled
-  def createNdefMessage(e: NfcEvent) = app.TransData.value match { case n: NFCData => n.getNfcMessage case _ => null }
+  def createNdefMessage(e: NfcEvent) = app.TransData.value.asInstanceOf[NFCData].getNfcMessage
 
   def onNfcPushStateDisabled = setVis(GONE, VISIBLE)
   def onNfcPushStateEnabled = setVis(VISIBLE, GONE)
