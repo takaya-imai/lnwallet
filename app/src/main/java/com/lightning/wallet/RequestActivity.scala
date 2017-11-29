@@ -63,8 +63,8 @@ object FileOps {
 
 class RequestActivity extends NfcBeamWriterActivity with TimerActivity with ViewSwitch { me =>
   lazy val views = findViewById(R.id.reqNfcEnabled) :: findViewById(R.id.reqNfcSettings) :: Nil
-  lazy val reqShare = findViewById(R.id.reqShare).asInstanceOf[ImageButton]
-  lazy val copyData = findViewById(R.id.copyData).asInstanceOf[ImageButton]
+  lazy val shareText = findViewById(R.id.shareText).asInstanceOf[ImageButton]
+  lazy val shareQR = findViewById(R.id.shareQR).asInstanceOf[ImageButton]
   lazy val reqCode = findViewById(R.id.reqCode).asInstanceOf[ImageView]
 
   lazy val textBounds = getResources getDimensionPixelSize R.dimen.bitmap_text_bounds
@@ -102,21 +102,23 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   }
 
   def showInfo(renderBitmap: Bitmap => Bitmap, data: String) = {
-    <(fun = QRGen.get(data, qrSize), onFail)(renderBitmap andThen setView)
-    copyData setOnClickListener onButtonTap(app setBuffer data)
+    <(QRGen.get(data, qrSize), onFail)(renderBitmap andThen setView)
+    reqCode setOnClickListener onButtonTap(app setBuffer data)
+    shareText setOnClickListener onButtonTap(me share data)
     app.TransData.value = NFCData(data)
   }
 
   def setView(displayedImage: Bitmap) = {
-    reqShare setOnClickListener onButtonTap {
+    shareQR setOnClickListener onButtonTap {
       <(me saveImage displayedImage, onFail) { file =>
         val share = new Intent setAction Intent.ACTION_SEND setType "image/png"
         me startActivity share.putExtra(Intent.EXTRA_STREAM, Uri fromFile file)
       }
     }
 
+    // Enable after QR is fully generated
     reqCode setImageBitmap displayedImage
-    reqShare setEnabled true
+    shareQR setEnabled true
   }
 
   // Low level draw utilites
@@ -194,7 +196,7 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   def onNdefPushCompleted = none
   def onNfcStateEnabled = none
 
-  // When NFC is available we show a tip so users would know how to use it
+  // When NFC is available we show a tip so users would know how they might use it
   def showTip(v: View) = showForm(negBld(dialog_ok).setMessage(me getString nfc_payee_tip).create)
   def goSettings(v: View) = startNfcSharingSettingsActivity
 }

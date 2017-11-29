@@ -9,14 +9,14 @@
         android:gravity="center">
 
         <ImageButton
-            android:src="@drawable/ic_share_white_18dp"
+            android:src="@drawable/qr_18dp"
             android:layout_height="60dp" android:layout_width="60dp"
-            android:id="@+id/reqShare" android:enabled="false"/>
+            android:id="@+id/shareQR" android:enabled="false"/>
 
         <ImageButton
-            android:src="@drawable/ic_content_copy_white_18dp"
+            android:src="@drawable/ic_share_white_18dp"
             android:layout_width="60dp" android:layout_height="60dp"
-            android:id="@+id/copyData"/>
+            android:id="@+id/shareText"/>
 
     </LinearLayout>
 

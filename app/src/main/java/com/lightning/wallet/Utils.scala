@@ -14,10 +14,10 @@ import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 
 import com.lightning.wallet.lnutils.{RatesSaver, CloudDataSaver}
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
+import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -194,10 +194,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
         def encryptAndExport: Unit = rm(alert1) {
           val packed = AES.encode(wordsText, Crypto sha256 password.binary.data)
-          val exported = s"Encrypted BIP32 code ${new java.util.Date}: ${packed.toString}"
-          val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
-          val s1 = share.putExtra(android.content.Intent.EXTRA_TEXT, exported)
-          me startActivity s1
+          me share s"Encrypted BIP32 code ${new java.util.Date}: ${packed.toString}"
         }
       }
     }
@@ -467,6 +464,7 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   // Utils
+
   def hideKeys(fun: => Unit): Unit = try {
     val mgr = getSystemService(INPUT_METHOD_SERVICE).asInstanceOf[InputMethodManager]
     mgr.hideSoftInputFromWindow(getCurrentFocus.getWindowToken, HIDE_NOT_ALWAYS)
@@ -485,6 +483,11 @@ trait TimerActivity extends AppCompatActivity { me =>
     val textView: TextView = view.asInstanceOf[TextView]
     textView setMovementMethod LinkMovementMethod.getInstance
     textView
+  }
+
+  def share(text: String): Unit = startActivity {
+    val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
+    share.putExtra(android.content.Intent.EXTRA_TEXT, text)
   }
 }
 
