@@ -82,7 +82,7 @@
     <string name="amount_hint_newchan"><![CDATA[<br><small>min channel capacity %1$s<br>max channel capacity %2$s<br>wallet balance %3$s</small>]]></string>
     <string name="amount_hint_sat"><![CDATA[Amount in Satoshi%1$s]]></string>
     <string name="amount_hint_btc"><![CDATA[Amount in Bitcoin%1$s]]></string>
-    <string name="amount_hint_mbtc"><![CDATA[Amount in mBTC%1$s]]></string>
+    <string name="amount_hint_fin"><![CDATA[Amount in Finney%1$s]]></string>
 
     <string name="dialog_address_absent">Clipboard does not contain an Address</string>
     <string name="dialog_address_wrong">Bitcoin address is required</string>

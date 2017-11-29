@@ -41,14 +41,14 @@ object SatDenomination extends Denomination {
     "ⓢ\u00A0" + formatted(msat)
 }
 
-object MBtcDenomination extends Denomination {
-  val fmt = new DecimalFormat("###,##0.00######")
-  val txt = app getString amount_hint_mbtc
-  val factor = 100000000L
+object FinDenomination extends Denomination {
+  val fmt = new DecimalFormat("###,###.#######")
+  val txt = app getString amount_hint_fin
+  val factor = 10000000L
 
   fmt setDecimalFormatSymbols symbols
   def withSign(msat: MilliSatoshi) =
-    formatted(msat) + "\u00A0mBTC"
+    formatted(msat) + "\u00A0FIN"
 }
 
 object BtcDenomination extends Denomination {
