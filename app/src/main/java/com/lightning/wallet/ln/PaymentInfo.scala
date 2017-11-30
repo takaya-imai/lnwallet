@@ -10,14 +10,14 @@ import com.lightning.wallet.ln.crypto.Sphinx._
 import com.lightning.wallet.ln.crypto.MultiStreamUtils._
 import com.lightning.wallet.ln.wire.FailureMessageCodecs._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import scala.util.{Success, Try}
+
 import com.lightning.wallet.ln.Tools.random
 import scala.language.postfixOps
 import scodec.bits.BitVector
 import scodec.Attempt
-
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
-import scala.util.{Success, Try}
 
 
 object PaymentInfo {
@@ -34,8 +34,8 @@ object PaymentInfo {
   final val FAILURE = 3
 
   def buildRelativeRoute(hops: Vector[PaymentHop], finalAmountMsat: Long) = {
-    val start = RelativeCLTVRoute(Vector apply PerHopPayload(0L, finalAmountMsat, 0),
-      nodeIds = Vector.empty, finalMsat = finalAmountMsat, finalRelativeExpiry = 0)
+    val firstPerHopPayload = Vector apply PerHopPayload(0L, finalAmountMsat, 0)
+    val start = RelativeCLTVRoute(firstPerHopPayload, Vector.empty, finalAmountMsat, 0)
 
     (start /: hops.reverse) {
       case RelativeCLTVRoute(payloads, nodes, msat, expiry) \ hop =>
@@ -166,7 +166,7 @@ case class PaymentInfo(hash: BinaryData, incoming: Int,
 // Route metadata with relative CLTV PerHopPayload values which start from zero!
 case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Int)
 case class RelativeCLTVRoute(payloads: Vector[PerHopPayload], nodeIds: Vector[PublicKey],
-                             finalMsat: Long, finalRelativeExpiry: Int)
+                             firstMsat: Long, firstRelativeExpiry: Int)
 
 // Used by outgoing payments to store routes, onion, bad nodes and channels
 case class RoutingData(routes: Vector[RelativeCLTVRoute], badNodes: Set[PublicKey], badChannels: Set[Long],

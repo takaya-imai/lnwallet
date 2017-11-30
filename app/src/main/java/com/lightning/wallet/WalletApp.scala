@@ -5,6 +5,7 @@ import spray.json._
 import org.bitcoinj.core._
 import com.lightning.wallet.ln._
 import scala.concurrent.duration._
+import com.softwaremill.quicklens._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Tools._
@@ -183,8 +184,8 @@ class WalletApp extends Application { me =>
         val allAssisted = Obs.zip(Obs from rd.pr.routingInfo map augmentAssisted)
         findRoutes(rd.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           val routes = for (rt <- direct ++ assisted) yield buildRelativeRoute(rt, rd.pr.finalSum.amount)
-          // Our routing data has updated routes, now use the first one to build an onion
-          val rd1 = rd.copy(routes = routes)
+          val rd1 = rd.modify(_.routes) setTo routes.filter(_.firstMsat < rd.pr.finalSum.amount * 2)
+          // Routing data now has updated acceptable routes, use the first one to build an onion
           completeRoutingData(rd1)
         }
       }
