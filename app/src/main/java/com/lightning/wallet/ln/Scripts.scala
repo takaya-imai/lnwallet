@@ -250,7 +250,7 @@ object Scripts { me =>
     val isDustyOrEmpty = txWithInputInfo.tx.txOut.map(_.amount).sum < LNParams.dustLimit
     val check = Map(txWithInputInfo.tx.txIn.head.outPoint -> txWithInputInfo.input.txOut)
     Transaction.correctlySpends(txWithInputInfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
-    if (isDustyOrEmpty) throw new Exception("Empty or dusty outputs")
+    if (isDustyOrEmpty) throw new Exception("Empty or dusty transaction")
     txWithInputInfo
   } toOption
 

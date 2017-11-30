@@ -7,15 +7,16 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
 import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import java.util.concurrent.Executors
+
 import scala.collection.mutable
 import scala.util.Success
-
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
+import fr.acinq.eclair.UInt64
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -52,7 +53,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           localParams.channelReserveSat, LNParams.minHtlcValue.amount, initialFeeratePerKw, localParams.toSelfDelay,
           localParams.maxAcceptedHtlcs, localParams.fundingPrivKey.publicKey, localParams.revocationBasepoint,
           localParams.paymentBasepoint, localParams.delayedPaymentBasepoint, localParams.htlcBasepoint,
-          Generators.perCommitPoint(localParams.shaSeed, index = 0L), channelFlags = 1.toByte)
+          Generators.perCommitPoint(localParams.shaSeed, index = 0L), channelFlags = 0.toByte)
 
 
       case (wait @ WaitAcceptData(announce, cmd), accept: AcceptChannel, WAIT_FOR_ACCEPT)
@@ -63,9 +64,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay * 0.75
         val wrongAcceptedHtlcs = accept.maxAcceptedHtlcs < 1 | accept.maxAcceptedHtlcs > 483
         val wrongDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5 | accept.dustLimitSatoshis < 546L
+        val tooSmallHtlcValueInFlight = accept.maxHtlcValueInFlightMsat < UInt64(LNParams.maxHtlcValue.amount / 10)
         val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
         val nope = tooHighMinDepth | wrongAcceptedHtlcs | tooHighHtlcMinimumMsat | wrongDustLimit | tooLowSelfDelay | exceedsReserve
-        if (nope) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
+        if (nope | tooSmallHtlcValueInFlight) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
       // They have accepted our proposal, now let them sign a first commit tx
@@ -90,7 +92,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if (Scripts.checkSpendable(signedLocalCommitTx).isEmpty) BECOME(wait, CLOSING) else {
           val localCommit = LocalCommit(0L, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
           val localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty)
-          val remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty)
+          val remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty)
           val dummy = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
 
           val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit,
@@ -118,7 +120,10 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // We have already sent them a FundingLocked and now we got one from them so we can enter normal state now
       case (wait @ WaitFundingDoneData(_, Some(our), _, _, _), their: FundingLocked, WAIT_FUNDING_DONE)
         if their.channelId == wait.commitments.channelId =>
-        startNormalChannelMode(wait, their)
+
+        val point = Right(their.nextPerCommitmentPoint)
+        val c1 = wait.commitments.copy(remoteNextCommitInfo = point)
+        BECOME(me STORE NormalData(wait.announce, c1), NORMAL)
 
 
       // We got our lock but their is not yet present so we save ours and just keep waiting for their
@@ -135,19 +140,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if wait.fundingTx.txid == tx.txid =>
 
         val our = makeFundingLocked(wait.commitments)
-        startNormalChannelMode(wait, their) SEND our
+        val point = Right(their.nextPerCommitmentPoint)
+        val c1 = wait.commitments.copy(remoteNextCommitInfo = point)
+        BECOME(me STORE NormalData(wait.announce, c1), NORMAL) SEND our
 
 
       // NORMAL MODE
-
-
-      case (norm @ NormalData(_, commitments, None, None), remote: AnnouncementSignatures, NORMAL) =>
-        val (localNodeSig, localBitcoinSig) = Announcements.signChannelAnnouncement(chainHash = LNParams.chainHash,
-          remote.shortChannelId, LNParams.nodePrivateKey, norm.announce.nodeId, commitments.localParams.fundingPrivKey,
-          commitments.remoteParams.fundingPubkey, LNParams.globalFeatures)
-
-        me SEND AnnouncementSignatures(commitments.channelId,
-        remote.shortChannelId, localNodeSig, localBitcoinSig)
 
 
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
@@ -515,11 +513,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def makeFundingLocked(cs: Commitments) = {
     val point = Generators.perCommitPoint(cs.localParams.shaSeed, 1L)
     FundingLocked(cs.channelId, nextPerCommitmentPoint = point)
-  }
-
-  private def startNormalChannelMode(wait: HasCommitments, their: FundingLocked) = {
-    val c1 = wait.commitments.modify(_.remoteNextCommitInfo) setTo Right(their.nextPerCommitmentPoint)
-    BECOME(me STORE NormalData(wait.announce, c1), NORMAL)
   }
 
   private def startShutdown(norm: NormalData) = {

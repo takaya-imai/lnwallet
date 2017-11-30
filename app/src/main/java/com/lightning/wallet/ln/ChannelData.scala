@@ -238,7 +238,7 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.rd.amountWithFee < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
+    if (cmd.rd.pr.finalSum.amount < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
     else if (cmd.rd.pr.finalSum > maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
     else if (cmd.rd.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
@@ -251,16 +251,18 @@ object Commitments {
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)
       val feesSat = if (c1.localParams.isFunder) Scripts.commitTxFee(c.remoteParams.dustLimitSat, reduced).amount else 0L
-
-      // WE can't send more than THEIR reserve + fees
+      val maxAllowedHtlcs = math.min(c.localParams.maxAcceptedHtlcs, c.remoteParams.maxAcceptedHtlcs)
       val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
-      val reserveWithFeeSat = feesSat + c.remoteParams.channelReserveSatoshis
-      val missingSat = reduced.toRemoteMsat / 1000L - reserveWithFeeSat
+      val incoming \ outgoing = reduced.htlcs.partition(_.incoming)
+
+      // WE can't send more than THEIR reserve + commit tx Bitcoin fees
+      val reserveWithTxFeeSat = feesSat + c.remoteParams.channelReserveSatoshis
+      val missingSat = reduced.toRemoteMsat / 1000L - reserveWithTxFeeSat
 
       // We should both check if WE can send another HTLC and if PEER can accept another HTLC
       if (totalInFlightMsat > c.remoteParams.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (reduced.htlcs.count(_.incoming) > c.remoteParams.maxAcceptedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (missingSat < 0L) throw ReserveException(cmd, missingSat, reserveWithFeeSat)
+      if (outgoing.size > maxAllowedHtlcs | incoming.size > maxAllowedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+      if (missingSat < 0L) throw ReserveException(cmd, missingSat, reserveWithTxFeeSat)
       c1 -> add
     }
 
