@@ -6,6 +6,7 @@ import org.bitcoinj.core._
 import com.lightning.wallet.ln._
 import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
+import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.LNParams._
@@ -13,7 +14,6 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import collection.JavaConverters.seqAsJavaListConverter
-import com.lightning.wallet.lnutils.PaymentInfoTable
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import com.lightning.wallet.ln.Channel.CLOSING
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
@@ -28,7 +28,6 @@ import android.app.Application
 import android.widget.Toast
 import java.io.File
 
-import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct, Notificator, RatesSaver}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import com.lightning.wallet.ln.wire.{Init, LightningMessage}
@@ -110,8 +109,8 @@ class WalletApp extends Application { me =>
     import ConnectionManager._
     type ChannelVec = Vector[Channel]
 
-    val operationalListeners = mutable.Set(broadcaster, bag, ChannelWrap, Notificator)
-    // Obtain a vector of saved channels which receive CMDSpent, CMDBestHeight and nothing else
+    val operationalListeners = mutable.Set(broadcaster, bag, ChannelWrap, StorageWrap, Notificator)
+    // Obtain a vector of stored channels which would receive CMDSpent, CMDBestHeight and nothing else
     var all: ChannelVec = for (data <- ChannelWrap.get) yield createChannel(operationalListeners, data)
     def fromNode(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
     def notRefunding: ChannelVec = all.filter(_.state != Channel.REFUNDING)

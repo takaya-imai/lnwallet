@@ -172,13 +172,13 @@ object Scripts { me =>
 
   private def trimOfferedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
     val htlcTimeoutFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcTimeoutWeight) + dustLimit
-    spec.htlcs collect { case Htlc(false, add) if add.amountMsat >= htlcTimeoutFee.amount => add }
-  }.toSeq
+    spec.htlcs.collect { case Htlc(false, add) if add.amountMsat >= htlcTimeoutFee.amount => add }.toSeq
+  }
 
   private def trimReceivedHtlcs(dustLimit: Satoshi, spec: CommitmentSpec) = {
     val htlcSuccessFee: MilliSatoshi = weight2fee(spec.feeratePerKw, htlcSuccessWeight) + dustLimit
-    spec.htlcs collect { case Htlc(true, add) if add.amountMsat >= htlcSuccessFee.amount => add }
-  }.toSeq
+    spec.htlcs.collect { case Htlc(true, add) if add.amountMsat >= htlcSuccessFee.amount => add }.toSeq
+  }
 
   def commitTxFee(dustLimit: Satoshi, spec: CommitmentSpec): Satoshi = {
     val trimmedOfferedHtlcs = 172 * trimOfferedHtlcs(dustLimit, spec).size

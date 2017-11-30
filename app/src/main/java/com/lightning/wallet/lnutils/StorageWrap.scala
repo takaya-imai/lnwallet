@@ -6,6 +6,7 @@ import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
+import com.lightning.wallet.ln.Announcements._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.Connector.CMDStart
@@ -17,7 +18,7 @@ import scala.collection.mutable
 import net.sqlcipher.Cursor
 
 
-object StorageWrap {
+object StorageWrap extends ChannelListener {
   def put(value: String, key: String) = db txWrap {
     db.change(StorageTable.newSql, params = key, value)
     db.change(StorageTable.updSql, params = value, key)
@@ -26,6 +27,15 @@ object StorageWrap {
   def get(key: String) = {
     val cursor = db.select(StorageTable.selectSql, key)
     RichCursor(cursor).headTry(_ string StorageTable.value)
+  }
+
+  override def onProcess = {
+    case (chan, norm: NormalData, upd: ChannelUpdate)
+      // GUARD: this update is created by peer node and enables a channel
+      if isEnabled(upd.flags) && checkSig(upd, norm.announce.nodeId) =>
+      // Store it in a database and process no further updates at all
+      put(upd.toJson.toString, norm.commitments.channelId.toString)
+      chan.listeners -= StorageWrap
   }
 }
 

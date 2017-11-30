@@ -88,14 +88,14 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           wait.remoteParams.fundingPubkey, Scripts.sign(wait.localCommitTx, wait.localParams.fundingPrivKey), remote.signature)
 
         if (Scripts.checkSpendable(signedLocalCommitTx).isEmpty) BECOME(wait, CLOSING) else {
-          val localCommit = LocalCommit(index = 0, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
+          val localCommit = LocalCommit(0L, wait.localSpec, htlcTxsAndSigs = Nil, signedLocalCommitTx)
           val localChanges = Changes(proposed = Vector.empty, signed = Vector.empty, acked = Vector.empty)
           val remoteChanges = Changes(proposed = Vector.empty, signed = Vector.empty, Vector.empty)
           val dummy = PrivateKey(data = Tools.random getBytes 32, compressed = true).toPoint
 
           val commitments = Commitments(wait.localParams, wait.remoteParams, localCommit,
-            remoteCommit = wait.remoteCommit, localChanges, remoteChanges, localNextHtlcId = 0,
-            remoteNextHtlcId = 0, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
+            remoteCommit = wait.remoteCommit, localChanges, remoteChanges, localNextHtlcId = 0L,
+            remoteNextHtlcId = 0L, remoteNextCommitInfo = Right(dummy), wait.localCommitTx.input,
             remotePerCommitmentSecrets = ShaHashesWithIndex(Map.empty, None), wait.channelId)
 
           BECOME(WaitFundingDoneData(wait.announce, None, None,
@@ -280,7 +280,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           norm.remoteShutdown.isEmpty =>
 
         // We got their first shutdown so save it and proceed
-        val d1 = norm.copy(remoteShutdown = Some apply remote)
+        val d1 = norm.modify(_.remoteShutdown) setTo Some(remote)
         me UPDATE d1 doProcess CMDProceed
 
 
@@ -525,7 +525,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   private def startShutdown(norm: NormalData) = {
     val finalScriptPubKey = norm.commitments.localParams.defaultFinalScriptPubKey
     val localShutdown = Shutdown(norm.commitments.channelId, finalScriptPubKey)
-    val norm1 = norm.copy(localShutdown = Some apply localShutdown)
+    val norm1 = norm.modify(_.localShutdown) setTo Some(localShutdown)
     me UPDATE norm1 SEND localShutdown
   }
 
