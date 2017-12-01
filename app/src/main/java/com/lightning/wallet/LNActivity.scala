@@ -325,34 +325,32 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def proceed(amount: Option[MilliSatoshi], preimg: BinaryData) = {
-        val paymentRequest = PaymentRequest(chainHash, amount, Crypto sha256 preimg, nodePrivateKey,
+      def proceed(amount: MilliSatoshi, preimg: BinaryData) = {
+        val paymentRequest = PaymentRequest(chainHash, Some(amount), Crypto sha256 preimg, nodePrivateKey,
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
 
         bag upsertRoutingData emptyRD(paymentRequest)
-        // Amount of 0 is a special case which means they can pay whatever they want
         // unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
-        bag upsertPaymentInfo PaymentInfo(hash = paymentRequest.paymentHash, incoming = 1, preimg,
-          paymentRequest.amount getOrElse MilliSatoshi(0), HIDDEN, System.currentTimeMillis,
-          paymentRequest.description.right getOrElse new String)
+        bag upsertPaymentInfo PaymentInfo(paymentRequest.paymentHash, incoming = 1, preimg, amount,
+          HIDDEN, System.currentTimeMillis, paymentRequest.description.right getOrElse new String)
 
         app.TransData.value = paymentRequest
         me goTo classOf[RequestActivity]
       }
 
-      def receiveAttempt = rateManager.result match {
+      def recAttempt = rateManager.result match {
+        case Failure(_) => app toast dialog_sum_empty
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
         case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
 
-        case result => rm(alert) {
-          // Payment request may contain no amount
+        case Success(ms) => rm(alert) {
           notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
-          <(proceed(result.toOption, random getBytes 32), onFail)(none)
+          <(proceed(ms, random getBytes 32), onFail)(none)
         }
       }
 
       val ok = alert getButton BUTTON_POSITIVE
-      ok setOnClickListener onButtonTap(receiveAttempt)
+      ok setOnClickListener onButtonTap(recAttempt)
     }
 
     whenStop = anyToRunnable {
