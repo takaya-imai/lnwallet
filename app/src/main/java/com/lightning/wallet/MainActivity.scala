@@ -5,9 +5,11 @@ import android.widget._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
-import scala.util.{Failure, Success, Try}
+import R.id.{typePIN, typePass}
 
+import scala.util.{Failure, Success, Try}
 import org.ndeftools.util.activity.NfcReaderActivity
+
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
@@ -15,12 +17,18 @@ import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.helper.AES
 import fr.acinq.bitcoin.Crypto.sha256
 import fr.acinq.bitcoin.BinaryData
+
 import scala.concurrent.Future
 import java.io.FileInputStream
+
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
+import android.text.InputType
+import android.text.method.PasswordTransformationMethod
 import android.view.View
+import android.widget.RadioGroup.OnCheckedChangeListener
+import info.hoang8f.android.segmented.SegmentedGroup
 
 
 trait ViewSwitch {
@@ -32,6 +40,7 @@ trait ViewSwitch {
 
 class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
   lazy val mnemonicOptions = getResources getStringArray R.array.restore_mnemonic_options
+  lazy val mainPassKeysType = findViewById(R.id.mainPassKeysType).asInstanceOf[SegmentedGroup]
   lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
   lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
   lazy val greet = me clickableTextField findViewById(R.id.mainGreetings)
@@ -63,6 +72,12 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
+    mainPassKeysType setOnCheckedChangeListener new OnCheckedChangeListener {
+      def onCheckedChanged(radioGroupView: RadioGroup, newInputKeyType: Int) = {
+        app.prefs.edit.putBoolean(AbstractKit.PASS_INPUT, newInputKeyType == typePass).commit
+        updateInputType
+      }
+    }
   }
 
   // NFC AND SHARE
@@ -108,8 +123,10 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         // Also happens if app has became inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
         <<(prepareKit, throw _)(none)
+        updateInputType
 
         mainPassCheck setOnClickListener onButtonTap {
+          // Lazy val Future has already been initialized above
           // Check password after wallet initialization is complete
           <<(prepareKit map setup, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
@@ -123,10 +140,17 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   // MISC
 
+  def updateInputType = {
+    val (isPassword, trans) = (app.prefs.getBoolean(AbstractKit.PASS_INPUT, true), new PasswordTransformationMethod)
+    val (inputType, id) = if (isPassword) (InputType.TYPE_CLASS_TEXT, typePass) else (InputType.TYPE_CLASS_NUMBER, typePIN)
+    mainPassData setTransformationMethod trans
+    mainPassData setInputType inputType
+    mainPassKeysType check id
+  }
+
   def setup(some: Any) = {
     val password = mainPassData.getText.toString
-    val rawSeed = app.kit decryptSeed password
-    LNParams setup rawSeed.getSeedBytes
+    LNParams setup app.kit.decryptSeed(password).getSeedBytes
   }
 
   def wrongPass(err: Throwable) = {

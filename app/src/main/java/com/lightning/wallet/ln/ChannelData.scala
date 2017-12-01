@@ -255,7 +255,7 @@ object Commitments {
       val totalInFlightMsat = UInt64(reduced.htlcs.map(_.add.amountMsat).sum)
       val incoming \ outgoing = reduced.htlcs.partition(_.incoming)
 
-      // WE can't send more than THEIR reserve + commit tx Bitcoin fees
+      // WE can't send more than OUR reserve + commit tx Bitcoin fees
       val reserveWithTxFeeSat = feesSat + c.remoteParams.channelReserveSatoshis
       val missingSat = reduced.toRemoteMsat / 1000L - reserveWithTxFeeSat
 
@@ -281,7 +281,7 @@ object Commitments {
       // We should both check if WE can accept another HTLC and if PEER can send another HTLC
       if (totalInFlightMsat > c.localParams.maxHtlcValueInFlightMsat) throw new LightningException
       if (reduced.htlcs.count(_.incoming) > c.localParams.maxAcceptedHtlcs) throw new LightningException
-      if (reduced.toRemoteMsat / 1000L - (feesSat + c.localParams.channelReserveSat) < 0L) throw new LightningException
+      if (reduced.toRemoteMsat / 1000L - feesSat - c.localParams.channelReserveSat < 0L) throw new LightningException
       c1
     }
 

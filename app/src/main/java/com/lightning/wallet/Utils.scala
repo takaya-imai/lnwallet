@@ -12,12 +12,12 @@ import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-
-import com.lightning.wallet.lnutils.{RatesSaver, CloudDataSaver}
+import com.lightning.wallet.lnutils.{CloudDataSaver, RatesSaver}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
+
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -29,24 +29,26 @@ import android.widget.RadioGroup.OnCheckedChangeListener
 import android.widget.AdapterView.OnItemClickListener
 import com.lightning.wallet.lnutils.JsonHttpUtils.to
 import info.hoang8f.android.segmented.SegmentedGroup
+
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
-import android.text.method.LinkMovementMethod
+import android.text.method.{LinkMovementMethod, PasswordTransformationMethod, TransformationMethod}
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import com.lightning.wallet.helper.AES
+
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.script.Script
+
 import scala.concurrent.Future
 import android.os.Bundle
-
 import ViewGroup.LayoutParams.WRAP_CONTENT
 import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
@@ -63,8 +65,6 @@ object Utils {
   lazy val sumIn = app getString txs_sum_in
   lazy val sumOut = app getString txs_sum_out
   lazy val denoms = List(SatDenomination, FinDenomination, BtcDenomination)
-  val textType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-  val passType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
   val coloredOut = (amt: MilliSatoshi) => sumOut.format(denom withSign amt)
   val coloredIn = (amt: MilliSatoshi) => sumIn.format(denom withSign amt)
 
@@ -76,7 +76,7 @@ object Utils {
 
   def changeDenom = {
     val index1 = (denoms.indexOf(denom) + 1) % denoms.size
-    app.prefs.edit.putInt(AbstractKit.DENOMINATION, index1).commit
+    app.prefs.edit.putInt(AbstractKit.DENOM_TYPE, index1).commit
     denom = denoms(index1)
   }
 
@@ -164,20 +164,22 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
   }
 
-  // Password checking popup
+  // Password prompting popup
+  // but it does not actually check a password
   def passPlus(title: CharSequence)(next: String => Unit) = {
-    val (passAsk, secret) = generatePasswordPromptView(passType, password_current)
-    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, passAsk)
+    val (view, field) = generatePromptView(passOrPinType, password_current, new PasswordTransformationMethod)
+    mkForm(builder = mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, view)
 
     def infoAndNext = {
       add(app getString pass_checking, Informer.CODECHECK).flash.run
       timer.schedule(delete(Informer.CODECHECK), 2500)
-      next(secret.getText.toString)
+      next(field.getText.toString)
     }
   }
 
   def checkPass(title: CharSequence)(next: String => Unit) = passPlus(title) { password =>
-    <(app.kit.wallet checkPassword password, _ => tellGenError)(if (_) next(password) else tellWrongPass)
+    def proceed(passwordCorrect: Boolean) = if (passwordCorrect) next(password) else tellWrongPass
+    <(app.kit.wallet checkPassword password, _ => tellGenError)(proceed)
   }
 
   def doViewMnemonic(password: String) =
@@ -223,7 +225,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       def proceed =
         LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(serverDataVec => {
           import app.ChannelManager.{operationalListeners, all, notClosing, reconnect, createChannel}
-          val localCommits = app.ChannelManager.all.flatMap(_ apply identity)
+          val localCommits: Vector[Commitments] = app.ChannelManager.all.flatMap(_ apply identity)
 
           for {
             encoded <- serverDataVec
@@ -271,10 +273,10 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     changePass setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_pass_change) { oldPass =>
-        val (textAsk, secretField) = generatePasswordPromptView(textType, password_new)
-        mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_pass_change, textAsk)
+        val (view, field) = generatePromptView(InputType.TYPE_CLASS_TEXT, password_new, null)
+        mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_pass_change, view)
         def proceed = if (newPass.length >= 6) changePassword else app toast password_too_short
-        def newPass = secretField.getText.toString.trim
+        def newPass = field.getText.toString.trim
 
         def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
@@ -285,6 +287,8 @@ trait ToolbarActivity extends TimerActivity { me =>
         def rotatePass = {
           app.kit.wallet.decrypt(oldPass)
           app.encryptWallet(app.kit.wallet, newPass)
+          // Make sure we have alphabetical keyboard in case of password
+          app.prefs.edit.putBoolean(AbstractKit.PASS_INPUT, true).commit
         }
       }
 
@@ -299,7 +303,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     field setTextIsSelectable true
 
     def proceed: Unit = rm(alert) {
-      val (view1, field1) = generatePasswordPromptView(inpType = textType, txt = ln_olympus_ip)
+      val (view1, field1) = generatePromptView(InputType.TYPE_CLASS_TEXT, ln_olympus_ip, null)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
       mkForm(dialog, me getString sets_olympus, view1)
       field1 setText LNParams.cloud.data.url
@@ -413,11 +417,17 @@ trait TimerActivity extends AppCompatActivity { me =>
     view -> titleTextField
   }
 
-  def generatePasswordPromptView(inpType: Int, txt: Int): (LinearLayout, EditText) = {
+  def passOrPinType = {
+    val isPassword = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
+    if (isPassword) InputType.TYPE_CLASS_TEXT else InputType.TYPE_CLASS_NUMBER
+  }
+
+  def generatePromptView(inputType: Int, message: Int, transform: TransformationMethod) = {
     val passAsk = getLayoutInflater.inflate(R.layout.frag_changer, null).asInstanceOf[LinearLayout]
     val secretInputField = passAsk.findViewById(R.id.secretInput).asInstanceOf[EditText]
-    passAsk.findViewById(R.id.secretTip).asInstanceOf[TextView] setText txt
-    secretInputField setInputType inpType
+    passAsk.findViewById(R.id.secretTip).asInstanceOf[TextView] setText message
+    secretInputField setTransformationMethod transform
+    secretInputField setInputType inputType
     passAsk -> secretInputField
   }
 
@@ -515,7 +525,7 @@ class RateManager(extra: String, val content: View) { me =>
       // We update both runtime variable and saved value for future launches
 
       fiatName = fiatMap apply newFiatName
-      app.prefs.edit.putString(AbstractKit.FIAT, fiatName).commit
+      app.prefs.edit.putString(AbstractKit.FIAT_TYPE, fiatName).commit
       if (fiatInput.hasFocus) fiatListener.upd else bitListener.upd
       fiatInput setHint fiatName
     }

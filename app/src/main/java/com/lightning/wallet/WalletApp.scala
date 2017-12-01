@@ -69,9 +69,9 @@ class WalletApp extends Application { me =>
 
   appReference = me
   override def onCreate = wrap(super.onCreate) {
-    // These cannot just be lazy vals because their values may change
-    denom = denoms apply prefs.getInt(AbstractKit.DENOMINATION, 0)
-    fiatName = prefs.getString(AbstractKit.FIAT, strDollar)
+    // These cannot be lazy vals because values may change
+    denom = denoms apply prefs.getInt(AbstractKit.DENOM_TYPE, 0)
+    fiatName = prefs.getString(AbstractKit.FIAT_TYPE, strDollar)
   }
 
   def setBuffer(text: String) = wrap(me toast copied_to_clipboard) {

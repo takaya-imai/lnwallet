@@ -36,20 +36,41 @@
 
     <LinearLayout
         style="@style/StandardLinearLayout"
+        android:layout_marginBottom="50dp"
         android:id="@+id/mainPassForm"
         android:visibility="gone">
 
         <EditText
             style="@style/Info"
-            android:minWidth="140dp"
             android:id="@+id/mainPassData"
             android:inputType="textPassword"
-            android:layout_width="wrap_content"/>
+            android:layout_width="wrap_content"
+            android:hint="@string/password_current"/>
 
-        <TextView
-            style="@style/Info"
-            android:text="@string/password_current"
-            android:layout_width="wrap_content"/>
+        <info.hoang8f.android.segmented.SegmentedGroup
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:id="@+id/mainPassKeysType"
+            android:orientation="horizontal"
+            android:paddingTop="10dp">
+
+            <RadioButton
+                android:textSize="16sp"
+                android:id="@+id/typePass"
+                android:text="@string/key_pass"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                style="@style/RadioButton"/>
+
+            <RadioButton
+                android:textSize="16sp"
+                android:id="@+id/typePIN"
+                android:text="@string/key_pin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                style="@style/RadioButton"/>
+
+        </info.hoang8f.android.segmented.SegmentedGroup>
 
         <Button
             style="@style/MarginInfo"

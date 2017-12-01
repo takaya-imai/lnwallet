@@ -7,16 +7,16 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
 import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import java.util.concurrent.Executors
-
 import scala.collection.mutable
+import fr.acinq.eclair.UInt64
 import scala.util.Success
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
 import fr.acinq.bitcoin.{Satoshi, Transaction}
-import fr.acinq.eclair.UInt64
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -295,8 +295,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (NormalData(announce, commitments, Some(local), their), CMDProceed, NORMAL)
         if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
 
-        val feerate = commitments.localCommit.spec.feeratePerKw
-        val _ \ sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey, feerate)
+        val _ \ sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey)
         val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
         BECOME(me STORE neg, NEGOTIATIONS) SEND sig
 

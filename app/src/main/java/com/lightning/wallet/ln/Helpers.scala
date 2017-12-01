@@ -67,15 +67,12 @@ object Helpers { me =>
       case _ => false
     }
 
-    def makeFirstClosing(commitments: Commitments, localScriptPubkey: BinaryData,
-                         remoteScriptPubkey: BinaryData, rate: Long) = {
+    def makeFirstClosing(commitments: Commitments, localScriptPubkey: BinaryData, remoteScriptPubkey: BinaryData) = {
+      val estimatedWeight: Int = Transaction.weight(Scripts.addSigs(makeFunderClosingTx(commitments.commitInput, localScriptPubkey,
+        remoteScriptPubkey, Satoshi(0), Satoshi(0), commitments.localCommit.spec), commitments.localParams.fundingPrivKey.publicKey,
+        commitments.remoteParams.fundingPubkey, "aa" * 71, "bb" * 71).tx)
 
-      // This is just to estimate the weight, it depends on size of the pubkey scripts
-      val closingWeight: Int = Transaction.weight(Scripts.addSigs(makeFunderClosingTx(commitments.commitInput,
-        localScriptPubkey, remoteScriptPubkey, dustLimit = Satoshi(0), closingFee = Satoshi(0), commitments.localCommit.spec),
-        commitments.localParams.fundingPrivKey.publicKey, commitments.remoteParams.fundingPubkey, "aa" * 71, "bb" * 71).tx)
-
-      val closingFee = Scripts.weight2fee(feeratePerKw = rate, closingWeight)
+      val closingFee = Scripts.weight2fee(commitments.localCommit.spec.feeratePerKw, estimatedWeight)
       makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, closingFee)
     }
 
