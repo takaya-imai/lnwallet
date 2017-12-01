@@ -53,7 +53,7 @@
 
 <ol>
   <li>Bitcoin balance should be restored on a new phone which is relatively simple thanks to <a href="setting-up-bitcoin-wallet.html#mnemonic-code">mnemonic code</a>.</li>
-  <li>Locked funds from a <a href="using-lightning-wallet.html#payment-channel">payment channel</a> have to be reimbursed as well which is not really possible <em>unless</em> some special measures are taken <em>before</em> an emergency.</li>
+  <li>Funds locked in a <a href="using-lightning-wallet.html#payment-channel">payment channel</a> should be reimbursed as well which is not really possible <em>unless</em> some special measures are taken <em>before</em> an emergency.</li>
 </ol>
 
 <p>Lightning Wallet does take those measures: once a new payment channel is created it’s static parameters are automatically encrypted and sent to <a href="what-does-olympus-server-do.hmtl#what-does-olympus-server-do">Olympus server</a>. This operation is only carried out once while no personally identifying information is transferred.</p>
@@ -62,7 +62,7 @@
 
 <p><code class="highlighter-rouge">App Menu → Wallet settings → Recover channel funds</code></p>
 
-<p>…and wait for a few seconds before remaining balance from a lost payment channel is refunded to your Bitcoin wallet. Please note that the following conditions have to be met for this to work:</p>
+<p>…and wait for a few seconds before remaining balance from a lost payment channel is refunded to your Bitcoin wallet. Please note that following conditions have to be met for this to work:</p>
 
 <ul>
   <li>Olympus server does not store your data for free so saving static channel parameters requires one <a href="storage-tokens.html#storage-tokens">storage token</a>.</li>

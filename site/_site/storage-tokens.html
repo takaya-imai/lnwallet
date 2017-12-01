@@ -51,7 +51,7 @@
 
 <p>These are special cryptographic entities provided by Olympus server in exchange for a Lightning payment. You can think of them as one-off tickets which can be used to anonymously store such data as <a href="reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel">channel backups</a> and <a href="what-does-olympus-server-do.html#what-does-olympus-server-do">scheduled Bitcoin transactions</a> on Olympus server.</p>
 
-<p>Currently an automatic Lightning payment of 2000 Satoshi to buy 50 storage tokens is issued by wallet when a first <a href="using-lightning-wallet.html#payment-channel">payment channel</a> is created. Once obtained these tokens are stored in a wallet while being used gradually and automatically as the need comes by.</p>
+<p>Currently an automatic Lightning payment of 2000 Satoshi to buy 50 storage tokens is issued by wallet when a first <a href="using-lightning-wallet.html#payment-channel">payment channel</a> is created. Once obtained these tokens are stored in a wallet while being spent gradually and automatically as the need comes by.</p>
 
 <h3 id="reasons-for-storage-tokens-to-exist"><a href="#reasons-for-storage-tokens-to-exist"></a>Reasons for storage tokens to exist</h3>
 
@@ -64,7 +64,7 @@
   </li>
 </ul>
 
-<p>Storage tokens solve both of these issues beautifully: a single Lightning micropayment gives you an access to 50 paid API calls and technically speaking these storage tokens are <a href="https://en.wikipedia.org/wiki/Blind_signature">blind signatures</a> which have an <a href="https://tools.ietf.org/id/draft-hansen-privacy-terminology-00.html#unlinkability">unlinkability</a> property so every server call made by your wallet is anonymous and private.</p>
+<p>Storage tokens solve both of these issues beautifully: a single Lightning micropayment gives you an access to 50 paid API calls and technically speaking these storage tokens are <a href="https://en.wikipedia.org/wiki/Blind_signature">blind signatures</a> which posess an <a href="https://tools.ietf.org/id/draft-hansen-privacy-terminology-00.html#unlinkability">unlinkability property</a> so every API call made by your wallet is anonymous and private.</p>
 
 <p>All that said, you can opt out of this at any moment by <a href="what-does-olympus-server-do.html#setting-up-your-own-server">setting up your own Olympus server</a> which would use a key based authentication instead of tokens described here.</p>
 

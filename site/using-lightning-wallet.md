@@ -4,7 +4,7 @@ layout: default
 
 ### [](#using-lightning-wallet)Using Lightning wallet
 
-Once Bitcoin wallet is created you can also start using a Lightning wallet which means opening a payment channel with a peer of your choice and using it to send payments across a Lightning network.
+Once Bitcoin wallet is created you can also start using a Lightning wallet by opening a payment channel with a peer of your choice and using it to send payments across a Lightning network.
 
 ### [](#payment-channel)Payment channel
 
@@ -28,6 +28,6 @@ This may sound strange since Lightning payment is an off-chan value transfer so 
 
 The answer is although sending each Lightning payment indeed does not involve broadcasting a Bitcoin transaction, such a transaction has to be created nevertheless and it must have an appropriate fee for Bitcoin network to accept it in a timely manner.
 
-So an actual amount available for spending in a payment channel will always be slightly less than a nominal amount because it always needs to contain enough funds for Bitcoin commit transaction fee should it ever be broadcasted.
+So an actual amount available for spending in a payment channel will always be slightly less than a nominal amount because it always needs to contain enough funds for current Bitcoin commit transaction fee should it ever be broadcasted.
 
 Next: [Recovering lost Bitcoin balance](http://lightning-wallet.com/recovering-lost-bitcoin-balance.html#recovering-lost-bitcoin-balance)
