@@ -5,11 +5,13 @@ import android.widget._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
+import scala.util.{Failure, Success, Try}
 import R.id.{typePIN, typePass}
 
-import scala.util.{Failure, Success, Try}
+import android.widget.RadioGroup.OnCheckedChangeListener
+import android.text.method.PasswordTransformationMethod
 import org.ndeftools.util.activity.NfcReaderActivity
-
+import info.hoang8f.android.segmented.SegmentedGroup
 import concurrent.ExecutionContext.Implicits.global
 import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.Tools.none
@@ -17,18 +19,13 @@ import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.helper.AES
 import fr.acinq.bitcoin.Crypto.sha256
 import fr.acinq.bitcoin.BinaryData
-
 import scala.concurrent.Future
 import java.io.FileInputStream
-
+import android.text.InputType
 import android.content.Intent
 import org.ndeftools.Message
 import android.os.Bundle
-import android.text.InputType
-import android.text.method.PasswordTransformationMethod
 import android.view.View
-import android.widget.RadioGroup.OnCheckedChangeListener
-import info.hoang8f.android.segmented.SegmentedGroup
 
 
 trait ViewSwitch {
@@ -155,7 +152,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   def wrongPass(err: Throwable) = {
     setVis(View.GONE, View.VISIBLE, View.GONE)
-    app toast password_wrong
+    app toast secret_wrong
   }
 
   def inform(messageCode: Int): Unit =

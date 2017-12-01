@@ -5,6 +5,7 @@ import android.text._
 import android.view._
 import android.widget._
 import org.bitcoinj.core._
+import android.text.method._
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import org.bitcoinj.core.listeners._
@@ -17,7 +18,6 @@ import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
 import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
-
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
 import R.id.{typeCNY, typeEUR, typeUSD}
@@ -29,26 +29,23 @@ import android.widget.RadioGroup.OnCheckedChangeListener
 import android.widget.AdapterView.OnItemClickListener
 import com.lightning.wallet.lnutils.JsonHttpUtils.to
 import info.hoang8f.android.segmented.SegmentedGroup
-
 import concurrent.ExecutionContext.Implicits.global
 import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
-import android.text.method.{LinkMovementMethod, PasswordTransformationMethod, TransformationMethod}
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
 import android.app.AlertDialog.Builder
 import com.lightning.wallet.helper.AES
-
 import language.implicitConversions
 import android.util.DisplayMetrics
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.script.Script
-
 import scala.concurrent.Future
 import android.os.Bundle
+
 import ViewGroup.LayoutParams.WRAP_CONTENT
 import InputMethodManager.HIDE_NOT_ALWAYS
 import Context.INPUT_METHOD_SERVICE
@@ -93,7 +90,7 @@ object Utils {
 
 trait ToolbarActivity extends TimerActivity { me =>
   def tellGenError = wrap(app toast err_general)(mkSetsForm)
-  def tellWrongPass = wrap(app toast password_wrong)(mkSetsForm)
+  def tellWrongPass = wrap(app toast secret_wrong)(mkSetsForm)
 
   private[this] var infos = List.empty[Informer]
   private[this] var currentAnimation = Option.empty[TimerTask]
@@ -167,11 +164,13 @@ trait ToolbarActivity extends TimerActivity { me =>
   // Password prompting popup
   // but it does not actually check a password
   def passPlus(title: CharSequence)(next: String => Unit) = {
-    val (view, field) = generatePromptView(passOrPinType, password_current, new PasswordTransformationMethod)
+    val isPassword = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
+    val inputType = if (isPassword) InputType.TYPE_CLASS_TEXT else InputType.TYPE_CLASS_NUMBER
+    val (view, field) = generatePromptView(inputType, secret_wallet, new PasswordTransformationMethod)
     mkForm(builder = mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, view)
 
     def infoAndNext = {
-      add(app getString pass_checking, Informer.CODECHECK).flash.run
+      add(app getString secret_checking, Informer.CODECHECK).flash.run
       timer.schedule(delete(Informer.CODECHECK), 2500)
       next(field.getText.toString)
     }
@@ -272,15 +271,15 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
 
     changePass setOnClickListener onButtonTap {
-      def openForm = checkPass(me getString sets_pass_change) { oldPass =>
-        val (view, field) = generatePromptView(InputType.TYPE_CLASS_TEXT, password_new, null)
-        mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_pass_change, view)
-        def proceed = if (newPass.length >= 6) changePassword else app toast password_too_short
+      def openForm = checkPass(me getString sets_secret_change) { oldPass =>
+        val (view, field) = generatePromptView(InputType.TYPE_CLASS_TEXT, secret_new, null)
+        mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_secret_change, view)
+        def proceed = if (newPass.length >= 6) changePassword else app toast secret_too_short
         def newPass = field.getText.toString.trim
 
         def changePassword = {
-          <(rotatePass, _ => System exit 0)(_ => app toast sets_password_ok)
-          add(app getString pass_changing, Informer.CODECHECK).flash.run
+          <(rotatePass, _ => System exit 0)(_ => app toast sets_secret_ok)
+          add(app getString secret_changing, Informer.CODECHECK).flash.run
           timer.schedule(delete(Informer.CODECHECK), 5000)
         }
 
@@ -387,7 +386,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         val balance = sumIn.format(denom withSign app.kit.currentBalance)
         getString(err_not_enough_funds).format(balance, sending, missing).html
 
-      case _: KeyCrypterException => app getString err_pass
+      case _: KeyCrypterException => app getString err_secret
       case _: Throwable => app getString err_general
     }
   }
@@ -415,11 +414,6 @@ trait TimerActivity extends AppCompatActivity { me =>
     val titleTextField = me clickableTextField view.findViewById(R.id.actionTip)
     titleTextField setText textFieldData
     view -> titleTextField
-  }
-
-  def passOrPinType = {
-    val isPassword = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
-    if (isPassword) InputType.TYPE_CLASS_TEXT else InputType.TYPE_CLASS_NUMBER
   }
 
   def generatePromptView(inputType: Int, message: Int, transform: TransformationMethod) = {

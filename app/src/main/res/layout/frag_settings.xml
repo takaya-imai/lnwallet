@@ -5,7 +5,7 @@
     <Button
         style="@style/TransButton"
         android:id="@+id/changePass"
-        android:text="@string/sets_pass_change"/>
+        android:text="@string/sets_secret_change"/>
 
     <Button
         style="@style/TransButton"

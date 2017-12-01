@@ -63,7 +63,7 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
 
         restoreWallet.setEnabled(mnemonicIsOk & passIsOk)
         if (!mnemonicIsOk) restoreWallet setText restore_mnemonic_wrong
-        else if (!passIsOk) restoreWallet setText password_too_short
+        else if (!passIsOk) restoreWallet setText secret_too_short
         else restoreWallet setText wallet_restore
       }
     }

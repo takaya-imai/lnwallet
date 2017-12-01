@@ -15,12 +15,11 @@
     <string name="unlock">Unlock Wallet</string>
     <string name="key_pin">&#160;PIN code&#160;</string>
     <string name="key_pass">&#160;Password&#160;</string>
-    <string name="sets_password_ok">New password has been set successfully</string>
+    <string name="sets_secret_ok">New wallet secret has been set</string>
     <string name="sets_rescan_ok">Application is about to be closed now and blockchain rescan will be triggered on next launch</string>
     <string name="sets_noscreen"><![CDATA[Do not make a screenshot<br><br><small>Since it will be saved in a gallery where other apps may access it which is not very safe</small>]]></string>
     <string name="greetings">Bitcoin + Lightning Wallet\nPlease read a short yet important\n<a href='http://lightning-wallet.com'>wallet manual</a> before proceeding</string>
-    <string name="password_info">This app uses encryption to protect your data so please pick a password or pin which is at least 6 characters long</string>
-    <string name="ln_chan_details"><![CDATA[Channel capacity %1$s<br>Opened at %2$s<br><small>%3$s</small>]]></string>
+    <string name="password_info">This app uses encryption to protect your data so please pick a pin code or password which is at least 6 characters long</string>
     <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Standard transaction fee</small></small>]]></string>
     <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
@@ -40,7 +39,7 @@
         <item><![CDATA[%1$d <a href=http://lightning-wallet.com/storage-tokens.html#storage-tokens>storage tokens</a> left]]></item>
     </array>
 
-    <string name="restore_pass">Old wallet password\n<small>the one you had in a previous wallet\nwhen mnemonic was encrypted</small></string>
+    <string name="restore_pass">Old wallet secret\n<small>the one you had in a previous wallet\nwhen mnemonic was encrypted</small></string>
     <string name="create_wallet_creating">Generating your wallet\nIt may take up to a few minutes</string>
     <string name="restore_when">When was Bitcoin wallet created?\nLeave date as is if not sure</string>
     <string name="restore_wallet_restoring">Restoring your wallet\nIt may take a while</string>
@@ -51,21 +50,22 @@
     <!-- headers with links -->
     <string name="read_settings"><![CDATA[<small>%1$s<br>Got questions or feel lost?<br><a href=http://lightning-wallet.com>Read a short app manual</a><br><br></small>Wallet settings]]></string>
     <string name="mnemonic_info"><![CDATA[<font color=#E31300>Mnemonic code is super important</font><br><a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>Read about it</a> and be sure to save it<br><br>With mnemonic code saved you can rest assured that you\'ll never lose your precious bitcoins]]></string>
-    <string name="mnemonic_export_details"><![CDATA[Mnemonic code will be encrypted and exported using <strong>your current wallet password</strong><br><br>You are strongly advised to read a <a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>related section</a> of wallet manual before proceeding with this]]></string>
-    <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
+    <string name="mnemonic_export_details"><![CDATA[Mnemonic code will be encrypted and exported using <strong>your current wallet secret</strong><br><br>You are strongly advised to read a <a href=http://lightning-wallet.com/setting-up-bitcoin-wallet.html#mnemonic-code>related section</a> of wallet manual before proceeding with this]]></string>
     <string name="ln_recover_explain"><![CDATA[<small>Not sure what is this about?<br><a href=http://lightning-wallet.com/reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel>Read more</a> on what this is and when you might need it</small><br><br>Would you like to start a channel funds recovery?]]></string>
+    <string name="buy_info"><![CDATA[<a href=https://localbitcoins.com/buy_bitcoins><strong>LocalBitcoins.com</strong></a><br>Available worldwide<br><br><a href=https://www.glidera.io/referral?client_id=86733e454669ce84ac3abd9bb2a1309c&buydestinationaddress=%1$s><strong>Glidera.io</strong></a><br>USA and Canada]]></string>
+
 
     <!-- menu and fab -->
-    <string name="sets_pass_change">Change wallet password</string>
+    <string name="sets_secret_change">Change wallet secret</string>
     <string name="sets_chan_recover">Recover channel funds</string>
     <string name="sets_olympus">Set your Olympus Server</string>
     <string name="sets_mnemonic">View mnemonic code</string>
     <string name="sets_rescan">Rescan blockchain</string>
 
-    <string name="password_new">New password</string>
-    <string name="password_current">Current password</string>
-    <string name="password_wrong">Wrong wallet password</string>
-    <string name="password_too_short">Password is too short</string>
+    <string name="secret_wallet">Wallet secret</string>
+    <string name="secret_new">New wallet secret</string>
+    <string name="secret_wrong">Wrong wallet secret</string>
+    <string name="secret_too_short">New secret is too short</string>
 
     <string name="action_settings">Wallet settings</string>
     <string name="action_bitcoin_receive">Receive bitcoin</string>
@@ -106,8 +106,8 @@
     <string name="btc_notify_connecting">Connecting to Testnet nodes&#8230;</string>
     <string name="btc_notify_operational">Testnet wallet is online</string>
     <string name="info_progress_done">Blockchain is up to date</string>
-    <string name="pass_changing">Changing wallet password&#8230;</string>
-    <string name="pass_checking">Checking password&#8230;</string>
+    <string name="secret_changing">Changing wallet secret&#8230;</string>
+    <string name="secret_checking">Checking wallet secret&#8230;</string>
 
     <string name="ln_notify_connecting">Connecting to Lightning peer&#8230;</string>
     <string name="ln_notify_operational">Lightning wallet is online</string>
@@ -154,7 +154,7 @@
     <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that Bitcoin transactions need to get at least one confirmation to become spendable]]></string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>
     <string name="err_empty_shrunk">Failed because an output could not be shrunken for fees. Please add some funds and try again</string>
-    <string name="err_pass">Failed because password did not match. Please make sure you have provided a correct password</string>
+    <string name="err_secret">Failed because wallet secret did not match. Please make sure you have provided a correct one</string>
     <string name="err_different_net">Failed because request contains an address that belongs to a different network</string>
     <string name="err_address">Failed because neither Bitcoin address nor Lightning payment request has been found</string>
     <string name="err_uri">Failed because request contains a malformed URI which could not be parsed</string>
