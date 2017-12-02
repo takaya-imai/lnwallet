@@ -1,12 +1,11 @@
 package com.lightning.wallet.ln
 
 import com.lightning.wallet.ln.wire._
+import com.lightning.wallet.ln.Features._
 import java.net.{InetSocketAddress, Socket}
 import com.lightning.wallet.ln.Tools.{Bytes, none}
-
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.ln.LNParams.nodePrivateKey
-import com.lightning.wallet.ln.Features.binData2BitSet
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.bitcoin.BinaryData
@@ -65,8 +64,12 @@ object ConnectionManager {
     }
 
     def intercept(message: LightningMessage) = message match {
-      case their: Init if Features areSupported their.localFeatures =>
-        events.onOperational(nodeId, their)
+      // Some messages need a special handling so we intercept them
+
+      case their: Init =>
+        val isOk = dataLossProtect(their.localFeatures)
+        if (isOk) events.onOperational(nodeId, their)
+        else events onTerminalError nodeId
         savedInit = their
 
       case error: Error =>
@@ -76,9 +79,12 @@ object ConnectionManager {
         Tools log s"Got remote Error: $decoded"
         events onTerminalError nodeId
 
-      case unsupportedFeaturesInit: Init => events onTerminalError nodeId
-      case Ping(len, _) if len > 0 => handler process Pong("00" * len)
-      case theirMessage => events onMessage theirMessage
+      case Ping(len, _) if len > 0 =>
+        handler process Pong("00" * len)
+
+      case theirMessage =>
+        // Forward to all channels
+        events onMessage theirMessage
     }
   }
 }

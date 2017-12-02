@@ -358,11 +358,10 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       super.onStop
     }
 
-    checkTransData
-    // Call checkTransData first
     chan.listeners += chanListener
     chanListener reloadOnBecome chan
     me updTitle chan
+    checkTransData
   }
 
   // DATA READING AND BUTTON ACTIONS
