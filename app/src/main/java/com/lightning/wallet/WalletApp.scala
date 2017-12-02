@@ -223,7 +223,7 @@ class WalletApp extends Application { me =>
       peerGroup.setUserAgent(appName, "0.01")
       peerGroup.setDownloadTxDependencies(0)
       peerGroup.setPingIntervalMsec(10000)
-      peerGroup.setMaxConnections(5)
+      peerGroup.setMaxConnections(3)
       peerGroup.addWallet(wallet)
 
       ConnectionManager.listeners += ChannelManager.socketEventsListener

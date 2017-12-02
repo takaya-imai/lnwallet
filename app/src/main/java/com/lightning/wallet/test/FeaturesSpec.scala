@@ -16,9 +16,22 @@ class FeaturesSpec {
     }
 
     {
+      println("'data_loss_protect' feature")
+      assert(dataLossProtect(BinaryData("02")))
+      assert(!dataLossProtect(BinaryData("00")))
+    }
+
+    {
+      println("'initial_routing_sync' and 'data_loss_protect' feature")
+      assert(areSupported(BinaryData("0a")) && initialRoutingSync(BinaryData("0a")) && dataLossProtect(BinaryData("0a")))
+    }
+
+    {
       println("features compatibility")
+      assert(!areSupported(BinaryData(Protocol.writeUInt64(1L << OPTION_DATA_LOSS_PROTECT_MANDATORY, ByteOrder.BIG_ENDIAN))))
+      assert(areSupported(BinaryData(Protocol.writeUInt64(1L << OPTION_DATA_LOSS_PROTECT_OPTIONAL, ByteOrder.BIG_ENDIAN))))
       assert(!areSupported(BinaryData(Protocol.writeUInt64(1L << INITIAL_ROUTING_SYNC_BIT_MANDATORY, ByteOrder.BIG_ENDIAN))))
-      assert(areSupported(BinaryData(Protocol.writeUInt64(1l << INITIAL_ROUTING_SYNC_BIT_OPTIONAL, ByteOrder.BIG_ENDIAN))))
+      assert(areSupported(BinaryData(Protocol.writeUInt64(1L << INITIAL_ROUTING_SYNC_BIT_OPTIONAL, ByteOrder.BIG_ENDIAN))))
       assert(!areSupported(BinaryData("14")))
       assert(!areSupported(BinaryData("0141")))
     }

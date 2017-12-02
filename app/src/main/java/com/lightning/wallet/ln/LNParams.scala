@@ -25,7 +25,7 @@ object LNParams { me =>
   val maxReserveToFundingRatio = 0.05 // 5%
   val maxFeerateMismatchRatio = 1.5 // 150%
   val updateFeeMinDiffRatio = 0.25 // 25%
-  val localFeatures = "00"
+  val localFeatures = "02" // data loss
   val globalFeatures = ""
   val minDepth = 1
 
