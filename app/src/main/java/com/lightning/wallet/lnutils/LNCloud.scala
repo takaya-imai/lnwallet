@@ -80,7 +80,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
         case Success(pay) if pay.actualStatus == FAILURE => for {
           operationalChannel <- app.ChannelManager.all.find(_.isOperational)
-          // Here we just retry an old request instead of getting a new one even though it's expired
+          // Just retry an old request instead of getting a new one even though it is expired
           Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(request), pickInc, 3 to 4)
         } operationalChannel process SilentAddHtlc(pay)
 

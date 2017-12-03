@@ -70,7 +70,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
     mainPassKeysType setOnCheckedChangeListener new OnCheckedChangeListener {
-      def onCheckedChanged(radioGroupView: RadioGroup, newInputKeyType: Int) = {
+      def onCheckedChanged(fancyRadioGroupView: RadioGroup, newInputKeyType: Int) = {
         app.prefs.edit.putBoolean(AbstractKit.PASS_INPUT, newInputKeyType == typePass).commit
         updateInputType
       }

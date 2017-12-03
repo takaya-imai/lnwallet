@@ -79,8 +79,8 @@ object ConnectionManager {
         Tools log s"Got remote Error: $decoded"
         events onTerminalError nodeId
 
-      case Ping(len, _) if len > 0 =>
-        handler process Pong("00" * len)
+      case ping: Ping if ping.pongLength > 0 =>
+        handler process Pong("00" * ping.pongLength)
 
       case theirMessage =>
         // Forward to all channels

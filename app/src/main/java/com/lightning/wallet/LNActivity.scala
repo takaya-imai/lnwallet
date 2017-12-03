@@ -80,8 +80,9 @@ trait DataReader extends NfcReaderActivity {
 class LNActivity extends DataReader with ToolbarActivity with ListUpdater with SearchBar { me =>
   lazy val layoutInflater = app.getSystemService(LAYOUT_INFLATER_SERVICE).asInstanceOf[LayoutInflater]
   lazy val viewParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-  lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val container = findViewById(R.id.container).asInstanceOf[RelativeLayout]
+
+  lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
   val imgMap = Array(await, await, conf1, dead)
@@ -204,21 +205,19 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     denom withSign MilliSatoshi(canSend getOrElse 0L)
   }
 
-  def manageActive(chan: Channel) = {
-    val pay = (manualRequestRoutingData: RoutingData) => {
-      def onPaymentError(er: Throwable) = er.getMessage match {
-        case FROMBLACKLISTED => onFail(me getString err_ln_black)
-        case techDetails => onFail(techDetails)
-      }
+  def onPaymentError(er: Throwable) = er.getMessage match {
+    case FROMBLACKLISTED => onFail(me getString err_ln_black)
+    case techDetails => onFail(techDetails)
+  }
 
-      val progressBarManager = new ProgressBarManager
+  def manageActive(chan: Channel) = {
+    val pay: RoutingData => Unit = routingData => {
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-      app.ChannelManager.outPaymentObs(rd = manualRequestRoutingData)
-        .doOnTerminate(progressBarManager.delayedRemove).foreach(onNext = {
-          // Must account for a special kind of error when no routes are found
-          case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
-          case None => onFail(me getString err_ln_no_route)
-        }, onPaymentError)
+      app.ChannelManager.getOutPaymentObs(routingData).foreach(onNext = {
+        // Must account for a special kind of error when no routes are found
+        case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
+        case None => onFail(me getString err_ln_no_route)
+      }, onPaymentError)
     }
 
     list setOnItemClickListener onTap { pos =>
@@ -354,8 +353,20 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     whenStop = anyToRunnable {
+      // On leaving this activity we can not show a progress bar anymore
+      // so we must replace it with a basic task of just asking for routes
+      app.ChannelManager.getOutPaymentObs = app.ChannelManager.outPaymentObs
       chan.listeners -= chanListener
       super.onStop
+    }
+
+    // After entering this activity we show a progress bar animation
+    // on each route request, a call may happen outside of this activity
+
+    app.ChannelManager.getOutPaymentObs = rd => {
+      val progressBarManager = new ProgressBarManager
+      val routeRequest = app.ChannelManager.outPaymentObs(rd)
+      routeRequest.doOnTerminate(progressBarManager.delayedStop)
     }
 
     chan.listeners += chanListener
@@ -429,15 +440,15 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   class ProgressBarManager {
-    def delayedRemove = try timer.schedule(anyToRunnable(progressBar.progressiveStop), 250) catch none
+    def delayedStop = try timer.schedule(anyToRunnable(progressBar.progressiveStop), 250) catch none
     val progressBar = layoutInflater.inflate(R.layout.frag_progress_bar, null).asInstanceOf[SmoothProgressBar]
     val drawable = progressBar.getIndeterminateDrawable.asInstanceOf[SmoothProgressDrawable]
 
-    container.addView(progressBar, viewParams)
     drawable setCallbacks new SmoothProgressDrawable.Callbacks {
-      // In some cases activity may be killed while progress bar is active so timer will throw here
+      // In some cases timer may already be disabled and will throw here because activity has been killed
       def onStop = try timer.schedule(anyToRunnable(container removeView progressBar), 250) catch none
       def onStart = try drawable.setColors(getResources getIntArray R.array.bar_colors) catch none
+      container.addView(progressBar, viewParams)
     }
   }
 

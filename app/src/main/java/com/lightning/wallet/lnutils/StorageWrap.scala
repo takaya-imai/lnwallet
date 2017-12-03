@@ -192,7 +192,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
               val nope = peerIsBad | recipientIsBad | nothingExcluded | serverCallAttempts(htlc.add.paymentHash) > 4
 
               if (!nope)
-                app.ChannelManager.outPaymentObs(reducedRoutingData)
+                app.ChannelManager.getOutPaymentObs(reducedRoutingData)
                   .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
                   .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
           }

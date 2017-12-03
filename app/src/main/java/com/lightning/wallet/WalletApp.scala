@@ -109,6 +109,7 @@ class WalletApp extends Application { me =>
   object ChannelManager {
     import ConnectionManager._
     type ChannelVec = Vector[Channel]
+    type RoutingDataOpt = Option[RoutingData]
 
     val operationalListeners = mutable.Set(broadcaster, bag, ChannelWrap, StorageWrap, Notificator)
     // Obtain a vector of stored channels which would receive CMDSpent, CMDBestHeight and nothing else
@@ -167,8 +168,10 @@ class WalletApp extends Application { me =>
     }
 
     // Get routes from maintenance server and update RoutingData if they exist
-    // If payment request contains extra routing info then we also ask for assisted routes
-    // Once direct route and assisted routes are fetched we combine them into single sequence
+    // if payment request contains extra routing info then we also ask for assisted routes
+    // once direct route and assisted routes are fetched we combine them into single sequence
+    // and then we make an onion out of the first available route while saving the rest
+    var getOutPaymentObs: RoutingData => Obs[RoutingDataOpt] = outPaymentObs
 
     def outPaymentObs(rd: RoutingData) =
       Obs from all.find(_.isOperational) flatMap { chan =>

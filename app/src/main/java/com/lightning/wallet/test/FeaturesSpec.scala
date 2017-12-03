@@ -28,9 +28,7 @@ class FeaturesSpec {
 
     {
       println("features compatibility")
-      assert(!areSupported(BinaryData(Protocol.writeUInt64(1L << OPTION_DATA_LOSS_PROTECT_MANDATORY, ByteOrder.BIG_ENDIAN))))
       assert(areSupported(BinaryData(Protocol.writeUInt64(1L << OPTION_DATA_LOSS_PROTECT_OPTIONAL, ByteOrder.BIG_ENDIAN))))
-      assert(!areSupported(BinaryData(Protocol.writeUInt64(1L << INITIAL_ROUTING_SYNC_BIT_MANDATORY, ByteOrder.BIG_ENDIAN))))
       assert(areSupported(BinaryData(Protocol.writeUInt64(1L << INITIAL_ROUTING_SYNC_BIT_OPTIONAL, ByteOrder.BIG_ENDIAN))))
       assert(!areSupported(BinaryData("14")))
       assert(!areSupported(BinaryData("0141")))
