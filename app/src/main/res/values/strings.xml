@@ -179,7 +179,6 @@
     <string name="ln_htlc_notification">to resolve pending payments</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_copy_proof">Copy Proof of Payment</string>
-    <string name="ln_resend">Retry this payment</string>
 
     <!-- see PaymentInfo.scala -->
     <array name="ln_payment_states">

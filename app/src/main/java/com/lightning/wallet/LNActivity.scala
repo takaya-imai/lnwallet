@@ -211,19 +211,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   def manageActive(chan: Channel) = {
-    val pay: RoutingData => Unit = routingData => {
-      notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-      app.ChannelManager.getOutPaymentObs(routingData).foreach(onNext = {
-        // Must account for a special kind of error when no routes are found
-        case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
-        case None => onFail(me getString err_ln_no_route)
-      }, onPaymentError)
-    }
-
     list setOnItemClickListener onTap { pos =>
       val info @ PaymentInfo(hash, incoming, preimg, amount, _, _, _) = adapter getItem pos
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
-      val paymentRetryAgain = detailsWrapper.findViewById(R.id.paymentRetryAgain).asInstanceOf[Button]
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
@@ -238,7 +228,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         if (info.actualStatus == SUCCESS) {
           paymentProof setVisibility View.VISIBLE
           paymentProof setOnClickListener onButtonTap {
-            // Signed payment request along with a preimage provides a proof of payment
+            // Both payer and payee may prove a payment is happened once it' has happened
+            // since signed payment request along with a preimage constitutes a proof of payment
             app setBuffer getString(ln_proof).format(PaymentRequest write rd.pr, preimg.toString)
           }
         }
@@ -250,18 +241,10 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           mkForm(me negBld dialog_ok, title.html, detailsWrapper)
         } else {
           val humanSent = humanFiat(coloredOut(amount), amount)
-          val fee = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
-          val title = getString(ln_outgoing_title).format(coloredOut(fee), humanStatus)
-          val alert = mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+          val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
+          val title = getString(ln_outgoing_title).format(coloredOut(feeAmount), humanStatus)
           paymentDetails setText s"$description<br><br>$humanSent".html
-
-          def retry = rm(alert) { pay apply rd }
-          if (info.actualStatus != SUCCESS && rd.pr.isFresh) {
-            // Users may issue new request to get an updated set of routes
-            // routing data will likely contain bad nodes and channels here
-            paymentRetryAgain setOnClickListener onButtonTap(retry)
-            paymentRetryAgain setVisibility View.VISIBLE
-          }
+          mkForm(me negBld dialog_ok, title.html, detailsWrapper)
         }
       }
     }
@@ -291,7 +274,16 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
-        case _ => rm(alert) { pay compose emptyRD apply pr }
+
+        case _ => rm(alert) {
+          val routingData = emptyRD(pr)
+          notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+          app.ChannelManager.getOutPaymentObs(routingData).foreach(onNext = {
+            // Must account for a special kind of error when no routes are found
+            case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
+            case None => onFail(me getString err_ln_no_route)
+          }, onPaymentError)
+        }
       }
 
       val ok = alert getButton BUTTON_POSITIVE

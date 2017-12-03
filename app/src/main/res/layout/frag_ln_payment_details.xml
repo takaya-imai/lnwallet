@@ -14,12 +14,6 @@
         android:text="@string/ln_copy_proof"
         android:visibility="gone"/>
 
-    <Button
-        style="@style/TransButton"
-        android:id="@+id/paymentRetryAgain"
-        android:text="@string/ln_resend"
-        android:visibility="gone"/>
-
     <View style="@style/GrayDivider"/>
 
     <TextView
