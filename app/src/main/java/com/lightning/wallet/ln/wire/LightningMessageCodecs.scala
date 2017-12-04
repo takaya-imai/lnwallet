@@ -327,7 +327,7 @@ object LightningMessageCodecs { me =>
     (constant(ByteVector fromByte 0) withContext "realm") ::
       (uint64 withContext "shortChannelId") ::
       (uint64 withContext "amtToForward") ::
-      (int32 withContext "outgoingCltv") ::
+      (uint32 withContext "outgoingCltv") ::
       (ignore(8 * 12) withContext "unusedWithV0VersionOnHeader")
 
   private val hop =

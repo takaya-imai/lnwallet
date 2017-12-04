@@ -53,7 +53,7 @@ object PaymentInfo {
     // Build a new RoutingData if we have routes available
     // provided RoutingData may have bad nodes and channels which have to be preserved
     RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, firstExpiry) <- rd.routes.headOption
-    absoluteExpiry = LNParams.broadcaster.currentHeight + rd.pr.minFinalCltvExpiry.getOrElse(default = 9)
+    absoluteExpiry = LNParams.broadcaster.currentHeight + rd.pr.minFinalCltvExpiry.getOrElse(default = 9L)
     absolutePayloads = for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(absoluteExpiry+)
     // First expiry is also relative so it should be updated with absolute part just like payloads above
   } yield rd.copy(onion = buildOnion(nodeIds :+ rd.pr.nodeId, absolutePayloads, rd.pr.paymentHash),
@@ -101,7 +101,7 @@ object PaymentInfo {
     } getOrElse rd
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
-  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Int) = Try {
+  def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Long) = Try {
     val packet = parsePacket(privateKey = nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     Tuple3(perHopPayloadCodec decode BitVector(packet.payload), packet.nextPacket, packet.sharedSecret)
   } map {
@@ -164,9 +164,9 @@ case class PaymentInfo(hash: BinaryData, incoming: Int,
 }
 
 // Route metadata with relative CLTV PerHopPayload values which start from zero!
-case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Int)
+case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Long)
 case class RelativeCLTVRoute(payloads: Vector[PerHopPayload], nodeIds: Vector[PublicKey],
-                             firstMsat: Long, firstRelativeExpiry: Int)
+                             firstMsat: Long, firstRelativeExpiry: Long)
 
 // Used by outgoing payments to store routes, onion, bad nodes and channels
 case class RoutingData(routes: Vector[RelativeCLTVRoute], badNodes: Set[PublicKey], badChannels: Set[Long],

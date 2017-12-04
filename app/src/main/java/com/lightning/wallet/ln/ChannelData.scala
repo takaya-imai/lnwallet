@@ -18,7 +18,7 @@ import fr.acinq.eclair.UInt64
 
 sealed trait Command
 case class CMDConfirmed(tx: Transaction) extends Command
-case class CMDBestHeight(height: Int) extends Command
+case class CMDBestHeight(height: Long) extends Command
 case class CMDSpent(tx: Transaction) extends Command
 case object CMDHTLCProcess extends Command
 case object CMDShutdown extends Command

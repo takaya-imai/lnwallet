@@ -70,7 +70,7 @@ case class UnknownTag(tag: Int5, int5s: Int5Seq) extends Tag {
 case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
-  lazy val minFinalCltvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta.toInt }
+  lazy val minFinalCltvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta }
   lazy val paymentHash = tags.collectFirst { case paymentHashTag: PaymentHashTag => paymentHashTag.hash }.get
   lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
   // Amount MUST be present if this is an outgoing payment

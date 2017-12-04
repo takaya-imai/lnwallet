@@ -116,8 +116,8 @@ object Broadcaster {
 
 trait Broadcaster extends ChannelListener { me =>
   def txStatus(txid: BinaryData): DepthAndDead
+  def currentHeight: Long
   def feeRatePerKw: Long
-  def currentHeight: Int
 
   // Parent state and next tier cltv delay
   // Actual negative delay will be represented as 0L

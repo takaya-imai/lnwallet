@@ -215,9 +215,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // Fail or fulfill incoming HTLCs
       case (norm: NormalData, CMDHTLCProcess, NORMAL) =>
+        val minExpiry = LNParams.broadcaster.currentHeight + 3L
         for (Htlc(false, add) <- norm.commitments.remoteCommit.spec.htlcs)
-          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag,
-            minExpiry = LNParams.broadcaster.currentHeight + 3)
+          me doProcess resolveHtlc(LNParams.nodePrivateKey, add, LNParams.bag, minExpiry)
 
         // And sign once done
         doProcess(CMDProceed)
