@@ -52,13 +52,12 @@ object RatesSaver extends Saver {
   type Result = (BlockNum2Fee, Fiat2Btc)
   val KEY = "rates"
 
-  private val updatePeriod: FiniteDuration = 20.minutes
+  // Either load saved rates data or create a new one from scratch
   var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
 
   def update = {
-    val unsafe = LNParams.cloud.connector.getRates map toVec[Result]
-    val periodic = retry(unsafe, pickInc, 2 to 4 by 2).repeatWhen(_ delay updatePeriod)
-    initDelay(periodic, rates.stamp, updatePeriod.toMillis) foreach { case newFee \ newFiat +: _ =>
+    val safe = retry(LNParams.cloud.connector.getRates map toVec[Result], pickInc, 3 to 4)
+    initDelay(safe, rates.stamp, timeoutMillis = 1200000) foreach { case newFee \ newFiat +: _ =>
       val validFees = for (validFee <- newFee("4") +: rates.feeHistory if validFee > 0) yield validFee
       rates = Rates(validFees take 4, newFiat, System.currentTimeMillis)
       save(rates.toJson)

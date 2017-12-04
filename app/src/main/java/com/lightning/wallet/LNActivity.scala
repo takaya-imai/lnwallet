@@ -259,7 +259,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       // we can not calculate an exact commitTx fee + HTLC fees in advance so just use a minChannelMargin
       // which also guarantees a user has some substantial amount to be refunded once a channel is exhausted
       val canSend = chan(c => c.localCommit.spec.toLocalMsat - c.remoteParams.channelReserveSatoshis * sat2msatFactor)
-      val finalCanSend = math.min(canSend.map(_ - minChannelMargin.amount).filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
+      val finalCanSend = math.min(canSend.map(_ - minChannelMargin.amount).filter(0L<) getOrElse 0L, maxHtlcValue.amount)
       val maxMsat = MilliSatoshi(finalCanSend)
 
       val title = getString(ln_send_title).format(me getDescription pr)

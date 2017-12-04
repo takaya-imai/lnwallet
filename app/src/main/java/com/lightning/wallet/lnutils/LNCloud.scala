@@ -38,23 +38,30 @@ abstract class Cloud extends StateMachine[CloudData] {
   }
 }
 
+// Represents a task to be executed, can be persisted
 case class CloudAct(data: BinaryData, plus: Seq[HttpParam], path: String)
+// Stores token request parameters, clear tokens left and tasks to be executed, also url for custom server
 case class CloudData(info: Option[RequestAndMemo], tokens: Set[ClearToken], acts: Set[CloudAct], url: String)
 class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud { me =>
 
   // STATE MACHINE
 
   def doProcess(some: Any) = (data, some) match {
-    case CloudData(None, ts, _, _) \ CMDStart if ts.isEmpty => for {
-      operationalChannel <- app.ChannelManager.all.find(_.isOperational)
-      paymentRequestAndMemo @ (pr, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
-      Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
-    } if (data.info.isEmpty) {
-      // Server response may arrive in some time after an initialization above
-      // so we state that it can only be accepted if data.info is still empty
-      me BECOME data.copy(info = Some apply paymentRequestAndMemo)
-      operationalChannel process SilentAddHtlc(pay)
-    }
+    case CloudData(None, tokens, acts, _) \ CMDStart
+      // Try to get new tokens either when we have no tokens left
+      // or when we have no acts to execute and a few tokens left
+      if tokens.isEmpty || acts.isEmpty && tokens.size < 5 =>
+
+      for {
+        operationalChannel <- app.ChannelManager.all.find(_.isOperational)
+        paymentRequestAndMemo @ (pr, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
+        Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
+        // Server response may arrive in some time after an initialization above
+      } if (data.info.isEmpty) {
+        // Eliminate a race condition: only proceed if info is empty
+        me BECOME data.copy(info = Some apply paymentRequestAndMemo)
+        operationalChannel process SilentAddHtlc(pay)
+      }
 
     // Execute if we are not busy and have available tokens and actions
     case CloudData(_, ##(token @ (point, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
@@ -70,21 +77,22 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         case _ => Tools errlog serverError
       }
 
-    // Check if payment is fulfilled and get tokens if it is
-    case CloudData(Some(request \ memo), _, _, _) \ CMDStart =>
+    // Check if payment is fulfilled and get signed tokens
+    case CloudData(Some(pr \ memo), _, _, _) \ CMDStart =>
 
-      bag getPaymentInfo request.paymentHash match {
+      bag getPaymentInfo pr.paymentHash match {
         case Success(pay) if pay.actualStatus == SUCCESS => me resolveSuccess memo
-        // Important: payment may fail but we wait until expiration before restarting
-        case Success(pay) if pay.actualStatus == FAILURE && request.isFresh =>
+        // These will have long expiration times, could be retried multiple times
+        case Success(pay) if pay.actualStatus == FAILURE && pr.isFresh =>
 
-        case Success(pay) if pay.actualStatus == FAILURE => for {
-          operationalChannel <- app.ChannelManager.all.find(_.isOperational)
-          // Just retry an old request instead of getting a new one even though it is expired
-          Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(request), pickInc, 3 to 4)
-        } operationalChannel process SilentAddHtlc(pay)
+          for {
+            operationalChannel <- app.ChannelManager.all.find(_.isOperational)
+            // Repeatedly retry an old request instead of getting a new one until it expires
+            Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
+          } operationalChannel process SilentAddHtlc(pay)
 
-        // First attempt has been rejected
+        // Failed after multiple attemps | First attempt has been rejected
+        case Success(pay) if pay.actualStatus == FAILURE => eraseRequestData
         case Failure(_) => eraseRequestData
         // WAITING state, do nothing
         case _ =>
