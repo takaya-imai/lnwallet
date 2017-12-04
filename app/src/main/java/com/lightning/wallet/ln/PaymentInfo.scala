@@ -203,8 +203,9 @@ case class ExtraHop(nodeId: PublicKey, shortChannelId: Long, fee: Long, cltvExpi
 }
 
 case class Hop(nodeId: PublicKey, lastUpdate: ChannelUpdate) extends PaymentHop {
-  // Fee is not pre-calculated for public hops so we need to derive it accoring to rules specified in BOLT 04
+  // Fee is not pre-calculated for public hops so we need to derive it accoring to rules in BOLT 04
   def nextFee(msat: Long) = lastUpdate.feeBaseMsat + (lastUpdate.feeProportionalMillionths * msat) / 1000000L
+  def toExtra(msat: Long) = ExtraHop(nodeId, lastUpdate.shortChannelId, nextFee(msat), lastUpdate.cltvExpiryDelta)
   def cltvExpiryDelta = lastUpdate.cltvExpiryDelta
   def shortChannelId = lastUpdate.shortChannelId
 }

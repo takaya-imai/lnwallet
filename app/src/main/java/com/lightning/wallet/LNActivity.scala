@@ -1,5 +1,6 @@
 package com.lightning.wallet
 
+import spray.json._
 import android.view._
 import android.widget._
 import com.lightning.wallet.ln._
@@ -10,9 +11,12 @@ import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
+import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
-import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
+
+import com.lightning.wallet.ln.wire.{ChannelUpdate, CommitSig}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.ln.Tools.{none, random}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import scala.util.{Failure, Success, Try}
@@ -24,10 +28,11 @@ import com.lightning.wallet.Denomination.sat2msatFactor
 import android.content.Context.LAYOUT_INFLATER_SERVICE
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
+import com.lightning.wallet.lnutils.JsonHttpUtils.to
 import com.github.clans.fab.FloatingActionMenu
-import com.lightning.wallet.ln.wire.CommitSig
 import android.support.v4.view.MenuItemCompat
 import android.view.ViewGroup.LayoutParams
+import fr.acinq.bitcoin.Crypto.sha256
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
@@ -310,7 +315,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       // Somewhat counterintuitive: localParams.channelReserveSat is THEIR unspendable reseve
       // peer's balance can't go below their unspendable channel reserve so it should be taken into account here
       val canReceive = chan(c => c.localCommit.spec.toRemoteMsat - c.localParams.channelReserveSat * sat2msatFactor)
-      val finalCanReceive = math.min(canReceive.filter(_ > 0L) getOrElse 0L, maxHtlcValue.amount)
+      val finalCanReceive = math.min(canReceive.filter(0L<) getOrElse 0L, maxHtlcValue.amount)
       val maxMsat = MilliSatoshi(finalCanReceive)
 
       val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
@@ -319,13 +324,20 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def proceed(amount: MilliSatoshi, preimg: BinaryData) = {
-        val pr = PaymentRequest(chainHash, Some(amount), Crypto sha256 preimg, nodePrivateKey,
-          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, Vector.empty)
+      def makeRequest(sum: MilliSatoshi, preimg: BinaryData) = for {
+        // We can only proceed if chan is operational and we have a ChannelUpdate
+        // if that is the case we save data to db and go to QR code activity
 
+        chanIdKey <- chan(_.channelId.toString)
+        upd <- StorageWrap get chanIdKey map to[ChannelUpdate]
+        extra = Vector(Hop(chan.data.announce.nodeId, upd) toExtra sum.amount)
+        pr = PaymentRequest(chainHash, Some(sum), sha256(preimg.data), nodePrivateKey,
+          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra)
+      } {
+        // For UI purposes only
         bag upsertRoutingData emptyRD(pr)
         // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user
-        bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg, amount,
+        bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg, sum,
           HIDDEN, System.currentTimeMillis, pr.description.right getOrElse new String)
 
         app.TransData.value = pr
@@ -339,7 +351,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
         case Success(ms) => rm(alert) {
           notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
-          <(proceed(ms, random getBytes 32), onFail)(none)
+          <(makeRequest(ms, random getBytes 32), onFail)(none)
         }
       }
 
