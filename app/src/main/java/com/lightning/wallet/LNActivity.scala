@@ -211,6 +211,15 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   def manageActive(chan: Channel) = {
+    val pay: RoutingData => Unit = rd => {
+      notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+      app.ChannelManager.getOutPaymentObs(rd).foreach(onNext = {
+        // Must account for a special fail when no routes are found
+        case Some(outPayment) => chan process PlainAddHtlc(outPayment)
+        case None => onFail(me getString err_ln_no_route)
+      }, onPaymentError)
+    }
+
     list setOnItemClickListener onTap { pos =>
       val info @ PaymentInfo(hash, incoming, preimg, amount, _, _, _) = adapter getItem pos
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
@@ -228,7 +237,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         if (info.actualStatus == SUCCESS) {
           paymentProof setVisibility View.VISIBLE
           paymentProof setOnClickListener onButtonTap {
-            // Both payer and payee may prove a payment is happened once it' has happened
+            // Both payer and payee may prove a payment has happened once it is settled
             // since signed payment request along with a preimage constitutes a proof of payment
             app setBuffer getString(ln_proof).format(PaymentRequest write rd.pr, preimg.toString)
           }
@@ -241,10 +250,13 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           mkForm(me negBld dialog_ok, title.html, detailsWrapper)
         } else {
           val humanSent = humanFiat(coloredOut(amount), amount)
+          val mayRetry = info.actualStatus == FAILURE && rd.pr.isFresh
           val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
           val title = getString(ln_outgoing_title).format(coloredOut(feeAmount), humanStatus)
+          // Users may issue a manual payment retry in case if it has failed and request is still fresh
+          val bld = if (mayRetry) mkChoiceDialog(none, pay(rd), dialog_ok, dialog_retry) else negBld(dialog_ok)
           paymentDetails setText s"$description<br><br>$humanSent".html
-          mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+          mkForm(bld, title.html, detailsWrapper)
         }
       }
     }
@@ -274,16 +286,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
-
-        case _ => rm(alert) {
-          val routingData = emptyRD(pr)
-          notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
-          app.ChannelManager.getOutPaymentObs(routingData).foreach(onNext = {
-            // Must account for a special kind of error when no routes are found
-            case Some(outgoingPayment) => chan process PlainAddHtlc(outgoingPayment)
-            case None => onFail(me getString err_ln_no_route)
-          }, onPaymentError)
-        }
+        case _ => rm(alert)(pay compose emptyRD apply pr)
       }
 
       val ok = alert getButton BUTTON_POSITIVE
@@ -317,15 +320,15 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val rateManager = new RateManager(hint, content)
 
       def proceed(amount: MilliSatoshi, preimg: BinaryData) = {
-        val paymentRequest = PaymentRequest(chainHash, Some(amount), Crypto sha256 preimg, nodePrivateKey,
-          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra = Vector.empty)
+        val pr = PaymentRequest(chainHash, Some(amount), Crypto sha256 preimg, nodePrivateKey,
+          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, Vector.empty)
 
-        bag upsertRoutingData emptyRD(paymentRequest)
-        // unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user by default
-        bag upsertPaymentInfo PaymentInfo(paymentRequest.paymentHash, incoming = 1, preimg, amount,
-          HIDDEN, System.currentTimeMillis, paymentRequest.description.right getOrElse new String)
+        bag upsertRoutingData emptyRD(pr)
+        // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user
+        bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg, amount,
+          HIDDEN, System.currentTimeMillis, pr.description.right getOrElse new String)
 
-        app.TransData.value = paymentRequest
+        app.TransData.value = pr
         me goTo classOf[RequestActivity]
       }
 

@@ -338,7 +338,7 @@ trait ToolbarActivity extends TimerActivity { me =>
           // Get live final fee and set a risky final fee to be 3 times less
 
           val liveFinalFee: MilliSatoshi = estimateTx.getFee
-          val riskyFinalFee: MilliSatoshi = liveFinalFee / 3 // Msat to Sat
+          val riskyFinalFee: MilliSatoshi = liveFinalFee / 2 // Msat to Sat
           val markedLiveFinalFee = sumOut format denom.withSign(liveFinalFee)
           val markedRiskyFinalFee = sumOut format denom.withSign(riskyFinalFee)
 
@@ -352,7 +352,7 @@ trait ToolbarActivity extends TimerActivity { me =>
           val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
           def proceed = lst.getCheckedItemPosition match {
-            case 0 => processTx(password, RatesSaver.rates.feeLive div 3)
+            case 0 => processTx(password, RatesSaver.rates.feeLive div 2)
             case _ => processTx(password, RatesSaver.rates.feeLive)
           }
 

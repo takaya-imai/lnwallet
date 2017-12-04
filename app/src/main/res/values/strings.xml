@@ -93,6 +93,7 @@
     <string name="dialog_sum_big">Amount is too large</string>
     <string name="dialog_export">Encrypt and export</string>
     <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_retry">Retry</string>
     <string name="dialog_next">Next</string>
     <string name="dialog_pay">Pay</string>
     <string name="dialog_ok">OK</string>
