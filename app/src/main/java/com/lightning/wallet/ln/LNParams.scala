@@ -23,9 +23,7 @@ object LNParams { me =>
   val chainHash = Block.RegtestGenesisBlock.hash
   val theirReserveToFundingRatio = 0.01 // 1%
   val maxReserveToFundingRatio = 0.05 // 5%
-  val maxFeerateMismatchRatio = 1.5 // 150%
-  val updateFeeMinDiffRatio = 0.25 // 25%
-  val localFeatures = "02" // data loss
+  val localFeatures = "02"
   val globalFeatures = ""
   val minDepth = 1
 
@@ -65,13 +63,9 @@ object LNParams { me =>
 
   // FEE RELATED
 
-  def feeRateMismatch(remoteFeeratePerKw: Long, localFeeratePerKw: Long) = Math abs {
-    2.0 * (remoteFeeratePerKw - localFeeratePerKw) / (localFeeratePerKw + remoteFeeratePerKw)
-  }
-
-  def shouldUpdateFee(commitmentFeeratePerKw: Long, networkFeeratePerKw: Long) = {
-    val newFeeMismatch = feeRateMismatch(networkFeeratePerKw, commitmentFeeratePerKw)
-    newFeeMismatch > updateFeeMinDiffRatio && newFeeMismatch < maxFeerateMismatchRatio
+  def shouldUpdateFee(oldPerKw: Long, newPerKw: Long) = {
+    val mismatch = (newPerKw - oldPerKw) / (oldPerKw + newPerKw)
+    math.abs(2.0 * mismatch) > 0.25
   }
 
   // MISC

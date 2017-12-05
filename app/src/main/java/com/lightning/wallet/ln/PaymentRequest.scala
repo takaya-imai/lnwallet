@@ -71,7 +71,7 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
   lazy val minFinalCltvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta }
-  lazy val paymentHash = tags.collectFirst { case paymentHashTag: PaymentHashTag => paymentHashTag.hash }.get
+  lazy val paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
   lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
   // Amount MUST be present if this is an outgoing payment
   lazy val finalSum = amount.get
@@ -87,9 +87,8 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestam
   }.get
 
   def stream: BitStream = {
-    val stream = BitStream.empty
     val int5s = Timestamp.encode(timestamp) ++ tags.flatMap(_.toInt5s)
-    val stream1 = int5s.foldLeft(stream)(PaymentRequest.write5)
+    val stream1 = int5s.foldLeft(BitStream.empty)(PaymentRequest.write5)
     stream1
   }
 

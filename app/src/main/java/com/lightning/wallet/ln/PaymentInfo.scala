@@ -105,8 +105,8 @@ object PaymentInfo {
     val packet = parsePacket(privateKey = nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     Tuple3(perHopPayloadCodec decode BitVector(packet.payload), packet.nextPacket, packet.sharedSecret)
   } map {
+    // We are the final HTLC recipient, the only viable option since we don't route
     case (Attempt.Successful(decoded), nextPacket, sharedSecret) if nextPacket.isLast =>
-      // We are the final HTLC recipient, the only viable option since we don't route
 
       bag getPaymentInfo add.paymentHash match {
         case Success(_) if add.expiry < minExpiry =>

@@ -503,11 +503,13 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     events onProcess Tuple3(me, data, change)
   }
 
-  def sendFeeUpdate(norm: NormalData, updatedFeeRate: Long) = {
-    val c1 \ msg = Commitments.sendFee(norm.commitments, updatedFeeRate)
-    me UPDATE norm.copy(commitments = c1) SEND msg
-    doProcess(CMDProceed)
-  }
+  def sendFeeUpdate(norm: NormalData, updatedFeeRate: Long) =
+    Commitments.sendFee(norm.commitments, updatedFeeRate) foreach { case c1 \ msg =>
+      // We only send a fee update if our current chan reserve + commit tx fee can afford it
+      // otherwise we fail silently in hope that fee will drop or we will receive a payment
+      me UPDATE norm.copy(commitments = c1) SEND msg
+      doProcess(CMDProceed)
+    }
 
   private def makeFundingLocked(cs: Commitments) = {
     val point = Generators.perCommitPoint(cs.localParams.shaSeed, 1L)

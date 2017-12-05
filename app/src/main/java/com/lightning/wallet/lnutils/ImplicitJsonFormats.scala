@@ -292,11 +292,13 @@ object ImplicitJsonFormats { me =>
     "remoteChanges", "localNextHtlcId", "remoteNextHtlcId", "remoteNextCommitInfo", "commitInput",
     "remotePerCommitmentSecrets", "channelId")
 
-  implicit val localCommitPublishedFmt = jsonFormat[Seq[ClaimDelayedOutputTx], Seq[SuccessAndClaim], Seq[TimeoutAndClaim], Transaction,
-    LocalCommitPublished](LocalCommitPublished.apply, "claimMainDelayed", "claimHtlcSuccess", "claimHtlcTimeout", "commitTx")
+  implicit val localCommitPublishedFmt =
+    jsonFormat[Seq[ClaimDelayedOutputTx], Seq[SuccessAndClaim], Seq[TimeoutAndClaim], Transaction,
+      LocalCommitPublished](LocalCommitPublished.apply, "claimMainDelayed", "claimHtlcSuccess", "claimHtlcTimeout", "commitTx")
 
-  implicit val remoteCommitPublishedFmt = jsonFormat[Seq[ClaimP2WPKHOutputTx], Seq[ClaimHtlcSuccessTx], Seq[ClaimHtlcTimeoutTx], Transaction,
-    RemoteCommitPublished](RemoteCommitPublished.apply, "claimMain", "claimHtlcSuccess", "claimHtlcTimeout", "commitTx")
+  implicit val remoteCommitPublishedFmt =
+    jsonFormat[Seq[ClaimP2WPKHOutputTx], Seq[ClaimHtlcSuccessTx], Seq[ClaimHtlcTimeoutTx], Transaction,
+      RemoteCommitPublished](RemoteCommitPublished.apply, "claimMain", "claimHtlcSuccess", "claimHtlcTimeout", "commitTx")
 
   implicit val revokedCommitPublishedFmt = jsonFormat[Seq[ClaimP2WPKHOutputTx], Seq[MainPenaltyTx], Transaction,
     RevokedCommitPublished](RevokedCommitPublished.apply, "claimMain", "claimPenalty", "commitTx")
