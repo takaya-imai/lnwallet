@@ -166,7 +166,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFunding(chan: Channel, their: Init) = {
-    val minUserCapacity = LNParams.minChannelMargin * 2
+    val minUserCapacity = LNParams.minChannelMargin * 3
     // Make room for something a user can actually spend
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
