@@ -9,8 +9,9 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
 import android.widget.{BaseAdapter, Button, ListView, TextView}
-import com.lightning.wallet.lnutils.{ChannelWrap, CloudAct}
+import com.lightning.wallet.lnutils.{CloudAct, PaymentInfoWrap}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{AES, ThrottledWork}
 import com.lightning.wallet.Utils.{app, denom}
@@ -89,10 +90,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(pos: Int) = hideKeys {
     val annChanNum @ (announce, _) = adapter getItem pos
-    val selectedNodeView = mkNodeView(annChanNum)
-
-    // This channel receives neither blockchain nor peer events just yet so we need to use some custom listeners
-    val freshChan = app.ChannelManager.createChannel(bootstrap = InitData(announce), interested = mutable.Set.empty)
+    // This channel does not receive events just yet so we need to add some custom listeners
+    val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, InitData apply announce)
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(message: LightningMessage) = freshChan process message
@@ -146,12 +145,12 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     }
 
     ConnectionManager.listeners += socketOpenListener
-    // We need ChannelWrap here to process inner channel errors
-    freshChan.listeners ++= Set(chanOpenListener, ChannelWrap)
+    // We need PaymentInfoWrap here to process inner channel errors
+    freshChan.listeners ++= Set(chanOpenListener, PaymentInfoWrap)
     lnCancel setOnClickListener onButtonTap(cancelChannel)
+    lnStartDetailsText setText mkNodeView(annChanNum)
     whenBackPressed = anyToRunnable(cancelChannel)
     ConnectionManager requestConnection announce
-    lnStartDetailsText setText selectedNodeView
     setVis(View.GONE, View.VISIBLE)
     getSupportActionBar.hide
   }

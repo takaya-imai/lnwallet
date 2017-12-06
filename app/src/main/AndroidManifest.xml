@@ -19,7 +19,7 @@
         android:name="WalletApp"
         android:allowBackup="true"
         android:fullBackupContent="false"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@drawable/ic_launcher_testnet"
         android:label="@string/app_name">
 
         <receiver
