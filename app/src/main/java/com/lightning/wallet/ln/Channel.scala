@@ -291,7 +291,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         doProcess(CMDProceed)
 
 
-      // This is the final stage: both Shutdown messages are present and no pending HTLCs are left
+      // This is the final stage: both Shutdown messages are present without pending HTLCs
       case (NormalData(announce, commitments, Some(local), their), CMDProceed, NORMAL)
         if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
 
@@ -419,19 +419,24 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val Seq(closeFeeSat, remoteFeeSat) = Seq(neg.localClosingSigned.feeSatoshis, feeSatoshis) map Satoshi
         val Seq(localScript, remoteScript) = Seq(neg.localShutdown.scriptPubKey, neg.remoteShutdown.scriptPubKey)
+        val lastCommitAmountSat = neg.commitments.localCommit.commitTx.tx.txOut.map(_.amount.amount).sum
+        val lastCommitFeeSat = neg.commitments.commitInput.txOut.amount.amount - lastCommitAmountSat
+        if (remoteFeeSat.amount > lastCommitFeeSat) throw new LightningException
+
+        val nextCloseFee = (closeFeeSat + remoteFeeSat) / 4 * 2
         val (closingTx, closingSigned) = Closing.makeClosing(neg.commitments, localScript, remoteScript, remoteFeeSat)
         val closeOpt = Scripts checkSpendable Scripts.addSigs(closingTx, neg.commitments.localParams.fundingPrivKey.publicKey,
           neg.commitments.remoteParams.fundingPubkey, closingSigned.signature, remoteSig)
 
-        lazy val nextCloseFee = Closing.nextClosingFee(closeFeeSat, remoteFeeSat)
-        lazy val _ \ nextClosingSigned = Closing.makeClosing(neg.commitments,
-          localScript, remoteScript, nextCloseFee)
-
         closeOpt match {
+          case None => throw new LightningException
           case Some(closingInfo) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closingInfo.tx)
           case Some(closingInfo) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closingInfo.tx)
-          case Some(_) => me UPDATE neg.copy(localClosingSigned = nextClosingSigned) SEND nextClosingSigned
-          case _ => throw new LightningException
+
+          case _ =>
+            // Fee has been further reduced and we can offer a next version of mutual closing transaction
+            val _ \ nextClosingSigned = Closing.makeClosing(neg.commitments, localScript, remoteScript, nextCloseFee)
+            me UPDATE neg.copy(localClosingSigned = nextClosingSigned) SEND nextClosingSigned
         }
 
 

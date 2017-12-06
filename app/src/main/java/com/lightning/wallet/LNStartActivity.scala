@@ -180,9 +180,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       case Success(ms) => rm(alert) {
         val amountSat = ms.amount / sat2msatFactor
-        val theirReserveSat = (amountSat * LNParams.theirReserveToFundingRatio).toLong
+        val theirUnspendableReserveSat = (amountSat * LNParams.theirReserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
-        val localParams = LNParams.makeLocalParams(theirReserveSat, finalPubKeyScript, System.currentTimeMillis)
+        val localParams = LNParams.makeLocalParams(theirUnspendableReserveSat, finalPubKeyScript, System.currentTimeMillis)
         chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
       }
     }

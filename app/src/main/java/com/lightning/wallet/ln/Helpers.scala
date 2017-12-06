@@ -103,9 +103,6 @@ object Helpers { me =>
       ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
     }
 
-    def nextClosingFee(localClosingFee: Satoshi, remoteClosingFee: Satoshi): Satoshi =
-      (localClosingFee + remoteClosingFee) / 4 * 2
-
     def claimCurrentLocalCommitTxOutputs(commitments: Commitments, bag: PaymentInfoBag) = {
       val localPerCommitmentPoint = perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)
       val localRevocationPubkey = revocationPubKey(commitments.remoteParams.revocationBasepoint, localPerCommitmentPoint)

@@ -19,7 +19,7 @@
     <string name="sets_rescan_ok">Application is about to be closed now and blockchain rescan will be triggered on next launch</string>
     <string name="sets_noscreen"><![CDATA[Do not make a screenshot<br><br><small>Since it will be saved in a gallery where other apps may access it which is not very safe</small>]]></string>
     <string name="greetings">Bitcoin + Lightning Wallet\nPlease read a short yet important\n<a href='http://lightning-wallet.com'>wallet manual</a> before proceeding</string>
-    <string name="password_info">This app uses encryption to protect your data so please pick a pin code or password which is at least 6 characters long</string>
+    <string name="password_info">This app uses encryption to protect your data so please pick a pin or password which is at least 6 characters long</string>
     <string name="fee_risky"><![CDATA[<small>%1$s<br><small>Standard transaction fee</small></small>]]></string>
     <string name="fee_live"><![CDATA[<small>%1$s<br><small>Priority transaction fee</small></small>]]></string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
