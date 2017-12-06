@@ -155,9 +155,10 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     app toast secret_wrong
   }
 
-  def inform(messageCode: Int): Unit =
-    showForm(mkChoiceDialog(next, finish, dialog_ok,
-      dialog_cancel).setMessage(messageCode).create)
+  def inform(messageCode: Int): Unit = {
+    val dlg = mkChoiceDialog(next, finish, dialog_ok, dialog_cancel)
+    showForm(alertDialog = dlg.setMessage(messageCode).create)
+  }
 
   def goRestoreWallet(view: View) = {
     val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
