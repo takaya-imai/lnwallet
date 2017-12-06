@@ -72,13 +72,6 @@ object ConnectionManager {
         else events onTerminalError nodeId
         savedInit = their
 
-      case error: Error =>
-        // For now we treat any Error as connection level one
-        // since a user may only have one open channel per node
-        val decoded = new String(error.data.toArray)
-        Tools log s"Got remote Error: $decoded"
-        events onTerminalError nodeId
-
       case ping: Ping if ping.pongLength > 0 =>
         handler process Pong("00" * ping.pongLength)
 

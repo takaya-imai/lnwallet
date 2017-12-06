@@ -7,16 +7,18 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
 import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import java.util.concurrent.Executors
+
 import scala.collection.mutable
 import fr.acinq.eclair.UInt64
-import scala.util.Success
 
+import scala.util.Success
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
+
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
-import fr.acinq.bitcoin.{Satoshi, Transaction}
+import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -424,17 +426,17 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         if (remoteFeeSat.amount > lastCommitFeeSat) throw new LightningException
 
         val nextCloseFee = (closeFeeSat + remoteFeeSat) / 4 * 2
-        val (closingTx, closingSigned) = Closing.makeClosing(neg.commitments, localScript, remoteScript, remoteFeeSat)
-        val closeOpt = Scripts checkSpendable Scripts.addSigs(closingTx, neg.commitments.localParams.fundingPrivKey.publicKey,
-          neg.commitments.remoteParams.fundingPubkey, closingSigned.signature, remoteSig)
+        val (closingTx, signed) = Closing.makeClosing(neg.commitments, localScript, remoteScript, remoteFeeSat)
+        val closing = Scripts.addSigs(closingTx, neg.commitments.localParams.fundingPrivKey.publicKey,
+          neg.commitments.remoteParams.fundingPubkey, signed.signature, remoteSig)
 
-        closeOpt match {
+        Scripts checkSpendable closing match {
           case None => throw new LightningException
           case Some(closingInfo) if closeFeeSat == remoteFeeSat => startMutualClose(neg, closingInfo.tx)
           case Some(closingInfo) if nextCloseFee == remoteFeeSat => startMutualClose(neg, closingInfo.tx)
 
           case _ =>
-            // Fee has been further reduced and we can offer a next version of mutual closing transaction
+            // Fee has been further corrected and we can offer a next version of mutual closing transaction
             val _ \ nextClosingSigned = Closing.makeClosing(neg.commitments, localScript, remoteScript, nextCloseFee)
             me UPDATE neg.copy(localClosingSigned = nextClosingSigned) SEND nextClosingSigned
         }
@@ -498,8 +500,25 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // MISC
 
 
-      case (some, CMDShutdown, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) => BECOME(some, CLOSING)
-      case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
+      case (some, CMDShutdown | _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) =>
+        // This may only happen when we cancel opening of new channel or get their remote error, we lose nothing here
+        BECOME(some, CLOSING)
+
+
+      case (some: HasCommitments, err: Error, WAIT_FUNDING_DONE | NEGOTIATIONS | NORMAL | SYNC)
+        // GUARD: we only react on connection level remote errors or those related to our channel
+        if err.channelId == some.commitments.channelId || err.channelId == BinaryData("00" * 32) =>
+        Tools log s"Remote error, chanId: ${err.channelId}, " + new String(err.data.toArray)
+        startLocalCurrentClose(some)
+
+
+      case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) =>
+        // This happens when we decide to close a channel while we have something to lose
+        // except for NORMAL which may initiate a cooperative closing in this case
+        startLocalCurrentClose(some)
+
+
+      // Trying to send an HTLC while channel is not online for whatever reason
       case (_: NormalData, add: CMDAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
       case _ => Tools log s"Channel: unhandled $state : $change"
     }

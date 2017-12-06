@@ -90,10 +90,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   private def onPeerSelected(pos: Int) = hideKeys {
     val annChanNum @ (announce, _) = adapter getItem pos
     val selectedNodeView = mkNodeView(annChanNum)
-    val initData = InitData(announce)
 
-    // This channel receives neither blockchain nor peer events just yet
-    val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, initData)
+    // This channel receives neither blockchain nor peer events just yet so we need to use some custom listeners
+    val freshChan = app.ChannelManager.createChannel(bootstrap = InitData(announce), interested = mutable.Set.empty)
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(message: LightningMessage) = freshChan process message
@@ -139,6 +138,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     def cancelChannel: Unit = {
       freshChan.listeners -= chanOpenListener
       ConnectionManager.listeners -= socketOpenListener
+      // Just disconnect this channel from all listeners
       whenBackPressed = anyToRunnable(super.onBackPressed)
       setVis(View.VISIBLE, View.GONE)
       app toast ln_ops_start_abort

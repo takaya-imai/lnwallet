@@ -16,9 +16,9 @@ case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends L
 case class Ping(pongLength: Int, data: BinaryData) extends LightningMessage
 case class Pong(data: BinaryData) extends LightningMessage
 
-case class ChannelReestablish(channelId: BinaryData, nextLocalCommitmentNumber: Long, nextRemoteRevocationNumber: Long,
-                              yourLastPerCommitmentSecret: Option[Scalar], myCurrentPerCommitmentPoint: Option[Point]
-                             ) extends ChannelMessage
+case class ChannelReestablish(channelId: BinaryData, nextLocalCommitmentNumber: Long,
+                              nextRemoteRevocationNumber: Long, yourLastPerCommitmentSecret: Option[Scalar],
+                              myCurrentPerCommitmentPoint: Option[Point] = None) extends ChannelMessage
 
 case class OpenChannel(chainHash: BinaryData, temporaryChannelId: BinaryData, fundingSatoshis: Long, pushMsat: Long,
                        dustLimitSatoshis: Long, maxHtlcValueInFlightMsat: UInt64, channelReserveSatoshis: Long, htlcMinimumMsat: Long,
