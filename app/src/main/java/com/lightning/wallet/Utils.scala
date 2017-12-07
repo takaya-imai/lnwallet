@@ -167,7 +167,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     val isPassword = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
     val inputType = if (isPassword) InputType.TYPE_CLASS_TEXT else InputType.TYPE_CLASS_NUMBER
     val (view, field) = generatePromptView(inputType, secret_wallet, new PasswordTransformationMethod)
-    mkForm(builder = mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, view)
+    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, view)
 
     def infoAndNext = {
       add(app getString secret_checking, Informer.CODECHECK).flash.run
@@ -230,7 +230,7 @@ trait ToolbarActivity extends TimerActivity { me =>
             encoded <- serverDataVec
             jsonDecoded = AES.decode(LNParams.cloudSecret)(encoded)
             // This may be some garbage so omit this one if it fails
-            refundingData <- Try apply jsonDecoded map to[RefundingData]
+            refundingData <- Try apply to[RefundingData](jsonDecoded)
             // Now throw it away if it is already present in list of local channels
             if !localCommits.exists(_.channelId == refundingData.commitments.channelId)
             refundingChannel = createChannel(operationalListeners, refundingData)
@@ -249,8 +249,8 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     rescanWallet setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_rescan) { _ =>
-        mkForm(mkChoiceDialog(go, none, dialog_ok, dialog_cancel)
-          .setMessage(sets_rescan_ok), title = null, content = null)
+        val dlg = mkChoiceDialog(go, none, dialog_ok, dialog_cancel)
+        showForm(dlg.setMessage(sets_rescan_ok).create)
       }
 
       def go = try {
@@ -425,14 +425,11 @@ trait TimerActivity extends AppCompatActivity { me =>
     passAsk -> secretInputField
   }
 
-  def delayUI(fun: => Unit): Unit = timer.schedule(anyToRunnable(fun), 225)
-  def rm(previous: Dialog)(fun: => Unit): Unit = wrap(previous.dismiss)(me delayUI fun)
-  def mkErrorUiUnsafeForm(error: CharSequence): Unit = mkForm(me negBld dialog_ok, null, error)
-  def onFail(error: CharSequence): Unit = me runOnUiThread mkErrorUiUnsafeForm(error)
+  def delayUI(fun: => Unit) = timer.schedule(anyToRunnable(fun), 225)
+  def rm(previous: Dialog)(fun: => Unit) = wrap(previous.dismiss)(me delayUI fun)
+  def mkForm(bld: Builder, title: View, content: View) = showForm(bld.setCustomTitle(title).setView(content).create)
+  def onFail(error: CharSequence): Unit = me runOnUiThread mkForm(me negBld dialog_ok, null, error).show
   def onFail(error: Throwable): Unit = onFail(error.getMessage)
-
-  def mkForm(builder: Builder, title: View, content: View) =
-    showForm(builder.setCustomTitle(title).setView(content).create)
 
   def showForm(alertDialog: AlertDialog) = {
     alertDialog setCanceledOnTouchOutside false

@@ -72,7 +72,8 @@ object Helpers { me =>
         remoteScriptPubkey, Satoshi(0), Satoshi(0), commitments.localCommit.spec), commitments.localParams.fundingPrivKey.publicKey,
         commitments.remoteParams.fundingPubkey, "aa" * 71, "bb" * 71).tx)
 
-      val closingFee = Scripts.weight2fee(commitments.localCommit.spec.feeratePerKw, estimatedWeight)
+      // We don't need an extra high fee for a closing transaction so we offer an economical one
+      val closingFee = Scripts.weight2fee(commitments.localCommit.spec.feeratePerKw / 2, estimatedWeight)
       makeClosing(commitments, localScriptPubkey, remoteScriptPubkey, closingFee)
     }
 

@@ -500,8 +500,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // MISC
 
 
-      case (some, CMDShutdown | _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) =>
+      case (some, x @ (CMDShutdown | _: Error), WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) =>
         // This may only happen when we cancel opening of new channel or get their remote error, we lose nothing here
+        println(x)
         BECOME(some, CLOSING)
 
 

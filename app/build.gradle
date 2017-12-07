@@ -30,7 +30,6 @@ android {
 
 dependencies {
     // Bitcoin and crypto
-    //compile files('libwally-core/src/swig_java/wallycore.jar')
     compile files('libs/bitcoinj-core-0.15-SNAPSHOT-bundled.jar')
     compile 'net.zetetic:android-database-sqlcipher:3.5.4@aar'
 

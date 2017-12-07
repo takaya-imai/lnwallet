@@ -65,12 +65,13 @@ object ConnectionManager {
 
     def intercept(message: LightningMessage) = message match {
       // Some messages need a special handling so we intercept them
-
-      case their: Init =>
-        val isOk = dataLossProtect(their.localFeatures)
-        if (isOk) events.onOperational(nodeId, their)
-        else events onTerminalError nodeId
+      case their: Init if dataLossProtect(their.localFeatures) =>
+        events.onOperational(nodeId, their)
         savedInit = their
+
+      case _: Init =>
+        // Incompatible features
+        events onTerminalError nodeId
 
       case ping: Ping if ping.pongLength > 0 =>
         handler process Pong("00" * ping.pongLength)

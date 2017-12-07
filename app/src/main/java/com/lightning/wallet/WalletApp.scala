@@ -201,7 +201,6 @@ class WalletApp extends Application { me =>
     def watchScripts(scripts: ScriptSeq) = app.kit.wallet addWatchedScripts scripts.asJava
     def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
-    def currentHeight = blockChain.getBestChainHeight
     def shutDown = none
 
     def useCheckPoints(time: Long) = {
