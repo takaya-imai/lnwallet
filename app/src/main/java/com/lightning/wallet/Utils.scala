@@ -286,7 +286,7 @@ trait ToolbarActivity extends TimerActivity { me =>
         def rotatePass = {
           app.kit.wallet.decrypt(oldPass)
           app.encryptWallet(app.kit.wallet, newPass)
-          // Make sure we have alphabetical keyboard in case of password
+          // Make sure we have alphabetical keyboard from now on
           app.prefs.edit.putBoolean(AbstractKit.PASS_INPUT, true).commit
         }
       }
@@ -434,6 +434,7 @@ trait TimerActivity extends AppCompatActivity { me =>
   def showForm(alertDialog: AlertDialog) = {
     alertDialog setCanceledOnTouchOutside false
     alertDialog.getWindow.getAttributes.windowAnimations = R.style.SlidingDialog
+    // This may be called after a host activity is destroyed and thus would throw
     try alertDialog.show catch none finally if (scrWidth > 2.3) alertDialog.getWindow
       .setLayout(maxDialog.toInt, WRAP_CONTENT)
 

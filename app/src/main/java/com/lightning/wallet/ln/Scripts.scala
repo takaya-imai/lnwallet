@@ -29,13 +29,13 @@ object Scripts { me =>
     }
 
   def cltvBlocks(tx: Transaction): Long =
-    if (tx.lockTime <= LockTimeThreshold) tx.lockTime else 0
+    if (tx.lockTime <= LockTimeThreshold) tx.lockTime else 0L
 
   def csvTimeout(tx: Transaction): Long =
-    if (tx.version < 2) 0L else tx.txIn.map { in =>
-      val isCsvDisabled = (in.sequence & TxIn.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0
+    if (tx.version < 2) 0L else tx.txIn map { in =>
+      val isCsvDisabled = (in.sequence & TxIn.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0L
       if (isCsvDisabled) 0L else in.sequence & TxIn.SEQUENCE_LOCKTIME_MASK
-    }.max
+    } max
 
   def encodeNumber(number: Long): ScriptElt = number match {
     case n if n < -1 | n > 16 => OP_PUSHDATA(Script encodeNumber n)
@@ -247,10 +247,9 @@ object Scripts { me =>
     sign(txinfo.tx, inputIndex = 0, txinfo.input.redeemScript, txinfo.input.txOut.amount, key)
 
   def checkSpendable[T <: TransactionWithInputInfo](txWithInputInfo: => T) = Try {
-    val isDustyOrEmpty = txWithInputInfo.tx.txOut.map(_.amount).sum < LNParams.dustLimit
+    if (txWithInputInfo.tx.txOut.isEmpty) throw new Exception("Empty transaction found")
     val check = Map(txWithInputInfo.tx.txIn.head.outPoint -> txWithInputInfo.input.txOut)
     Transaction.correctlySpends(txWithInputInfo.tx, check, STANDARD_SCRIPT_VERIFY_FLAGS)
-    if (isDustyOrEmpty) throw new Exception("Empty or dusty transaction")
     txWithInputInfo
   } toOption
 

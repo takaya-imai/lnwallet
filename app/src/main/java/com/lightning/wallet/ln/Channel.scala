@@ -7,18 +7,16 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.AddErrorCodes._
 import com.lightning.wallet.ln.crypto.Sphinx.zeroes
 import java.util.concurrent.Executors
-
 import scala.collection.mutable
 import fr.acinq.eclair.UInt64
-
 import scala.util.Success
-import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 
+import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 import com.lightning.wallet.ln.Helpers.{Closing, Funding}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, Scalar}
 import com.lightning.wallet.ln.Tools.{none, runAnd}
-import fr.acinq.bitcoin.{BinaryData, Satoshi, Transaction}
 
 
 abstract class Channel extends StateMachine[ChannelData] { me =>
@@ -500,9 +498,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // MISC
 
 
-      case (some, x @ (CMDShutdown | _: Error), WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) =>
+      case (some, CMDShutdown | _: Error, WAIT_FOR_INIT | WAIT_FOR_ACCEPT | WAIT_FOR_FUNDING | WAIT_FUNDING_SIGNED) =>
         // This may only happen when we cancel opening of new channel or get their remote error, we lose nothing here
-        println(x)
         BECOME(some, CLOSING)
 
 

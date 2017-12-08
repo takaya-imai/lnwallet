@@ -25,7 +25,7 @@ object PaymentInfo {
   type ExtraPaymentRoute = Vector[ExtraHop]
 
   // Used as placeholder for unresolved outgoing payments
-  val NOIMAGE = BinaryData("empty" getBytes "UTF-8")
+  val NOIMAGE = BinaryData("00000000" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
 
   final val HIDDEN = 0

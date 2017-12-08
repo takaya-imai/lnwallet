@@ -191,15 +191,15 @@ class TransactionsSpec {
       assert(htlcTimeoutTxs.size == 2) // htlc1 and htlc3
       assert(htlcSuccessTxs.size == 2) // htlc2 and htlc4
 
-//      {
-//        // either party spends local->remote htlc output with htlc timeout tx
-//        for (htlcTimeoutTx <- htlcTimeoutTxs) {
-//          val localSig = sign(htlcTimeoutTx, localHtlcPriv)
-//          val remoteSig = sign(htlcTimeoutTx, remoteHtlcPriv)
-//          val signed = addSigs(htlcTimeoutTx, localSig, remoteSig)
-//          assert(checkSpendable(signed).isDefined)
-//        }
-//      }
+      {
+        // either party spends local->remote htlc output with htlc timeout tx
+        for (htlcTimeoutTx <- htlcTimeoutTxs) {
+          val localSig = sign(htlcTimeoutTx, localHtlcPriv)
+          val remoteSig = sign(htlcTimeoutTx, remoteHtlcPriv)
+          val signed = addSigs(htlcTimeoutTx, localSig, remoteSig)
+          assert(checkSpendable(signed).isDefined)
+        }
+      }
 
       {
         // remote spends local->remote htlc1/htlc3 output directly in case of success
@@ -211,17 +211,17 @@ class TransactionsSpec {
         }
       }
 
-//      {
-//        // local spends remote->local htlc2/htlc4 output with htlc success tx using payment preimage
-//        for ((htlcSuccessTx, paymentPreimage) <- (htlcSuccessTxs(0), paymentPreimage2) :: (htlcSuccessTxs(1), paymentPreimage4) :: Nil) {
-//          val localSig = sign(htlcSuccessTx, localHtlcPriv)
-//          val remoteSig = sign(htlcSuccessTx, remoteHtlcPriv)
-//          val signedTx = addSigs(htlcSuccessTx, localSig, remoteSig, paymentPreimage)
-//          assert(checkSpendable(signedTx).isDefined)
-//          // check remote sig
-//          assert(checkSig(htlcSuccessTx, remoteSig, remoteHtlcPriv.publicKey))
-//        }
-//      }
+      {
+        // local spends remote->local htlc2/htlc4 output with htlc success tx using payment preimage
+        for ((htlcSuccessTx, paymentPreimage) <- (htlcSuccessTxs(0), paymentPreimage2) :: (htlcSuccessTxs(1), paymentPreimage4) :: Nil) {
+          val localSig = sign(htlcSuccessTx, localHtlcPriv)
+          val remoteSig = sign(htlcSuccessTx, remoteHtlcPriv)
+          val signedTx = addSigs(htlcSuccessTx, localSig, remoteSig, paymentPreimage)
+          assert(checkSpendable(signedTx).isDefined)
+          // check remote sig
+          assert(checkSig(htlcSuccessTx, remoteSig, remoteHtlcPriv.publicKey))
+        }
+      }
 
       {
         // remote spends main output
