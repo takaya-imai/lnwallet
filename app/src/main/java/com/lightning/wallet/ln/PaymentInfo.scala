@@ -20,6 +20,7 @@ object PaymentInfo {
   // Used as placeholder for unresolved outgoing payments
   val NOIMAGE = BinaryData("00000000" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
+  val NOAMOUNT = MilliSatoshi(0L)
 
   final val HIDDEN = 0
   final val WAITING = 1
@@ -109,12 +110,12 @@ object PaymentInfo {
           // GUARD: final outgoing CLTV does not equal the one from message
           failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
 
-        case Success(pay) if add.amount > pay.amount * 2 =>
-          // GUARD: they have sent too much funds so reject it
+        case Success(pay) if pay.amount != NOAMOUNT && add.amount > pay.amount * 2 =>
+          // GUARD: not a domation case and they have sent too much funds so reject it
           failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
-        case Success(pay) if add.amount < pay.amount =>
-          // GUARD: amount is less than requested so reject it
+        case Success(pay) if pay.amount != NOAMOUNT && add.amount < pay.amount =>
+          // GUARD: not a domation case and amount is less than asked so reject it
           failHtlc(sharedSecret, IncorrectPaymentAmount, add)
 
         case Success(pay) if pay.incoming == 1 =>

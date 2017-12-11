@@ -324,34 +324,36 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def makeRequest(sum: MilliSatoshi, preimg: BinaryData) = for {
+      def makeRequest(sum: Option[MilliSatoshi], preimg: BinaryData) =
         // We can only proceed if chan is operational and we have a ChannelUpdate
         // if that is the case we save data to db and go to QR code activity
 
-        chanIdKey <- chan(_.channelId.toString)
-        update <- StorageWrap get chanIdKey map to[ChannelUpdate]
-        extra = Vector apply Hop(chan.data.announce.nodeId, update)
-        pr = PaymentRequest(chainHash, Some(sum), sha256(preimg.data), nodePrivateKey,
-          inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra)
-      } {
-        // For UI purposes only
-        bag upsertRoutingData emptyRD(pr)
-        // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user
-        bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg, sum,
-          HIDDEN, System.currentTimeMillis, pr.description.right getOrElse new String)
+        for {
+          chanIdKey <- chan(_.channelId.toString)
+          update <- StorageWrap get chanIdKey map to[ChannelUpdate]
+          extra = Vector apply Hop(chan.data.announce.nodeId, update)
+          pr = PaymentRequest(chainHash, sum, sha256(preimg.data), nodePrivateKey,
+            inputDescription.getText.toString.trim, fallbackAddress = None, 21600, extra)
+        } {
+          // For UI purposes only
+          bag upsertRoutingData emptyRD(pr)
+          // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user
+          bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg,
+            sum getOrElse NOAMOUNT, HIDDEN, System.currentTimeMillis,
+            pr.description.right getOrElse new String)
 
-        app.TransData.value = pr
-        me goTo classOf[RequestActivity]
-      }
+          app.TransData.value = pr
+          me goTo classOf[RequestActivity]
+        }
 
       def recAttempt = rateManager.result match {
-        case Failure(_) => app toast dialog_sum_empty
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
         case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
 
-        case Success(ms) => rm(alert) {
+        case ms => rm(alert) {
+          // Request may contain no amount
           notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
-          <(makeRequest(ms, random getBytes 32), onFail)(none)
+          <(makeRequest(ms.toOption, random getBytes 32), onFail)(none)
         }
       }
 

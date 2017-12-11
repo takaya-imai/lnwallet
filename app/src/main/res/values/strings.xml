@@ -66,9 +66,9 @@
     <string name="secret_wrong">Wrong wallet secret</string>
     <string name="secret_too_short">New secret is too short</string>
 
-    <string name="action_settings">Wallet settings</string>
     <string name="action_bitcoin_receive">Receive bitcoin</string>
     <string name="action_bitcoin_send">Send bitcoin</string>
+    <string name="action_settings">Wallet settings</string>
     <string name="action_buy">Testnet faucet</string>
     <string name="action_scan">Scan QR code</string>
 
