@@ -1,29 +1,22 @@
 package com.lightning.wallet.ln
 
-import java.nio.ByteOrder._
-import fr.acinq.bitcoin.Protocol._
-import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.crypto.Sphinx._
-import com.lightning.wallet.ln.crypto.MultiStreamUtils._
 import com.lightning.wallet.ln.wire.FailureMessageCodecs._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
-import scala.util.{Success, Try}
 
+import scala.util.{Success, Try}
+import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Transaction}
+import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import com.lightning.wallet.ln.Tools.random
-import scala.language.postfixOps
 import scodec.bits.BitVector
 import scodec.Attempt
 
 
 object PaymentInfo {
-  type PublicPaymentRoute = Vector[Hop]
-  type ExtraPaymentRoute = Vector[ExtraHop]
-
   // Used as placeholder for unresolved outgoing payments
   val NOIMAGE = BinaryData("00000000" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
@@ -33,14 +26,16 @@ object PaymentInfo {
   final val SUCCESS = 2
   final val FAILURE = 3
 
-  def buildRelativeRoute(hops: Vector[PaymentHop], finalAmountMsat: Long) = {
-    val firstPerHopPayload = Vector apply PerHopPayload(0L, finalAmountMsat, 0)
-    val start = RelativeCLTVRoute(firstPerHopPayload, Vector.empty, finalAmountMsat, 0)
+  private def build(hops: PaymentRoute, pr: PaymentRequest) = {
+    val firstExpiry = LNParams.broadcaster.currentHeight + pr.minFinalCltvExpiry.getOrElse(default = 9L)
+    val firstPayload = Vector apply PerHopPayload(shortChannelId = 0L, pr.finalSum.amount, firstExpiry)
+    val start = (firstPayload, Vector.empty[PublicKey], pr.finalSum.amount, firstExpiry)
 
     (start /: hops.reverse) {
-      case RelativeCLTVRoute(payloads, nodes, msat, expiry) \ hop =>
-        RelativeCLTVRoute(PerHopPayload(hop.shortChannelId, msat, expiry) +: payloads,
-          hop.nodeId +: nodes, msat + hop.nextFee(msat), expiry + hop.cltvExpiryDelta)
+      case (payloads, nodes, msat, expiry) \ Hop(nodeId, update) =>
+        val fee = update.feeBaseMsat + (update.feeProportionalMillionths * msat) / 1000000L
+        val nextPayloads = PerHopPayload(update.shortChannelId, msat, expiry) +: payloads
+        (nextPayloads, nodeId +: nodes, msat + fee, expiry + update.cltvExpiryDelta)
     }
   }
 
@@ -49,30 +44,27 @@ object PaymentInfo {
     makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assoc)
   }
 
-  def completeRoutingData(rd: RoutingData) = for {
-    // Build a new RoutingData if we have routes available
-    // provided RoutingData may have bad nodes and channels which have to be preserved
-    RelativeCLTVRoute(relPayloads, nodeIds, firstAmount, firstExpiry) <- rd.routes.headOption
-    absoluteExpiry = LNParams.broadcaster.currentHeight + rd.pr.minFinalCltvExpiry.getOrElse(default = 9L)
-    absolutePayloads = for (payload <- relPayloads) yield payload.modify(_.outgoingCltv).using(absoluteExpiry+)
-    // First expiry is also relative so it should be updated with absolute part just like payloads above
-  } yield rd.copy(onion = buildOnion(nodeIds :+ rd.pr.nodeId, absolutePayloads, rd.pr.paymentHash),
-    routes = rd.routes.tail, amountWithFee = firstAmount, expiry = firstExpiry + absoluteExpiry)
+  def completeRD(rd: RoutingData) = for {
+    firstUnusedPaymentRoute <- rd.routes.headOption
+    (payloads, nodeIds, firstAmount, firstExpiry) = build(firstUnusedPaymentRoute, rd.pr)
+  } yield rd.copy(onion = buildOnion(nodeIds :+ rd.pr.nodeId, payloads, rd.pr.paymentHash),
+    routes = rd.routes.tail, amountWithFee = firstAmount, expiry = firstExpiry)
 
   def emptyRD(pr: PaymentRequest) = {
     val packet = Packet(Array.empty, random getBytes 33, random getBytes DataLength, random getBytes MacLength)
     RoutingData(Vector.empty, Set.empty, Set.empty, pr, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
   }
 
+  private def without(rs: Vector[PaymentRoute], fn: Hop => Boolean) = rs.filterNot(_ exists fn)
   private def failHtlc(sharedSecret: BinaryData, failure: FailureMessage, add: UpdateAddHtlc) = {
     // Will send an error onion packet which contains a detailed description back to payment sender
     val reason = createErrorPacket(sharedSecret, failure)
     CMDFailHtlc(add.id, reason)
   }
 
-  private def withoutNode(faultyId: PublicKey, rd: RoutingData) = {
-    val updatedRoutes = rd.routes.filterNot(_.nodeIds contains faultyId)
-    rd.copy(routes = updatedRoutes, badNodes = rd.badNodes + faultyId)
+  private def withoutNode(bad: PublicKey, rd: RoutingData) = {
+    val updatedPaymentRoutes = without(rd.routes, _.nodeId == bad)
+    rd.copy(routes = updatedPaymentRoutes, badNodes = rd.badNodes + bad)
   }
 
   def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
@@ -89,9 +81,9 @@ object PaymentInfo {
         } getOrElse rd
 
       case ErrorPacket(_, message: Update) =>
-        // There may be other operational channels left so try them out, also remember this channel as failed
-        val routes1 = rd.routes.filterNot(_.payloads.map(_.shortChannelId) contains message.update.shortChannelId)
-        rd.copy(routes = routes1, badChannels = rd.badChannels + message.update.shortChannelId)
+        // There may be other operational channels so try them out, also remember this channel as failed
+        val updatedPaymentRoutes = without(rd.routes, _.lastUpdate.shortChannelId == message.update.shortChannelId)
+        rd.copy(routes = updatedPaymentRoutes, badChannels = rd.badChannels + message.update.shortChannelId)
 
       case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(nodeKey, rd)
       case ErrorPacket(nodeKey, _: Node) => withoutNode(nodeKey, rd)
@@ -149,9 +141,8 @@ object PaymentInfo {
 }
 
 // Used on UI to quickly display payment details
-case class PaymentInfo(hash: BinaryData, incoming: Int,
-                       preimage: BinaryData, amount: MilliSatoshi,
-                       status: Int, stamp: Long, text: String) {
+case class PaymentInfo(hash: BinaryData, incoming: Int, preimage: BinaryData,
+                       amount: MilliSatoshi, status: Int, stamp: Long, text: String) {
 
   def actualStatus = incoming match {
     // Once we have a preimage it is a SUCCESS
@@ -163,13 +154,8 @@ case class PaymentInfo(hash: BinaryData, incoming: Int,
   }
 }
 
-// Route metadata with relative CLTV PerHopPayload values which start from zero!
 case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Long)
-case class RelativeCLTVRoute(payloads: Vector[PerHopPayload], nodeIds: Vector[PublicKey],
-                             firstMsat: Long, firstRelativeExpiry: Long)
-
-// Used by outgoing payments to store routes, onion, bad nodes and channels
-case class RoutingData(routes: Vector[RelativeCLTVRoute], badNodes: Set[PublicKey], badChannels: Set[Long],
+case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey], badChannels: Set[Long],
                        pr: PaymentRequest, onion: SecretsAndPacket, amountWithFee: Long, expiry: Long)
 
 trait PaymentInfoBag { me =>
@@ -185,27 +171,4 @@ trait PaymentInfoBag { me =>
     case Seq(_, pre, _) if pre.size == 32 => me updatePreimg UpdateFulfillHtlc(null, 0L, pre)
     case Seq(_, _, _, pre, _) if pre.size == 32 => me updatePreimg UpdateFulfillHtlc(null, 0L, pre)
   }
-}
-
-trait PaymentHop {
-  def nextFee(msat: Long): Long
-  def shortChannelId: Long
-  def cltvExpiryDelta: Int
-  def nodeId: PublicKey
-}
-
-case class ExtraHop(nodeId: PublicKey, shortChannelId: Long, fee: Long, cltvExpiryDelta: Int) extends PaymentHop {
-  def pack = aconcat(nodeId.toBin.data.toArray, writeUInt64(shortChannelId, BIG_ENDIAN), writeUInt64(fee, BIG_ENDIAN),
-    writeUInt16(cltvExpiryDelta, BIG_ENDIAN).data.toArray, Array.emptyByteArray)
-
-  // Already pre-calculated
-  def nextFee(msat: Long) = fee
-}
-
-case class Hop(nodeId: PublicKey, lastUpdate: ChannelUpdate) extends PaymentHop {
-  // Fee is not pre-calculated for public hops so we need to derive it accoring to rules in BOLT 04
-  def nextFee(msat: Long) = lastUpdate.feeBaseMsat + (lastUpdate.feeProportionalMillionths * msat) / 1000000L
-  def toExtra(msat: Long) = ExtraHop(nodeId, lastUpdate.shortChannelId, nextFee(msat), lastUpdate.cltvExpiryDelta)
-  def cltvExpiryDelta = lastUpdate.cltvExpiryDelta
-  def shortChannelId = lastUpdate.shortChannelId
 }

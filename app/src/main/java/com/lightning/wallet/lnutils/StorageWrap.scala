@@ -172,7 +172,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
             oldRoutingData <- getRoutingData(htlc.add.paymentHash)
             reducedRoutingData = cutRoutes(fail)(oldRoutingData)
             // Try to use the rest of available local routes
-          } completeRoutingData(reducedRoutingData) match {
+          } completeRD(reducedRoutingData) match {
 
             case Some(updatedRoutingData) =>
               // There are still routes left and we have just used one

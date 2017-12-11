@@ -111,8 +111,8 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
       case (true, true, true) =>
         // We go to a last visited activity by default
-        val landing = app.prefs.getString(AbstractKit.LANDING, AbstractKit.BITCOIN)
-        val target = if (landing == AbstractKit.BITCOIN) classOf[BtcActivity] else classOf[LNActivity]
+        val landingIsLN = app.prefs.getBoolean(AbstractKit.LANDING_LN, true)
+        val target = if (landingIsLN) classOf[LNActivity] else classOf[BtcActivity]
         me exitTo target
 
       case (true, false, _) =>

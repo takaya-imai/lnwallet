@@ -11,7 +11,7 @@ import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
 import com.lightning.wallet.lnutils.Connector.{ClearToken, HttpParam, RequestAndMemo}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
-import com.lightning.wallet.ln.PaymentInfo.ExtraPaymentRoute
+import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
@@ -135,9 +135,6 @@ object ImplicitJsonFormats { me =>
     }
   }
 
-  implicit val extraHopFmt = jsonFormat[PublicKey, Long, Long, Int,
-    ExtraHop](ExtraHop.apply, "nodeId", "shortChannelId", "fee", "cltvExpiryDelta")
-
   implicit val paymentHashTagFmt = taggedJsonFmt(jsonFormat[BinaryData,
     PaymentHashTag](PaymentHashTag.apply, "hash"), tag = "PaymentHashTag")
 
@@ -147,7 +144,7 @@ object ImplicitJsonFormats { me =>
   implicit val descriptionHashTagFmt = taggedJsonFmt(jsonFormat[BinaryData,
     DescriptionHashTag](DescriptionHashTag.apply, "hash"), tag = "DescriptionHashTag")
 
-  implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[ExtraPaymentRoute,
+  implicit val routingInfoTagFmt = taggedJsonFmt(jsonFormat[PaymentRoute,
     RoutingInfoTag](RoutingInfoTag.apply, "route"), tag = "RoutingInfoTag")
 
   implicit val minFinalCltvExpiryTagFmt = taggedJsonFmt(jsonFormat[Long,
@@ -170,11 +167,8 @@ object ImplicitJsonFormats { me =>
   implicit val secretsAndPacketFmt = jsonFormat[Vector[BytesAndKey], Packet,
     SecretsAndPacket](SecretsAndPacket.apply, "sharedSecrets", "packet")
 
-  implicit val relativeCLTVRouteFmt = jsonFormat[Vector[PerHopPayload], Vector[PublicKey], Long, Long,
-    RelativeCLTVRoute](RelativeCLTVRoute.apply, "payloads", "nodeIds", "firstMsat", "firstRelativeExpiry")
-
   implicit val routingDataFmt =
-    jsonFormat[Vector[RelativeCLTVRoute], Set[PublicKey], Set[Long], PaymentRequest, SecretsAndPacket, Long, Long,
+    jsonFormat[Vector[PaymentRoute], Set[PublicKey], Set[Long], PaymentRequest, SecretsAndPacket, Long, Long,
       RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "pr", "onion", "amountWithFee", "expiry")
 
   implicit val ratesFmt = jsonFormat[Seq[Double], Fiat2Btc, Long,

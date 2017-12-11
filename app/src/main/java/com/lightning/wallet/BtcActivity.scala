@@ -277,7 +277,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   }
 
   override def onResume: Unit = wrap(super.onResume) {
-    app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.BITCOIN).commit
+    app.prefs.edit.putBoolean(AbstractKit.LANDING_LN, false).commit
     checkTransData
   }
 

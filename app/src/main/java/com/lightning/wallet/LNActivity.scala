@@ -1,6 +1,5 @@
 package com.lightning.wallet
 
-import spray.json._
 import android.view._
 import android.widget._
 import com.lightning.wallet.ln._
@@ -194,8 +193,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   override def onResume: Unit = wrap(super.onResume) {
-    app.prefs.edit.putString(AbstractKit.LANDING, AbstractKit.LIGHTNING).commit
-    app.ChannelManager.all.find(_.isOperational) map manageActive getOrElse evacuate
+    app.prefs.edit.putBoolean(AbstractKit.LANDING_LN, true).commit
+    val chanOpt = app.ChannelManager.all.find(_.isOperational)
+    chanOpt map manageActive getOrElse evacuate
   }
 
   // APP MENU
@@ -329,8 +329,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         // if that is the case we save data to db and go to QR code activity
 
         chanIdKey <- chan(_.channelId.toString)
-        upd <- StorageWrap get chanIdKey map to[ChannelUpdate]
-        extra = Vector(Hop(chan.data.announce.nodeId, upd) toExtra sum.amount)
+        update <- StorageWrap get chanIdKey map to[ChannelUpdate]
+        extra = Vector apply Hop(chan.data.announce.nodeId, update)
         pr = PaymentRequest(chainHash, Some(sum), sha256(preimg.data), nodePrivateKey,
           inputDescription.getText.toString.trim, fallbackAddress = None, 3600 * 6, extra)
       } {

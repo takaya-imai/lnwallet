@@ -95,14 +95,14 @@ class PaymentRequestSpec {
 
     {
       println("On mainnet, with fallback address 1RustyRX2oai4EYYDpQGWvEL62BBGqN9T with extra routing info to go via nodes 029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255 then 039e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255")
-      val ref = "lnbc20m1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqhp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqsfpp3qjmp7lwpagxun9pygexvgpjdc4jdj85fr9yq20q82gphp2nflc7jtzrcazrra7wwgzxqc8u7754cdlpfrmccae92qgzqvzq2ps8pqqqqqqqqqqqq9qqqvpeuqafqxu92d8lr6fvg0r5gv0heeeqgcrqlnm6jhphu9y00rrhy4grqszsvpcgpy9qqqqqqqqqqqq7qqzqfnlkwydm8rg30gjku7wmxmk06sevjp53fmvrcfegvwy7d5443jvyhxsel0hulkstws7vqv400q4j3wgpk4crg49682hr4scqvmad43cqd5m7tf"
+      val ref = "lnbc20m1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqhp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqsfpp3qjmp7lwpagxun9pygexvgpjdc4jdj85fr9yq20q82gphp2nflc7jtzrcazrra7wwgzxqc8u7754cdlpfrmccae92qgzqvzq2ps8pqqqqqqpqqqqq9qqqvpeuqafqxu92d8lr6fvg0r5gv0heeeqgcrqlnm6jhphu9y00rrhy4grqszsvpcgpy9qqqqqqgqqqqq7qqzqj9n4evl6mr5aj9f58zp6fyjzup6ywn3x6sk8akg5v4tgn2q8g4fhx05wf6juaxu9760yp46454gpg5mtzgerlzezqcqvjnhjh8z3g2qqdhhwkj"
       val pr = PaymentRequest.read(ref)
       assert(pr.prefix == "lnbc")
       assert(pr.amount == Some(MilliSatoshi(2000000000L)))
       assert(pr.paymentHash == BinaryData("0001020304050607080900010203040506070809000102030405060708090102"))
       assert(pr.timestamp == 1496314658L)
       assert(pr.nodeId == PublicKey(BinaryData("03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad")))
-      assert(pr.routingInfo.head == RoutingInfoTag(Vector(ExtraHop(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), 72623859790382856L, 20, 3), ExtraHop(PublicKey("039e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"), 217304205466536202L, 30, 4))))
+      println(pr.routingInfo == Vector(RoutingInfoTag(Vector(Hop(PublicKey("029e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"),ChannelUpdate(BinaryData("00"),BinaryData("00"),72623859790382856L,1512989651,BinaryData("0000"),3,0,1,20)), Hop(PublicKey("039e03a901b85534ff1e92c43c74431f7ce72046060fcf7a95c37e148f78c77255"),ChannelUpdate(BinaryData("00"),BinaryData("00"),217304205466536202L,1512989651,BinaryData("0000"),4,0,2,30))))))
       assert(pr.tags.size == 4)
       assert(PaymentRequest.write(pr.sign(priv)) == ref)
     }

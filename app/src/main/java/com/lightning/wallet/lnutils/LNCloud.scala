@@ -14,7 +14,7 @@ import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
 import scala.util.{Failure, Success}
 
-import com.lightning.wallet.ln.PaymentInfo.PublicPaymentRoute
+import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
 import com.lightning.wallet.ln.Broadcaster.TxSeq
@@ -186,9 +186,9 @@ class Connector(val url: String) {
   def getBackup(key: String) = ask("data/get", chans => toVec[String](chans) map HEX.decode, "key" -> key)
   def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
 
-  def findRoutes(noNodes: Set[PublicKey], noChannels: Set[Long], fromNode: PublicKey, toNode: PublicKey) =
-    ask("router/routes", toVec[PublicPaymentRoute], "from" -> fromNode.toString, "to" -> toNode.toString,
-      "nodes" -> noNodes.map(_.toBin).toJson.toString.hex, "channels" -> noChannels.toJson.toString.hex)
+  def findRoutes(noNodes: Set[PublicKey], noChannels: Set[Long], from: PublicKey, to: PublicKey) =
+    ask("router/routes", toVec[PaymentRoute], "nodes" -> noNodes.map(_.toBin).toJson.toString.hex,
+      "channels" -> noChannels.toJson.toString.hex, "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
