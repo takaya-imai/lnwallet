@@ -72,6 +72,7 @@ object ConnectionManager {
       case _: Init =>
         // Incompatible features
         events onTerminalError nodeId
+        connections -= nodeId
 
       case ping: Ping if ping.pongLength > 0 =>
         handler process Pong("00" * ping.pongLength)
