@@ -187,7 +187,7 @@ class WalletApp extends Application { me =>
         val allAssisted = Obs.zip(Obs from rd.pr.routingInfo map augmentAssisted)
         findRoutes(rd.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           // We have got direct and assisted routes, now combine them into single vector and proceed
-          val rdWithRoutes = rd.copy(routes = direct ++ assisted)
+          val rdWithRoutes = rd.copy(routes = direct ++ assisted.toVector)
           completeRD(rdWithRoutes)
         }
       }

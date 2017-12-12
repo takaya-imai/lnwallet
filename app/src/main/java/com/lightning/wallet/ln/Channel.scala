@@ -147,7 +147,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // NORMAL MODE
 
-
+        
       case (norm: NormalData, add: UpdateAddHtlc, NORMAL)
         if add.channelId == norm.commitments.channelId =>
 

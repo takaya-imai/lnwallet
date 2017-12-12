@@ -13,9 +13,9 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi, Crypto}
 import com.lightning.wallet.ln.wire.{ChannelUpdate, CommitSig}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import com.lightning.wallet.ln.Tools.{none, random}
 import com.lightning.wallet.ln.Tools.{runAnd, wrap}
 import scala.util.{Failure, Success, Try}
@@ -31,7 +31,6 @@ import com.lightning.wallet.lnutils.JsonHttpUtils.to
 import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
 import android.view.ViewGroup.LayoutParams
-import fr.acinq.bitcoin.Crypto.sha256
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
@@ -332,15 +331,14 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           chanIdKey <- chan(_.channelId.toString)
           update <- StorageWrap get chanIdKey map to[ChannelUpdate]
           extra = Vector apply Hop(chan.data.announce.nodeId, update)
-          pr = PaymentRequest(chainHash, sum, sha256(preimg.data), nodePrivateKey,
+          pr = PaymentRequest(chainHash, sum, Crypto sha256 preimg.data, nodePrivateKey,
             inputDescription.getText.toString.trim, fallbackAddress = None, 21600, extra)
         } {
           // For UI purposes only
           bag upsertRoutingData emptyRD(pr)
           // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user
-          bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg,
-            sum getOrElse NOAMOUNT, HIDDEN, System.currentTimeMillis,
-            pr.description.right getOrElse new String)
+          bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg, sum getOrElse NOAMOUNT,
+            HIDDEN, stamp = System.currentTimeMillis, pr.description.right getOrElse new String)
 
           app.TransData.value = pr
           me goTo classOf[RequestActivity]
