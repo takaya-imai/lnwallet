@@ -5,7 +5,6 @@ import spray.json._
 import org.bitcoinj.core._
 import com.lightning.wallet.ln._
 import scala.concurrent.duration._
-import com.softwaremill.quicklens._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Tools._
@@ -187,7 +186,7 @@ class WalletApp extends Application { me =>
         val allAssisted = Obs.zip(Obs from rd.pr.routingInfo map augmentAssisted)
         findRoutes(rd.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           // We have got direct and assisted routes, now combine them into single vector and proceed
-          val rdWithRoutes = rd.copy(routes = direct ++ assisted.toVector)
+          val rdWithRoutes = rd.copy(routes = direct ++ assisted)
           completeRD(rdWithRoutes)
         }
       }

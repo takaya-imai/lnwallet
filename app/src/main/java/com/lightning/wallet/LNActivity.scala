@@ -367,13 +367,21 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       super.onStop
     }
 
-    // After entering this activity we show a progress bar animation
-    // on each route request, a call may happen outside of this activity
-
     app.ChannelManager.getOutPaymentObs = rd => {
-      val progressBarManager = new ProgressBarManager
-      val routeRequest = app.ChannelManager.outPaymentObs(rd)
-      routeRequest.doOnTerminate(progressBarManager.delayedStop)
+      // On entering this activity we show a progress bar animation, a call may happen outside of this activity
+      val progressBar = layoutInflater.inflate(R.layout.frag_progress_bar, null).asInstanceOf[SmoothProgressBar]
+      // Stopping animation immediately does not work sometimes so we use a guarded timer here once again
+      def delayedStop = try timer.schedule(anyToRunnable(progressBar.progressiveStop), 250) catch none
+      val drawable = progressBar.getIndeterminateDrawable.asInstanceOf[SmoothProgressDrawable]
+
+      drawable setCallbacks new SmoothProgressDrawable.Callbacks {
+        // In some cases timer may already be disabled and will throw here because activity has been killed
+        def onStop = try timer.schedule(anyToRunnable(container removeView progressBar), 250) catch none
+        def onStart = try drawable.setColors(getResources getIntArray R.array.bar_colors) catch none
+      }
+
+      me runOnUiThread container.addView(progressBar, viewParams)
+      app.ChannelManager.outPaymentObs(rd).doOnTerminate(delayedStop)
     }
 
     chan.listeners += chanListener
@@ -443,19 +451,6 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       def updatePaymentList(pays: InfoVec) = wrap(adapter.notifyDataSetChanged)(adapter set pays)
       def createItem(shifted: RichCursor) = bag toPaymentInfo shifted
       type InfoVec = Vector[PaymentInfo]
-    }
-  }
-
-  class ProgressBarManager {
-    def delayedStop = try timer.schedule(anyToRunnable(progressBar.progressiveStop), 250) catch none
-    val progressBar = layoutInflater.inflate(R.layout.frag_progress_bar, null).asInstanceOf[SmoothProgressBar]
-    val drawable = progressBar.getIndeterminateDrawable.asInstanceOf[SmoothProgressDrawable]
-
-    drawable setCallbacks new SmoothProgressDrawable.Callbacks {
-      // In some cases timer may already be disabled and will throw here because activity has been killed
-      def onStop = try timer.schedule(anyToRunnable(container removeView progressBar), 250) catch none
-      def onStart = try drawable.setColors(getResources getIntArray R.array.bar_colors) catch none
-      container.addView(progressBar, viewParams)
     }
   }
 
