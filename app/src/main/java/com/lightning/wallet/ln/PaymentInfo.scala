@@ -16,7 +16,7 @@ import scodec.bits.BitVector
 import scodec.Attempt
 
 
-object PaymentInfo {
+object PaymentInfo { me =>
   // Used as placeholder for unresolved outgoing payments
   val NOIMAGE = BinaryData("00000000" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
@@ -27,10 +27,9 @@ object PaymentInfo {
   final val SUCCESS = 2
   final val FAILURE = 3
 
-  private def build(hops: PaymentRoute, pr: PaymentRequest) = {
-    val firstExpiry = LNParams.broadcaster.currentHeight + pr.minFinalCltvExpiry.getOrElse(default = 9L)
-    val firstPayload = Vector apply PerHopPayload(shortChannelId = 0L, pr.finalSum.amount, firstExpiry)
-    val start = (firstPayload, Vector.empty[PublicKey], pr.finalSum.amount, firstExpiry)
+  private def build(hops: PaymentRoute, pr: PaymentRequest, lastExpiry: Long) = {
+    val firstPayload = Vector apply PerHopPayload(0L, pr.finalSum.amount, lastExpiry)
+    val start = (firstPayload, Vector.empty[PublicKey], pr.finalSum.amount, lastExpiry)
 
     (start /: hops.reverse) {
       case (payloads, nodes, msat, expiry) \ Hop(nodeId, update) =>
@@ -45,11 +44,14 @@ object PaymentInfo {
     makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assoc)
   }
 
-  def completeRD(rd: RoutingData) = for {
-    firstUnusedPaymentRoute <- rd.routes.headOption
-    (payloads, nodeIds, firstAmount, firstExpiry) = build(firstUnusedPaymentRoute, rd.pr)
-  } yield rd.copy(onion = buildOnion(nodeIds :+ rd.pr.nodeId, payloads, rd.pr.paymentHash),
-    routes = rd.routes.tail, amountWithFee = firstAmount, expiry = firstExpiry)
+  def completeRD(rd: RoutingData): Option[RoutingData] = rd.routes.headOption map { firstRoute =>
+    val lastChanExpiry = LNParams.broadcaster.currentHeight + rd.pr.minFinalCltvExpiry.getOrElse(9L)
+    val Tuple4(payloads, nodeIds, firstAmount, firstExpiry) = build(firstRoute, rd.pr, lastChanExpiry)
+    // Reject route if fees are 1.5+ times larger than payment itself or if cltv delta is way too large
+    val nope = firstAmount.toDouble / rd.pr.finalSum.amount > 1.5 || firstExpiry - lastChanExpiry > 1440L
+    if (nope) rd.copy(routes = rd.routes.tail) else rd.copy(routes = rd.routes.tail, expiry = firstExpiry,
+      onion = buildOnion(nodeIds :+ rd.pr.nodeId, payloads, rd.pr.paymentHash), amountWithFee = firstAmount)
+  }
 
   def emptyRD(pr: PaymentRequest) = {
     val packet = Packet(Array.empty, random getBytes 33, random getBytes DataLength, random getBytes MacLength)
