@@ -468,19 +468,9 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         // First, we have to check if it's remote or next remote closing
         some.commitments.remoteNextCommitInfo.left.map(_.nextRemoteCommit) match {
-          case Left(nextRemoteTx) if nextRemoteTx.txid == spendTx.txid => startRemoteNextClose(some, nextRemoteTx)
+          case Left(nextRemote) if nextRemote.txid == spendTx.txid => startRemoteNextClose(some, nextRemote)
           case _ if some.commitments.remoteCommit.txid == spendTx.txid => startRemoteCurrentClose(some)
-          case _ =>
-
-            // Then, we have to check if this is a revoked commit tx
-            Closing.claimRevokedRemoteCommitTxOutputs(some.commitments, spendTx) -> some match {
-              case (Some(claim), close: ClosingData) => BECOME(me STORE close.modify(_.revokedCommit).using(claim +: _), CLOSING)
-              case (Some(claim), _) => BECOME(me STORE ClosingData(some.announce, some.commitments, revokedCommit = claim :: Nil), CLOSING)
-              // Local, remote and revoked checks have failed and we are negotiating so this must be a peer broadcasted mutual closing tx
-              case (None, neg: NegotiationsData) => startMutualClose(neg, spendTx)
-              // This is weird, try to spend local commit and hope we're lucky
-              case _ => startLocalCurrentClose(some)
-            }
+          case _ => startOtherClose(some, spendTx)
         }
 
 
@@ -567,6 +557,16 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     Closing.claimRemoteCommitTxOutputs(some.commitments, nextRemoteCommit, LNParams.bag) -> some match {
       case (remoteClaim, closingData: ClosingData) => me CLOSEANDWATCH closingData.copy(nextRemoteCommit = remoteClaim :: Nil)
       case (remoteClaim, _) => me CLOSEANDWATCH ClosingData(some.announce, some.commitments, nextRemoteCommit = remoteClaim :: Nil)
+    }
+
+  private def startOtherClose(some: HasCommitments, spendTx: Transaction) =
+    Closing.claimRevokedRemoteCommitTxOutputs(some.commitments, spendTx) -> some match {
+      case (Some(claim), close: ClosingData) => BECOME(me STORE close.modify(_.revokedCommit).using(claim +: _), CLOSING)
+      case (Some(claim), _) => BECOME(me STORE ClosingData(some.announce, some.commitments, revokedCommit = claim :: Nil), CLOSING)
+      // Local, remote and revoked checks have failed and we are negotiating so this must be a peer broadcasted mutual closing tx
+      case (None, neg: NegotiationsData) => startMutualClose(neg, spendTx)
+      // This is weird, try to spend local commit and hope we're lucky
+      case _ => startLocalCurrentClose(some)
     }
 }
 

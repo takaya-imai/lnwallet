@@ -9,11 +9,11 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.Announcements._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
+import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
+
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
-import fr.acinq.bitcoin.MilliSatoshi
-import fr.acinq.bitcoin.BinaryData
 import scala.collection.mutable
 import net.sqlcipher.Cursor
 
@@ -29,11 +29,15 @@ object StorageWrap extends ChannelListener {
     RichCursor(cursor).headTry(_ string StorageTable.value)
   }
 
+  private def ourUpdate(norm: NormalData, upd: ChannelUpdate) = {
+    val (_, _, outputIndex) = Tools.fromShortId(upd.shortChannelId)
+    val idxMatch = norm.commitments.commitInput.outPoint.index == outputIndex
+    idxMatch && isEnabled(upd.flags) && checkSig(upd, norm.announce.nodeId)
+  }
+
   override def onProcess = {
-    case (chan, norm: NormalData, upd: ChannelUpdate)
-      // GUARD: this update is created by peer node and enables a channel
-      if isEnabled(upd.flags) && checkSig(upd, norm.announce.nodeId) =>
-      // Store it in a database and process no further updates at all
+    case (chan, norm: NormalData, upd: ChannelUpdate) if ourUpdate(norm, upd) =>
+      // Store update in a database and process no further updates afterwards
       put(upd.toJson.toString, norm.commitments.channelId.toString)
       chan.listeners -= StorageWrap
   }
