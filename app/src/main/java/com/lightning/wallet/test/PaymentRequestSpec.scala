@@ -148,18 +148,6 @@ class PaymentRequestSpec {
     }
 
     {
-      println("expiry is a variable-length unsigned value")
-      val pr = PaymentRequest(Block.RegtestGenesisBlock.hash, Some(MilliSatoshi(100000L)),
-        BinaryData("0001020304050607080900010203040506070809000102030405060708090102"),
-        priv, "test", fallbackAddress = None, expirySeconds = 21600, Vector.empty)
-
-      val serialized = PaymentRequest write pr
-      val pr1 = PaymentRequest read serialized
-      val expiry = pr1.tags.collectFirst { case ex: ExpiryTag => ex.seconds }.get
-      assert(expiry == 21600)
-    }
-
-    {
       println("On mainnet, with fallback (p2wsh) address bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3 and a minimum htlc cltv expiry of 12")
       val ref = "lnbc20m1pvjluezcqpvpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqhp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqsfp4qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q90qkf3gd7fcqs0ewr7t3xf72ptmc4n38evg0xhy4p64nlg7hgrmq6g997tkrvezs8afs0x0y8v4vs8thwsk6knkvdfvfa7wmhhpcsxcqw0ny48"
       val pr = PaymentRequest.read(ref)

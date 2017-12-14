@@ -113,10 +113,8 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   }
 
   def updateIncoming(add: UpdateAddHtlc) = {
-    // Incoming payment may provide a larger amount than what was requested
-    // so an actual incoming sum should be updated along with timestamp
-    db.change(sql = PaymentInfoTable updIncomingSql add.amountMsat,
-      System.currentTimeMillis.toString, add.paymentHash.toString)
+    // Incoming payment may provide a larger amount than what was initially requested so it be updated along with timestamp
+    db.change(PaymentInfoTable.updIncomingSql, add.amountMsat.toString, System.currentTimeMillis.toString, add.paymentHash.toString)
   }
 
   // Records a number of retry attempts for a given outgoing payment hash

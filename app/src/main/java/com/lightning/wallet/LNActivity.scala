@@ -332,13 +332,14 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           update <- StorageWrap get chanIdKey map to[ChannelUpdate]
           extra = Vector apply Hop(chan.data.announce.nodeId, update)
           pr = PaymentRequest(chainHash, sum, Crypto sha256 preimg.data, nodePrivateKey,
-            inputDescription.getText.toString.trim, fallbackAddress = None, 21600, extra)
+            inputDescription.getText.toString.trim, fallbackAddress = None, extra)
         } {
           // For UI purposes only
           bag upsertRoutingData emptyRD(pr)
-          // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed to user
-          bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg, sum getOrElse NOAMOUNT,
-            HIDDEN, stamp = System.currentTimeMillis, pr.description.right getOrElse new String)
+          // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed
+          bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg,
+            sum getOrElse MilliSatoshi(0L), HIDDEN, System.currentTimeMillis,
+            pr.description.right getOrElse new String)
 
           app.TransData.value = pr
           me goTo classOf[RequestActivity]

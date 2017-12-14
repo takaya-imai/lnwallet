@@ -20,7 +20,6 @@ object PaymentInfo {
   // Used as placeholder for unresolved outgoing payments
   val NOIMAGE = BinaryData("00000000" getBytes "UTF-8")
   val FROMBLACKLISTED = "fromblacklisted"
-  val NOAMOUNT = MilliSatoshi(0L)
 
   final val HIDDEN = 0
   final val WAITING = 1
@@ -100,33 +99,22 @@ object PaymentInfo {
     val packet = parsePacket(privateKey = nodeSecret, associatedData = add.paymentHash, add.onionRoutingPacket)
     Tuple3(perHopPayloadCodec decode BitVector(packet.payload), packet.nextPacket, packet.sharedSecret)
   } map {
-    // We are the final HTLC recipient, the only viable option since we don't route
-    case (Attempt.Successful(decoded), nextPacket, sharedSecret) if nextPacket.isLast =>
+    // We are the final HTLC recipient, sanity checks first
+    case (Attempt.Successful(decoded), nextPacket, sharedSecret)
+      if nextPacket.isLast && decoded.value.outgoingCltv != add.expiry =>
+      failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
 
-      bag getPaymentInfo add.paymentHash match {
-        case Success(_) if add.expiry < minExpiry =>
-          // GUARD: not enough time to redeem it on-chain
-          failHtlc(sharedSecret, FinalExpiryTooSoon, add)
+    case (Attempt.Successful(_), nextPacket, sharedSecret)
+      if nextPacket.isLast && add.expiry < minExpiry =>
+      failHtlc(sharedSecret, FinalExpiryTooSoon, add)
 
-        case Success(_) if decoded.value.outgoingCltv != add.expiry =>
-          // GUARD: final outgoing CLTV does not equal the one from message
-          failHtlc(sharedSecret, FinalIncorrectCltvExpiry(add.expiry), add)
-
-        case Success(pay) if pay.amount != NOAMOUNT && add.amount > pay.amount * 2 =>
-          // GUARD: not a domation case and they have sent too much funds so reject it
-          failHtlc(sharedSecret, IncorrectPaymentAmount, add)
-
-        case Success(pay) if add.amount < pay.amount =>
-          // GUARD: amount is less than asked so reject it
-          failHtlc(sharedSecret, IncorrectPaymentAmount, add)
-
-        case Success(pay) if pay.incoming == 1 =>
-          // We have a valid *incoming* payment
-          CMDFulfillHtlc(add.id, pay.preimage)
-
-        case _ =>
-          // Payment spec has not been found
-          failHtlc(sharedSecret, UnknownPaymentHash, add)
+    case (Attempt.Successful(_), nextPacket, ss) if nextPacket.isLast =>
+      // We are the final HTLC recipient and it's sane, check if we have a request
+      bag.getRoutingData(add.paymentHash) -> bag.getPaymentInfo(add.paymentHash) match {
+        case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat > _.amount * 2) => failHtlc(ss, IncorrectPaymentAmount, add)
+        case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat < _.amount) => failHtlc(ss, IncorrectPaymentAmount, add)
+        case _ \ Success(info) if info.incoming == 1 => CMDFulfillHtlc(add.id, info.preimage)
+        case _ => failHtlc(ss, UnknownPaymentHash, add)
       }
 
     case (Attempt.Successful(_), _, sharedSecret) =>

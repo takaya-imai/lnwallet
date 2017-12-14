@@ -103,7 +103,7 @@
     <string name="tx_received">Bitcoin transaction received</string>
     <string name="tx_sent">Bitcoin transaction sent</string>
 
-    <string name="btc_notify_connecting">Connecting to Testnet nodes&#8230;</string>
+    <string name="btc_notify_connecting">Connecting to Testnet peers&#8230;</string>
     <string name="btc_notify_operational">Testnet wallet is online</string>
     <string name="info_progress_done">Blockchain is up to date</string>
     <string name="secret_changing">Changing wallet secret&#8230;</string>
@@ -166,7 +166,8 @@
     <string name="nfc_enabled">NFC is on</string>
     <string name="nfc_settings">Enable NFC</string>
     <string name="nfc_error">Could not process an NFC message\nbecause it is malformed or empty</string>
-    <string name="ln_qr_warning"><![CDATA[Request is valid for 6 hours<br>Do not reuse this QR code]]></string>
+    <string name="ln_qr_reusable"><![CDATA[Reusable payment request<br>Pay whatever you want]]></string>
+    <string name="ln_qr_disposable"><![CDATA[Request is valid for 6 hours<br>Do not reuse this QR code]]></string>
     <string name="nfc_payee_tip">This payment request can be sent by touching two devices back-to-back if the other device also supports NFC technology</string>
 
     <!-- SPECIFIC TO LIGHTNING NETWORK -->

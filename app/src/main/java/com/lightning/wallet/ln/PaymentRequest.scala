@@ -121,9 +121,10 @@ object PaymentRequest {
 
   def apply(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData,
             privateKey: PrivateKey, description: String, fallbackAddress: Option[String],
-            expirySeconds: Long, extra: PaymentRoute): PaymentRequest = {
+            extra: PaymentRoute): PaymentRequest = {
 
     val paymentHashTag = PaymentHashTag(paymentHash)
+    val expirySeconds = if (amount.isDefined) 3600 * 6 else 3600 * 24 * 365 * 5
     val tags = Vector(DescriptionTag(description), ExpiryTag(expirySeconds), paymentHashTag)
     PaymentRequest(getPrefix(chain), amount, System.currentTimeMillis / 1000L, privateKey.publicKey,
       if (extra.isEmpty) tags else RoutingInfoTag(extra) +: tags, BinaryData.empty) sign privateKey

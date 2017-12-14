@@ -71,7 +71,6 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
   lazy val bottomSize = getResources getDimensionPixelSize R.dimen.bitmap_bottom_size
   lazy val topSize = getResources getDimensionPixelSize R.dimen.bitmap_top_size
   lazy val qrSize = getResources getDimensionPixelSize R.dimen.bitmap_qr_size
-  lazy val lnWarning = me getString ln_qr_warning
 
   case class NFCData(data: String) {
     def getNfcMessage: NdefMessage = {
@@ -90,11 +89,10 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
     setDetecting(true)
 
     app.TransData.value match {
-      case request: PaymentRequest if request.amount.isDefined =>
-        showInfo(drawAll(denom withSign request.amount.get, lnWarning.html),
-          PaymentRequest write request)
+      case request @ PaymentRequest(prefix, Some(amount), timestamp, nodeId, tags, signature) =>
+        showInfo(drawAll(denom withSign amount, getString(ln_qr_disposable).html), PaymentRequest write request)
 
-      case request: PaymentRequest => showInfo(drawBottom(lnWarning.html), PaymentRequest write request)
+      case request: PaymentRequest => showInfo(drawBottom(getString(ln_qr_reusable).html), PaymentRequest write request)
       case pay: AddrData => showInfo(drawAll(denom withSign pay.cn, Utils humanAddr pay.address), pay.link)
       case address: Address => showInfo(drawBottom(Utils humanAddr address), address.toString)
       case _ => finish
