@@ -138,7 +138,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       case (chan, norm: NormalData, _: CommitSig)
         // GUARD: Update UI once we have some fulfilled HTLCs
         if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
-        notifySubTitle(me getString ln_done, Informer.LNSUCCESS)
+        notifySubTitle(me getString ln_done, Informer.LNPAYMENT)
         me updTitle chan
     }
   }

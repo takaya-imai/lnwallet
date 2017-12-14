@@ -221,10 +221,16 @@ trait ToolbarActivity extends TimerActivity { me =>
         mkForm(dialog, getString(ln_recover_explain).html, null)
       }
 
-      def proceed =
-        LNParams.cloud.connector.getBackup(LNParams.cloudId.toString).foreach(serverDataVec => {
-          import app.ChannelManager.{operationalListeners, all, notClosing, reconnect, createChannel}
-          val localCommits: Vector[Commitments] = app.ChannelManager.all.flatMap(_ apply identity)
+      def proceed = {
+        import app.ChannelManager.{operationalListeners, all, notClosing, reconnect, createChannel}
+        val localCommits: Vector[Commitments] = app.ChannelManager.all.flatMap(_ apply identity)
+        val serverRequest = LNParams.cloud.connector.getBackup(LNParams.cloudId.toString)
+        add(app getString ln_notify_recovering, Informer.LNPAYMENT).flash.run
+        timer.schedule(delete(Informer.LNPAYMENT), 16000)
+
+        serverRequest.foreach(serverDataVec => {
+          // Decrypt channel datas upon successful call
+          // then put them in a list and connect to peers
 
           for {
             encoded <- serverDataVec
@@ -237,9 +243,10 @@ trait ToolbarActivity extends TimerActivity { me =>
             isAdded = app.kit watchFunding refundingData.commitments
           } all +:= refundingChannel
 
-          // Request connections
+          // Request new connections
           reconnect(notClosing)
         }, Tools.errlog)
+      }
     }
 
     setBackupServer setOnClickListener onButtonTap {

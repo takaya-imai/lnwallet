@@ -136,12 +136,12 @@ class WalletApp extends Application { me =>
       override def onTerminalError(id: PublicKey) = fromNode(notClosing, id).foreach(_ process CMDShutdown)
       override def onMessage(msg: LightningMessage) = notClosing.foreach(_ process msg)
 
-      override def onDisconnect(id: PublicKey) =
-        fromNode(notClosing, id) match { case needsReconnect =>
-          val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
-          delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
-          needsReconnect.foreach(_ process CMDOffline)
-        }
+      override def onDisconnect(id: PublicKey) = {
+        val needsReconnect = fromNode(notClosing, id)
+        val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
+        delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
+        needsReconnect.foreach(_ process CMDOffline)
+      }
     }
 
     def reconnect(of: ChannelVec) = of.map(_.data.announce).distinct foreach requestConnection

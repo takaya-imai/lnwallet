@@ -6,18 +6,15 @@ public class Informer {
     public static final int PEER = 1;
     public static final int LNSTATE = 2;
 
-    // Temporary btc infos
+    // Temporary btc and ln infos
     public static final int BTCEVENT = 3;
     public static final int CHAINSYNC = 4;
     public static final int CODECHECK = 5;
     public static final int TXCONFIRMED = 6;
-
-    // Temporary LN infos
     public static final int LNPAYMENT = 7;
-    public static final int LNSUCCESS = 8;
 
     // Special emergency state
-    public static final int EMERGENCY = 9;
+    public static final int EMERGENCY = 8;
 
     public int tag;
     public String value;

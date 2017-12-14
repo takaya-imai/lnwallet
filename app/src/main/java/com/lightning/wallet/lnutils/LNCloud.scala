@@ -63,7 +63,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         operationalChannel process SilentAddHtlc(pay)
       }
 
-    // Execute if we are not busy and have available tokens and actions
+    // Execute if we are not busy and have available tokens and actions, don't care amout memo
     case CloudData(_, ##(token @ (point, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> point, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
       val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
@@ -77,7 +77,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
         case _ => Tools errlog serverError
       }
 
-    // Check if payment is fulfilled and get signed tokens
+    // We don't have acts or tokens but have a memo
     case CloudData(Some(pr \ memo), _, _, _) \ CMDStart =>
 
       bag getPaymentInfo pr.paymentHash match {

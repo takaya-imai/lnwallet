@@ -110,6 +110,7 @@
     <string name="secret_checking">Checking wallet secret&#8230;</string>
 
     <string name="ln_notify_connecting">Connecting to Lightning peer&#8230;</string>
+    <string name="ln_notify_recovering">Recovering channel funds&#8230;</string>
     <string name="ln_notify_operational">Lightning wallet is online</string>
     <string name="ln_send">Sending lightning payment&#8230;</string>
     <string name="ln_pr_make">Making payment request&#8230;</string>
@@ -206,7 +207,7 @@
     <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Channel capacity is %1$s<br><br>You will be able to send and receive Lightning payments after a funding transaction reaches %2$s<br><br><font color=#999999>Funding transaction status</font><br>%3$s]]></string>
     <string name="ln_ops_chan_bilateral_negotiations"><![CDATA[Closing a Payment Channel&#8230;<br>Waiting for peer\'s confirmation<br><br>Your current channel balance will be refunded to you via a Bitcoin transaction once both of you are ready to mutually close a channel]]></string>
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[<a href=http://lightning-wallet.com/using-lightning-wallet.html#forced-channel-closing>Forced channel closing</a><br>%1$s<br><br>%2$s]]></string>
-    <string name="ln_ops_chan_bilateral_closing"><![CDATA[Closing a Payment Channel&#8230;<br><br>Remaining channel balance has been refunded to your Bitcoin wallet<br><br>%1$s]]></string>
+    <string name="ln_ops_chan_bilateral_closing"><![CDATA[Closing a Payment Channel&#8230;<br>Remaining channel balance has been refunded to your Bitcoin wallet<br><br>%1$s]]></string>
 
     <string name="ln_ops_chan_amount_status">%1$s - %2$s fee</string>
     <string name="ln_ops_chan_refund_status"><![CDATA[<br><br><font color=#999999>Your pending refunds</font><br>]]></string>
