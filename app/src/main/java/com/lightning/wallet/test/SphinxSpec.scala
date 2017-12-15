@@ -117,7 +117,7 @@ class SphinxSpec {
     println(BinaryData(error4) == BinaryData("9c5add3963fc7f6ed7f148623c84134b5647e1306419dbe2174e523fa9e2fbed3a06a19f899145610741c83ad40b7712aefaddec8c6baf7325d92ea4ca4d1df8bce517f7e54554608bf2bd8071a4f52a7a2f7ffbb1413edad81eeea5785aa9d990f2865dc23b4bc3c301a94eec4eabebca66be5cf638f693ec256aec514620cc28ee4a94bd9565bc4d4962b9d3641d4278fb319ed2b84de5b665f307a2db0f7fbb757366067d88c50f7e829138fde4f78d39b5b5802f1b92a8a820865af5cc79f9f30bc3f461c66af95d13e5e1f0381c184572a91dee1c849048a647a1158cf884064deddbf1b0b88dfe2f791428d0ba0f6fb2f04e14081f69165ae66d9297c118f0907705c9c4954a199bae0bb96fad763d690e7daa6cfda59ba7f2c8d11448b604d12d"))
 
     // origin parses error packet and can see that it comes from node #4
-    val Some(ErrorPacket(pubkey, failure)) = parseErrorPacket(sharedSecrets, error4)
+    val ErrorPacket(pubkey, failure) = parseErrorPacket(sharedSecrets, error4)
     println(pubkey == publicKeys(4))
     println(failure == TemporaryNodeFailure)
   }
@@ -145,7 +145,7 @@ class SphinxSpec {
     val error2 = forwardErrorPacket(error1, sharedSecret0)
 
     // origin parses error packet and can see that it comes from node #2
-    val Some(ErrorPacket(pubkey, failure)) = parseErrorPacket(sharedSecrets, error2)
+    val ErrorPacket(pubkey, failure) = parseErrorPacket(sharedSecrets, error2)
     println(pubkey == publicKeys(2))
     println(failure == InvalidRealm)
   }

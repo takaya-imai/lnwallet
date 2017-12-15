@@ -29,8 +29,8 @@
 
     <!-- wallet creation and restoring -->
     <array name="restore_mnemonic_options">
-        <item>Was encrypted using «Encrypt and export» option</item>
-        <item>Is not encrypted\nIt\'s just plain 12 words</item>
+        <item>Encrypted using «Encrypt and export» option</item>
+        <item>Not encrypted\nIt\'s just plain 12 words</item>
     </array>
 
     <array name="info_storage_tokens">

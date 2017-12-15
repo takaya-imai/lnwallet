@@ -70,8 +70,9 @@ object PaymentInfo {
   }
 
   def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
-    parseErrorPacket(rd.onion.sharedSecrets, fail.reason) collect {
-      // Reduce remaining routes and remember bad nodes and channels
+    Try apply parseErrorPacket(rd.onion.sharedSecrets, fail.reason) map {
+      // Try to reduce remaining routes and remember bad nodes and channels
+      // excluded nodes and channels will be needed for further calls
 
       case ErrorPacket(nodeKey, UnknownNextPeer) =>
         val _ \ nodeIds = rd.onion.sharedSecrets.unzip
