@@ -17,10 +17,10 @@ import com.lightning.wallet.lnutils.{CloudDataSaver, RatesSaver}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
+import R.id.{typeCNY, typeJPY, typeEUR, typeUSD}
 import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
-import R.id.{typeCNY, typeEUR, typeUSD}
 import java.util.{Timer, TimerTask}
 
 import org.bitcoinj.wallet.Wallet.ExceededMaxTransactionSize
@@ -66,9 +66,9 @@ object Utils {
   val coloredIn = (amt: MilliSatoshi) => sumIn.format(denom withSign amt)
 
   // Mapping from text to Android id integer
-  val Seq(strDollar, strEuro, strYuan) = Seq("dollar", "euro", "yuan")
-  val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeCNY -> strYuan)
-  val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYuan -> typeCNY)
+  val Seq(strDollar, strEuro, strYen, strYuan) = Seq("dollar", "euro", "yen", "yuan")
+  val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeJPY -> strYen, typeCNY -> strYuan)
+  val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYen -> typeJPY, strYuan -> typeCNY)
   def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
 
   def changeDenom = {
@@ -83,6 +83,7 @@ object Utils {
   def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = msatInFiat(ms) match {
     case Success(amt) if fiatName == strYuan => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} CNY</font>"
     case Success(amt) if fiatName == strEuro => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} EUR</font>"
+    case Success(amt) if fiatName == strYen => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} JPY</font>"
     case Success(amt) => s"$prefix$div<font color=#999999>≈ ${formatFiat format amt} USD</font>"
     case _ => prefix
   }
