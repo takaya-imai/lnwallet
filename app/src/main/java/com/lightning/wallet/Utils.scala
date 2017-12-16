@@ -130,7 +130,6 @@ trait ToolbarActivity extends TimerActivity { me =>
   val txTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = notifySubTitle(me getString tx_sent, Informer.BTCEVENT)
     override def coinsReceived(tx: Transaction) = notifySubTitle(me getString tx_received, Informer.BTCEVENT)
-    override def txConfirmed(tx: Transaction) = notifySubTitle(me getString tx_confirmed, Informer.TXCONFIRMED)
   }
 
   // Informer CRUD

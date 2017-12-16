@@ -65,7 +65,6 @@
     <string name="secret_new">New wallet secret</string>
     <string name="secret_wrong">Wrong wallet secret</string>
     <string name="secret_too_short">New secret is too short</string>
-
     <string name="action_bitcoin_receive">Receive bitcoin</string>
     <string name="action_bitcoin_send">Send bitcoin</string>
     <string name="action_settings">Wallet settings</string>
@@ -99,14 +98,13 @@
 
     <!-- notifications -->
     <string name="tx_announcing">Announcing transaction&#8230;</string>
-    <string name="tx_confirmed">Bitcoin transaction confirmed</string>
     <string name="tx_received">Bitcoin transaction received</string>
     <string name="tx_sent">Bitcoin transaction sent</string>
 
     <string name="btc_notify_connecting">Connecting to Testnet peers&#8230;</string>
     <string name="btc_notify_operational">Testnet wallet is online</string>
     <string name="info_progress_done">Blockchain is up to date</string>
-    <string name="secret_changing">Changing wallet secret&#8230;</string>
+    <string name="secret_changing">Updating wallet secret&#8230;</string>
     <string name="secret_checking">Checking wallet secret&#8230;</string>
 
     <string name="ln_notify_connecting">Connecting to Lightning peer&#8230;</string>
@@ -151,6 +149,7 @@
     <string name="err_ln_no_route">Failed because no route to recipient could be found</string>
     <string name="err_ln_fulfilled">Failed because this payment is already fulfilled</string>
 
+    <string name="err_ln_cant_ask">Can\'t ask for payments right now because a funding transaction has not got 6 confirmations yet. Please wait a bit and try again</string>
     <string name="err_ln_fee_overflow"><![CDATA[Failed because this payment combined with Bitcoin <a href=http://lightning-wallet.com/using-lightning-wallet.html#commit-transaction-fee>commit transaction</a> fee exceeds your unspendable channel reserve<br><br>reserve %1$s<br>sending %2$s<br>missing %3$s]]></string>
     <string name="err_not_enough_funds"><![CDATA[Not enough funds<br><br>balance %1$s<br>sending %2$s<br>missing %3$s<br><br>Please note that Bitcoin transactions need to get at least one confirmation to become spendable]]></string>
     <string name="err_transaction_too_large">Failed because transaction is too big for Bitcoin network to process. Try breaking it into a number of smaller transactions</string>

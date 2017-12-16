@@ -323,27 +323,32 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
       val rateManager = new RateManager(hint, content)
 
-      def makeRequest(sum: Option[MilliSatoshi], preimg: BinaryData) =
-        // We can only proceed if chan is operational and we have a ChannelUpdate
-        // if that is the case we save data to db and go to QR code activity
+      def makeRequest(sum: Option[MilliSatoshi], preimg: BinaryData) = for {
+        // We can only proceed if peer has previously sent us a ChannelUpdate
 
-        for {
-          chanIdKey <- chan(_.channelId.toString)
-          update <- StorageWrap get chanIdKey map to[ChannelUpdate]
-          extra = Vector apply Hop(chan.data.announce.nodeId, update)
-          pr = PaymentRequest(chainHash, sum, Crypto sha256 preimg.data, nodePrivateKey,
-            inputDescription.getText.toString.trim, fallbackAddress = None, extra)
-        } {
-          // For UI purposes only
-          bag upsertRoutingData emptyRD(pr)
-          // Unfulfilled incoming HTLCs are marked HIDDEN and not displayed
-          bag upsertPaymentInfo PaymentInfo(pr.paymentHash, incoming = 1, preimg,
-            sum getOrElse MilliSatoshi(0L), HIDDEN, System.currentTimeMillis,
-            pr.description.right getOrElse new String)
+        chanIdKey <- chan(_.channelId.toString)
+        text = inputDescription.getText.toString.trim
+        upd = StorageWrap get chanIdKey map to[ChannelUpdate]
+      } upd match {
+
+        case Success(update) =>
+          // Save a payment request to db and proceed to QR activity
+          val extra = Vector apply Hop(chan.data.announce.nodeId, update)
+          // Zero request sum has a special meaning: such a payment request can be reused and is valid forever
+          val pr = PaymentRequest(chainHash, sum, Crypto sha256 preimg.data, nodePrivateKey, text, None, extra)
+          val payInfo = PaymentInfo(pr.paymentHash, incoming = 1, preimg, sum getOrElse MilliSatoshi(0L), HIDDEN,
+            System.currentTimeMillis, text)
 
           app.TransData.value = pr
           me goTo classOf[RequestActivity]
-        }
+          bag upsertRoutingData emptyRD(pr)
+          bag upsertPaymentInfo payInfo
+
+        case _ =>
+          // Peer has not yet sent us a ChannelUpdate
+          // most likely because a funding tx is not deep enough
+          showForm(negBld(dialog_ok).setMessage(err_ln_cant_ask).create)
+      }
 
       def recAttempt = rateManager.result match {
         case Success(ms) if maxMsat < ms => app toast dialog_sum_big
