@@ -151,7 +151,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     }
   }
 
-  private[this] val txsTracker = new TxTracker {
+  private[this] val lstTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = me runOnUiThread tell(tx)
     override def coinsReceived(tx: Transaction): Unit = me runOnUiThread tell(tx)
     override def txConfirmed(tx: Transaction) = me runOnUiThread adapter.notifyDataSetChanged
@@ -236,9 +236,9 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
       // Wait for transactions list
       <(nativeTransactions, onFail) { txs =>
-        app.kit.wallet addCoinsSentEventListener txsTracker
-        app.kit.wallet addCoinsReceivedEventListener txsTracker
-        app.kit.wallet addTransactionConfidenceEventListener txsTracker
+        app.kit.wallet addCoinsSentEventListener lstTracker
+        app.kit.wallet addCoinsReceivedEventListener lstTracker
+        app.kit.wallet addTransactionConfidenceEventListener lstTracker
         if (txs.isEmpty) mnemonicWarn setVisibility View.VISIBLE
         mnemonicInfo setText getString(mnemonic_info).html
         adapter set txs
@@ -248,19 +248,17 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
       app.kit.peerGroup addBlocksDownloadedEventListener catchListener
-      app.kit.wallet addTransactionConfidenceEventListener txTracker
       app.kit.peerGroup addDisconnectedEventListener constListener
       app.kit.peerGroup addConnectedEventListener constListener
     } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
-    app.kit.wallet removeTransactionConfidenceEventListener txsTracker
-    app.kit.wallet removeCoinsReceivedEventListener txsTracker
-    app.kit.wallet removeCoinsSentEventListener txsTracker
+    app.kit.wallet removeTransactionConfidenceEventListener lstTracker
+    app.kit.wallet removeCoinsReceivedEventListener lstTracker
+    app.kit.wallet removeCoinsSentEventListener lstTracker
 
     app.kit.wallet removeCoinsSentEventListener txTracker
     app.kit.wallet removeCoinsReceivedEventListener txTracker
-    app.kit.wallet removeTransactionConfidenceEventListener txTracker
     app.kit.peerGroup removeDisconnectedEventListener constListener
     app.kit.peerGroup removeConnectedEventListener constListener
     stopDetecting

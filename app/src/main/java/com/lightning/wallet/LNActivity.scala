@@ -174,14 +174,12 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       paymentsViewProvider reload new String
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
-      app.kit.wallet addTransactionConfidenceEventListener txTracker
       app.kit.peerGroup addBlocksDownloadedEventListener catchListener
     } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker
     app.kit.wallet removeCoinsReceivedEventListener txTracker
-    app.kit.wallet removeTransactionConfidenceEventListener txTracker
     stopDetecting
   }
 
