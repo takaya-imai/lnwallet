@@ -87,21 +87,21 @@ class WalletApp extends Application { me =>
 
   object TransData {
     var value: Any = _
-    val lnRequest = "lightning:([a-fA-F0-9]+)".r
-    def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
-      case _: org.bitcoinj.core.WrongNetworkException => err(err_different_net)
-      case _: org.bitcoinj.core.AddressFormatException => err(err_address)
-      case _: BitcoinURIParseException => err(err_uri)
-      case _: ArithmeticException => err(err_neg)
-      case _: Throwable => err(err_general)
-    }
-
+    val lnRequest = "lightning:([a-zA-Z0-9]+)\\W*".r
     def recordValue(rawText: String) = value = rawText match {
       case raw if raw startsWith "bitcoin" => new BitcoinURI(params, raw)
       case raw if raw startsWith "lnbc" => PaymentRequest read raw
       case raw if raw startsWith "lntb" => PaymentRequest read raw
       case lnRequest(raw) => PaymentRequest read raw
       case raw => getTo(raw)
+    }
+
+    def onFail(err: Int => Unit): PartialFunction[Throwable, Unit] = {
+      case _: org.bitcoinj.core.WrongNetworkException => err(err_different_net)
+      case _: org.bitcoinj.core.AddressFormatException => err(err_address)
+      case _: BitcoinURIParseException => err(err_uri)
+      case _: ArithmeticException => err(err_neg)
+      case _: Throwable => err(err_general)
     }
   }
 

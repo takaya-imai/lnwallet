@@ -2,6 +2,7 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
+import com.lightning.wallet.MainActivity._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
@@ -35,18 +36,8 @@ trait ViewSwitch {
   }
 }
 
-class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
-  lazy val mnemonicOptions = getResources getStringArray R.array.restore_mnemonic_options
-  lazy val mainPassKeysType = findViewById(R.id.mainPassKeysType).asInstanceOf[SegmentedGroup]
-  lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
-  lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
-  lazy val greet = me clickableTextField findViewById(R.id.mainGreetings)
-
-  lazy val views =
-    findViewById(R.id.mainChoice) ::
-      findViewById(R.id.mainPassForm) ::
-      findViewById(R.id.mainProgress) :: Nil
-
+object MainActivity {
+  var current: MainActivity = _
   lazy val prepareKit = Future {
     val stream = new FileInputStream(app.walletFile)
     val proto = WalletProtobufSerializer parseToProto stream
@@ -59,16 +50,40 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
       def startUp: Unit = {
         setupAndStartDownload
-        next
+        exitToLastClosedActivity
       }
     }
   }
 
+  def exitToLastClosedActivity = {
+    // We go to a last visited activity by default
+    val landingIsLN = app.prefs.getBoolean(AbstractKit.LANDING_LN, true)
+    val target = if (landingIsLN) classOf[LNActivity] else classOf[BtcActivity]
+    current exitTo target
+    current = null
+  }
+}
+
+class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
+  lazy val mnemonicOptions = getResources getStringArray R.array.restore_mnemonic_options
+  lazy val mainPassKeysType = findViewById(R.id.mainPassKeysType).asInstanceOf[SegmentedGroup]
+  lazy val mainPassCheck = findViewById(R.id.mainPassCheck).asInstanceOf[Button]
+  lazy val mainPassData = findViewById(R.id.mainPassData).asInstanceOf[EditText]
+  lazy val greet = me clickableTextField findViewById(R.id.mainGreetings)
+
+  lazy val views =
+    findViewById(R.id.mainChoice) ::
+      findViewById(R.id.mainPassForm) ::
+      findViewById(R.id.mainProgress) :: Nil
+
   // Initialize this activity, method is run once
   override def onCreate(savedInstanceState: Bundle) =
   {
+    current = me
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
+    if (intentProcessed) next
+
     mainPassKeysType setOnCheckedChangeListener new OnCheckedChangeListener {
       def onCheckedChanged(fancyRadioGroupView: RadioGroup, newInputKeyType: Int) = {
         app.prefs.edit.putBoolean(AbstractKit.PASS_INPUT, newInputKeyType == typePass).commit
@@ -91,7 +106,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
     app.TransData recordValue asText
     next
 
-  } catch { case _: Throwable =>
+  } catch { case err: Throwable =>
     // Could not process a message
     me inform nfc_error
   }
@@ -107,13 +122,10 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   def next: Unit =
     (app.walletFile.exists, app.isAlive, LNParams.isSetUp) match {
+      // Find out what exactly should be done once user opens an app
+      // depends on both wallet app file existence and runtime objects
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
-
-      case (true, true, true) =>
-        // We go to a last visited activity by default
-        val landingIsLN = app.prefs.getBoolean(AbstractKit.LANDING_LN, true)
-        val target = if (landingIsLN) classOf[LNActivity] else classOf[BtcActivity]
-        me exitTo target
+      case (true, true, true) => exitToLastClosedActivity
 
       case (true, false, _) =>
         // Launch of a previously closed app
