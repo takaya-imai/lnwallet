@@ -39,6 +39,7 @@ trait ViewSwitch {
 object MainActivity {
   var current: MainActivity = _
   lazy val prepareKit = Future {
+    // Lazy Future only runs once so no conflicts
     val stream = new FileInputStream(app.walletFile)
     val proto = WalletProtobufSerializer parseToProto stream
 
@@ -135,7 +136,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         updateInputType
 
         mainPassCheck setOnClickListener onButtonTap {
-          // Lazy val Future has already been initialized above
+          // Lazy Future has already been initialized above
           // Check password after wallet initialization is complete
           <<(prepareKit map setup, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)

@@ -36,7 +36,7 @@ object ConnectionManager {
     val handler: TransportHandler = new TransportHandler(pair, nodeId) {
       def handleDecryptedIncomingData(data: BinaryData) = intercept(LightningMessageCodecs deserialize data)
       def handleEncryptedOutgoingData(data: BinaryData) = try socket.getOutputStream write data catch none
-      def handleError(err: Throwable) = events onTerminalError nodeId
+      def handleError = { case _ => events onTerminalError nodeId }
       def handleEnterOperationalState = process(ourInit)
     }
 
