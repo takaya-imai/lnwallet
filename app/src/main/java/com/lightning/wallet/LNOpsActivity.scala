@@ -54,7 +54,7 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
       lnOpsAction setText ln_force_close
       lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClose)
       lnOpsDescription setText getString(ln_ops_chan_opening).format(balance,
-        app.plurOrZero(txsConfs, threshold), openStatus).html
+        app.plurOrZero(txsConfs, threshold), open.txid.toString, openStatus).html
     }
 
     def manageNegs(c: Commitments) = {
@@ -123,7 +123,7 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
     case Right(info) => txStatus(info.commitTx.txid) match { case cfs \ _ => cfs }
   } match {
     case Left(mutualTx) =>
-      val mutualTxHumanStatus = humanStatus(LNParams.broadcaster txStatus mutualTx.txid)
+      val mutualTxHumanStatus = humanStatus apply txStatus(mutualTx.txid)
       val mutualFee = coloredOut(data.commitments.commitInput.txOut.amount - mutualTx.txOut.map(_.amount).sum)
       val mutualTxHumanView = commitStatus.format(mutualTx.txid.toString, mutualTxHumanStatus, mutualFee)
       lnOpsDescription setText bilateralClosing.format(mutualTxHumanView).html
@@ -150,9 +150,9 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
       } take 3
 
       val startedAtView = time apply new Date(data.startedAt)
-      val commitHumanStatus = humanStatus(LNParams.broadcaster txStatus info.commitTx.txid)
+      val commitHumanStatus = humanStatus apply txStatus(info.commitTx.txid)
       val commitFee = coloredOut(data.commitments.commitInput.txOut.amount - info.commitTx.txOut.map(_.amount).sum)
-      val commitTxHumanView = commitStatus.format(args = info.commitTx.txid, commitHumanStatus, commitFee)
+      val commitTxHumanView = commitStatus.format(info.commitTx.txid.toString, commitHumanStatus, commitFee)
       val combinedView = commitTxHumanView + refundStatus + tier2HumanView.mkString("<br><br>")
       lnOpsDescription setText unilateralClosing.format(startedAtView, combinedView).html
       lnOpsAction setOnClickListener onButtonTap(goStartChannel)

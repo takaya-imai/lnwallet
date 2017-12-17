@@ -153,7 +153,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
   private[this] val lstTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = me runOnUiThread tell(tx)
-    override def coinsReceived(tx: Transaction): Unit = me runOnUiThread tell(tx)
+    override def coinsReceived(tx: Transaction) = me runOnUiThread tell(tx)
     override def txConfirmed(tx: Transaction) = me runOnUiThread adapter.notifyDataSetChanged
 
     def tell(wrap: TxWrap) =
