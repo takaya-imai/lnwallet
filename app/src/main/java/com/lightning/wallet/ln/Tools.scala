@@ -7,7 +7,7 @@ import crypto.RandomGenerator
 import java.util
 
 
-object ## {
+object SET {
   // Matching sets as algebraic data structures
   def unapplySeq[T](s: Set[T] /* got a set */) = Some(s.toSeq)
 }

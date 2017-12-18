@@ -64,7 +64,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       }
 
     // Execute if we are not busy and have available tokens and actions, don't care amout memo
-    case CloudData(_, ##(token @ (point, clear, sig), _*), ##(action, _*), _) \ CMDStart if isFree =>
+    case CloudData(_, SET(token @ (point, clear, sig), _*), SET(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> point, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
       val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(ok => me BECOME data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
@@ -83,18 +83,17 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       bag getPaymentInfo pr.paymentHash match {
         case Success(pay) if pay.actualStatus == SUCCESS => me resolveSuccess memo
         // These will have long expiration times, could be retried multiple times
-        case Success(pay) if pay.actualStatus == FAILURE && pr.isFresh =>
+        case Success(pay) if pay.actualStatus == FAILURE =>
 
-          for {
+          if (!pr.isFresh) eraseRequestData else for {
             operationalChannel <- app.ChannelManager.all.find(_.isOperational)
             // Repeatedly retry an old request instead of getting a new one until it expires
             Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
           } operationalChannel process SilentAddHtlc(pay)
 
-        // Failed after multiple attemps | First attempt has been rejected
-        case Success(pay) if pay.actualStatus == FAILURE => eraseRequestData
+        // First attempt has been rejected
         case Failure(_) => eraseRequestData
-        // WAITING state, do nothing
+        // Probably WAITING so do nothing
         case _ =>
       }
 
@@ -143,7 +142,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 
   def doProcess(some: Any) = (data, some) match {
     // Execute if we are not busy and have available actions
-    case CloudData(_, _, ##(action, _*), _) \ CMDStart if isFree =>
+    case CloudData(_, _, SET(action, _*), _) \ CMDStart if isFree =>
       val go = connector.tell(signed(action.data) ++ action.plus, action.path)
       go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(ok => me BECOME data.copy(acts = data.acts - action), Tools.errlog)
@@ -182,10 +181,10 @@ class Connector(val url: String) {
     }
 
   def getRates = ask("rates/get", identity)
-  def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
-  def getBackup(key: String) = ask("data/get", chans => toVec[String](chans) map HEX.decode, "key" -> key)
+  def getBackup(key: String) = ask("data/get", ecryptedData => toVec[String](ecryptedData) map HEX.decode, "key" -> key)
   def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
 
+  def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
   def findRoutes(noNodes: Set[PublicKey], noChannels: Set[Long], from: PublicKey, to: PublicKey) =
     ask("router/routes", toVec[PaymentRoute], "nodes" -> noNodes.map(_.toBin).toJson.toString.hex,
       "channels" -> noChannels.toJson.toString.hex, "from" -> from.toString, "to" -> to.toString)
