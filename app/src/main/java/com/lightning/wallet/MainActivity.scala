@@ -2,8 +2,8 @@ package com.lightning.wallet
 
 import R.string._
 import android.widget._
+import com.lightning.wallet.Utils._
 import com.lightning.wallet.lnutils.ImplicitConversions._
-import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import org.bitcoinj.core.{BlockChain, PeerGroup}
 import scala.util.{Failure, Success, Try}
 import R.id.{typePIN, typePass}
@@ -57,7 +57,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       blockChain = new BlockChain(app.params, wallet, store)
       peerGroup = new PeerGroup(app.params, blockChain)
 
-      def startUp: Unit = {
+      def startUp = {
         setupAndStartDownload
         exitToLastClosedActivity
       }
@@ -135,7 +135,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   private def updateInputType = {
     val (isPassword, trans) = (app.prefs.getBoolean(AbstractKit.PASS_INPUT, true), new PasswordTransformationMethod)
-    val (inputType, id) = if (isPassword) (InputType.TYPE_CLASS_TEXT, typePass) else (InputType.TYPE_CLASS_NUMBER, typePIN)
+    val (inputType, id) = if (isPassword) (passNoSuggest, typePass) else (InputType.TYPE_CLASS_NUMBER, typePIN)
     mainPassData setTransformationMethod trans
     mainPassData setInputType inputType
     mainPassKeysType check id

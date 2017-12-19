@@ -69,6 +69,7 @@ object Utils {
   val Seq(strDollar, strEuro, strYen, strYuan) = Seq("dollar", "euro", "yen", "yuan")
   val fiatMap = Map(typeUSD -> strDollar, typeEUR -> strEuro, typeJPY -> strYen, typeCNY -> strYuan)
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYen -> typeJPY, strYuan -> typeCNY)
+  val passNoSuggest = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
   def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
 
   def changeDenom = {
@@ -165,9 +166,9 @@ trait ToolbarActivity extends TimerActivity { me =>
   // but it does not actually check a password
   def passPlus(title: CharSequence)(next: String => Unit) = {
     val isPassword = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
-    val inputType = if (isPassword) InputType.TYPE_CLASS_TEXT else InputType.TYPE_CLASS_NUMBER
+    val inputType = if (isPassword) passNoSuggest else InputType.TYPE_CLASS_NUMBER
     val (view, field) = generatePromptView(inputType, secret_wallet, new PasswordTransformationMethod)
-    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, view)
+    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, content = view)
 
     def infoAndNext = {
       add(app getString secret_checking, Informer.CODECHECK).flash.run
@@ -279,7 +280,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     changePass setOnClickListener onButtonTap {
       def openForm = checkPass(me getString sets_secret_change) { oldPass =>
-        val (view, field) = generatePromptView(InputType.TYPE_CLASS_TEXT, secret_new, null)
+        val (view, field) = generatePromptView(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, secret_new, null)
         mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_secret_change, view)
         def proceed = if (newPass.length >= 6) changePassword else app toast secret_too_short
         def newPass = field.getText.toString.trim
