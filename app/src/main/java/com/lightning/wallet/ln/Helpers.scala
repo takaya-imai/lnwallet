@@ -103,7 +103,7 @@ object Helpers { me =>
       val tx = Transaction(version = 2, input, toLocalOutput ++ toRemoteOutput, lockTime = 0)
       ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
     }
-`
+
     def claimCurrentLocalCommitTxOutputs(commitments: Commitments, bag: PaymentInfoBag) = {
       val localPerCommitmentPoint = perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)
       val localRevocationPubkey = revocationPubKey(commitments.remoteParams.revocationBasepoint, localPerCommitmentPoint)
