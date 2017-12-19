@@ -103,14 +103,14 @@ object Helpers { me =>
       val tx = Transaction(version = 2, input, toLocalOutput ++ toRemoteOutput, lockTime = 0)
       ClosingTx(commitTxInput, LexicographicalOrdering sort tx)
     }
-
+`
     def claimCurrentLocalCommitTxOutputs(commitments: Commitments, bag: PaymentInfoBag) = {
       val localPerCommitmentPoint = perCommitPoint(commitments.localParams.shaSeed, commitments.localCommit.index.toInt)
       val localRevocationPubkey = revocationPubKey(commitments.remoteParams.revocationBasepoint, localPerCommitmentPoint)
       val localDelayedPrivkey = derivePrivKey(commitments.localParams.delayedPaymentKey, localPerCommitmentPoint)
 
       def makeClaimDelayedOutput(tx: Transaction): ClaimDelayedOutputTx = {
-        val claimDelayed = Scripts.makeClaimDelayedOutputTx(tx, localRevocationPubkey, commitments.localParams.toSelfDelay,
+        val claimDelayed = Scripts.makeClaimDelayedOutputTx(tx, localRevocationPubkey, commitments.remoteParams.toSelfDelay,
           localDelayedPrivkey.publicKey, commitments.localParams.defaultFinalScriptPubKey, commitments.localCommit.spec.feeratePerKw)
 
         val sig = Scripts.sign(claimDelayed, localDelayedPrivkey)
@@ -212,7 +212,7 @@ object Helpers { me =>
 
         val claimPenaltyTx = Scripts checkSpendable {
           val txinfo = Scripts.makeMainPenaltyTx(tx, remoteRevocationPrivkey.publicKey,
-            commitments.localParams.defaultFinalScriptPubKey, commitments.remoteParams.toSelfDelay,
+            commitments.localParams.defaultFinalScriptPubKey, commitments.localParams.toSelfDelay,
             remoteDelayedPaymentPubkey, LNParams.broadcaster.feeRatePerKw)
 
           val sig = Scripts.sign(txinfo, remoteRevocationPrivkey)
