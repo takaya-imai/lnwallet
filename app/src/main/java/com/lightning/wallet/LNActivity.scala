@@ -315,52 +315,52 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val finalCanReceive = math.min(canReceive.filter(0L<) getOrElse 0L, maxHtlcValue.amount)
       val maxMsat = MilliSatoshi(finalCanReceive)
 
-      val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
-      val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
-      val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive, content)
-      val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
-      val rateManager = new RateManager(hint, content)
+      chan(_.channelId.toString) foreach { chanIdKey =>
+        StorageWrap get chanIdKey map to[ChannelUpdate] match {
+          // Can only issue requests if have a saved ChannelUpdate
 
-      def makeRequest(sum: Option[MilliSatoshi], preimg: BinaryData) = for {
-        // We can only proceed if peer has previously sent us a ChannelUpdate
+          case Success(update) =>
+            val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
+            val inputDescription = content.findViewById(R.id.inputDescription).asInstanceOf[EditText]
+            val alert = mkForm(negPosBld(dialog_cancel, dialog_ok), me getString ln_receive, content)
+            val hint = getString(amount_hint_maxamount).format(denom withSign maxMsat)
+            val rateManager = new RateManager(hint, content)
 
-        chanIdKey <- chan(_.channelId.toString)
-        text = inputDescription.getText.toString.trim
-        upd = StorageWrap get chanIdKey map to[ChannelUpdate]
-      } upd match {
+            def makeRequest(sum: Option[MilliSatoshi], r: BinaryData) = {
+              val extra = Vector apply Hop(chan.data.announce.nodeId, update)
+              val description = inputDescription.getText.toString.trim
 
-        case Success(update) =>
-          // Save a payment request to db and proceed to QR activity
-          val extra = Vector apply Hop(chan.data.announce.nodeId, update)
-          // Zero request sum has a special meaning: such a payment request can be reused and is valid forever
-          val pr = PaymentRequest(chainHash, sum, Crypto sha256 preimg.data, nodePrivateKey, text, None, extra)
-          val payInfo = PaymentInfo(pr.paymentHash, incoming = 1, preimg, sum getOrElse MilliSatoshi(0L), HIDDEN,
-            System.currentTimeMillis, text)
+              // Zero request sum has a special meaning: such a payment request can be reused and is valid forever
+              val pr = PaymentRequest(chainHash, sum, Crypto sha256 r, nodePrivateKey, description, None, extra)
+              val payInfo = PaymentInfo(pr.paymentHash, incoming = 1, r, sum getOrElse MilliSatoshi(0L), HIDDEN,
+                System.currentTimeMillis, description)
 
-          app.TransData.value = pr
-          me goTo classOf[RequestActivity]
-          bag upsertRoutingData emptyRD(pr)
-          bag upsertPaymentInfo payInfo
+              app.TransData.value = pr
+              me goTo classOf[RequestActivity]
+              bag upsertRoutingData emptyRD(pr)
+              bag upsertPaymentInfo payInfo
+            }
 
-        case _ =>
-          // Peer has not yet sent us a ChannelUpdate
-          // most likely because a funding tx is not deep enough
-          showForm(negBld(dialog_ok).setMessage(err_ln_cant_ask).create)
-      }
+            def recAttempt = rateManager.result match {
+              case Success(ms) if maxMsat < ms => app toast dialog_sum_big
+              case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
 
-      def recAttempt = rateManager.result match {
-        case Success(ms) if maxMsat < ms => app toast dialog_sum_big
-        case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
+              case ms => rm(alert) {
+                // Request may contain no amount
+                notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
+                <(makeRequest(ms.toOption, random getBytes 32), onFail)(none)
+              }
+            }
 
-        case ms => rm(alert) {
-          // Request may contain no amount
-          notifySubTitle(me getString ln_pr_make, Informer.LNPAYMENT)
-          <(makeRequest(ms.toOption, random getBytes 32), onFail)(none)
+            val ok = alert getButton BUTTON_POSITIVE
+            ok setOnClickListener onButtonTap(recAttempt)
+
+          case _ =>
+            // Peer has not yet sent us a ChannelUpdate
+            // most likely because a funding tx is not deep enough
+            showForm(negBld(dialog_ok).setMessage(err_ln_cant_ask).create)
         }
       }
-
-      val ok = alert getButton BUTTON_POSITIVE
-      ok setOnClickListener onButtonTap(recAttempt)
     }
 
     whenStop = anyToRunnable {
