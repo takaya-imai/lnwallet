@@ -319,15 +319,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // SYNC and REFUNDING MODE
 
 
-      case (ref: RefundingData, cr: ChannelReestablish, REFUNDING)
-        // GUARD: we have lost our state and wait for their `myCurrentPerCommitmentPoint`
-        if cr.channelId == ref.commitments.channelId && cr.myCurrentPerCommitmentPoint.isDefined =>
-        // Save `myCurrentPerCommitmentPoint` and send an Error which should cause them to spend their current local commit
-        val d1 = ref.modify(_.commitments.remoteCommit.remotePerCommitmentPoint) setTo cr.myCurrentPerCommitmentPoint.get
-        val error = Error(cr.channelId, "Please be so kind as to spend your current local commit" getBytes "UTF-8")
-        me UPDATE STORE(d1) SEND error
-
-
       // We may get this message any time so just save it here
       case (wait: WaitFundingDoneData, CMDConfirmed(tx), SYNC)
         if wait.fundingTx.txid == tx.txid =>
@@ -406,11 +397,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
 
       case (some: HasCommitments, CMDOnline, SYNC) =>
-        val secrets = some.commitments.remotePerCommitmentSecrets
-        val yourLastPerCommitmentSecret = secrets.lastIndex.map(ShaChain.moves).flatMap(ShaChain getHash secrets.hashes) getOrElse zeroes(32)
-        val myCurrentPerCommitmentPoint = Generators.perCommitPoint(some.commitments.localParams.shaSeed, some.commitments.localCommit.index)
-        me SEND ChannelReestablish(some.commitments.channelId, some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index,
-          Some apply Scalar(yourLastPerCommitmentSecret), Some apply myCurrentPerCommitmentPoint)
+        me SEND ChannelReestablish(some.commitments.channelId,
+          some.commitments.localCommit.index + 1, some.commitments.remoteCommit.index)
 
 
       case (wait: WaitFundingDoneData, CMDOffline, WAIT_FUNDING_DONE) => BECOME(wait, SYNC)
