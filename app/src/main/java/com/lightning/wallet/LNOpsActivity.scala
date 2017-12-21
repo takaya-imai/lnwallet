@@ -87,7 +87,8 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
           app.kit watchFunding wait.commitments
           app.kit blockingSend wait.fundingTx
 
-        case (_, norm: NormalData, _, _) if norm.isFinishing => me runOnUiThread manageNegs(norm.commitments)
+        case (_, norm: NormalData, _, _) if norm.remoteShutdown.isDefined => me runOnUiThread manageNegs(norm.commitments)
+        case (_, norm: NormalData, _, _) if norm.localShutdown.isDefined => me runOnUiThread manageNegs(norm.commitments)
         case (_, negs: NegotiationsData, _, _) => me runOnUiThread manageNegs(negs.commitments)
         case _ if chan.isOperational => me exitTo classOf[LNActivity]
         case _ => me runOnUiThread manageNoActiveChannel

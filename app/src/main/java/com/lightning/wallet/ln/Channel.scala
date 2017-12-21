@@ -23,7 +23,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
   implicit val context: ExecutionContextExecutor = ExecutionContext fromExecutor Executors.newSingleThreadExecutor
   def apply[T](ex: Commitments => T) = Some(data) collect { case some: HasCommitments => ex apply some.commitments }
   def process(change: Any) = Future(me doProcess change) onFailure { case err => events onError me -> err }
-  def isOperational = data match { case norm: NormalData => !norm.isFinishing case other => false }
+  def isOperational = data match { case NormalData(_, _, None, None) => true case _ => false }
   val listeners: mutable.Set[ChannelListener]
 
   private[this] val events = new ChannelListener {
@@ -145,6 +145,58 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         BECOME(me STORE NormalData(wait.announce, c1), NORMAL) SEND our
 
 
+      // SHUTDOWN
+
+
+      case (wait: WaitFundingDoneData, CMDShutdown, WAIT_FUNDING_DONE) =>
+        // We have decided to close our channel before it reached a min depth
+        me startShutdown NormalData(wait.announce, wait.commitments)
+
+
+      case (wait: WaitFundingDoneData, remote: Shutdown, WAIT_FUNDING_DONE)
+        // They have decided to close our channel before it reached a min depth
+        if remote.channelId == wait.commitments.channelId =>
+
+        val norm = NormalData(wait.announce, wait.commitments)
+        val norm1 = norm.modify(_.remoteShutdown) setTo Some(remote)
+        me startShutdown norm1
+        doProcess(CMDProceed)
+
+
+      case (norm @ NormalData(_, commitments, our, their), CMDShutdown, NORMAL) =>
+        // We have unsigned outgoing HTLCs or already have tried to close this channel cooperatively
+        val nope = our.isDefined | their.isDefined | Commitments.localHasUnsignedOutgoing(commitments)
+        if (nope) startLocalCurrentClose(norm) else me startShutdown norm
+
+
+      case (norm @ NormalData(_, commitments, _, None), remote: Shutdown, NORMAL)
+        // GUARD: Either they initiate a shutdown or respond to the one we have sent
+        if remote.channelId == norm.commitments.channelId =>
+
+        val d1 = norm.modify(_.remoteShutdown) setTo Some(remote)
+        val nope = Commitments.remoteHasUnsignedOutgoing(commitments)
+        // Can't close cooperatively if they have unsigned outgoing HTLCs
+        // we should clear our unsigned outgoing HTLCs and then start a shutdown
+        if (nope) startLocalCurrentClose(norm) else me UPDATE d1 doProcess CMDProceed
+
+
+      case (norm @ NormalData(_, commitments, None, their), CMDProceed, NORMAL)
+        // GUARD: got their shutdown, have no unsigned HTLCs, send ours and proceed
+        if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
+
+        me startShutdown norm
+        doProcess(CMDProceed)
+
+
+      case (NormalData(announce, commitments, our, their), CMDProceed, NORMAL)
+        // GUARD: got both shutdowns, have no unsigned HTLCs so we can start negotiations
+        if Commitments.hasNoPendingHtlc(commitments) && our.isDefined && their.isDefined =>
+
+        val _ \ sig = Closing.makeFirstClosing(commitments, our.get.scriptPubKey, their.get.scriptPubKey)
+        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, our.get, their.get)
+        BECOME(me STORE neg, NEGOTIATIONS) SEND sig
+
+
       // NORMAL MODE
 
 
@@ -253,51 +305,6 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val c1 = Commitments.receiveRevocation(norm.commitments, rev)
         val d1 = me STORE norm.copy(commitments = c1)
         me UPDATE d1 doProcess CMDHTLCProcess
-
-
-      // NORMAL: SHUTDOWN
-
-
-      case (norm @ NormalData(_, commitments, our, their), CMDShutdown, NORMAL) =>
-        val nope = our.isDefined | their.isDefined | Commitments.localHasUnsignedOutgoing(commitments)
-        if (nope) startLocalCurrentClose(norm) else me startShutdown norm
-
-
-      // They try to shutdown with uncommited changes
-      case (norm: NormalData, remote: Shutdown, NORMAL)
-        if remote.channelId == norm.commitments.channelId &&
-          Commitments.remoteHasUnsignedOutgoing(norm.commitments) =>
-
-        // Can't start mutual shutdown
-        startLocalCurrentClose(norm)
-
-
-      // They initiate shutdown or respond to ours
-      case (norm: NormalData, remote: Shutdown, NORMAL)
-        if remote.channelId == norm.commitments.channelId &&
-          norm.remoteShutdown.isEmpty =>
-
-        // We got their first shutdown so save it and proceed
-        val d1 = norm.modify(_.remoteShutdown) setTo Some(remote)
-        me UPDATE d1 doProcess CMDProceed
-
-
-      // GUARD: we can't send our shutdown untill all HTLCs are resolved
-      // GUARD: this case will only be triggered if CMDProceed above was not
-      case (norm @ NormalData(_, commitments, None, their), CMDProceed, NORMAL)
-        if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
-
-        me startShutdown norm
-        doProcess(CMDProceed)
-
-
-      // This is the final stage: both Shutdown messages are present without pending HTLCs
-      case (NormalData(announce, commitments, Some(local), their), CMDProceed, NORMAL)
-        if Commitments.hasNoPendingHtlc(commitments) && their.isDefined =>
-
-        val _ \ sig = Closing.makeFirstClosing(commitments, local.scriptPubKey, their.get.scriptPubKey)
-        val neg = NegotiationsData(announce, commitments, localClosingSigned = sig, local, their.get)
-        BECOME(me STORE neg, NEGOTIATIONS) SEND sig
 
 
       // Check if we have outdated outgoing HTLCs
@@ -496,17 +503,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (some: HasCommitments, err: Error, WAIT_FUNDING_DONE | NEGOTIATIONS | NORMAL | SYNC)
         // GUARD: we only react on connection level remote errors or those related to our channel
         if err.channelId == some.commitments.channelId || err.channelId == BinaryData("00" * 32) =>
-        Tools log s"Remote error, chanId: ${err.channelId}, " + new String(err.data.toArray)
+
         startLocalCurrentClose(some)
+        Tools log err.explanation
 
 
-      case (some: HasCommitments, CMDShutdown, WAIT_FUNDING_DONE | NEGOTIATIONS | SYNC) =>
-        // This happens when we decide to close a channel while we have something to lose
-        // except for NORMAL which may initiate a cooperative closing in this case
-        startLocalCurrentClose(some)
-
-
-      // Trying to send an HTLC while channel is not online for whatever reason
+      case (some: HasCommitments, CMDShutdown, NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
       case (_: NormalData, add: CMDAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
       case _ => Tools log s"Channel: unhandled $state : $change"
     }
@@ -532,7 +534,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
     val finalScriptPubKey = norm.commitments.localParams.defaultFinalScriptPubKey
     val localShutdown = Shutdown(norm.commitments.channelId, finalScriptPubKey)
     val norm1 = norm.modify(_.localShutdown) setTo Some(localShutdown)
-    me UPDATE norm1 SEND localShutdown
+    BECOME(norm1, NORMAL) SEND localShutdown
   }
 
   private def startMutualClose(neg: NegotiationsData, closeTx: Transaction) =

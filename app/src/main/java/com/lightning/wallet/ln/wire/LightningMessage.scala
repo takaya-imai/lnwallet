@@ -11,7 +11,10 @@ trait LightningMessage
 trait RoutingMessage extends LightningMessage
 trait ChannelMessage extends LightningMessage
 
-case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage
+case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage {
+  def explanation = s"Remote error, channelId: $channelId, " + new String(data.toArray)
+}
+
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends LightningMessage
 case class Ping(pongLength: Int, data: BinaryData) extends LightningMessage
 case class Pong(data: BinaryData) extends LightningMessage
