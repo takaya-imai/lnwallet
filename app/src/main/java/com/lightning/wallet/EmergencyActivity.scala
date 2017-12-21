@@ -35,9 +35,8 @@ class EmergencyActivity extends ToolbarActivity { me =>
       store = null
     }
 
-  override def mkSetsForm: Unit = none
-  override def notifySubTitle(subtitle: String, infoType: Int) = none
-  def emergeMnemonic(view: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
+  override def notifySubTitle(subtitleText: String, infoType: Int): Unit = none
+  def showMnemonic(view: View) = passWrap(me getString sets_mnemonic) apply checkPassNotify(doViewMnemonic)
 
   def showDetails(report: String) = {
     val (view, field) = str2Tuple(report)
@@ -45,7 +44,7 @@ class EmergencyActivity extends ToolbarActivity { me =>
     field setTextIsSelectable true
   }
 
-  def emergeReport(view: View) =
+  def showReport(view: View) =
     Try(getIntent getStringExtra ERROR_REPORT) match {
       case Success(report: String) => showDetails(report)
       case _ => showDetails(me getString err_general)

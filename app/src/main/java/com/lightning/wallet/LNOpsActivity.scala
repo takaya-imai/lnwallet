@@ -6,7 +6,6 @@ import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Broadcaster._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
-import com.lightning.wallet.ln.Tools.none
 import fr.acinq.bitcoin.Transaction
 import android.widget.Button
 import android.os.Bundle
@@ -51,22 +50,23 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
       val openStatus = humanStatus(LNParams.broadcaster txStatus open.txid)
       val balance = coloredIn(c.commitInput.txOut.amount)
 
-      lnOpsAction setText ln_force_close
-      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClose)
+      closeOnClick(ln_close)
+      lnOpsAction setText ln_close
       lnOpsDescription setText getString(ln_ops_chan_opening).format(balance,
         app.plurOrZero(txsConfs, threshold), open.txid.toString, openStatus).html
     }
 
     def manageNegs(c: Commitments) = {
-      val description = getString(ln_ops_chan_bilateral_negotiations)
-      lnOpsAction setOnClickListener onButtonTap(warnAboutUnilateralClose)
-      lnOpsDescription setText description.html
+      val details = getString(ln_ops_chan_negotiations)
+      lnOpsDescription setText details.html
       lnOpsAction setText ln_force_close
+      closeOnClick(ln_force_close)
     }
 
-    def warnAboutUnilateralClose =
-      mkForm(mkChoiceDialog(chan process CMDShutdown, none, ln_force_close,
-        dialog_cancel), null, getString(ln_ops_chan_unilateral_warn).html)
+    def closeOnClick(title: Int) = lnOpsAction setOnClickListener onButtonTap {
+      // First closing attempt will be a cooperative one, second will be uncooperative
+      passWrap(me getString title) apply checkPass { pass => chan process CMDShutdown }
+    }
 
     val chanOpsListener = new ChannelListener {
       // Updates UI accordingly to changes in channel

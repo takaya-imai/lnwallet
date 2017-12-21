@@ -91,13 +91,11 @@ object Utils {
 }
 
 trait ToolbarActivity extends TimerActivity { me =>
-  def tellGenError = wrap(app toast err_general)(mkSetsForm)
-  def tellWrongPass = wrap(app toast secret_wrong)(mkSetsForm)
+  lazy val toolbar = findViewById(R.id.toolbar).asInstanceOf[Toolbar]
+  lazy val flash = uiTask(getSupportActionBar setSubtitle infos.head.value)
 
   private[this] var infos = List.empty[Informer]
   private[this] var currentAnimation = Option.empty[TimerTask]
-  lazy val toolbar = findViewById(R.id.toolbar).asInstanceOf[Toolbar]
-  lazy val flash = uiTask(getSupportActionBar setSubtitle infos.head.value)
 
   val catchListener = new BlocksListener {
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
@@ -162,29 +160,15 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
   }
 
-  // Password prompting popup
-  // but it does not actually check a password
-  def passPlus(title: CharSequence)(next: String => Unit) = {
-    val isPassword = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
-    val inputType = if (isPassword) passNoSuggest else InputType.TYPE_CLASS_NUMBER
-    val (view, field) = generatePromptView(inputType, secret_wallet, new PasswordTransformationMethod)
-    mkForm(mkChoiceDialog(infoAndNext, none, dialog_next, dialog_cancel), title, content = view)
-
-    def infoAndNext = {
-      add(app getString secret_checking, Informer.CODECHECK).flash.run
-      timer.schedule(delete(Informer.CODECHECK), 2500)
-      next(field.getText.toString)
-    }
-  }
-
-  def checkPass(title: CharSequence)(next: String => Unit) = passPlus(title) { password =>
-    def proceed(passwordCorrect: Boolean) = if (passwordCorrect) next(password) else tellWrongPass
-    <(app.kit.wallet checkPassword password, _ => tellGenError)(proceed)
+  def checkPassNotify(next: String => Unit)(pass: String) = {
+    add(app getString secret_checking, Informer.CODECHECK).flash.run
+    timer.schedule(delete(Informer.CODECHECK), 2500)
+    checkPass(next)(pass)
   }
 
   def doViewMnemonic(password: String) =
-    <(app.kit decryptSeed password, _ => tellGenError) { seed =>
-      val wordsText = TextUtils.join("\u0020", seed.getMnemonicCode)
+    <(app.kit decryptSeed password, _ => app toast err_general) { seed =>
+      val wordsText: String = TextUtils.join("\u0020", seed.getMnemonicCode)
       lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
       lazy val alert = mkForm(dialog, getString(sets_noscreen).html, wordsText)
       alert
@@ -256,9 +240,8 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
 
     rescanWallet setOnClickListener onButtonTap {
-      def openForm = checkPass(me getString sets_rescan) { _ =>
-        val dlg = mkChoiceDialog(go, none, dialog_ok, dialog_cancel)
-        showForm(dlg.setMessage(sets_rescan_ok).create)
+      def openForm = passWrap(me getString sets_rescan) apply checkPassNotify { pass =>
+        showForm(mkChoiceDialog(go, none, dialog_ok, dialog_cancel).setMessage(sets_rescan_ok).create)
       }
 
       def go = try {
@@ -273,17 +256,16 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
 
     viewMnemonic setOnClickListener onButtonTap {
-      // Provided as an external function because may be accessed from main page
-      def openForm = checkPass(me getString sets_mnemonic)(doViewMnemonic)
+      // Provided as an external function because may be accessed directly from main page
+      def openForm = passWrap(me getString sets_mnemonic) apply checkPassNotify(doViewMnemonic)
       rm(menu)(openForm)
     }
 
     changePass setOnClickListener onButtonTap {
-      def openForm = checkPass(me getString sets_secret_change) { oldPass =>
+      def openForm = passWrap(me getString sets_secret_change) apply checkPassNotify { oldPass =>
         val (view, field) = generatePromptView(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, secret_new, null)
-        mkForm(mkChoiceDialog(proceed, none, dialog_ok, dialog_cancel), me getString sets_secret_change, view)
-        def proceed = if (newPass.length >= 6) changePassword else app toast secret_too_short
-        def newPass = field.getText.toString.trim
+        mkForm(mkChoiceDialog(checkNewPass, none, dialog_ok, dialog_cancel), me getString sets_secret_change, view)
+        def checkNewPass = if (field.getText.toString.length >= 6) changePassword else app toast secret_too_short
 
         def changePassword = {
           <(rotatePass, _ => System exit 0)(_ => app toast sets_secret_ok)
@@ -293,8 +275,8 @@ trait ToolbarActivity extends TimerActivity { me =>
 
         def rotatePass = {
           app.kit.wallet.decrypt(oldPass)
-          app.encryptWallet(app.kit.wallet, newPass)
           // Make sure we have alphabetical keyboard from now on
+          app.encryptWallet(app.kit.wallet, field.getText.toString)
           app.prefs.edit.putBoolean(AbstractKit.PASS_INPUT, true).commit
         }
       }
@@ -341,9 +323,12 @@ trait ToolbarActivity extends TimerActivity { me =>
     val pay: PayData
 
     def chooseFee: Unit =
-      passPlus(getString(step_2).format(pay cute sumOut).html) { password =>
+      passWrap(getString(step_2).format(pay cute sumOut).html) { password =>
+        add(app getString secret_checking, Informer.CODECHECK).flash.run
+        timer.schedule(delete(Informer.CODECHECK), 2500)
+
         <(makeTx(password, RatesSaver.rates.feeLive), onTxFail) { estimateTx =>
-          // Get live final fee and set a risky final fee to be 3 times less
+          // Get live final fee and set a risky final fee to be 2 times less
 
           val liveFinalFee: MilliSatoshi = estimateTx.getFee
           val riskyFinalFee: MilliSatoshi = liveFinalFee / 2 // Msat to Sat
@@ -498,6 +483,20 @@ trait TimerActivity extends AppCompatActivity { me =>
   def share(text: String): Unit = startActivity {
     val share = new Intent setAction Intent.ACTION_SEND setType "text/plain"
     share.putExtra(android.content.Intent.EXTRA_TEXT, text)
+  }
+
+  // Password prompting popup
+  // but it does not actually check a password
+  val passWrap = (title: CharSequence) => (next: String => Unit) => {
+    val isPasswordKeyboard = app.prefs.getBoolean(AbstractKit.PASS_INPUT, true)
+    val inputType = if (isPasswordKeyboard) passNoSuggest else InputType.TYPE_CLASS_NUMBER
+    val (view, field) = generatePromptView(inputType, secret_wallet, new PasswordTransformationMethod)
+    mkForm(mkChoiceDialog(next(field.getText.toString), none, dialog_next, dialog_cancel), title, view)
+  }
+
+  def checkPass(next: String => Unit)(pass: String) = {
+    def proceed(isCorrect: Boolean) = if (isCorrect) next(pass) else app toast secret_wrong
+    <(app.kit.wallet checkPassword pass, _ => app toast err_general)(proceed)
   }
 }
 

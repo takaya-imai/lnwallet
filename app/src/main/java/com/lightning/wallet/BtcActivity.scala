@@ -375,7 +375,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     fab close true
   }
 
-  def viewMnemonic(top: View) = checkPass(me getString sets_mnemonic)(doViewMnemonic)
+  def viewMnemonic(top: View) = passWrap(me getString sets_mnemonic) apply checkPassNotify(doViewMnemonic)
   def nativeTransactions = app.kit.wallet.getRecentTransactions(maxLinesNum, false).asScala
     .toVector.map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 }

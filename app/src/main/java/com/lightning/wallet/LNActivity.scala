@@ -297,13 +297,13 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     closePaymentChannel = anyToRunnable {
-      val nodeView = me getString ln_ops_start_node_view
       val humanId = chan.data.announce.nodeId.toString grouped 3 mkString "\u0020"
       val humanAddress = chan.data.announce.addresses.headOption.map(_.getHostString).orNull
-      val nodeDetails = nodeView.format(chan.data.announce.alias, humanAddress, humanId)
+      val nodeDetails = getString(ln_ops_start_node_view).format(chan.data.announce.alias, humanAddress, humanId)
+      val title = s"$nodeDetails<br><br>${me getString ln_close}"
 
-      // Close all of the channels just in case we have more than one active left
-      checkPass(s"$nodeDetails<br><br>${me getString ln_close}".html) { pass =>
+      passWrap(title.html) apply checkPassNotify { pass =>
+        // Close all of the channels just in case we have more than one active left
         for (chan <- app.ChannelManager.notClosing) chan process CMDShutdown
       }
     }
