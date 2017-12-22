@@ -5,6 +5,7 @@ import collection.JavaConverters._
 import android.widget.DatePicker._
 import com.lightning.wallet.R.string._
 import org.bitcoinj.wallet.KeyChain.KeyPurpose._
+import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.hootsuite.nachos.terminator.ChipTerminatorHandler._
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
@@ -16,7 +17,6 @@ import com.hootsuite.nachos.NachoTextView
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
 import org.bitcoinj.crypto.MnemonicCode
-import android.text.TextUtils
 import java.util.Calendar
 import android.os.Bundle
 
@@ -43,14 +43,14 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
   lazy val password = findViewById(R.id.restorePass).asInstanceOf[EditText]
   lazy val datePicker = new WhenPicker(me, 1488326400L * 1000)
 
-  def getMnemonicText = TextUtils.join("\u0020", restoreCode.getChipValues)
-  override def onBackPressed = wrap(super.onBackPressed)(app.kit.stopAsync)
-
   // Initialize this activity, method is run once
   override def onCreate(savedState: Bundle) =
   {
     super.onCreate(savedState)
     setContentView(R.layout.activity_restore)
+    val allowed = MnemonicCode.INSTANCE.getWordList
+    val lineStyle = android.R.layout.simple_list_item_1
+    val adapter = new ArrayAdapter(me, lineStyle, allowed)
 
     val changeListener = new TextChangedWatcher {
       override def onTextChanged(s: CharSequence, x: Int, y: Int, z: Int) =
@@ -68,15 +68,12 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
       }
     }
 
-    val allowed = MnemonicCode.INSTANCE.getWordList
-    val lineStyle = android.R.layout.simple_list_item_1
-    val adapter = new ArrayAdapter(me, lineStyle, allowed)
-
     if (app.TransData.value != null) {
-      // This should be an unencrypted mnemonic string
+      // Should be an unencrypted mnemonic string
       val chips = app.TransData.value.toString split "\\s+"
-      restoreCode setText chips.toList.asJava
+      val task = anyToRunnable(restoreCode setText chips.toList.asJava)
       app.TransData.value = null
+      timer.schedule(task, 100)
     }
 
     restoreWhen setText datePicker.human
@@ -88,6 +85,10 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
     restoreCode setDropDownBackgroundResource R.color.button_material_dark
     restoreCode setAdapter adapter
   }
+
+  override def onBackPressed = wrap(super.onBackPressed)(app.kit.stopAsync)
+  def getMnemonicText = restoreCode.getText.toString.trim.toLowerCase
+    .replaceAll("[^a-zA-Z0-9']+", " ")
 
   def doRecoverWallet =
     app.kit = new app.WalletKit {

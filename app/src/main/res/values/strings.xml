@@ -57,8 +57,8 @@
     <!-- menu and fab -->
     <string name="sets_secret_change">Change wallet secret</string>
     <string name="sets_chan_recover">Recover channel funds</string>
-    <string name="sets_olympus">Set your Olympus Server</string>
     <string name="sets_mnemonic">View mnemonic code</string>
+    <string name="sets_olympus">Se Olympus Server</string>
     <string name="sets_rescan">Rescan blockchain</string>
 
     <string name="secret_wallet">Wallet secret</string>

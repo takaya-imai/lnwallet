@@ -26,6 +26,7 @@
             app:chipHeight="26dp"
             app:chipSpacing="3dp"
 
+            android:inputType="textMultiLine|textVisiblePassword"
             android:layout_height="wrap_content"
             android:layout_width="wrap_content"
             android:hint="@string/restore_hint"

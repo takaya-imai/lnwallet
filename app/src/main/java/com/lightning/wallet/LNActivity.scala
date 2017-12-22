@@ -303,7 +303,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       val title = s"$nodeDetails<br><br>${me getString ln_close}"
 
       passWrap(title.html) apply checkPassNotify { pass =>
-        // Close all of the channels just in case we have more than one active left
+        // Close all of the chans in case we have more than one active left
         for (chan <- app.ChannelManager.notClosing) chan process CMDShutdown
       }
     }
@@ -317,7 +317,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
       chan(_.channelId.toString) foreach { chanIdKey =>
         StorageWrap get chanIdKey map to[ChannelUpdate] match {
-          // Can only issue requests if have a saved ChannelUpdate
+          // Can issue requests if a saved ChannelUpdate is present
 
           case Success(update) =>
             val content = getLayoutInflater.inflate(R.layout.frag_ln_input_receive, null, false)
