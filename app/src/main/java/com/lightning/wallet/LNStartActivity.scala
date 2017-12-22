@@ -9,12 +9,12 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import android.widget.{BaseAdapter, Button, ListView, TextView}
 import com.lightning.wallet.lnutils.{CloudAct, PaymentInfoWrap}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{AES, ThrottledWork}
 import com.lightning.wallet.Utils.{app, denom}
+import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import android.view.{Menu, View, ViewGroup}
 import scala.util.{Failure, Success}
 
@@ -23,7 +23,6 @@ import com.lightning.wallet.ln.Scripts.multiSig2of2
 import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
 import scala.collection.mutable
-import fr.acinq.bitcoin.Script
 import org.bitcoinj.core.Coin
 import android.os.Bundle
 
@@ -165,8 +164,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFunding(chan: Channel, their: Init) = {
-    val minUserCapacity = LNParams.minChannelMargin * 2
-    // Make room for something a user can actually spend
+    val minUserCapacity = MilliSatoshi(LNParams.broadcaster.feeRatePerKw)
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
     val rateManager = new RateManager(getString(amount_hint_newchan).format(denom withSign minUserCapacity,
