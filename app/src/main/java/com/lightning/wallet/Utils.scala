@@ -292,7 +292,7 @@ trait ToolbarActivity extends TimerActivity { me =>
     field setTextIsSelectable true
 
     def proceed: Unit = rm(alert) {
-      val (view1, field1) = generatePromptView(InputType.TYPE_CLASS_TEXT, ln_olympus_ip, null)
+      val view1 \ field1 = generatePromptView(InputType.TYPE_CLASS_TEXT, ln_olympus_ip, null)
       val dialog = mkChoiceDialog(trySave(field1.getText.toString), none, dialog_ok, dialog_cancel)
       mkForm(dialog, me getString sets_olympus, view1)
       field1 setText LNParams.cloud.data.url
@@ -304,8 +304,8 @@ trait ToolbarActivity extends TimerActivity { me =>
 
       cloud1.checkIfWorks.subscribe(done => {
         // Just send a dummy data with signature
+        runOnUiThread(app toast ln_olympus_success)
         CloudDataSaver saveObject data1
-        app toast ln_olympus_success
         LNParams.cloud = cloud1
       }, onError)
     }
@@ -323,11 +323,11 @@ trait ToolbarActivity extends TimerActivity { me =>
     val pay: PayData
 
     def chooseFee: Unit =
-      passWrap(getString(step_2).format(pay cute sumOut).html) { password =>
+      passWrap(getString(step_2).format(pay cute sumOut).html) { pass =>
         add(app getString secret_checking, Informer.CODECHECK).flash.run
         timer.schedule(delete(Informer.CODECHECK), 2500)
 
-        <(makeTx(password, RatesSaver.rates.feeLive), onTxFail) { estimateTx =>
+        <(makeTx(pass, RatesSaver.rates.feeLive), onTxFail) { estimateTx =>
           // Get live final fee and set a risky final fee to be 2 times less
 
           val liveFinalFee: MilliSatoshi = estimateTx.getFee
@@ -345,8 +345,8 @@ trait ToolbarActivity extends TimerActivity { me =>
           val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
           def proceed = lst.getCheckedItemPosition match {
-            case 0 => processTx(password, RatesSaver.rates.feeLive div 2)
-            case _ => processTx(password, RatesSaver.rates.feeLive)
+            case 0 => processTx(pass, RatesSaver.rates.feeLive div 2)
+            case _ => processTx(pass, RatesSaver.rates.feeLive)
           }
 
           lst.setAdapter(opts)

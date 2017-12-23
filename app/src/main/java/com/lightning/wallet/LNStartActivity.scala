@@ -9,6 +9,7 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
+
 import android.widget.{BaseAdapter, Button, ListView, TextView}
 import com.lightning.wallet.lnutils.{CloudAct, PaymentInfoWrap}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
@@ -164,7 +165,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   def askForFunding(chan: Channel, their: Init) = {
-    val minUserCapacity = MilliSatoshi(LNParams.broadcaster.feeRatePerKw)
+    val minUserCapacity = MilliSatoshi(LNParams.broadcaster.ratePerKwSat * sat2msatFactor)
     val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
     val alert = mkForm(negPosBld(dialog_cancel, dialog_next), getString(ln_ops_start_fund_title).html, content)
     val rateManager = new RateManager(getString(amount_hint_newchan).format(denom withSign minUserCapacity,
@@ -180,7 +181,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
         val theirUnspendableReserveSat = (amountSat * LNParams.theirReserveToFundingRatio).toLong
         val finalPubKeyScript = ScriptBuilder.createOutputScript(app.kit.currentAddress).getProgram
         val localParams = LNParams.makeLocalParams(theirUnspendableReserveSat, finalPubKeyScript, System.currentTimeMillis)
-        chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.feeRatePerKw, 0, their, amountSat)
+        chan process CMDOpenChannel(localParams, random getBytes 32, LNParams.broadcaster.ratePerKwSat, 0, their, amountSat)
       }
     }
 

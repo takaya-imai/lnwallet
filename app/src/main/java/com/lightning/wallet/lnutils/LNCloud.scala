@@ -66,8 +66,8 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     // Execute if we are not busy and have available tokens and actions, don't care amout memo
     case CloudData(_, SET(token @ (point, clear, sig), _*), SET(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> point, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
-      val go = connector.tell(params, action.path) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
-      go.foreach(ok => me BECOME data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
+      val go = connector.ask(action.path, none, params:_*) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
+      go.foreach(_ => me BECOME data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
       isFree = false
 
       // data may change while request is on so we always copy it
@@ -143,9 +143,9 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
   def doProcess(some: Any) = (data, some) match {
     // Execute if we are not busy and have available actions
     case CloudData(_, _, SET(action, _*), _) \ CMDStart if isFree =>
-      val go = connector.tell(signed(action.data) ++ action.plus, action.path)
-      go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
-      go.foreach(ok => me BECOME data.copy(acts = data.acts - action), Tools.errlog)
+      val go = connector.ask(action.path, none, signed(action.data) ++ action.plus:_*)
+      val go1 = go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
+      go1.foreach(_ => me BECOME data.copy(acts = data.acts - action), Tools.errlog)
       isFree = false
 
     case (_, action: CloudAct) =>
@@ -158,7 +158,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 
   def signed(data: BinaryData): Seq[HttpParam] = {
     val sig = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> sig.toString, "key" -> cloudPublicKey.toString, BODY -> data.toString)
+    Seq("sig" -> sig.toString, "pubkey" -> cloudPublicKey.toString, BODY -> data.toString)
   }
 
   override def checkIfWorks = {
@@ -170,9 +170,6 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 class Connector(val url: String) {
   import com.lightning.wallet.ln.wire.LightningMessageCodecs._
   def http(way: String) = post(s"http://$url:9001/v1/$way", true)
-    .connectTimeout(10000)
-
-  def tell(params: Seq[HttpParam], path: String) = ask(path, none, params:_*)
   def ask[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)

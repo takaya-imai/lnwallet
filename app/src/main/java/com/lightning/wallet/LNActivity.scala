@@ -272,9 +272,10 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       // Somewhat counterintuitive: remoteParams.channelReserveSatoshis is OUR unspendable reseve
       // we can not calculate an exact commitTx fee + HTLC fees in advance so just use a minChannelMargin
       // which also guarantees a user has some substantial amount to be refunded once a channel is exhausted
-      val canSend = chan(c => c.localCommit.spec.toLocalMsat - c.remoteParams.channelReserveSatoshis * sat2msatFactor)
-      val finalCanSend = math.min(canSend.map(_ - broadcaster.feeRatePerKw / 2).filter(0L<) getOrElse 0L, maxHtlcValue.amount)
-      val maxMsat = MilliSatoshi(finalCanSend)
+      val canSend0 = chan(c => c.localCommit.spec.toLocalMsat - c.remoteParams.channelReserveSatoshis * sat2msatFactor)
+      val canSend1 = canSend0.map(_ - broadcaster.ratePerKwSat * sat2msatFactor / 2).filter(0L<) getOrElse 0L
+      val canSend2 = math.min(canSend1, maxHtlcValue.amount)
+      val maxMsat = MilliSatoshi(canSend2)
 
       val title = getString(ln_send_title).format(me getDescription pr)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)

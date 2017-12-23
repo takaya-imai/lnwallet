@@ -180,7 +180,7 @@ object Helpers { me =>
 
       RemoteCommitPublished(Scripts.checkSpendable {
         val txWithInputInfo = Scripts.makeClaimP2WPKHOutputTx(commitTx, localPaymentPrivkey.publicKey,
-          commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
+          commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.ratePerKwSat)
 
         val sig = Scripts.sign(txWithInputInfo, localPaymentPrivkey)
         Scripts.addSigs(txWithInputInfo, localPaymentPrivkey.publicKey, sig)
@@ -204,7 +204,7 @@ object Helpers { me =>
 
         val claimMainTx = Scripts checkSpendable {
           val claimMain = Scripts.makeClaimP2WPKHOutputTx(tx, localPrivkey.publicKey,
-            commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.feeRatePerKw)
+            commitments.localParams.defaultFinalScriptPubKey, LNParams.broadcaster.ratePerKwSat)
 
           val sig = Scripts.sign(claimMain, localPrivkey)
           Scripts.addSigs(claimMain, localPrivkey.publicKey, sig)
@@ -213,7 +213,7 @@ object Helpers { me =>
         val claimPenaltyTx = Scripts checkSpendable {
           val txinfo = Scripts.makeMainPenaltyTx(tx, remoteRevocationPrivkey.publicKey,
             commitments.localParams.defaultFinalScriptPubKey, commitments.localParams.toSelfDelay,
-            remoteDelayedPaymentPubkey, LNParams.broadcaster.feeRatePerKw)
+            remoteDelayedPaymentPubkey, LNParams.broadcaster.ratePerKwSat)
 
           val sig = Scripts.sign(txinfo, remoteRevocationPrivkey)
           Scripts.addSigs(txinfo, sig)

@@ -12,7 +12,7 @@ import fr.acinq.bitcoin.BinaryData
 
 
 object LocalBroadcaster extends Broadcaster {
-  def feeRatePerKw: Long = RatesSaver.rates.feeLive.value / 2
+  def ratePerKwSat: Long = RatesSaver.rates.feeLive.value / 2
   def currentHeight = math.max(app.kit.wallet.getLastBlockSeenHeight,
     app.kit.peerGroup.getMostCommonChainHeight)
 
@@ -28,8 +28,8 @@ object LocalBroadcaster extends Broadcaster {
     case (chan, norm: NormalData, SYNC, NORMAL) =>
       // Check for fee changes once when channel becomes online
       val currentFee = norm.commitments.localCommit.spec.feeratePerKw
-      val shouldUpdate = LNParams.shouldUpdateFee(currentFee, feeRatePerKw)
-      if (shouldUpdate) chan.sendFeeUpdate(norm, feeRatePerKw)
+      val shouldUpdate = LNParams.shouldUpdateFee(currentFee, ratePerKwSat)
+      if (shouldUpdate) chan.sendFeeUpdate(norm, ratePerKwSat)
   }
 
   override def onProcess = {

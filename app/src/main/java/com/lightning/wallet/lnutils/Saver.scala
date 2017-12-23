@@ -67,6 +67,6 @@ object RatesSaver extends Saver {
 
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
 case class Rates(feeHistory: Seq[Double], exchange: Fiat2Btc, stamp: Long) {
-  lazy val feeLive = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE else
-    btcBigDecimal2MSat(feeHistory.sum / feeHistory.size): Coin
+  lazy val feeLive: Coin = if (feeHistory.isEmpty) Transaction.DEFAULT_TX_FEE
+    else btcBigDecimal2MSat(feeHistory.sum / feeHistory.size)
 }
