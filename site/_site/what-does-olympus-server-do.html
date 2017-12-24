@@ -57,23 +57,23 @@
 
 <ul>
   <li>
-    <p>It provides an aggregate fiat prices collected by periodially polling a number of well known exchanges as well as current Bitcoin transaction fee rates which are taken directly from a local full Bitcoin node. <em>Note: wallet caches this data locally so in case of Olympus going offline fiat prices will likely stay relevant for days and Bitcoin fees never completely lose their relevance at all.</em></p>
+    <p>It provides an aggregate fiat prices collected by periodially polling a number of well known exchanges as well as current Bitcoin transaction fee rates which are taken directly from a local full Bitcoin node. <em>Note: wallet caches this data locally so in case of Olympus going offline fiat prices will likely stay relevant for hours and Bitcoin fees never completely lose their relevance at all.</em></p>
   </li>
   <li>
-    <p>Maintains a list of public Lightning nodes which a wallet uses to open payment channels. <em>Note: Olympus only provides node search results while payment channel opening is done by Lightning Wallet in a completely autonomous manner.</em></p>
+    <p>Maintains a list of public Lightning nodes which a wallet uses to open payment channels. <em>Note: Olympus only provides node search results while payment channel opening and management is done by Lightning Wallet in a completely autonomous manner.</em></p>
   </li>
   <li>
-    <p>Provides partial payment routes by traversing a graph of available payment channels. This is done to relieve wallet of the burden of maintaining such a graph locally which may quickly become computationally infeasible for a phone app but this also introduces privacy implications which need clarifications:</p>
+    <p>Provides partial payment routes by traversing a graph of available payment channels. This relieves wallet of the burden of maintaining such a graph locally which may quickly become computationally infeasible for a phone app but this also introduces privacy implications which need clarifications:</p>
 
     <ul>
       <li>
-        <p>Wallet always asks for a <em>partial</em> route which starts at your peer’s node and ends at a payment recipient’s node. This provides a plausible deniability since your peer may have many different wallets connected to it so there is no way for Olympus to tell for sure which exact wallet asks for a route.</p>
+        <p>Wallet always asks for a <em>partial</em> route which starts at your peer’s node. This provides a plausible deniability since your peer may have many different wallets connected to it so there is no way for Olympus to tell for sure which exact wallet asks for a route.</p>
       </li>
       <li>
         <p>Wallet knows when a payment is being sent directly to your peer and does not ask Olympus for a payment route in this special case.</p>
       </li>
       <li>
-        <p>Payment recipient may insert an assisted route right into it’s payment request and wallet is smart enough to detect and use it. Here is an example: suppose a complete route is <code class="highlighter-rouge">A (you) → B (peer) → C → D → E (payee)</code>, in case when payee adds an assisted <code class="highlighter-rouge">D →  E</code> route into it’s payment request an Olympus will be asked to provide only <code class="highlighter-rouge">B (peer) → C → D</code> part so it would know neither who is a sender nor who is a receiver here.</p>
+        <p>Recipient may insert an assisted route right into it’s payment request and wallet is smart enough to detect and use it. Here is an example: suppose a complete route is <code class="highlighter-rouge">A (you) → B (peer) → C → D → E (payee)</code>, in case when payee adds an assisted <code class="highlighter-rouge">D →  E</code> route into it’s payment request an Olympus will be asked to provide only <code class="highlighter-rouge">B (peer) → C → D</code> part so it would know neither who is a sender nor who is a receiver here.</p>
       </li>
     </ul>
   </li>
@@ -81,7 +81,7 @@
     <p>Stores an encrypted payment channel backups which can be used to <a href="reimbursing-funds-locked-in-a-lost-payment-channel.html#reimbursing-funds-locked-in-a-lost-payment-channel">reimburse your locked channel balance</a> if you lose an access to your phone. <em>Note: saving one backup requires one <a href="storage-tokens.html#storage-tokens">storage token</a>.</em></p>
   </li>
   <li>
-    <p>Accepts and schedules a delayed refund Bitcoin transactions which spend funds from a payment channel to your Bitcoin wallet in a case of a <a href="using-lightning-wallet.html#forced-channel-closing">forced channel closing</a>. <em>Note: your wallet is capable of spending these transactions all by itself but it’s possible that you lose your phone before a refund time lock is cleared so Olympus acts as a safety belt here. This service also requires one <a href="storage-tokens.html#storage-tokens">storage token</a>.</em></p>
+    <p>Schedules delayed refund Bitcoin transactions which spend funds from a payment channel to your Bitcoin wallet in a case of a <a href="using-lightning-wallet.html#forced-channel-closing">forced channel closing</a>. <em>Note: your wallet is capable of spending these transactions all by itself but it’s possible that you lose your phone before a refund time lock is cleared so Olympus acts as a safety belt here. This service also requires one <a href="storage-tokens.html#storage-tokens">storage token</a>.</em></p>
   </li>
 </ul>
 
@@ -96,7 +96,6 @@
           Other wallets
           <div><a href="https://github.com/ACINQ/eclair">Eclair Lightning node</a></div>
           <div><a href="https://medium.com/@ACINQ/announcing-eclair-wallet-a8d8c136fc7e">Eclair wallet for Android</a></div>
-          <div><a href="https://blog.lightning.engineering/announcement/2017/10/12/test-blitz.html">Lightning Labs desktop wallet</a></div>
         </small>
       </footer>
     </div>

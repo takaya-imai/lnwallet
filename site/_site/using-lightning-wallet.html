@@ -63,17 +63,13 @@
 
 <p>That said, a refunding Bitcoin transaction created by forced channel closing is encumbered in a time lock of 144 Bitcoin blocks so closing a channel uncooperatively will take about one day of waiting before your channel coins are sent back to your Bitcoin wallet.</p>
 
-<p>You may also want to watch <a href="https://www.youtube.com/watch?v=H-WJPjAp5u8">this video</a> which covers all the ways a payment channel could be closed in a great detail.</p>
+<p>You may also want to watch <a href="https://www.youtube.com/watch?v=H-WJPjAp5u8">this video</a> which covers all the ways a payment channel could be closed.</p>
 
 <h3 id="commit-transaction-fee"><a href="#commit-transaction-fee"></a>Commit transaction fee</h3>
 
-<p>You may encounter a message which says that your Lightning payment sum exceeds a Bitcoin commit transaction fee when you try to send a payment while your channel balance is low.</p>
+<p>Sending each Lightning payment creates a valid Bitcoin transaction which is kept off-chain, in fact it never even leaves your device unless a forced channel closing happens. This commit transaction must have an appropriate fee for Bitcoin network to accept it in a timely manner.</p>
 
-<p>This may sound strange since Lightning payment is an off-chan value transfer so what does an on-chain Bitcoin commit transaction have to do with it?</p>
-
-<p>The answer is although sending each Lightning payment indeed does not involve broadcasting a Bitcoin transaction, such a transaction has to be created nevertheless and it must have an appropriate fee for Bitcoin network to accept it in a timely manner.</p>
-
-<p>So an actual amount available for spending in a payment channel will always be slightly less than a nominal amount because it always needs to contain enough funds for current Bitcoin commit transaction fee should it ever be broadcasted.</p>
+<p>As a consequence an actual amount available for spending in a payment channel will always be slightly less than a nominal amount because it always needs to contain enough funds for a current Bitcoin commit transaction fee should it ever be broadcasted.</p>
 
 <p>Next: <a href="http://lightning-wallet.com/recovering-lost-bitcoin-balance.html#recovering-lost-bitcoin-balance">Recovering lost Bitcoin balance</a></p>
 
@@ -84,7 +80,6 @@
           Other wallets
           <div><a href="https://github.com/ACINQ/eclair">Eclair Lightning node</a></div>
           <div><a href="https://medium.com/@ACINQ/announcing-eclair-wallet-a8d8c136fc7e">Eclair wallet for Android</a></div>
-          <div><a href="https://blog.lightning.engineering/announcement/2017/10/12/test-blitz.html">Lightning Labs desktop wallet</a></div>
         </small>
       </footer>
     </div>

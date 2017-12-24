@@ -49,16 +49,16 @@
       <section>
       <h3 id="reimbursing-funds-locked-in-a-lost-payment-channel"><a href="#reimbursing-funds-locked-in-a-lost-payment-channel"></a>Reimbursing funds locked in a lost payment channel</h3>
 
-<p>A phone with an open payment channel may be lost or destroyed at any moment. Once that happens there are two tasks to accomplish:</p>
+<p>A phone with an open payment channel may get lost or destroyed at any moment. Once that happens there are two tasks to accomplish:</p>
 
 <ol>
   <li>Bitcoin balance should be restored on a new phone which is relatively simple thanks to <a href="setting-up-bitcoin-wallet.html#mnemonic-code">mnemonic code</a>.</li>
-  <li>Funds locked in a <a href="using-lightning-wallet.html#payment-channel">payment channel</a> should be reimbursed as well which is not really possible <em>unless</em> some special measures are taken <em>before</em> an emergency.</li>
+  <li>Funds locked in a <a href="using-lightning-wallet.html#payment-channel">payment channel</a> should be reimbursed as well which is not really possible <em>unless</em> some special measures were taken <em>before</em> an emergency.</li>
 </ol>
 
 <p>Lightning Wallet does take those measures: once a new payment channel is created it’s static parameters are automatically encrypted and sent to <a href="what-does-olympus-server-do.hmtl#what-does-olympus-server-do">Olympus server</a>. This operation is only carried out once while no personally identifying information is transferred.</p>
 
-<p>Thanks to this after Bitcoin balance is restored you can just issue a lost channel funds recovery request:</p>
+<p>Thanks to this after Bitcoin balance is restored on a new phone you can just issue a lost channel funds recovery request:</p>
 
 <p><code class="highlighter-rouge">App Menu → Wallet settings → Recover channel funds</code></p>
 
@@ -76,7 +76,6 @@
           Other wallets
           <div><a href="https://github.com/ACINQ/eclair">Eclair Lightning node</a></div>
           <div><a href="https://medium.com/@ACINQ/announcing-eclair-wallet-a8d8c136fc7e">Eclair wallet for Android</a></div>
-          <div><a href="https://blog.lightning.engineering/announcement/2017/10/12/test-blitz.html">Lightning Labs desktop wallet</a></div>
         </small>
       </footer>
     </div>
