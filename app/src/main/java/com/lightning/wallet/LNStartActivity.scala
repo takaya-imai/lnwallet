@@ -198,8 +198,9 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val pay = P2WSHData(funding, scriptPubKey)
       chooseFee
 
-      def processTx(pass: String, fee: Coin) =
-        <(makeTx(pass, fee): fr.acinq.bitcoin.Transaction, onTxFail) { fundTx =>
+      def processTx(pass: String, feePerKb: Coin) =
+        <(makeTx(pass, feePerKb): fr.acinq.bitcoin.Transaction, onTxFail) { fundTx =>
+          // Convert bitcoinj tx to bitcoin-lib format and find our output order number
           val outIndex = Scripts.findPubKeyScriptIndex(fundTx, scriptPubKey)
           chan.process(fundTx -> outIndex)
         }

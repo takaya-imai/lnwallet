@@ -319,7 +319,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   abstract class TxProcessor {
     def onTxFail(exc: Throwable): Unit
-    def processTx(pass: String, fee: Coin)
+    def processTx(pass: String, feePerKb: Coin)
     val pay: PayData
 
     def chooseFee: Unit =
@@ -330,13 +330,12 @@ trait ToolbarActivity extends TimerActivity { me =>
         <(makeTx(pass, RatesSaver.rates.feeLive), onTxFail) { estimateTx =>
           // Get live final fee and set a risky final fee to be 2 times less
 
-          val liveFinalFee: MilliSatoshi = estimateTx.getFee
-          val riskyFinalFee: MilliSatoshi = liveFinalFee / 2 // Msat to Sat
-          val markedLiveFinalFee = sumOut format denom.withSign(liveFinalFee)
-          val markedRiskyFinalFee = sumOut format denom.withSign(riskyFinalFee)
-
-          val feeLive = getString(fee_live) format humanFiat(markedLiveFinalFee, liveFinalFee, " ")
-          val feeRisky = getString(fee_risky) format humanFiat(markedRiskyFinalFee, riskyFinalFee, " ")
+          val livePerTxFee: MilliSatoshi = estimateTx.getFee
+          val riskyPerTxFee: MilliSatoshi = livePerTxFee / 2
+          val markedLivePerTxFee = sumOut format denom.withSign(livePerTxFee)
+          val markedRiskyPerTxFee = sumOut format denom.withSign(riskyPerTxFee)
+          val feeLive = getString(fee_live) format humanFiat(markedLivePerTxFee, livePerTxFee, " ")
+          val feeRisky = getString(fee_risky) format humanFiat(markedRiskyPerTxFee, riskyPerTxFee, " ")
           val feesOptions = Array(feeRisky.html, feeLive.html)
 
           // Prepare popup interface with fee options
@@ -346,7 +345,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
           def proceed = lst.getCheckedItemPosition match {
             case 0 => processTx(pass, RatesSaver.rates.feeLive div 2)
-            case _ => processTx(pass, RatesSaver.rates.feeLive)
+            case 1 => processTx(pass, RatesSaver.rates.feeLive)
           }
 
           lst.setAdapter(opts)

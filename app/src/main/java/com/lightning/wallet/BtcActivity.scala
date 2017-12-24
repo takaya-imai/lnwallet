@@ -350,10 +350,9 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       case ok @ Success(ms) =>
         val processor = new TxProcessor {
           val pay = AddrData(ms, spendManager.getAddress)
-
-          override def processTx(pass: String, fee: Coin) = {
-            <(app.kit blockingSend makeTx(pass, fee), onTxFail)(Tools.log)
+          override def processTx(pass: String, feePerKb: Coin) = {
             add(me getString tx_announcing, Informer.BTCEVENT).flash.run
+            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(Tools.log)
           }
 
           override def onTxFail(err: Throwable) =
