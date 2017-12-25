@@ -61,12 +61,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         val tooHighMinDepth = accept.minimumDepth > 6L
         val tooHighHtlcMinimumMsat = accept.htlcMinimumMsat > 2500000L
-        val tooLowSelfDelay = accept.toSelfDelay < cmd.localParams.toSelfDelay * 0.75
+        val tooHighMineDelay = accept.toSelfDelay > cmd.localParams.toSelfDelay * 2
         val wrongAcceptedHtlcs = accept.maxAcceptedHtlcs < 1 | accept.maxAcceptedHtlcs > 483
         val wrongDustLimit = accept.dustLimitSat > LNParams.dustLimit * 5 | accept.dustLimitSatoshis < 546L
         val tooSmallHtlcValueInFlight = accept.maxHtlcValueInFlightMsat < UInt64(LNParams.maxHtlcValue.amount / 10)
         val exceedsReserve = accept.channelReserveSatoshis.toDouble / cmd.fundingAmountSat > LNParams.maxReserveToFundingRatio
-        val nope = tooHighMinDepth | wrongAcceptedHtlcs | tooHighHtlcMinimumMsat | wrongDustLimit | tooLowSelfDelay | exceedsReserve
+        val nope = tooHighMinDepth | wrongAcceptedHtlcs | tooHighHtlcMinimumMsat | wrongDustLimit | tooHighMineDelay | exceedsReserve
         if (nope | tooSmallHtlcValueInFlight) BECOME(wait, CLOSING) else BECOME(WaitFundingData(announce, cmd, accept), WAIT_FOR_FUNDING)
 
 
