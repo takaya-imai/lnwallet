@@ -491,9 +491,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       case (some: HasCommitments, err: Error, WAIT_FUNDING_DONE | NEGOTIATIONS | NORMAL | SYNC)
         // GUARD: we only react on connection level remote errors or those related to our channel
         if err.channelId == some.commitments.channelId || err.channelId == BinaryData("00" * 32) =>
-
         startLocalCurrentClose(some)
-        Tools log err.explanation
 
 
       // CMDShutdown in WAIT_FUNDING_DONE and NORMAL is handled differently above

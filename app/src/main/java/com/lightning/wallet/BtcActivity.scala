@@ -302,7 +302,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
   // Get bitcoins
   private def localBitcoinsAndGlidera = {
-    val uri = Uri parse "https://testnet.coinfaucet.eu/en/"
+    val uri = Uri parse "https://testnet.manu.backend.hamburg/faucet"
     me startActivity new Intent(Intent.ACTION_VIEW, uri)
   }
 

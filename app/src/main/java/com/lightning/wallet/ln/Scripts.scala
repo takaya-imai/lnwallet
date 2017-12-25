@@ -39,9 +39,14 @@ object Scripts { me =>
 
   def encodeNumber(number: Long): ScriptElt = number match {
     case n if n < -1 | n > 16 => OP_PUSHDATA(Script encodeNumber n)
-    case n if n >= 1 & n <= 16 => ScriptElt code2elt number.toInt
-    case -1L => OP_1NEGATE
-    case 0L => OP_0
+
+    case x if x >= 1 && x <= 16 =>
+      val code = ScriptElt elt2code OP_1
+      val result = (code + x - 1).toInt
+      ScriptElt code2elt result
+
+    case -1 => OP_1NEGATE
+    case 0 => OP_0
   }
 
   // LN SCRIPTS

@@ -4,6 +4,7 @@ import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}
 import com.lightning.wallet.ln.Tools.fromShortId
+import com.lightning.wallet.ln.Tools
 import fr.acinq.eclair.UInt64
 
 
@@ -12,7 +13,7 @@ trait RoutingMessage extends LightningMessage
 trait ChannelMessage extends LightningMessage
 
 case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage {
-  def explanation = s"Remote error, channelId: $channelId, " + new String(data.toArray)
+  Tools log s"Remote error, channelId: $channelId, " + new String(data.toArray, "UTF-8")
 }
 
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends LightningMessage
