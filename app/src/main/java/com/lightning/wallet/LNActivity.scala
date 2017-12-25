@@ -215,6 +215,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   def manageActive(chan: Channel) = {
     val pay: RoutingData => Unit = rd => {
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+      PaymentInfoWrap.serverCallAttempts(rd.pr.paymentHash) = 0
       app.ChannelManager.getOutPaymentObs(rd).foreach(onNext = {
         // Must account for a special fail when no routes are found
         case Some(outPayment) => chan process PlainAddHtlc(outPayment)
