@@ -63,7 +63,7 @@ object ConnectionManager {
 
     def intercept(message: LightningMessage) = message match {
       // Some messages need a special handling so we intercept them
-      case their: Init if dataLossProtect(their.localFeatures) =>
+      case their: Init if areSupported(their.localFeatures) =>
         events.onOperational(nodeId, their)
         savedInit = their
 
