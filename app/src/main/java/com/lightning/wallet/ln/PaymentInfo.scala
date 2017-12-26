@@ -113,6 +113,7 @@ object PaymentInfo {
     case (Attempt.Successful(_), nextPacket, ss) if nextPacket.isLast =>
       // We are the final HTLC recipient and it's sane, check if we have a request
       bag.getRoutingData(add.paymentHash) -> bag.getPaymentInfo(add.paymentHash) match {
+        // Payment request may not have an amount which means it's a donation and should not be checked for overflow
         case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat > _.amount * 2) => failHtlc(ss, IncorrectPaymentAmount, add)
         case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat < _.amount) => failHtlc(ss, IncorrectPaymentAmount, add)
         case _ \ Success(info) if info.incoming == 1 => CMDFulfillHtlc(add.id, info.preimage)
@@ -153,7 +154,6 @@ case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey], b
 
 trait PaymentInfoBag { me =>
   def upsertRoutingData(rd: RoutingData): Unit
-  def upsertPaymentInfo(info: PaymentInfo): Unit
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
   def getRoutingData(hash: BinaryData): Try[RoutingData]
   def updateStatus(status: Int, hash: BinaryData): Unit

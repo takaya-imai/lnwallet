@@ -62,7 +62,7 @@ object ChannelWrap extends ChannelListener {
   override def onProcess = {
     case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
       // Mutual tx has enough confirmations or hard timeout has passed out
-      db.change(ChannelTable.killSql, close.commitments.channelId.toString)
+      db.change(ChannelTable.killSql, close.commitments.channelId)
 
     case (_, norm: NormalData, _: CommitSig)
       // GUARD: this may be a storage token HTLC
@@ -80,8 +80,8 @@ object ChannelWrap extends ChannelListener {
 
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath PaymentInfoTable.table, null)
-  def getRoutingData(hash: BinaryData) = RichCursor apply db.select(RoutingDataTable.selectSql, hash.toString) headTry toRoutingData
-  def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(PaymentInfoTable.selectSql, hash.toString) headTry toPaymentInfo
+  def getRoutingData(hash: BinaryData) = RichCursor apply db.select(RoutingDataTable.selectSql, hash) headTry toRoutingData
+  def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(PaymentInfoTable.selectSql, hash) headTry toPaymentInfo
   def byQuery(query: String): Cursor = db.select(PaymentInfoTable.searchSql, s"$query*")
   def byRecent: Cursor = db select PaymentInfoTable.selectRecentSql
 
@@ -91,40 +91,34 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
     rc long PaymentInfoTable.stamp, rc string PaymentInfoTable.text)
 
   def upsertRoutingData(rd: RoutingData) = {
-    // Always use REPLACE instead of INSERT INTO for RoutingData and PaymentInfo
-    db.change(RoutingDataTable.newSql, rd.pr.paymentHash.toString, rd.toJson.toString)
-  }
-
-  def upsertPaymentInfo(info: PaymentInfo) = {
-    db.change(PaymentInfoTable.newVirtualSql, s"${info.text} ${info.hash.toString}", info.hash.toString)
-    db.change(PaymentInfoTable.newSql, info.hash.toString, info.incoming.toString, info.preimage.toString,
-      info.amount.amount.toString, info.status.toString, info.text, System.currentTimeMillis.toString)
+    // Always use REPLACE instead of INSERT INTO for RoutingData
+    db.change(RoutingDataTable.newSql, rd.pr.paymentHash, rd.toJson)
   }
 
   def updateStatus(status: Int, hash: BinaryData) = {
-    // Can become HIDDEN -> SUCCESS or WAITING -> FAILURE or SUCCESS
-    db.change(PaymentInfoTable.updStatusSql, status.toString, hash.toString)
+    // HIDDEN -> SUCCESS or WAITING -> FAILURE or SUCCESS
+    db.change(PaymentInfoTable.updStatusSql, status, hash)
   }
 
   def updatePreimg(upd: UpdateFulfillHtlc) = {
     // Incoming payment is in fact fulfilled once we get a preimage
-    // so we should save a preimage right away without waiting for peer's next commitment sig
-    db.change(PaymentInfoTable.updPreimageSql, upd.paymentPreimage.toString, upd.paymentHash.toString)
+    // so we should save a preimage without waiting for peer's next commitment sig
+    db.change(PaymentInfoTable.updPreimageSql, upd.paymentPreimage, upd.paymentHash)
   }
 
   def updateIncoming(add: UpdateAddHtlc) = {
-    // Incoming payment may provide a larger amount than what was initially requested so it be updated along with timestamp
-    db.change(PaymentInfoTable.updIncomingSql, add.amountMsat.toString, System.currentTimeMillis.toString, add.paymentHash.toString)
+    // Incoming payment may provide a larger amount than requested so update it along with timestamp
+    db.change(PaymentInfoTable.updIncomingSql, add.amountMsat, System.currentTimeMillis, add.paymentHash)
   }
 
   // Records a number of retry attempts for a given outgoing payment hash
   val serverCallAttempts = mutable.Map.empty[BinaryData, Int] withDefaultValue 0
 
   override def onError = {
-    case (_, exception: CMDException) =>
+    case (_, exc: CMDException) =>
       // Useless most of the time but needed for retry add failures
       // CMDException should still be used or channel will be closed
-      updateStatus(FAILURE, exception.cmd.rd.pr.paymentHash)
+      updateStatus(FAILURE, exc.cmd.rd.pr.paymentHash)
       uiNotify
 
     case chan \ error =>
@@ -144,14 +138,17 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
       me updatePreimg fulfill
 
     case (_, _: NormalData, cmd: CMDAddHtlc) =>
-      // Channel has accepted a possible payment retry
-      // must insert or update related routing data
+      // Channel has accepted what may be a payment retry
+      val text = cmd.rd.pr.description.right getOrElse ""
+      val hash = cmd.rd.pr.paymentHash
 
       db txWrap {
         me upsertRoutingData cmd.rd
-        me upsertPaymentInfo PaymentInfo(cmd.rd.pr.paymentHash, incoming = 0,
-          NOIMAGE, cmd.rd.pr.finalSum, WAITING, System.currentTimeMillis,
-          cmd.rd.pr.description.right getOrElse new String)
+        updateStatus(WAITING, hash)
+
+        db.change(PaymentInfoTable.newVirtualSql, s"$text ${hash.toString}", hash)
+        db.change(PaymentInfoTable.newSql, hash, 0, NOIMAGE, cmd.rd.pr.finalSum.amount,
+          WAITING, text, System.currentTimeMillis)
       }
 
       uiNotify

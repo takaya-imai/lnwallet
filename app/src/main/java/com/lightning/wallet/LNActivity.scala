@@ -328,18 +328,21 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
             val rateManager = new RateManager(hint, content)
 
             def makeRequest(sum: Option[MilliSatoshi], r: BinaryData) = {
+              // We have a private channel so including extra route is obligatory
               val extra = Vector apply Hop(chan.data.announce.nodeId, update)
-              val description = inputDescription.getText.toString.trim
+              val text = inputDescription.getText.toString.trim
+              val finalSum = sum getOrElse MilliSatoshi(0L)
+              val hash = Crypto sha256 r
 
-              // Zero request sum has a special meaning: such a payment request can be reused and is valid forever
-              val pr = PaymentRequest(chainHash, sum, Crypto sha256 r, nodePrivateKey, description, None, extra)
-              val payInfo = PaymentInfo(pr.paymentHash, incoming = 1, r, sum getOrElse MilliSatoshi(0L), HIDDEN,
-                System.currentTimeMillis, description)
+              // Zero request sum means a payment request can be reused
+              val pr = PaymentRequest(chainHash, sum, hash, nodePrivateKey, text, fallbackAddress = None, extra)
+              db.change(PaymentInfoTable.newSql, hash, 1, r, finalSum.amount, HIDDEN, text, System.currentTimeMillis)
+              db.change(PaymentInfoTable.newVirtualSql, s"$text ${hash.toString}", hash)
+              bag upsertRoutingData emptyRD(pr)
 
+              // Save and make qr
               app.TransData.value = pr
               me goTo classOf[RequestActivity]
-              bag upsertRoutingData emptyRD(pr)
-              bag upsertPaymentInfo payInfo
             }
 
             def recAttempt = rateManager.result match {

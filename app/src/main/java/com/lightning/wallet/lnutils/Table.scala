@@ -50,8 +50,8 @@ object PaymentInfoTable extends Table {
   val Tuple9(table, hash, incoming, preimage, amount, status, stamp, text, search) = names
 
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
-  def newSql = s"REPLACE INTO $table ($hash, $incoming, $preimage, $amount, $status, $text, $stamp) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $incoming, $preimage, $amount, $status, $text, $stamp) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT DISTINCT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
   def selectSql = s"SELECT * FROM $table WHERE $hash = ?"
 
@@ -99,8 +99,8 @@ extends SQLiteOpenHelper(context, "lndata1.db", null, version) { me =>
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)
   def onUpgrade(db: SQLiteDatabase, oldVer: Int, newVer: Int) = none
-  def change(sql: String, params: String*) = base.execSQL(sql, params.toArray)
-  def select(sql: String, params: String*) = base.rawQuery(sql, params.toArray)
+  def change(sql: String, params: Any*) = base.execSQL(sql, params.map(_.toString).toArray)
+  def select(sql: String, params: Any*) = base.rawQuery(sql, params.map(_.toString).toArray)
   def sqlPath(tbl: String) = Uri parse s"sqlite://com.lightning.wallet/table/$tbl"
 
   def txWrap(process: => Unit) = try {
