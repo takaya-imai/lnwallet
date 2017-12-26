@@ -191,12 +191,13 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
               val peerIsBad = reducedRoutingData.badNodes contains chan.data.announce.nodeId
               val recipientIsBad = reducedRoutingData.badNodes contains oldRoutingData.pr.nodeId
               val nothingExcluded = reducedRoutingData.badNodes.isEmpty && reducedRoutingData.badChannels.isEmpty
-              val nope = peerIsBad | recipientIsBad | nothingExcluded | serverCallAttempts(htlc.add.paymentHash) >= 8
+              val nope = peerIsBad | recipientIsBad | nothingExcluded | serverCallAttempts(htlc.add.paymentHash) > 8
 
-              if (!nope)
-                app.ChannelManager.getOutPaymentObs(reducedRoutingData)
-                  .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
-                  .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
+              // Reset it in case of manual retry later
+              if (nope) serverCallAttempts(htlc.add.paymentHash) = 0
+              else app.ChannelManager.getOutPaymentObs(reducedRoutingData)
+                .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
+                .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
           }
         }
       }

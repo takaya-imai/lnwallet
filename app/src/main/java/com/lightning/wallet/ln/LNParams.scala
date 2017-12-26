@@ -50,7 +50,7 @@ object LNParams { me =>
 
   // CLOUD
 
-  private val con = new Connector("213.133.99.89")
+  private val con = new Connector("10.0.2.2")
   def getCloud(tryData: TryCloudData) = tryData match {
     case Failure(_) => new PublicCloud(con, bag) { data = CloudDataSaver.empty }
     case Success(saved) if saved.url.isEmpty => new PublicCloud(con, bag) { data = saved }

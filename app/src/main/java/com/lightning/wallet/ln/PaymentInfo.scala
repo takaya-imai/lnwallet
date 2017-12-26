@@ -64,9 +64,9 @@ object PaymentInfo {
     CMDFailHtlc(add.id, reason)
   }
 
-  private def withoutNode(bad: PublicKey, rd: RoutingData) = {
-    val updatedPaymentRoutes = without(rd.routes, _.nodeId == bad)
-    rd.copy(routes = updatedPaymentRoutes, badNodes = rd.badNodes + bad)
+  private def withoutNode(bad: PublicKeyVec, rd: RoutingData) = {
+    val updatedPaymentRoutes = without(rd.routes, bad contains _.nodeId)
+    rd.copy(routes = updatedPaymentRoutes, badNodes = rd.badNodes ++ bad)
   }
 
   def cutRoutes(fail: UpdateFailHtlc)(rd: RoutingData) =
@@ -75,12 +75,11 @@ object PaymentInfo {
       // excluded nodes and channels will be needed for further calls
 
       case ErrorPacket(nodeKey, UnknownNextPeer) =>
-        val _ \ nodeIds = rd.onion.sharedSecrets.unzip
-
-        nodeIds drop 1 zip nodeIds collectFirst {
-          case nextId \ prevId if prevId == nodeKey =>
+        val _ \ nodePublicKeys = rd.onion.sharedSecrets.unzip
+        nodePublicKeys drop 1 zip nodePublicKeys collectFirst {
+          case failedId \ previousId if previousId == nodeKey =>
             // Remove all the routes containing next node
-            withoutNode(nextId, rd)
+            withoutNode(Vector(failedId), rd)
         } getOrElse rd
 
       case ErrorPacket(_, message: Update) =>
@@ -88,12 +87,14 @@ object PaymentInfo {
         val updatedPaymentRoutes = without(rd.routes, _.lastUpdate.shortChannelId == message.update.shortChannelId)
         rd.copy(routes = updatedPaymentRoutes, badChannels = rd.badChannels + message.update.shortChannelId)
 
-      case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(nodeKey, rd)
-      case ErrorPacket(nodeKey, _: Node) => withoutNode(nodeKey, rd)
+      case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(Vector(nodeKey), rd)
+      case ErrorPacket(nodeKey, _: Node) => withoutNode(Vector(nodeKey), rd)
+      case _ => rd
 
-      // Nothing to cut
-      // try the next route
-    } getOrElse rd
+    } getOrElse {
+      val _ \ nodeIds = rd.onion.sharedSecrets.unzip
+      withoutNode(nodeIds drop 1 dropRight 2, rd)
+    }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
   def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Long) = Try {
