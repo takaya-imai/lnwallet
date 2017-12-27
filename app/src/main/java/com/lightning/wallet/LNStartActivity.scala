@@ -2,6 +2,7 @@ package com.lightning.wallet
 
 import spray.json._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.Utils._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Channel._
@@ -9,12 +10,10 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-
 import android.widget.{BaseAdapter, Button, ListView, TextView}
 import com.lightning.wallet.lnutils.{CloudAct, PaymentInfoWrap}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{AES, ThrottledWork}
-import com.lightning.wallet.Utils.{app, denom}
 import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import android.view.{Menu, View, ViewGroup}
 import scala.util.{Failure, Success}
@@ -52,12 +51,17 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   def react(query: String) = worker addWork query
   def notifySubTitle(subtitle: String, infoType: Int) = none
 
-  // Adapter for btc tx list
+  // Adapter for nodes tx list
   class NodesAdapter extends BaseAdapter {
     def getView(nodePosition: Int, cv: View, parent: ViewGroup) = {
       val view = getLayoutInflater.inflate(R.layout.frag_single_line, null)
       val textLine = view.findViewById(R.id.textLine).asInstanceOf[TextView]
-      textLine setText mkNodeView(nodes apply nodePosition)
+
+      val (announce, connections) = adapter getItem nodePosition
+      val humanConnects = app.plurOrZero(chansNumber, connections)
+      textLine setText nodeView.format(announce.alias, humanConnects,
+        humanNode(announce.nodeId, "\u00A0"), new String).html
+
       view
     }
 
@@ -89,7 +93,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   }
 
   private def onPeerSelected(pos: Int) = hideKeys {
-    val annChanNum @ (announce, _) = adapter getItem pos
+    val (announce, connections) = adapter getItem pos
     // This channel does not receive events just yet so we need to add some custom listeners
     val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, InitData apply announce)
 
@@ -144,25 +148,22 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       getSupportActionBar.show
     }
 
+    val humanConnects = app.plurOrZero(chansNumber, connections)
+    val detailsText = nodeView.format(announce.alias, humanConnects,
+      "<br>" + humanNode(announce.nodeId, "\n"), new String).html
+
+    ConnectionManager requestConnection announce
     ConnectionManager.listeners += socketOpenListener
     // We need PaymentInfoWrap here to process inner channel errors
     freshChan.listeners ++= Set(chanOpenListener, PaymentInfoWrap)
     lnCancel setOnClickListener onButtonTap(cancelChannel)
-    lnStartDetailsText setText mkNodeView(annChanNum)
     whenBackPressed = anyToRunnable(cancelChannel)
-    ConnectionManager requestConnection announce
+    lnStartDetailsText setText detailsText
     setVis(View.GONE, View.VISIBLE)
     getSupportActionBar.hide
   }
 
   // UI utilities
-
-  private def mkNodeView(info: AnnounceChansNum) = {
-    val (announce: NodeAnnouncement, connections) = info
-    val humanConnections = app.plurOrZero(chansNumber, connections)
-    val humanId = announce.nodeId.toString grouped 3 mkString "\u0020"
-    nodeView.format(announce.alias, humanConnections, humanId).html
-  }
 
   def askForFunding(chan: Channel, their: Init) = {
     val minUserCapacity = MilliSatoshi(LNParams.broadcaster.ratePerKwSat * sat2msatFactor)

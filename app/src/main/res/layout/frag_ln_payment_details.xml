@@ -4,9 +4,8 @@
 
     <Button
         style="@style/TransButton"
-        android:textColor="#999999"
         android:id="@+id/paymentHash"
-        android:textSize="14sp"/>
+        android:text="@string/ln_copy_hash"/>
 
     <Button
         style="@style/TransButton"

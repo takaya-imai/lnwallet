@@ -114,7 +114,6 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
       val transactCircle = view.findViewById(R.id.transactCircle).asInstanceOf[ImageView]
       val transactWhen = view.findViewById(R.id.transactWhen).asInstanceOf[TextView]
       val transactSum = view.findViewById(R.id.transactSum).asInstanceOf[TextView]
-      transactSum setTypeface Typeface.MONOSPACE
       def fillView(data: T): Unit
       view setTag this
     }

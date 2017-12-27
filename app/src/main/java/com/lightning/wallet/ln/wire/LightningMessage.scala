@@ -83,8 +83,6 @@ case class ChannelUpdate(signature: BinaryData, chainHash: BinaryData, shortChan
                          flags: BinaryData, cltvExpiryDelta: Int, htlcMinimumMsat: Long, feeBaseMsat: Long,
                          feeProportionalMillionths: Long) extends RoutingMessage {
 
-  // When returning paths to user we order them by cumulative score
-  lazy val score = cltvExpiryDelta * 10 + feeBaseMsat + feeProportionalMillionths
   def toHop(nodeId: PublicKey) = Hop(nodeId, shortChannelId, cltvExpiryDelta,
     htlcMinimumMsat, feeBaseMsat, feeProportionalMillionths)
 }

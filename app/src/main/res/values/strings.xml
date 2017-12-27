@@ -180,6 +180,7 @@
     <string name="ln_htlc_notification">to resolve pending payments</string>
     <string name="ln_no_description">No description provided</string>
     <string name="ln_copy_proof">Copy Proof of Payment</string>
+    <string name="ln_copy_hash">Copy Payment Hash</string>
 
     <!-- see PaymentInfo.scala -->
     <array name="ln_payment_states">
@@ -203,14 +204,14 @@
     <string name="ln_ops_btc">Back to Bitcoin</string>
 
     <string name="ln_ops_chan_none"><a href='http://lightning-wallet.com/using-lightning-wallet.html#using-lightning-wallet'>Lightning Network</a> enables fast and secure off-chain Bitcoin transactions with a near zero fees\n\nUsing it requires you to open a <a href='http://lightning-wallet.com/using-lightning-wallet.html#payment-channel'>Payment Channel</a> with a peer of your choice and then fund it with Bitcoin transaction</string>
-    <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Channel capacity is %1$s<br><br>You will be able to send Lightning payments after a funding transaction reaches %2$s<br><br><a href=https://www.blocktrail.com/tBTC/tx/%3$s>Funding transaction status</a><br>%4$s]]></string>
-    <string name="ln_ops_chan_negotiations"><![CDATA[Closing a Payment Channel&#8230;<br>Waiting for peer\'s confirmation<br><br>Your current channel balance will be refunded to you via a Bitcoin transaction once both of you are ready to mutually close a channel]]></string>
+    <string name="ln_ops_chan_opening"><![CDATA[Opening a Payment Channel&#8230;<br>Channel capacity is %1$s<br><br>You will be able to send Lightning payments after a funding transaction reaches %2$s<br><br><a href=https://www.blocktrail.com/tBTC/tx/%3$s>Funding status</a><br>%4$s]]></string>
+    <string name="ln_ops_chan_negotiations"><![CDATA[Closing a Payment Channel&#8230;<br>Waiting for peer\'s confirmation<br><br>Remaining channel balance will be refunded to your Bitcoin wallet]]></string>
     <string name="ln_ops_chan_unilateral_closing"><![CDATA[<a href=http://lightning-wallet.com/using-lightning-wallet.html#forced-channel-closing>Forced channel closing</a><br>%1$s<br><br>%2$s]]></string>
     <string name="ln_ops_chan_bilateral_closing"><![CDATA[Closing a Payment Channel&#8230;<br>Remaining channel balance has been refunded to your Bitcoin wallet<br><br>%1$s]]></string>
 
     <string name="ln_ops_chan_amount_status">%1$s - %2$s fee</string>
     <string name="ln_ops_chan_refund_status"><![CDATA[<br><br><font color=#999999>Your pending refunds</font><br>]]></string>
-    <string name="ln_ops_chan_commit_status"><![CDATA[<a href=https://www.blocktrail.com/tBTC/tx/%1$s>Closing transaction status</a><br>%2$s<br>%3$s fee]]></string>
+    <string name="ln_ops_chan_commit_status"><![CDATA[<a href=https://www.blocktrail.com/tBTC/tx/%1$s>Closing status</a><br>%2$s<br>%3$s fee]]></string>
 
     <string name="ln_ops_chan_unilateral_status_dead"><![CDATA[%1$s<br>= %2$s cancelled]]></string>
     <string name="ln_ops_chan_unilateral_status_done"><![CDATA[%1$s<br>= %2$s received]]></string>
@@ -224,7 +225,7 @@
 
     <!-- opening a new channel -->
     <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=http://lightning-wallet.com/using-lightning-wallet.html#using-lightning-wallet>Read about Lightning Network</a></small><br><br>Fund a Payment Channel]]></string>
-    <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
+    <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>%4$s]]></string>
     <string name="ln_ops_start_abort">Channel opening has been cancelled</string>
     <string name="ln_ops_start">Open new Channel</string>
 

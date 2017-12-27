@@ -93,7 +93,7 @@ object PaymentInfo {
 
     } getOrElse {
       val _ \ nodeIds = rd.onion.sharedSecrets.unzip
-      withoutNode(nodeIds drop 1 dropRight 2, rd)
+      withoutNode(nodeIds drop 1 dropRight 3, rd)
     }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them

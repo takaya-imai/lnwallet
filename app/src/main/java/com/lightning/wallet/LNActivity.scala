@@ -174,7 +174,6 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       paymentsViewProvider reload new String
       app.kit.wallet addCoinsSentEventListener txTracker
       app.kit.wallet addCoinsReceivedEventListener txTracker
-      app.kit.peerGroup addBlocksDownloadedEventListener catchListener
     } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
@@ -231,10 +230,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
       for (rd <- bag getRoutingData hash) {
         val description = me getDescription rd.pr
-        val humanHash = hash.toString.grouped(32).map(_ grouped 8 mkString "\u00A0")
         val humanStatus = s"<strong>${paymentStatesMap apply info.actualStatus}</strong>"
         paymentHash setOnClickListener onButtonTap(app setBuffer hash.toString)
-        paymentHash setText humanHash.mkString("\n")
 
         if (info.actualStatus == SUCCESS) {
           paymentProof setVisibility View.VISIBLE
@@ -254,8 +251,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           val humanSent = humanFiat(coloredOut(amount), amount)
           val mayRetry = info.actualStatus == FAILURE && rd.pr.isFresh
           val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
-          val title = getString(ln_outgoing_title).format(coloredOut(feeAmount), humanStatus)
-          // Users may issue a manual payment retry in case if it has failed and request is still fresh
+          val title = getString(ln_outgoing_title).format(humanFiat(coloredOut(feeAmount), feeAmount), humanStatus)
+          // Users may issue a manual payment retry in case when it has failed but payment request is still fresh
           val bld = if (mayRetry) mkChoiceDialog(none, pay(rd), dialog_ok, dialog_retry) else negBld(dialog_ok)
           paymentDetails setText s"$description<br><br>$humanSent".html
           mkForm(bld, title.html, detailsWrapper)
@@ -298,10 +295,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     closePaymentChannel = anyToRunnable {
-      val humanId = chan.data.announce.nodeId.toString grouped 3 mkString "\u0020"
-      val humanAddress = chan.data.announce.addresses.headOption.map(_.getHostString).orNull
-      val nodeDetails = getString(ln_ops_start_node_view).format(chan.data.announce.alias, humanAddress, humanId)
-      val title = s"$nodeDetails<br><br>${me getString ln_close}"
+      val humanIp = chan.data.announce.addresses.headOption.map(_.getHostString).orNull
+      val title = getString(ln_ops_start_node_view).format(chan.data.announce.alias, humanIp,
+        "<br>" + humanNode(chan.data.announce.nodeId) + "<br><br>", me getString ln_close)
 
       passWrap(title.html) apply checkPassNotify { pass =>
         // Close all of the chans in case we have more than one active left

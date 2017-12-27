@@ -13,11 +13,12 @@ import org.bitcoinj.wallet.listeners._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
+
 import com.lightning.wallet.lnutils.{CloudDataSaver, RatesSaver}
 import android.content.{Context, DialogInterface, Intent}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{SendRequest, Wallet}
-import R.id.{typeCNY, typeJPY, typeEUR, typeUSD}
+import R.id.{typeCNY, typeEUR, typeJPY, typeUSD}
 import fr.acinq.bitcoin.{Crypto, MilliSatoshi}
 import scala.util.{Failure, Success, Try}
 import android.app.{AlertDialog, Dialog}
@@ -34,6 +35,7 @@ import android.view.inputmethod.InputMethodManager
 import com.lightning.wallet.ln.LNParams.minDepth
 import android.support.v7.app.AppCompatActivity
 import org.bitcoinj.crypto.KeyCrypterException
+import fr.acinq.bitcoin.Crypto.PublicKey
 import android.support.v7.widget.Toolbar
 import android.view.View.OnClickListener
 import org.bitcoinj.store.SPVBlockStore
@@ -79,6 +81,9 @@ object Utils {
   }
 
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
+  def humanNode(nodeId: PublicKey, separator: String = "\n") = nodeId.toString
+    .grouped(24).map(_ grouped 3 mkString "\u00A0").mkString(separator)
+
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
   def msatInFiat(msat: MilliSatoshi) = currentRate.map(perBtc => msat.amount * perBtc / btc2msatFactor)
   def humanFiat(prefix: String, ms: MilliSatoshi, div: String = "<br>"): String = msatInFiat(ms) match {
