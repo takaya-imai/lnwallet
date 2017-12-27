@@ -4,6 +4,7 @@ import R.string._
 import spray.json._
 import org.bitcoinj.core._
 import com.lightning.wallet.ln._
+
 import scala.concurrent.duration._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.lnutils._
@@ -13,8 +14,10 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+
 import collection.JavaConverters.seqAsJavaListConverter
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import com.lightning.wallet.ln.Channel.CLOSING
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.net.discovery.DnsDiscovery
@@ -23,6 +26,7 @@ import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.google.protobuf.ByteString
+
 import scala.collection.mutable
 import android.app.Application
 import android.widget.Toast
@@ -32,6 +36,7 @@ import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import android.content.{ClipData, ClipboardManager, Context}
+import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import org.bitcoinj.wallet.{Protos, Wallet}
 import rx.lang.scala.{Observable => Obs}
 
@@ -181,12 +186,12 @@ class WalletApp extends Application { me =>
 
         def augmentAssisted(tag: RoutingInfoTag) = for {
           publicRoutes <- findRoutes(tag.route.head.nodeId)
-        } yield publicRoutes.flatMap(_ ++ tag.route)
+        } yield publicRoutes.map(_ ++ tag.route)
 
         val allAssisted = Obs.zip(Obs from rd.pr.routingInfo map augmentAssisted)
         findRoutes(rd.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           // We have got direct and assisted routes, now combine them into single vector and proceed
-          val rdWithRoutes = rd.copy(routes = direct ++ assisted)
+          val rdWithRoutes = rd.copy(routes = direct ++ assisted.flatten)
           completeRD(rdWithRoutes)
         }
       }

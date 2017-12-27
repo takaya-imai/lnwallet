@@ -31,10 +31,10 @@ object PaymentInfo {
     val start = (firstPayload, Vector.empty[PublicKey], pr.finalSum.amount, lastExpiry)
 
     (start /: hops.reverse) {
-      case (payloads, nodes, msat, expiry) \ Hop(nodeId, update) =>
-        val fee = update.feeBaseMsat + (update.feeProportionalMillionths * msat) / 1000000L
-        val nextPayloads = PerHopPayload(update.shortChannelId, msat, expiry) +: payloads
-        (nextPayloads, nodeId +: nodes, msat + fee, expiry + update.cltvExpiryDelta)
+      case (payloads, nodes, msat, expiry) \ hop =>
+        val fee = hop.feeBaseMsat + (hop.feeProportionalMillionths * msat) / 1000000L
+        val nextPayloads = PerHopPayload(hop.shortChannelId, msat, expiry) +: payloads
+        (nextPayloads, hop.nodeId +: nodes, msat + fee, expiry + hop.cltvExpiryDelta)
     }
   }
 
@@ -83,8 +83,8 @@ object PaymentInfo {
         } getOrElse rd
 
       case ErrorPacket(_, message: Update) =>
-        // There may be other operational channels so try them out, also remember this channel as failed
-        val updatedPaymentRoutes = without(rd.routes, _.lastUpdate.shortChannelId == message.update.shortChannelId)
+        // There may be other operational chans so try them out, also remember this chan as failed
+        val updatedPaymentRoutes = without(rd.routes, _.shortChannelId == message.update.shortChannelId)
         rd.copy(routes = updatedPaymentRoutes, badChannels = rd.badChannels + message.update.shortChannelId)
 
       case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(Vector(nodeKey), rd)

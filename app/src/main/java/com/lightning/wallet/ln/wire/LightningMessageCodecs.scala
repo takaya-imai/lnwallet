@@ -316,10 +316,13 @@ object LightningMessageCodecs { me =>
       (uint32 withContext "feeBaseMsat") ::
       (uint32 withContext "feeProportionalMillionths")
 
-  private val channelUpdate = (signature withContext "signature") :: channelUpdateWitness
-  private val nodeAnnouncement = (signature withContext "signature") :: nodeAnnouncementWitness
-  val nodeAnnouncementCodec: Codec[NodeAnnouncement] = nodeAnnouncement.as[NodeAnnouncement]
-  val channelUpdateCodec: Codec[ChannelUpdate] = channelUpdate.as[ChannelUpdate]
+  private val hop =
+    (publicKey withContext "nodeId") ::
+      (int64 withContext "shortChannelId") ::
+      (uint16 withContext "cltvExpiryDelta") ::
+      (uint64 withContext "htlcMinimumMsat") ::
+      (uint32 withContext "feeBaseMsat") ::
+      (uint32 withContext "feeProportionalMillionths")
 
   private val perHopPayload =
     (constant(ByteVector fromByte 0) withContext "realm") ::
@@ -328,10 +331,10 @@ object LightningMessageCodecs { me =>
       (uint32 withContext "outgoingCltv") ::
       (ignore(8 * 12) withContext "unusedWithV0VersionOnHeader")
 
-  private val hop =
-    (publicKey withContext "nodeId") ::
-      (channelUpdateCodec withContext "lastUpdate")
-
+  private val channelUpdate = (signature withContext "signature") :: channelUpdateWitness
+  private val nodeAnnouncement = (signature withContext "signature") :: nodeAnnouncementWitness
+  val nodeAnnouncementCodec: Codec[NodeAnnouncement] = nodeAnnouncement.as[NodeAnnouncement]
+  val channelUpdateCodec: Codec[ChannelUpdate] = channelUpdate.as[ChannelUpdate]
   val perHopPayloadCodec: Codec[PerHopPayload] = perHopPayload.as[PerHopPayload]
   val hopCodec: Codec[Hop] = hop.as[Hop]
 
