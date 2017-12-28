@@ -116,8 +116,8 @@ object PaymentInfo {
       // We are the final HTLC recipient and it's sane, check if we have a request
       bag.getRoutingData(add.paymentHash) -> bag.getPaymentInfo(add.paymentHash) match {
         // Payment request may not have a zero final sum which means it's a donation and should not be checked for overflow
-        case Success(rd) \ _ if rd.pr.finalMsat > 0L && rd.pr.finalMsat * 2 < add.amountMsat => failHtlc(ss, IncorrectPaymentAmount, add)
-        case Success(rd) \ _ if rd.pr.finalMsat > 0L && rd.pr.finalMsat > add.amountMsat => failHtlc(ss, IncorrectPaymentAmount, add)
+        case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat > _.amount * 2) => failHtlc(ss, IncorrectPaymentAmount, add)
+        case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat < _.amount) => failHtlc(ss, IncorrectPaymentAmount, add)
         case _ \ Success(info) if info.incoming == 1 => CMDFulfillHtlc(add.id, info.preimage)
         case _ => failHtlc(ss, UnknownPaymentHash, add)
       }

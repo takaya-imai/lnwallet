@@ -342,7 +342,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
               db txWrap {
                 // Zero request sum means a payment request can be reused
-                val pr = PaymentRequest(chainHash, sum, hash, nodePrivateKey, text, fallbackAddress = None, extra)
+                val pr = PaymentRequest.our(chainHash, sum, hash, nodePrivateKey, text, fallbackAddress = None, extra)
                 db.change(PaymentInfoTable.newSql, hash, 1, r, pr.finalMsat, HIDDEN, text, System.currentTimeMillis)
                 db.change(PaymentInfoTable.newVirtualSql, s"$text ${hash.toString}", hash)
                 bag upsertRoutingData emptyRD(pr)

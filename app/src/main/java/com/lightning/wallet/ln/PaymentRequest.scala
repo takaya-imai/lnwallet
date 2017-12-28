@@ -125,14 +125,14 @@ object PaymentRequest {
   type Int5Seq = Seq[Int5]
 
   // Used when reading a payment request provided by someone else
-  def apply(prefix: String, amount: Option[MilliSatoshi], stamp: Long,
+  def their(prefix: String, amount: Option[MilliSatoshi], stamp: Long,
             pub: PublicKey, tags: Vector[Tag], sig: BinaryData): PaymentRequest =
 
     PaymentRequest(prefix, amount, amount.map(_.amount) getOrElse 0L,
       timestamp = stamp, nodeId = pub, tags, signature = sig)
 
   // Used when creating our payment request
-  def apply(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData, privateKey: PrivateKey,
+  def our(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData, privateKey: PrivateKey,
             description: String, fallbackAddress: Option[String], extra: PaymentRoute): PaymentRequest = {
 
     val expirySeconds = if (amount.isDefined) 3600 * 6 else 3600 * 24 * 365 * 5
@@ -307,7 +307,7 @@ object PaymentRequest {
 
     val prefix = hrp take 4
     val amountOpt = Amount decode hrp.drop(4)
-    val pr = PaymentRequest(prefix, amountOpt, Timestamp decode data0, pub, tags.toVector, signature)
+    val pr = their(prefix, amountOpt, Timestamp decode data0, pub, tags.toVector, signature)
     require(Crypto.verifySignature(messageHash, r -> s, pub), "Invalid payment request signature")
     pr
   }
