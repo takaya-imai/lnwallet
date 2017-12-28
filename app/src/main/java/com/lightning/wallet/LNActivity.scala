@@ -85,6 +85,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   lazy val viewParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
   lazy val container = findViewById(R.id.container).asInstanceOf[RelativeLayout]
 
+  lazy val blocksLeft = getResources getStringArray R.array.ln_status_left_blocks
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
   lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
   lazy val paymentsViewProvider = new PaymentsViewProvider
@@ -188,7 +189,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     true
   }
 
-  override def onResume: Unit = wrap(super.onResume) {
+  override def onResume = wrap(super.onResume) {
     app.prefs.edit.putBoolean(AbstractKit.LANDING_LN, true).commit
     val chanOpt = app.ChannelManager.all.find(_.isOperational)
     chanOpt map manageActive getOrElse evacuate
@@ -211,6 +212,12 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     case techDetails => onFail(techDetails)
   }
 
+  def expiryText(expiry: Long) = {
+    val left = expiry - broadcaster.currentHeight
+    val leftHuman = app.plurOrZero(blocksLeft, left)
+    s"${me getString ln_expiry} $leftHuman"
+  }
+
   def manageActive(chan: Channel) = {
     val pay: RoutingData => Unit = rd => {
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
@@ -222,23 +229,24 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     list setOnItemClickListener onTap { pos =>
-      val info @ PaymentInfo(hash, incoming, preimg, amount, _, _, _) = adapter getItem pos
+      val info @ PaymentInfo(hash, incoming, r, amount, _, _, _) = adapter getItem pos
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
-      for (rd <- bag getRoutingData hash) {
+      bag getRoutingData hash foreach { rd =>
         val description = me getDescription rd.pr
         val humanStatus = s"<strong>${paymentStatesMap apply info.actualStatus}</strong>"
         paymentHash setOnClickListener onButtonTap(app setBuffer hash.toString)
 
         if (info.actualStatus == SUCCESS) {
+          paymentHash setVisibility View.GONE
           paymentProof setVisibility View.VISIBLE
           paymentProof setOnClickListener onButtonTap {
             // Both payer and payee may prove a payment has happened once it is settled
             // since signed payment request along with a preimage constitutes a proof of payment
-            app setBuffer getString(ln_proof).format(PaymentRequest write rd.pr, preimg.toString)
+            app setBuffer getString(ln_proof).format(PaymentRequest write rd.pr, hash.toString, r.toString)
           }
         }
 
@@ -249,13 +257,12 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           mkForm(me negBld dialog_ok, title.html, detailsWrapper)
         } else {
           val humanSent = humanFiat(coloredOut(amount), amount)
-          val mayRetry = info.actualStatus == FAILURE && rd.pr.isFresh
           val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
           val title = getString(ln_outgoing_title).format(humanFiat(coloredOut(feeAmount), feeAmount), humanStatus)
-          // Users may issue a manual payment retry in case when it has failed but payment request is still fresh
-          val bld = if (mayRetry) mkChoiceDialog(none, pay(rd), dialog_ok, dialog_retry) else negBld(dialog_ok)
+          val bld = if (info.actualStatus == FAILURE) mkChoiceDialog(none, pay(rd), dialog_ok, dialog_retry) else negBld(dialog_ok)
+          val title1 = if (info.actualStatus == WAITING) expiryText(rd.expiry) + "<br>" + title else title
           paymentDetails setText s"$description<br><br>$humanSent".html
-          mkForm(bld, title.html, detailsWrapper)
+          mkForm(bld, title1.html, detailsWrapper)
         }
       }
     }

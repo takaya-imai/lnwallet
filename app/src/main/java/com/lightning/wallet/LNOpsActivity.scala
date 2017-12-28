@@ -16,7 +16,7 @@ import java.util.Date
 class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   lazy val lnOpsAction = findViewById(R.id.lnOpsAction).asInstanceOf[Button]
   lazy val lnOpsDescription = me clickableTextField findViewById(R.id.lnOpsDescription)
-  lazy val blocksLeft = getResources getStringArray R.array.ln_ops_chan_unilateral_status_left_blocks
+  lazy val blocksLeft = getResources getStringArray R.array.ln_status_left_blocks
   lazy val txsConfs = getResources getStringArray R.array.txs_confs
 
   lazy val unilateralClosing = getString(ln_ops_chan_unilateral_closing)

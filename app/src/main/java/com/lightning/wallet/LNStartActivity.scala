@@ -96,6 +96,8 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     val (announce, connections) = adapter getItem pos
     // This channel does not receive events just yet so we need to add some custom listeners
     val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, InitData apply announce)
+    val detailsText = nodeView.format(announce.alias, app.plurOrZero(chansNumber, connections),
+      "<br>" + humanNode(announce.nodeId, "\n"), new String).html
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(message: LightningMessage) = freshChan process message
@@ -148,14 +150,12 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       getSupportActionBar.show
     }
 
-    val humanConnects = app.plurOrZero(chansNumber, connections)
-    val detailsText = nodeView.format(announce.alias, humanConnects,
-      "<br>" + humanNode(announce.nodeId, "\n"), new String).html
-
-    ConnectionManager requestConnection announce
-    ConnectionManager.listeners += socketOpenListener
     // We need PaymentInfoWrap here to process inner channel errors
     freshChan.listeners ++= Set(chanOpenListener, PaymentInfoWrap)
+    ConnectionManager.listeners += socketOpenListener
+    ConnectionManager requestConnection announce
+
+    // Update UI to display selected node details
     lnCancel setOnClickListener onButtonTap(cancelChannel)
     whenBackPressed = anyToRunnable(cancelChannel)
     lnStartDetailsText setText detailsText
