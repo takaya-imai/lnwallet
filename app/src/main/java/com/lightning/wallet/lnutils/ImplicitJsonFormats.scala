@@ -87,7 +87,7 @@ object ImplicitJsonFormats { me =>
   implicit val acceptChannelFmt = sCodecJsonFmt(acceptChannelCodec)
   implicit val updateAddHtlcFmt = sCodecJsonFmt(updateAddHtlcCodec)
   implicit val closingSignedFmt = sCodecJsonFmt(closingSignedCodec)
-  implicit val sundingLockedFmt = sCodecJsonFmt(fundingLockedCodec)
+  implicit val fundingLockedFmt = sCodecJsonFmt(fundingLockedCodec)
   implicit val channelUpdateFmt = sCodecJsonFmt(channelUpdateCodec)
   implicit val perHopPayloadFmt = sCodecJsonFmt(perHopPayloadCodec)
   implicit val commitSigFmt = sCodecJsonFmt(commitSigCodec)
@@ -115,8 +115,8 @@ object ImplicitJsonFormats { me =>
     def write(internal: Tag): JsValue = internal.toInt5s.toJson
   }
 
-  implicit val paymentRequestFmt = jsonFormat[String, Option[MilliSatoshi], Long, PublicKey, Vector[Tag], BinaryData,
-    PaymentRequest](PaymentRequest.apply, "prefix", "amount", "timestamp", "nodeId", "tags", "signature")
+  implicit val paymentRequestFmt = jsonFormat[String, Option[MilliSatoshi], Long, Long, PublicKey, Vector[Tag], BinaryData,
+    PaymentRequest](PaymentRequest.apply, "prefix", "amount", "finalMsat", "timestamp", "nodeId", "tags", "signature")
 
   // Rest
 

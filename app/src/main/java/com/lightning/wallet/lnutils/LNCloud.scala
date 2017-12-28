@@ -108,7 +108,6 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   // ADDING NEW TOKENS
 
   def eraseRequestData = me BECOME data.copy(info = None)
-  def sumIsAppropriate(req: PaymentRequest): Boolean = req.amount.exists(_.amount < 25000000L)
   // Send CMDStart only in case if call was successful as we may enter an infinite loop otherwise
   // We only start over if server can't actually find our tokens, otherwise just wait for next try
   def resolveSuccess(memo: BlindMemo) = getClearTokens(memo).doOnCompleted(me doProcess CMDStart)
@@ -127,7 +126,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
       val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
       connector.ask("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
-        "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(sumIsAppropriate).map(_ -> memo)
+        "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(_.finalMsat < 20000000L).map(_ -> memo)
     }
 
   def getClearTokens(memo: BlindMemo) = connector.ask("blindtokens/redeem",

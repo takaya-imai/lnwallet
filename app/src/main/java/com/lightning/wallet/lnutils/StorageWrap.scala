@@ -147,7 +147,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
         updateStatus(WAITING, hash)
 
         db.change(PaymentInfoTable.newVirtualSql, s"$text ${hash.toString}", hash)
-        db.change(PaymentInfoTable.newSql, hash, 0, NOIMAGE, cmd.rd.pr.finalSum.amount,
+        db.change(PaymentInfoTable.newSql, hash, 0, NOIMAGE, cmd.rd.pr.finalMsat,
           WAITING, text, System.currentTimeMillis)
       }
 
@@ -188,9 +188,9 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener { me =>
               val peerIsBad = reducedRoutingData.badNodes contains chan.data.announce.nodeId
               val recipientIsBad = reducedRoutingData.badNodes contains oldRoutingData.pr.nodeId
               val nothingExcluded = reducedRoutingData.badNodes.isEmpty && reducedRoutingData.badChannels.isEmpty
-              val nope = peerIsBad | recipientIsBad | nothingExcluded | serverCallAttempts(htlc.add.paymentHash) > 8
+              val nope = peerIsBad | recipientIsBad | nothingExcluded | serverCallAttempts(htlc.add.paymentHash) > 6
 
-              // Reset it in case of manual retry later
+              // Reset in case of manual retry later
               if (nope) serverCallAttempts(htlc.add.paymentHash) = 0
               else app.ChannelManager.getOutPaymentObs(reducedRoutingData)
                 .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)

@@ -26,9 +26,9 @@ object PaymentInfo {
   final val SUCCESS = 2
   final val FAILURE = 3
 
-  private def build(hops: PaymentRoute, pr: PaymentRequest, lastExpiry: Long) = {
-    val firstPayload = Vector apply PerHopPayload(0L, pr.finalSum.amount, lastExpiry)
-    val start = (firstPayload, Vector.empty[PublicKey], pr.finalSum.amount, lastExpiry)
+  def build(hops: PaymentRoute, pr: PaymentRequest, lastExpiry: Long) = {
+    val firstPayload = Vector apply PerHopPayload(0L, pr.finalMsat, lastExpiry)
+    val start = (firstPayload, Vector.empty[PublicKey], pr.finalMsat, lastExpiry)
 
     (start /: hops.reverse) {
       case (payloads, nodes, msat, expiry) \ hop =>
@@ -46,8 +46,10 @@ object PaymentInfo {
   def completeRD(rd: RoutingData): Option[RoutingData] = rd.routes.headOption map { firstRoute =>
     val lastChanExpiry = LNParams.broadcaster.currentHeight + rd.pr.minFinalCltvExpiry.getOrElse(9L)
     val Tuple4(payloads, nodeIds, firstAmount, firstExpiry) = build(firstRoute, rd.pr, lastChanExpiry)
-    // Reject route if fees are 1.5+ times larger than payment itself or if cltv delta is way too large
-    val nope = firstAmount.toDouble / rd.pr.finalSum.amount > 1.5 || firstExpiry - lastChanExpiry > 1440L
+
+    // Note: finalMsat can't be zero here since it's an outgoing payment
+    // Reject route if fees are 1.5+ times larger than amount or if cltv delta is way too large
+    val nope = firstAmount.toDouble / rd.pr.finalMsat > 1.5 || firstExpiry - lastChanExpiry > 1440L
     if (nope) rd.copy(routes = rd.routes.tail) else rd.copy(routes = rd.routes.tail, expiry = firstExpiry,
       onion = buildOnion(nodeIds :+ rd.pr.nodeId, payloads, rd.pr.paymentHash), amountWithFee = firstAmount)
   }
@@ -113,9 +115,9 @@ object PaymentInfo {
     case (Attempt.Successful(_), nextPacket, ss) if nextPacket.isLast =>
       // We are the final HTLC recipient and it's sane, check if we have a request
       bag.getRoutingData(add.paymentHash) -> bag.getPaymentInfo(add.paymentHash) match {
-        // Payment request may not have an amount which means it's a donation and should not be checked for overflow
-        case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat > _.amount * 2) => failHtlc(ss, IncorrectPaymentAmount, add)
-        case Success(rd) \ _ if rd.pr.amount.exists(add.amountMsat < _.amount) => failHtlc(ss, IncorrectPaymentAmount, add)
+        // Payment request may not have a zero final sum which means it's a donation and should not be checked for overflow
+        case Success(rd) \ _ if rd.pr.finalMsat > 0L && rd.pr.finalMsat * 2 < add.amountMsat => failHtlc(ss, IncorrectPaymentAmount, add)
+        case Success(rd) \ _ if rd.pr.finalMsat > 0L && rd.pr.finalMsat > add.amountMsat => failHtlc(ss, IncorrectPaymentAmount, add)
         case _ \ Success(info) if info.incoming == 1 => CMDFulfillHtlc(add.id, info.preimage)
         case _ => failHtlc(ss, UnknownPaymentHash, add)
       }
@@ -135,6 +137,7 @@ object PaymentInfo {
 }
 
 // Used on UI to quickly display payment details
+// Note: amount here should ALWAYS be taken from PaymentRequest.finalMsat
 case class PaymentInfo(hash: BinaryData, incoming: Int, preimage: BinaryData,
                        amount: MilliSatoshi, status: Int, stamp: Long, text: String) {
 

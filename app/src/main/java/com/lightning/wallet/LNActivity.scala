@@ -257,7 +257,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
           mkForm(me negBld dialog_ok, title.html, detailsWrapper)
         } else {
           val humanSent = humanFiat(coloredOut(amount), amount)
-          val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalSum.amount)
+          val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalMsat)
           val title = getString(ln_outgoing_title).format(humanFiat(coloredOut(feeAmount), feeAmount), humanStatus)
           val bld = if (info.actualStatus == FAILURE) mkChoiceDialog(none, pay(rd), dialog_ok, dialog_retry) else negBld(dialog_ok)
           val title1 = if (info.actualStatus == WAITING) expiryText(rd.expiry) + "<br>" + title else title
@@ -278,8 +278,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       // which also guarantees a user has some substantial amount to be refunded once a channel is exhausted
       val canSend0 = chan(c => c.localCommit.spec.toLocalMsat - c.remoteParams.channelReserveSatoshis * sat2msatFactor)
       val canSend1 = canSend0.map(_ - broadcaster.ratePerKwSat * sat2msatFactor / 2).filter(0L<) getOrElse 0L
-      val canSend2 = math.min(canSend1, maxHtlcValue.amount)
-      val maxMsat = MilliSatoshi(canSend2)
+      val maxMsat = MilliSatoshi apply math.min(canSend1, maxHtlcValue.amount)
 
       val title = getString(ln_send_title).format(me getDescription pr)
       val content = getLayoutInflater.inflate(R.layout.frag_input_fiat_converter, null, false)
@@ -293,7 +292,12 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         case Success(ms) if minHtlcValue > ms => app toast dialog_sum_small
         case Success(ms) if pr.amount.exists(_ * 2 < ms) => app toast dialog_sum_big
         case Success(ms) if pr.amount.exists(_ > ms) => app toast dialog_sum_small
-        case _ => rm(alert)(pay compose emptyRD apply pr)
+
+        case Success(ms) =>
+          // Outgoing payment needs to have an amount
+          // which may be higher than requested sum
+          val pr1 = pr.copy(finalMsat = ms.amount)
+          rm(alert)(pay compose emptyRD apply pr1)
       }
 
       val ok = alert getButton BUTTON_POSITIVE
@@ -334,13 +338,12 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
               // We have a private channel so must include extra route here
               val extra = Vector(update toHop chan.data.announce.nodeId)
               val text = inputDescription.getText.toString.trim
-              val finalSum = sum getOrElse MilliSatoshi(0L)
               val hash = Crypto sha256 r
 
               db txWrap {
                 // Zero request sum means a payment request can be reused
                 val pr = PaymentRequest(chainHash, sum, hash, nodePrivateKey, text, fallbackAddress = None, extra)
-                db.change(PaymentInfoTable.newSql, hash, 1, r, finalSum.amount, HIDDEN, text, System.currentTimeMillis)
+                db.change(PaymentInfoTable.newSql, hash, 1, r, pr.finalMsat, HIDDEN, text, System.currentTimeMillis)
                 db.change(PaymentInfoTable.newVirtualSql, s"$text ${hash.toString}", hash)
                 bag upsertRoutingData emptyRD(pr)
 

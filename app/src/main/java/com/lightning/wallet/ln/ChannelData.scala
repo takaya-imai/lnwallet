@@ -235,8 +235,8 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.rd.pr.finalSum.amount < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
-    else if (cmd.rd.pr.finalSum > maxHtlcValue) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
+    if (cmd.rd.pr.finalMsat < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
+    else if (cmd.rd.pr.finalMsat > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
     else if (cmd.rd.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
 
