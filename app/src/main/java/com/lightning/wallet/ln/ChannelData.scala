@@ -11,8 +11,8 @@ import com.lightning.wallet.ln.LNParams.broadcaster._
 import fr.acinq.bitcoin.{BinaryData, Transaction}
 import com.lightning.wallet.ln.crypto.{Generators, ShaChain, ShaHashesWithIndex}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
+import com.lightning.wallet.ln.CommitmentSpec.{HtlcAndFail, HtlcAndFulfill}
 import com.lightning.wallet.ln.wire.LightningMessageCodecs.LNMessageVector
-import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import fr.acinq.eclair.UInt64
 
 
@@ -33,9 +33,9 @@ case class CMDFailMalformedHtlc(id: Long, onionHash: BinaryData, code: Int) exte
 case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
-sealed trait CMDAddHtlc extends Command { val rd: RoutingData }
-case class SilentAddHtlc(rd: RoutingData) extends CMDAddHtlc
-case class PlainAddHtlc(rd: RoutingData) extends CMDAddHtlc
+sealed trait CMDAddHtlc extends Command { val rpi: RuntimePaymentInfo }
+case class SilentAddHtlc(rpi: RuntimePaymentInfo) extends CMDAddHtlc
+case class PlainAddHtlc(rpi: RuntimePaymentInfo) extends CMDAddHtlc
 
 // CHANNEL DATA
 
@@ -124,31 +124,30 @@ case class RevokedCommitPublished(claimMain: Seq[ClaimP2WPKHOutputTx], claimPena
 // COMMITMENTS
 
 case class Htlc(incoming: Boolean, add: UpdateAddHtlc)
-case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[Htlc], failed: Set[HtlcAndFail],
+case class CommitmentSpec(htlcs: Set[Htlc], fulfilled: Set[HtlcAndFulfill], failed: Set[HtlcAndFail],
                           feeratePerKw: Long, toLocalMsat: Long, toRemoteMsat: Long)
 
 object CommitmentSpec {
-  type HtlcAndFail = (Htlc, LightningMessage)
   def findHtlcById(cs: CommitmentSpec, id: Long, isIncoming: Boolean): Option[Htlc] =
     cs.htlcs.find(htlc => htlc.add.id == id && htlc.incoming == isIncoming)
 
+  type HtlcAndFulfill = (Htlc, UpdateFulfillHtlc)
   private def fulfill(cs: CommitmentSpec, in: Boolean, u: UpdateFulfillHtlc) =
-  // Suffices to remember an HTLC only for fulfilled payments
 
     findHtlcById(cs, u.id, in) match {
       case Some(htlc) if htlc.incoming =>
         cs.copy(toLocalMsat = cs.toLocalMsat + htlc.add.amountMsat,
-          fulfilled = cs.fulfilled + htlc, htlcs = cs.htlcs - htlc)
+          fulfilled = cs.fulfilled + Tuple2(htlc, u), htlcs = cs.htlcs - htlc)
 
       case Some(htlc) =>
         cs.copy(toRemoteMsat = cs.toRemoteMsat + htlc.add.amountMsat,
-          fulfilled = cs.fulfilled + htlc, htlcs = cs.htlcs - htlc)
+          fulfilled = cs.fulfilled + Tuple2(htlc, u), htlcs = cs.htlcs - htlc)
 
       case None => cs
     }
 
+  type HtlcAndFail = (Htlc, LightningMessage)
   private def fail(cs: CommitmentSpec, in: Boolean, u: HasHtlcId) =
-  // Should rememeber HTLC and failure reason to reduce routes
 
     findHtlcById(cs, u.id, in) match {
       case Some(htlc) if htlc.incoming =>
@@ -235,15 +234,15 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.rd.pr.finalMsat < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
-    else if (cmd.rd.pr.finalMsat > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
-    else if (cmd.rd.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
+    if (cmd.rpi.finalSum < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
+    else if (cmd.rpi.finalSum > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
+    else if (cmd.rpi.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
 
       // Let's compute the current commitment
       // *as seen by them* with this change taken into account
-      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rd.amountWithFee,
-        cmd.rd.pr.paymentHash, cmd.rd.expiry, cmd.rd.onion.packet.serialize)
+      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rpi.rd.firstSumWithFee,
+        cmd.rpi.pr.paymentHash, cmd.rpi.rd.firstExpiry, cmd.rpi.rd.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)

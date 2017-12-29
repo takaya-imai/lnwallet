@@ -80,13 +80,9 @@ case class UnknownTag(tag: Int5, int5s: Int5Seq) extends Tag {
   def toInt5s: Int5Seq = tag +: (writeSize(int5s.size) ++ int5s)
 }
 
-// Actual sum for outgoing payments may be higher than requested
-// request may not have a sum at all but we still need to save an actual sum we are going to pay
-// a special finalMsat parameter should be used because updating amount will render checksum invalid
-case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], finalMsat: Long, timestamp: Long,
+case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], timestamp: Long,
                           nodeId: PublicKey, tags: Vector[Tag], signature: BinaryData) {
 
-  require(amount.forall(finalMsat >= _.amount), "Actual amount should be equal or higher than requested")
   lazy val minFinalCltvExpiry = tags.collectFirst { case m: MinFinalCltvExpiryTag => m.expiryDelta }
   lazy val paymentHash = tags.collectFirst { case p: PaymentHashTag => p.hash }.get
   lazy val routingInfo = tags.collect { case r: RoutingInfoTag => r }
@@ -124,22 +120,15 @@ case class PaymentRequest(prefix: String, amount: Option[MilliSatoshi], finalMsa
 object PaymentRequest {
   type Int5Seq = Seq[Int5]
 
-  // Used when reading a payment request provided by someone else
-  def their(prefix: String, amount: Option[MilliSatoshi], stamp: Long,
-            pub: PublicKey, tags: Vector[Tag], sig: BinaryData): PaymentRequest =
+  def apply(chain: BinaryData, amount: Option[MilliSatoshi],
+            paymentHash: BinaryData, privateKey: PrivateKey, description: String,
+            fallbackAddress: Option[String], extra: PaymentRoute): PaymentRequest = {
 
-    PaymentRequest(prefix, amount, amount.map(_.amount) getOrElse 0L,
-      timestamp = stamp, nodeId = pub, tags, signature = sig)
-
-  // Used when creating our payment request
-  def our(chain: BinaryData, amount: Option[MilliSatoshi], paymentHash: BinaryData, privateKey: PrivateKey,
-            description: String, fallbackAddress: Option[String], extra: PaymentRoute): PaymentRequest = {
-
+    val paymentHashTag = PaymentHashTag(paymentHash)
     val expirySeconds = if (amount.isDefined) 3600 * 6 else 3600 * 24 * 365 * 5
-    val tags = DescriptionTag(description) :: ExpiryTag(expirySeconds) :: PaymentHashTag(paymentHash) :: Nil
-    PaymentRequest(getPrefix(chain), amount, amount.map(_.amount) getOrElse 0L, System.currentTimeMillis / 1000L,
-      privateKey.publicKey, if (extra.isEmpty) tags.toVector else RoutingInfoTag(extra) +: tags.toVector,
-      signature = BinaryData.empty) sign privateKey
+    val tags = Vector(DescriptionTag(description), ExpiryTag(expirySeconds), paymentHashTag)
+    PaymentRequest(getPrefix(chain), amount, System.currentTimeMillis / 1000L, privateKey.publicKey,
+      if (extra.isEmpty) tags else RoutingInfoTag(extra) +: tags, BinaryData.empty) sign privateKey
   }
 
   def getPrefix(chain: BinaryData) = chain match {
@@ -307,7 +296,7 @@ object PaymentRequest {
 
     val prefix = hrp take 4
     val amountOpt = Amount decode hrp.drop(4)
-    val pr = their(prefix, amountOpt, Timestamp decode data0, pub, tags.toVector, signature)
+    val pr = PaymentRequest(prefix, amountOpt, Timestamp decode data0, pub, tags.toVector, signature)
     require(Crypto.verifySignature(messageHash, r -> s, pub), "Invalid payment request signature")
     pr
   }

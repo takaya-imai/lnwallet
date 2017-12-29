@@ -98,8 +98,8 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       def fillView(info: PaymentInfo) = {
         val timestamp = new Date(info.stamp)
         val markedPaymentSum = info.incoming match {
-          case 1 => sumIn.format(denom formatted info.amount)
-          case _ => sumOut.format(denom formatted info.amount * -1)
+          case 1 => sumIn.format(denom formatted info.sum)
+          case _ => sumOut.format(denom formatted info.sum * -1)
         }
 
         transactWhen setText when(System.currentTimeMillis, timestamp).html
@@ -114,14 +114,14 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     // Should be removed when activity is stopped
 
     override def onError = {
-      case _ \ ReserveException(PlainAddHtlc(out), missingSat, reserveSat) =>
+      case _ \ ReserveException(PlainAddHtlc(rd), missingSat, reserveSat) =>
         // Current commit tx fee and channel reserve forbid sending of this payment
         // Inform user with all the details laid out as cleanly as possible
 
         val message = me getString err_ln_fee_overflow
         val reserve = coloredIn apply Satoshi(reserveSat)
         val missing = coloredOut apply Satoshi(missingSat)
-        val sending = coloredOut apply MilliSatoshi(out.amountWithFee)
+        val sending = coloredOut apply MilliSatoshi(rd.finalSum)
         onFail(error = message.format(reserve, sending, missing).html)
 
       case _ \ AddException(_: PlainAddHtlc, code) =>
@@ -229,41 +229,41 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     }
 
     list setOnItemClickListener onTap { pos =>
-      val info @ PaymentInfo(hash, incoming, r, amount, _, _, _) = adapter getItem pos
+      val info: PaymentInfo = adapter getItem pos
       val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]
 
-      bag getRoutingData hash foreach { rd =>
-        val description = me getDescription rd.pr
-        val humanStatus = s"<strong>${paymentStatesMap apply info.actualStatus}</strong>"
-        paymentHash setOnClickListener onButtonTap(app setBuffer hash.toString)
+      val description = me getDescription info.routingData.pr
+      val humanStatus = s"<strong>${paymentStatesMap apply info.actualStatus}</strong>"
+      paymentHash setOnClickListener onButtonTap(app setBuffer info.hash.toString)
 
-        if (info.actualStatus == SUCCESS) {
-          paymentHash setVisibility View.GONE
-          paymentProof setVisibility View.VISIBLE
-          paymentProof setOnClickListener onButtonTap {
-            // Both payer and payee may prove a payment has happened once it is settled
-            // since signed payment request along with a preimage constitutes a proof of payment
-            app setBuffer getString(ln_proof).format(PaymentRequest write rd.pr, hash.toString, r.toString)
-          }
-        }
+      if (info.actualStatus == SUCCESS) {
+        paymentHash setVisibility View.GONE
+        paymentProof setVisibility View.VISIBLE
 
-        if (incoming == 1) {
-          val humanReceived = humanFiat(coloredIn(amount), amount)
-          val title = getString(ln_incoming_title).format(humanStatus)
-          paymentDetails setText s"$description<br><br>$humanReceived".html
-          mkForm(me negBld dialog_ok, title.html, detailsWrapper)
-        } else {
-          val humanSent = humanFiat(coloredOut(amount), amount)
-          val feeAmount = MilliSatoshi(rd.amountWithFee - rd.pr.finalMsat)
-          val title = getString(ln_outgoing_title).format(humanFiat(coloredOut(feeAmount), feeAmount), humanStatus)
-          val bld = if (info.actualStatus == FAILURE) mkChoiceDialog(none, pay(rd), dialog_ok, dialog_retry) else negBld(dialog_ok)
-          val title1 = if (info.actualStatus == WAITING) expiryText(rd.expiry) + "<br>" + title else title
-          paymentDetails setText s"$description<br><br>$humanSent".html
-          mkForm(bld, title1.html, detailsWrapper)
+        paymentProof setOnClickListener onButtonTap {
+          val serialized = PaymentRequest write info.routingData.pr
+          app setBuffer getString(ln_proof).format(serialized,
+            info.hash.toString, info.preimage.toString)
         }
+      }
+
+      if (info.incoming == 1) {
+        val humanIn = humanFiat(coloredIn(info.sum), info.sum)
+        val title = getString(ln_incoming_title).format(humanStatus)
+        paymentDetails setText s"$description<br><br>$humanIn".html
+        mkForm(me negBld dialog_ok, title.html, detailsWrapper)
+      } else {
+        val humanOut = humanFiat(coloredOut(info.sum), info.sum)
+        val feeAmount = MilliSatoshi(info.routingData.finalSum - info.routingData.firstSum)
+        val title = getString(ln_outgoing_title).format(humanFiat(coloredOut(feeAmount), feeAmount), humanStatus)
+
+        val bld = if (info.actualStatus != SUCCESS) mkChoiceDialog(none, pay(info.routingData), dialog_ok, dialog_retry) else negBld(dialog_ok)
+        val title1 = if (info.actualStatus == WAITING) expiryText(info.routingData.expiry) + "<br>" + title else title
+        paymentDetails setText s"$description<br><br>$humanOut".html
+        mkForm(bld, title1.html, detailsWrapper)
       }
     }
 

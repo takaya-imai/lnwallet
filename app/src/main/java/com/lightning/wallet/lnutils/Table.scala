@@ -44,51 +44,44 @@ object ChannelTable extends Table {
     )"""
 }
 
-object PaymentInfoTable extends Table {
-  import com.lightning.wallet.ln.PaymentInfo.{HIDDEN, FAILURE, WAITING}
-  val names = ("payment", "hash", "incoming", "preimage", "amount", "status", "stamp", "text", "search")
-  val Tuple9(table, hash, incoming, preimage, amount, status, stamp, text, search) = names
+object PaymentTable extends Table {
+  import com.lightning.wallet.ln.PaymentInfo.{HIDDEN, WAITING, SUCCESS, FAILURE}
+  val names = ("payment", "hash", "preimage", "incoming", "sum", "status", "stamp", "text", "pr", "rd", "search")
+  val Tuple11(table, hash, preimage, incoming, sum, status, stamp, text, pr, rd, search) = names
 
+  // Inserting new records for data and fast search
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
-  def newSql = s"INSERT OR IGNORE INTO $table ($hash, $incoming, $preimage, $amount, $status, $text, $stamp) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  val insert9 = s"$hash, $preimage, $incoming, $sum, $status, $stamp, $text, $pr, $rd"
+  def newSql = s"INSERT OR IGNORE INTO $table ($insert9) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+
+  // Querying and searching
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT DISTINCT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24)"
   def selectRecentSql = s"SELECT * FROM $table WHERE $status <> $HIDDEN ORDER BY $id DESC LIMIT 24"
   def selectSql = s"SELECT * FROM $table WHERE $hash = ?"
 
+  // Updating various parts of data
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def updPreimageSql = s"UPDATE $table SET $preimage = ? WHERE $hash = ?"
-  def updIncomingSql = s"UPDATE $table SET $amount = ?, $stamp = ? WHERE $hash = ?"
+  def updRoutingSql = s"UPDATE $table SET $status = ?, $rd = ? WHERE $hash = ?"
   def updFailWaitingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
+  def updOkOutgoingSql = s"UPDATE $table SET $status = $SUCCESS, $preimage = ? WHERE $hash = ?"
+  def updOkIncomingSql = s"UPDATE $table SET $status = $SUCCESS, $sum = ?, $stamp = ? WHERE $hash = ?"
   def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 
   def createSql = s"""
     CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $hash STRING UNIQUE NOT NULL,
+      $preimage STRING UNIQUE NOT NULL,
       $incoming INTEGER NOT NULL,
-      $preimage STRING NOT NULL,
-      $amount INTEGER NOT NULL,
-      $status STRING NOT NULL,
+      $sum INTEGER NOT NULL,
+      $status INTEGER NOT NULL,
       $stamp INTEGER NOT NULL,
-      $text STRING NOT NULL
+      $text STRING NOT NULL,
+      $pr STRING NOT NULL,
+      $rd STRING NOT NULL
     );
     CREATE INDEX idx1 ON $table ($status);
     CREATE INDEX idx2 ON $table ($hash);
-    COMMIT"""
-}
-
-object RoutingDataTable extends Table {
-  val (table, hash, routing) = ("outgoing", "hash", "routing")
-  def newSql = s"REPLACE INTO $table ($hash, $routing) VALUES (?, ?)"
-  def selectSql = s"SELECT * FROM $table WHERE $hash = ?"
-
-  def createSql = s"""
-    CREATE TABLE $table(
-      $id INTEGER PRIMARY KEY AUTOINCREMENT,
-      $hash STRING UNIQUE NOT NULL,
-      $routing STRING NOT NULL
-    );
-    CREATE INDEX idx ON $table ($hash);
     COMMIT"""
 }
 
@@ -109,9 +102,8 @@ extends SQLiteOpenHelper(context, "lndata1.db", null, version) { me =>
   } finally base.endTransaction
 
   def onCreate(dbs: SQLiteDatabase) = {
-    dbs execSQL PaymentInfoTable.createVirtualSql
-    dbs execSQL PaymentInfoTable.createSql
-    dbs execSQL RoutingDataTable.createSql
+    dbs execSQL PaymentTable.createVirtualSql
+    dbs execSQL PaymentTable.createSql
     dbs execSQL StorageTable.createSql
     dbs execSQL ChannelTable.createSql
   }

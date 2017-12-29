@@ -234,7 +234,6 @@ class WalletApp extends Application { me =>
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager reconnect ChannelManager.notClosing
-      db change PaymentInfoTable.updFailWaitingSql
       RatesSaver.update
     }
   }
