@@ -74,9 +74,10 @@ class WalletApp extends Application { me =>
     fiatName = prefs.getString(AbstractKit.FIAT_TYPE, strDollar)
   }
 
-  def setBuffer(text: String) = wrap(me toast copied_to_clipboard) {
+  def setBuffer(text: String) = {
     // Set clipboard contents to given text and notify user via toast
     clipboardManager setPrimaryClip ClipData.newPlainText(appName, text)
+    me toast getString(copied_to_clipboard).format(text)
   }
 
   def encryptWallet(wallet: Wallet, pass: CharSequence) = {

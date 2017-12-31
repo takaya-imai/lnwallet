@@ -238,8 +238,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
         LNParams.bag getPaymentInfo cmd.rpi.pr.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
-          case Success(pay: PaymentInfo) if pay.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(pay: PaymentInfo) if pay.incoming == 1 => throw AddException(cmd, ERR_FAILED)
+          case Success(info: PaymentInfo) if info.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
+          case Success(info: PaymentInfo) if info.incoming == 1 => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
             val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)

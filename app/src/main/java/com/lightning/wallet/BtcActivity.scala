@@ -37,23 +37,23 @@ trait HumanTimeDisplay { me: TimerActivity =>
 
   // Should be accessed after activity is initialized
   lazy val timeString = DateFormat is24HourFormat me match {
-    case false if scrWidth < 2.2 & bigFont => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
-    case false if scrWidth < 2.2 => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
+    case false if scrWidth < 2.2 & bigFont => "MM/dd/yy' <small>'h:mma'</small>'"
+    case false if scrWidth < 2.2 => "MM/dd/yy' <small>'h:mma'</small>'"
 
-    case false if scrWidth < 2.5 & bigFont => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
-    case false if scrWidth < 2.5 => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
+    case false if scrWidth < 2.5 & bigFont => "MM/dd/yy' <small>'h:mma'</small>'"
+    case false if scrWidth < 2.5 => "MM/dd/yy' <small>'h:mma'</small>'"
 
-    case false if bigFont => "MMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
-    case false => "MMMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
+    case false if bigFont => "MMM dd, yyyy' <small>'h:mma'</small>'"
+    case false => "MMMM dd, yyyy' <small>'h:mma'</small>'"
 
-    case true if scrWidth < 2.2 & bigFont => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
-    case true if scrWidth < 2.2 => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
+    case true if scrWidth < 2.2 & bigFont => "d MMM yyyy' <small>'HH:mm'</small>'"
+    case true if scrWidth < 2.2 => "d MMM yyyy' <small>'HH:mm'</small>'"
 
-    case true if scrWidth < 2.4 & bigFont => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
-    case true if scrWidth < 2.5 => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
+    case true if scrWidth < 2.4 & bigFont => "d MMM yyyy' <small>'HH:mm'</small>'"
+    case true if scrWidth < 2.5 => "d MMM yyyy' <small>'HH:mm'</small>'"
 
-    case true if bigFont => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
-    case true => "d MMMM yyyy' <font color=#999999>'HH:mm'</font>'"
+    case true if bigFont => "d MMM yyyy' <small>'HH:mm'</small>'"
+    case true => "d MMMM yyyy' <small>'HH:mm'</small>'"
   }
 
   // Relative or absolute date
@@ -89,6 +89,7 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
     var cut: Int = minLinesNum
     var visibleItems = Vector.empty[T]
     var availableItems = Vector.empty[T]
+    val viewLine: Int
 
     val set: Vector[T] => Unit = items1 => {
       val visibility = if (items1.size > minLinesNum) View.VISIBLE else View.GONE
@@ -102,7 +103,7 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
     }
 
     def getView(position: Int, savedView: View, parent: ViewGroup) = {
-      val view = if (null == savedView) getLayoutInflater.inflate(R.layout.frag_transfer_line, null) else savedView
+      val view = if (null == savedView) getLayoutInflater.inflate(viewLine, null) else savedView
       val hold = if (null == view.getTag) getHolder(view) else view.getTag.asInstanceOf[TxViewHolder]
       hold fillView visibleItems(position)
       view
@@ -130,6 +131,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   lazy val walletEmpty = getString(wallet_empty)
 
   lazy val adapter = new CutAdapter[TxWrap] {
+    override val viewLine = R.layout.frag_tx_btc_line
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
 
@@ -193,7 +195,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       list setFooterDividersEnabled false
       list setOnItemClickListener onTap { pos =>
         val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
-        val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_transaction_details, null)
+        val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_tx_btc_details, null)
         val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
 
         val wrap = adapter getItem pos

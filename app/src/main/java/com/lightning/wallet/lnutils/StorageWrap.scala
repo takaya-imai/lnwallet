@@ -129,7 +129,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
 
           case None =>
             updateRouting(reducedPaymentInfo)
-            updateStatus(WAITING, reducedPaymentInfo.pr.paymentHash)
+            updateStatus(FAILURE, reducedPaymentInfo.pr.paymentHash)
             val canNotProceed = reducedPaymentInfo canNotProceed chan.data.announce.nodeId
             val nope = canNotProceed || serverCallAttempts(htlc.add.paymentHash) > 8
 

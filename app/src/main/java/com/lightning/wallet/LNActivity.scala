@@ -93,6 +93,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   val imgMap = Array(await, await, conf1, dead)
 
   lazy val adapter = new CutAdapter[PaymentInfo] {
+    override val viewLine = R.layout.frag_tx_ln_line
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
 
@@ -232,7 +233,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     list setOnItemClickListener onTap { pos =>
       val info: PaymentInfo = adapter getItem pos
       val description = me getDescription info.pr
-      val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_ln_payment_details, null)
+      val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_tx_ln_details, null)
       val paymentDetails = detailsWrapper.findViewById(R.id.paymentDetails).asInstanceOf[TextView]
       val paymentProof = detailsWrapper.findViewById(R.id.paymentProof).asInstanceOf[Button]
       val paymentHash = detailsWrapper.findViewById(R.id.paymentHash).asInstanceOf[Button]

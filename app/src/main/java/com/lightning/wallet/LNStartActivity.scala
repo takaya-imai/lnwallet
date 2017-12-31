@@ -60,7 +60,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       val (announce, connections) = adapter getItem nodePosition
       val humanConnects = app.plurOrZero(chansNumber, connections)
       textLine setText nodeView.format(announce.alias, humanConnects,
-        humanNode(announce.nodeId, "\u00A0"), new String).html
+        humanNode(announce.nodeId, "\u0020"), new String).html
 
       view
     }
@@ -97,7 +97,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     // This channel does not receive events just yet so we need to add some custom listeners
     val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, InitData apply announce)
     val detailsText = nodeView.format(announce.alias, app.plurOrZero(chansNumber, connections),
-      "<br>" + humanNode(announce.nodeId, "\n"), new String).html
+      "<br>" + humanNode(announce.nodeId, "<br>"), new String).html
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(message: LightningMessage) = freshChan process message
@@ -131,7 +131,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
           // Error while saving will halt any further progress here
           // User may press cancel at this point but it won't affect anything
           val state = RefundingData(wait.announce, wait.commitments, wait.fundingTx).toJson.toString
-          // Attempt to save a channel backup right away, in worst case it will be saved once channel becomes NORMAL if there are no tokens
+          // Save a channel backup right away, in worst case it will be saved once channel becomes NORMAL if there are no tokens
           LNParams.cloud doProcess CloudAct(AES.encode(state, LNParams.cloudSecret), Seq("key" -> LNParams.cloudId.toString), "data/put")
           // Make this a fully established channel by attaching operational listeners and adding it to list
           freshChan.listeners ++= app.ChannelManager.operationalListeners
