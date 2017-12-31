@@ -82,7 +82,7 @@ object Utils {
 
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   def humanNode(nodeId: PublicKey, separator: String = "\n") = nodeId.toString
-    .grouped(24).map(_ grouped 3 mkString "\u00A0").mkString(separator)
+    .grouped(24).map(_ grouped 3 mkString "\u0020").mkString(separator)
 
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
   def msatInFiat(msat: MilliSatoshi) = currentRate.map(perBtc => msat.amount * perBtc / btc2msatFactor)

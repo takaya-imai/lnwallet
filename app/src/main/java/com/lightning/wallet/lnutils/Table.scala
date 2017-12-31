@@ -52,7 +52,7 @@ object PaymentTable extends Table {
   // Inserting new records for data and fast search
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
   val insert9 = s"$hash, $preimage, $incoming, $msat, $status, $stamp, $text, $pr, $rd"
-  def newSql = s"INSERT INTO $table ($insert9) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  def newSql = s"INSERT OR IGNORE INTO $table ($insert9) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
   // Querying and searching
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT DISTINCT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24)"
@@ -87,7 +87,7 @@ object PaymentTable extends Table {
 
 trait Table { val (id, fts) = "_id" -> "fts4" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata2.db", null, version) { me =>
+extends SQLiteOpenHelper(context, "lndata3.db", null, version) { me =>
 
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)

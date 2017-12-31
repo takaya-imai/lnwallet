@@ -32,29 +32,28 @@ import java.util.Date
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
-  import R.layout.{frag_transfer_line_wide, frag_transfer_line_narrow}
   val time: Date => String = date => new SimpleDateFormat(timeString) format date
   lazy val bigFont = FontSystem.getFloat(getContentResolver, FontSystem.FONT_SCALE, 1) > 1
 
   // Should be accessed after activity is initialized
-  lazy val (txLineType, timeString) = DateFormat is24HourFormat me match {
-    case false if scrWidth < 2.2 & bigFont => (frag_transfer_line_wide, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
-    case false if scrWidth < 2.2 => (frag_transfer_line_narrow, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+  lazy val timeString = DateFormat is24HourFormat me match {
+    case false if scrWidth < 2.2 & bigFont => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
+    case false if scrWidth < 2.2 => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
 
-    case false if scrWidth < 2.5 & bigFont => (frag_transfer_line_wide, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
-    case false if scrWidth < 2.5 => (frag_transfer_line_narrow, "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if scrWidth < 2.5 & bigFont => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
+    case false if scrWidth < 2.5 => "MM/dd/yy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
 
-    case false if bigFont => (frag_transfer_line_narrow, "MMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
-    case false => (frag_transfer_line_narrow, "MMMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'")
+    case false if bigFont => "MMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
+    case false => "MMMM dd, yyyy' <font color=#999999>'h:mm'<small>'a'</small></font>'"
 
-    case true if scrWidth < 2.2 & bigFont => (frag_transfer_line_wide, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
-    case true if scrWidth < 2.2 => (frag_transfer_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if scrWidth < 2.2 & bigFont => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
+    case true if scrWidth < 2.2 => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
 
-    case true if scrWidth < 2.4 & bigFont => (frag_transfer_line_wide, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
-    case true if scrWidth < 2.5 => (frag_transfer_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if scrWidth < 2.4 & bigFont => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
+    case true if scrWidth < 2.5 => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
 
-    case true if bigFont => (frag_transfer_line_narrow, "d MMM yyyy' <font color=#999999>'HH:mm'</font>'")
-    case true => (frag_transfer_line_narrow, "d MMMM yyyy' <font color=#999999>'HH:mm'</font>'")
+    case true if bigFont => "d MMM yyyy' <font color=#999999>'HH:mm'</font>'"
+    case true => "d MMMM yyyy' <font color=#999999>'HH:mm'</font>'"
   }
 
   // Relative or absolute date
@@ -103,7 +102,7 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
     }
 
     def getView(position: Int, savedView: View, parent: ViewGroup) = {
-      val view = if (null == savedView) getLayoutInflater.inflate(txLineType, null) else savedView
+      val view = if (null == savedView) getLayoutInflater.inflate(R.layout.frag_transfer_line, null) else savedView
       val hold = if (null == view.getTag) getHolder(view) else view.getTag.asInstanceOf[TxViewHolder]
       hold fillView visibleItems(position)
       view
