@@ -4,8 +4,8 @@ import R.string._
 import spray.json._
 import org.bitcoinj.core._
 import com.lightning.wallet.ln._
-
 import scala.concurrent.duration._
+import com.softwaremill.quicklens._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Tools._
@@ -14,10 +14,8 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
-
 import collection.JavaConverters.seqAsJavaListConverter
 import java.util.concurrent.TimeUnit.MILLISECONDS
-
 import com.lightning.wallet.ln.Channel.CLOSING
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
 import org.bitcoinj.net.discovery.DnsDiscovery
@@ -26,7 +24,6 @@ import org.bitcoinj.crypto.KeyCrypterScrypt
 import com.google.common.net.InetAddresses
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.google.protobuf.ByteString
-
 import scala.collection.mutable
 import android.app.Application
 import android.widget.Toast
@@ -36,7 +33,6 @@ import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import android.content.{ClipData, ClipboardManager, Context}
-import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import org.bitcoinj.wallet.{Protos, Wallet}
 import rx.lang.scala.{Observable => Obs}
 
@@ -113,9 +109,9 @@ class WalletApp extends Application { me =>
   object ChannelManager {
     import ConnectionManager._
     type ChannelVec = Vector[Channel]
-    type RoutingDataOpt = Option[RoutingData]
+    type RPIOpt = Option[RuntimePaymentInfo]
 
-    val operationalListeners = mutable.Set(broadcaster, bag, ChannelWrap, StorageWrap, Notificator)
+    val operationalListeners = mutable.Set(broadcaster, bag, StorageWrap, Notificator)
     // Obtain a vector of stored channels which would receive CMDSpent, CMDBestHeight and nothing else
     var all: ChannelVec = for (data <- ChannelWrap.get) yield createChannel(operationalListeners, data)
     def fromNode(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
@@ -175,24 +171,23 @@ class WalletApp extends Application { me =>
     // if payment request contains extra routing info then we also ask for assisted routes
     // once direct route and assisted routes are fetched we combine them into single sequence
     // and then we make an onion out of the first available route while saving the rest
-    var getOutPaymentObs: RoutingData => Obs[RoutingDataOpt] = outPaymentObs
+    var getOutPaymentObs: RuntimePaymentInfo => Obs[RPIOpt] = outPaymentObs
 
-    def outPaymentObs(rd: RoutingData) =
+    def outPaymentObs(rpi: RuntimePaymentInfo) =
       Obs from all.find(_.isOperational) flatMap { chan =>
         def findRoutes(target: PublicKey) = chan.data.announce.nodeId match {
-          case directPeerNodeId if directPeerNodeId == target => Obs just Vector(Vector.empty)
-          case _ => cloud.connector.findRoutes(rd.badNodes, rd.badChannels, chan.data.announce.nodeId, target)
+          case peerNodeId if peerNodeId == target => Obs just Vector(Vector.empty)
+          case _ => cloud.connector.findRoutes(rpi.rd, chan.data.announce.nodeId, target)
         }
 
         def augmentAssisted(tag: RoutingInfoTag) = for {
           publicRoutes <- findRoutes(tag.route.head.nodeId)
         } yield publicRoutes.map(_ ++ tag.route)
 
-        val allAssisted = Obs.zip(Obs from rd.pr.routingInfo map augmentAssisted)
-        findRoutes(rd.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
+        val allAssisted = Obs.zip(Obs from rpi.pr.routingInfo map augmentAssisted)
+        findRoutes(rpi.pr.nodeId).zipWith(allAssisted orElse Vector.empty) { case direct \ assisted =>
           // We have got direct and assisted routes, now combine them into single vector and proceed
-          val rdWithRoutes = rd.copy(routes = direct ++ assisted.flatten)
-          completeRD(rdWithRoutes)
+          completeRPI(rpi.modify(_.rd.routes) setTo direct ++ assisted.flatten)
         }
       }
   }

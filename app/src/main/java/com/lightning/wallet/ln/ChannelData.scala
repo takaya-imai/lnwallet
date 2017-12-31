@@ -234,14 +234,14 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.rpi.finalSum < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
-    else if (cmd.rpi.finalSum > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
+    if (cmd.rpi.firstMsat < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
+    else if (cmd.rpi.firstMsat > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
     else if (cmd.rpi.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
     else {
 
       // Let's compute the current commitment
       // *as seen by them* with this change taken into account
-      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rpi.rd.firstSumWithFee,
+      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rpi.rd.firstMsatWithFee,
         cmd.rpi.pr.paymentHash, cmd.rpi.rd.firstExpiry, cmd.rpi.rd.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)

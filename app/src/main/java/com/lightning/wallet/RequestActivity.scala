@@ -89,10 +89,10 @@ class RequestActivity extends NfcBeamWriterActivity with TimerActivity with View
     setDetecting(true)
 
     app.TransData.value match {
-      case request @ PaymentRequest(prefix, Some(amount), _, timestamp, nodeId, tags, signature) =>
-        showInfo(drawAll(denom withSign amount, getString(ln_qr_disposable).html), PaymentRequest write request)
+      case pr: PaymentRequest =>
+        if (pr.amount.isEmpty) showInfo(drawBottom(getString(ln_qr_reusable).html), PaymentRequest write pr)
+        else showInfo(drawAll(denom withSign pr.amount.get, getString(ln_qr_disposable).html), PaymentRequest write pr)
 
-      case request: PaymentRequest => showInfo(drawBottom(getString(ln_qr_reusable).html), PaymentRequest write request)
       case pay: AddrData => showInfo(drawAll(denom withSign pay.cn, Utils humanAddr pay.address), pay.link)
       case address: Address => showInfo(drawBottom(Utils humanAddr address), address.toString)
       case _ => finish

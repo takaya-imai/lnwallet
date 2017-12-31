@@ -46,13 +46,13 @@ object ChannelTable extends Table {
 
 object PaymentTable extends Table {
   import com.lightning.wallet.ln.PaymentInfo.{HIDDEN, WAITING, SUCCESS, FAILURE}
-  val names = ("payment", "hash", "preimage", "incoming", "sum", "status", "stamp", "text", "pr", "rd", "search")
-  val Tuple11(table, hash, preimage, incoming, sum, status, stamp, text, pr, rd, search) = names
+  val Tuple11(table, hash, preimage, incoming, msat, status, stamp, text, pr, rd, search) =
+    ("payment", "hash", "preimage", "incoming", "msat", "status", "stamp", "text", "pr", "rd", "search")
 
   // Inserting new records for data and fast search
   def newVirtualSql = s"INSERT INTO $fts$table ($search, $hash) VALUES (?, ?)"
-  val insert9 = s"$hash, $preimage, $incoming, $sum, $status, $stamp, $text, $pr, $rd"
-  def newSql = s"INSERT OR IGNORE INTO $table ($insert9) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  val insert9 = s"$hash, $preimage, $incoming, $msat, $status, $stamp, $text, $pr, $rd"
+  def newSql = s"INSERT INTO $table ($insert9) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
   // Querying and searching
   def searchSql = s"SELECT * FROM $table WHERE $hash IN (SELECT DISTINCT $hash FROM $fts$table WHERE $search MATCH ? LIMIT 24)"
@@ -60,20 +60,20 @@ object PaymentTable extends Table {
   def selectSql = s"SELECT * FROM $table WHERE $hash = ?"
 
   // Updating various parts of data
+  def updRoutingSql = s"UPDATE $table SET $rd = ? WHERE $hash = ?"
   def updStatusSql = s"UPDATE $table SET $status = ? WHERE $hash = ?"
-  def updRoutingSql = s"UPDATE $table SET $status = ?, $rd = ? WHERE $hash = ?"
   def updFailWaitingSql = s"UPDATE $table SET $status = $FAILURE WHERE $status = $WAITING"
   def updOkOutgoingSql = s"UPDATE $table SET $status = $SUCCESS, $preimage = ? WHERE $hash = ?"
-  def updOkIncomingSql = s"UPDATE $table SET $status = $SUCCESS, $sum = ?, $stamp = ? WHERE $hash = ?"
+  def updOkIncomingSql = s"UPDATE $table SET $status = $SUCCESS, $msat = ?, $stamp = ? WHERE $hash = ?"
   def createVirtualSql = s"CREATE VIRTUAL TABLE $fts$table USING $fts($search, $hash)"
 
   def createSql = s"""
     CREATE TABLE $table(
       $id INTEGER PRIMARY KEY AUTOINCREMENT,
       $hash STRING UNIQUE NOT NULL,
-      $preimage STRING UNIQUE NOT NULL,
+      $preimage STRING NOT NULL,
       $incoming INTEGER NOT NULL,
-      $sum INTEGER NOT NULL,
+      $msat INTEGER NOT NULL,
       $status INTEGER NOT NULL,
       $stamp INTEGER NOT NULL,
       $text STRING NOT NULL,
@@ -87,7 +87,7 @@ object PaymentTable extends Table {
 
 trait Table { val (id, fts) = "_id" -> "fts4" }
 class CipherOpenHelper(context: Context, version: Int, secret: String)
-extends SQLiteOpenHelper(context, "lndata1.db", null, version) { me =>
+extends SQLiteOpenHelper(context, "lndata2.db", null, version) { me =>
 
   SQLiteDatabase loadLibs context
   val base = getWritableDatabase(secret)

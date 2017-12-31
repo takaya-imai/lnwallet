@@ -59,7 +59,7 @@ object RatesSaver extends Saver {
     val safe = retry(LNParams.cloud.connector.getRates map toVec[Result], pickInc, 3 to 4)
     initDelay(safe, rates.stamp, timeoutMillis = 1200000) foreach { case newFee \ newFiat +: _ =>
       val validFees = for (positive <- newFee("5") +: rates.feeHistory if positive > 0) yield positive
-      rates = Rates(validFees take 4, newFiat, System.currentTimeMillis)
+      rates = Rates(validFees take 3, newFiat, System.currentTimeMillis)
       save(rates.toJson)
     }
   }

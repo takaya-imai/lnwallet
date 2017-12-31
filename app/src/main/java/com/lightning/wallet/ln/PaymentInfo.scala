@@ -1,6 +1,5 @@
 package com.lightning.wallet.ln
 
-import spray.json._
 import com.softwaremill.quicklens._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.crypto._
@@ -49,16 +48,18 @@ object PaymentInfo {
 
   def completeRPI(rpi: RuntimePaymentInfo) = rpi.rd.routes.headOption map { firstRoute =>
     val lastChanExpiry = LNParams.broadcaster.currentHeight + rpi.pr.minFinalCltvExpiry.getOrElse(9L)
-    val (payloads, nodeIds, firstSumWithFee, firstExpiry) = build(firstRoute, rpi.finalSum, lastChanExpiry)
+    val (payloads, nodeIds, firstSumWithFee, firstExpiry) = build(firstRoute, rpi.firstMsat, lastChanExpiry)
     val rd1 = rpi.rd.copy(onion = buildOnion(nodeIds :+ rpi.pr.nodeId, payloads, rpi.pr.paymentHash),
-      routes = rpi.rd.routes.tail, firstSumWithFee = firstSumWithFee, firstExpiry = firstExpiry)
+      routes = rpi.rd.routes.tail, firstMsatWithFee = firstSumWithFee, firstExpiry = firstExpiry)
 
     rpi.copy(rd = rd1)
   }
 
-  def emptyRD = {
+  val emptyRPI: PaymentRequest => RuntimePaymentInfo = pr => {
     val packet = Packet(Array(Version), random getBytes 33, random getBytes DataLength, random getBytes MacLength)
-    RoutingData(Vector.empty, Set.empty, Set.empty, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
+    val rd = RoutingData(Vector.empty, Set.empty, Set.empty, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
+    val finalSum = pr.amount match { case Some(msat) => msat.amount case None => 0L }
+    RuntimePaymentInfo(rd, pr, finalSum)
   }
 
   private def without(rs: Vector[PaymentRoute], fn: Hop => Boolean) = rs.filterNot(_ exists fn)
@@ -94,7 +95,7 @@ object PaymentInfo {
       case ErrorPacket(nodeKey, _: Node) => withoutNode(Vector(nodeKey), rpi)
       case _ => rpi
 
-      // Remove all except our peer, recipient, recipient's peers
+      // Remove all except our peer, recipient, recipient's peer
     } getOrElse withoutNode(rpi.routeIds drop 1 dropRight 3, rpi)
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
@@ -113,8 +114,8 @@ object PaymentInfo {
 
     case (Attempt.Successful(_), nextPacket, ss) if nextPacket.isLast => bag getPaymentInfo add.paymentHash match {
       // Payment request may not have a zero final sum which means it's a donation and should not be checked for overflow
-      case Success(info) if info.finalSum > 0L && add.amountMsat > info.finalSum * 2 => failHtlc(ss, IncorrectPaymentAmount, add)
-      case Success(info) if info.finalSum > 0L && add.amountMsat < info.finalSum => failHtlc(ss, IncorrectPaymentAmount, add)
+      case Success(info) if info.pr.amount.exists(add.amountMsat > _.amount * 2) => failHtlc(ss, IncorrectPaymentAmount, add)
+      case Success(info) if info.pr.amount.exists(add.amountMsat < _.amount) => failHtlc(ss, IncorrectPaymentAmount, add)
       case Success(info) if info.incoming == 1 => CMDFulfillHtlc(add.id, info.preimage)
       case _ => failHtlc(ss, UnknownPaymentHash, add)
     }
@@ -135,23 +136,25 @@ object PaymentInfo {
 
 case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Long)
 case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey], badChans: Set[Long],
-                       onion: SecretsAndPacket, firstSumWithFee: Long, firstExpiry: Long)
+                       onion: SecretsAndPacket, firstMsatWithFee: Long, firstExpiry: Long)
 
-case class RuntimePaymentInfo(rd: RoutingData, pr: PaymentRequest, finalSum: Long) {
-  lazy val text = pr.description.right.getOrElse(new String) + " " + pr.paymentHash.toString
-  lazy val routeIds = rd.onion.sharedSecrets.unzip match { case _ \ ids => ids }
+case class RuntimePaymentInfo(rd: RoutingData, pr: PaymentRequest, firstMsat: Long) {
+  lazy val routeIds = rd.onion.sharedSecrets.unzip match { case _ \ nodeIds => nodeIds }
+  lazy val text = pr.description match { case Right(txt) => txt case _ => new String }
+  lazy val searchText = text + " " + pr.paymentHash.toString
 
   def canNotProceed(peerId: PublicKey) = {
-    val extraIds = pr.routingInfo.flatMap(_.route).map(_.nodeId)
-    val stopSet = extraIds.toSet + pr.nodeId + peerId & rd.badNodes
-    stopSet.nonEmpty || rd.badNodes.isEmpty && rd.badChans.isEmpty
+    val routes = pr.routingInfo.flatMap(_.route).toSet
+    val criticalNodes = routes.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
+    criticalNodes.nonEmpty || rd.badNodes.isEmpty && rd.badChans.isEmpty
   }
 }
 
-// finalSum is an amount I'm actually getting or an amount I'm paying without routing fees
-// incoming finalSum is updated on fulfilling, outgoing finalSum is updated on pay attempt
+// This class is constructed directly from database
+// firstMsat is an amount I'm actually getting or an amount I'm paying without routing fees
+// incoming firstMsat is updated on fulfilling, outgoing firstMsat is updated on pay attempt
 case class PaymentInfo(rawRd: String, rawPr: String, preimage: BinaryData, incoming: Int,
-                       finalSum: Long, status: Int, stamp: Long, text: String) {
+                       firstMsat: Long, status: Int, stamp: Long, text: String) {
 
   def actualStatus = incoming match {
     // Once we have a preimage it is a SUCCESS
@@ -163,13 +166,16 @@ case class PaymentInfo(rawRd: String, rawPr: String, preimage: BinaryData, incom
   }
 
   // Keep these serialized for performance reasons
-  def runtime = RuntimePaymentInfo(rd, pr, finalSum)
+  def runtime = RuntimePaymentInfo(rd, pr, firstMsat)
+  lazy val firstInvertedSum = MilliSatoshi(-firstMsat)
+  lazy val firstSum = MilliSatoshi(firstMsat)
   lazy val pr = to[PaymentRequest](rawPr)
   lazy val rd = to[RoutingData](rawRd)
 }
 
 trait PaymentInfoBag { me =>
-  def updateRouting(status: Int, rpi: RuntimePaymentInfo)
+  def updateRouting(rpi: RuntimePaymentInfo)
+  def updateStatus(status: Int, hash: BinaryData)
   def getPaymentInfo(hash: BinaryData): Try[PaymentInfo]
   def updOkOutgoing(fulfill: UpdateFulfillHtlc)
   def updOkIncoming(add: UpdateAddHtlc)

@@ -54,13 +54,13 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
 
       for {
         operationalChannel <- app.ChannelManager.all.find(_.isOperational)
-        paymentRequestAndMemo @ (pr, _) <- retry(getRequestAndMemo, pickInc, 3 to 4)
-        Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
-        // Server response may arrive in some time after an initialization above
-      } if (data.info.isEmpty) {
-        // Eliminate a race condition: only proceed if info is empty
+        paymentRequestAndMemo @ (pr, memo) <- retry(getRequestAndMemo, pickInc, 3 to 4)
+        Some(rpi) <- retry(app.ChannelManager outPaymentObs emptyRPI(pr), pickInc, 3 to 4)
+        // Server response may arrive in some time after requesting, must account for that
+      } if (data.info.isEmpty && pr.amount.forall(_.amount < 20000000L) && memo.clears.size > 20) {
+        // Proceed if data is still empty, the price is low enough and number of sigs is high enough
         me BECOME data.copy(info = Some apply paymentRequestAndMemo)
-        operationalChannel process SilentAddHtlc(pay)
+        operationalChannel process SilentAddHtlc(rpi)
       }
 
     // Execute if we are not busy and have available tokens and actions, don't care amout memo
@@ -81,14 +81,14 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     case CloudData(Some(pr \ memo), _, _, _) \ CMDStart =>
 
       bag getPaymentInfo pr.paymentHash match {
-        case Success(pay) if pay.actualStatus == SUCCESS => me resolveSuccess memo
+        case Success(rpi) if rpi.actualStatus == SUCCESS => me resolveSuccess memo
         // These will have long expiration times, could be retried multiple times
-        case Success(pay) if pay.actualStatus == FAILURE =>
+        case Success(rpi) if rpi.actualStatus == FAILURE =>
 
           if (!pr.isFresh) eraseRequestData else for {
             operationalChannel <- app.ChannelManager.all.find(_.isOperational)
             // Repeatedly retry an old request instead of getting a new one until it expires
-            Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRD(pr), pickInc, 3 to 4)
+            Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRPI(pr), pickInc, 3 to 4)
           } operationalChannel process SilentAddHtlc(pay)
 
         // First attempt has been rejected
@@ -126,7 +126,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
       val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
       connector.ask("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
-        "tokens" -> memo.makeBlindTokens.toJson.toString.hex).filter(_.finalMsat < 20000000L).map(_ -> memo)
+        "tokens" -> memo.makeBlindTokens.toJson.toString.hex).map(_ -> memo)
     }
 
   def getClearTokens(memo: BlindMemo) = connector.ask("blindtokens/redeem",
@@ -181,9 +181,9 @@ class Connector(val url: String) {
   def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
 
   def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
-  def findRoutes(noNodes: Set[PublicKey], noChannels: Set[Long], from: PublicKey, to: PublicKey) =
-    ask("router/routes", toVec[PaymentRoute], "nodes" -> noNodes.map(_.toBin).toJson.toString.hex,
-      "channels" -> noChannels.toJson.toString.hex, "from" -> from.toString, "to" -> to.toString)
+  def findRoutes(rd: RoutingData, from: PublicKey, to: PublicKey) = ask("router/routes", toVec[PaymentRoute],
+    "nodes" -> rd.badNodes.map(_.toBin).toJson.toString.hex, "channels" -> rd.badChans.toJson.toString.hex,
+    "from" -> from.toString, "to" -> to.toString)
 }
 
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {

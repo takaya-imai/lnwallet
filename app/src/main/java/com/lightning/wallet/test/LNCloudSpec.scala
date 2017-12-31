@@ -26,7 +26,6 @@ class LNCloudSpec {
     }
 
     chan.listeners += restartListener
-    chan.listeners -= ChannelWrap
 
     val set: Set[CloudAct] = List.fill(750)(CloudAct(random getBytes 32, Nil, "check")).toSet
     LNParams.cloud.data = LNParams.cloud.data.copy(acts = set)

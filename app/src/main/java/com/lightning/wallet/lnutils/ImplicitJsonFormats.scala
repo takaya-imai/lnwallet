@@ -7,12 +7,12 @@ import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.ln.Scripts._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.Crypto.{Point, PrivateKey, PublicKey, Scalar}
+import com.lightning.wallet.ln.CommitmentSpec.{HtlcAndFail, HtlcAndFulfill}
 import com.lightning.wallet.ln.Helpers.Closing.{SuccessAndClaim, TimeoutAndClaim}
 import com.lightning.wallet.ln.crypto.{Packet, SecretsAndPacket, ShaHashesWithIndex}
 import com.lightning.wallet.lnutils.Connector.{ClearToken, HttpParam, RequestAndMemo}
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, OutPoint, Satoshi, Transaction, TxOut}
 import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
-import com.lightning.wallet.ln.CommitmentSpec.HtlcAndFail
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
 import com.lightning.wallet.ln.crypto.ShaChain.Index
@@ -33,9 +33,8 @@ object ImplicitJsonFormats { me =>
   }
 
   def taggedJsonFmt[T](base: JsonFormat[T], tag: String) =
-  // Adds an external tag which can be later used to discern
-  // different children of the same super class
-
+    // Adds an external tag which can be later used to discern
+    // different children of the same super class
     new JsonFormat[T] {
       def read(serialized: JsValue) =
         base read serialized
@@ -83,6 +82,7 @@ object ImplicitJsonFormats { me =>
 
   implicit val lightningMessageFmt = sCodecJsonFmt(lightningMessageCodec)
   implicit val nodeAnnouncementFmt = sCodecJsonFmt(nodeAnnouncementCodec)
+  implicit val updateFulfillHtlcFmt = sCodecJsonFmt(updateFulfillHtlcCodec)
   implicit val updateFailHtlcFmt = sCodecJsonFmt(updateFailHtlcCodec)
   implicit val acceptChannelFmt = sCodecJsonFmt(acceptChannelCodec)
   implicit val updateAddHtlcFmt = sCodecJsonFmt(updateAddHtlcCodec)
@@ -115,8 +115,8 @@ object ImplicitJsonFormats { me =>
     def write(internal: Tag): JsValue = internal.toInt5s.toJson
   }
 
-  implicit val paymentRequestFmt = jsonFormat[String, Option[MilliSatoshi], Long, Long, PublicKey, Vector[Tag], BinaryData,
-    PaymentRequest](PaymentRequest.apply, "prefix", "amount", "finalMsat", "timestamp", "nodeId", "tags", "signature")
+  implicit val paymentRequestFmt = jsonFormat[String, Option[MilliSatoshi], Long, PublicKey, Vector[Tag], BinaryData,
+    PaymentRequest](PaymentRequest.apply, "prefix", "amount", "timestamp", "nodeId", "tags", "signature")
 
   // Rest
 
@@ -126,9 +126,8 @@ object ImplicitJsonFormats { me =>
   implicit val secretsAndPacketFmt = jsonFormat[Vector[BytesAndKey], Packet,
     SecretsAndPacket](SecretsAndPacket.apply, "sharedSecrets", "packet")
 
-  implicit val routingDataFmt =
-    jsonFormat[Vector[PaymentRoute], Set[PublicKey], Set[Long], PaymentRequest, SecretsAndPacket, Long, Long,
-      RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "pr", "onion", "amountWithFee", "expiry")
+  implicit val routingDataFmt = jsonFormat[Vector[PaymentRoute], Set[PublicKey], Set[Long], SecretsAndPacket, Long, Long,
+    RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "onion", "amountWithFee", "expiry")
 
   implicit val ratesFmt = jsonFormat[Seq[Double], Fiat2Btc, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")
@@ -220,9 +219,8 @@ object ImplicitJsonFormats { me =>
       "shaSeed", "isFunder")
 
   implicit val htlcFmt = jsonFormat[Boolean, UpdateAddHtlc, Htlc](Htlc.apply, "incoming", "add")
-  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[Htlc], Set[HtlcAndFail], Long, Long, Long,
-    CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw",
-    "toLocalMsat", "toRemoteMsat")
+  implicit val commitmentSpecFmt = jsonFormat[Set[Htlc], Set[HtlcAndFulfill], Set[HtlcAndFail], Long, Long, Long,
+    CommitmentSpec](CommitmentSpec.apply, "htlcs", "fulfilled", "failed", "feeratePerKw", "toLocalMsat", "toRemoteMsat")
 
   implicit val htlcTxAndSigs = jsonFormat[TransactionWithInputInfo, BinaryData, BinaryData,
     HtlcTxAndSigs](HtlcTxAndSigs.apply, "txinfo", "localSig", "remoteSig")
@@ -237,8 +235,9 @@ object ImplicitJsonFormats { me =>
     WaitingForRevocation](WaitingForRevocation.apply, "nextRemoteCommit", "sent",
     "localCommitIndexSnapshot")
 
-  implicit val changesFmt = jsonFormat[LNMessageVector, LNMessageVector, LNMessageVector,
-    Changes](Changes.apply, "proposed", "signed", "acked")
+  implicit val changesFmt =
+    jsonFormat[LNMessageVector, LNMessageVector, LNMessageVector,
+      Changes](Changes.apply, "proposed", "signed", "acked")
 
   implicit val commitmentsFmt = jsonFormat[LocalParams, AcceptChannel, LocalCommit, RemoteCommit,
     Changes, Changes, Long, Long, Either[WaitingForRevocation, Point], InputInfo, ShaHashesWithIndex, BinaryData,

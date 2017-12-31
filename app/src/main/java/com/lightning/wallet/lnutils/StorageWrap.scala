@@ -8,14 +8,12 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.Announcements._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
-
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi}
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.lnutils.JsonHttpUtils.to
 import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
+import fr.acinq.bitcoin.BinaryData
 import scala.collection.mutable
-import net.sqlcipher.Cursor
 
 
 object StorageWrap extends ChannelListener {
@@ -43,7 +41,7 @@ object StorageWrap extends ChannelListener {
   }
 }
 
-object ChannelWrap extends ChannelListener {
+object ChannelWrap {
   def doPut(chanId: String, data: String) = db txWrap {
     db.change(ChannelTable.newSql, params = chanId, data)
     db.change(ChannelTable.updSql, params = data, chanId)
@@ -58,37 +56,20 @@ object ChannelWrap extends ChannelListener {
     val rc = RichCursor(db select ChannelTable.selectAllSql)
     rc.vec(_ string ChannelTable.data) map to[HasCommitments]
   }
-
-  override def onProcess = {
-    case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
-      // Mutual tx has enough confirmations or hard timeout has passed out
-      db.change(ChannelTable.killSql, close.commitments.channelId)
-
-    case (_, norm: NormalData, _: CommitSig)
-      // GUARD: this may be a storage token HTLC
-      if norm.commitments.localCommit.spec.fulfilled.nonEmpty =>
-      // We should remind cloud to maybe send a scheduled data
-      cloud doProcess CMDStart
-  }
-
-  override def onBecome = {
-    case (_, NormalData(_, _, None, None), WAIT_FUNDING_DONE | SYNC, NORMAL) =>
-      // We may need to send an LN payment in -> NORMAL unless it is sutting down
-      cloud doProcess CMDStart
-  }
 }
 
 object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
+  def updateStatus(status: Int, hash: BinaryData) = db.change(PaymentTable.updStatusSql, status, hash)
+  def updateRouting(rpi: RuntimePaymentInfo) = db.change(PaymentTable.updRoutingSql, rpi.rd.toJson, rpi.pr.paymentHash)
+  def updOkIncoming(u: UpdateAddHtlc) = db.change(PaymentTable.updOkIncomingSql, u.amountMsat, System.currentTimeMillis, u.paymentHash)
+  def updOkOutgoing(fulfill: UpdateFulfillHtlc) = db.change(PaymentTable.updOkOutgoingSql, fulfill.paymentPreimage, fulfill.paymentHash)
   def getPaymentInfo(hash: BinaryData) = RichCursor apply db.select(PaymentTable.selectSql, hash) headTry toPaymentInfo
-  def updateRouting(status: Int, rpi: RuntimePaymentInfo) = db.change(PaymentTable.updRoutingSql, status, rpi.rd.toJson, rpi.pr.paymentHash)
-  def updOkIncoming(m: UpdateAddHtlc) = db.change(PaymentTable.updOkIncomingSql, m.amountMsat, System.currentTimeMillis, m.paymentHash)
-  def updOkOutgoing(m: UpdateFulfillHtlc) = db.change(PaymentTable.updOkOutgoingSql, m.paymentPreimage, m.paymentHash)
   def uiNotify = app.getContentResolver.notifyChange(db sqlPath PaymentTable.table, null)
   def byQuery(query: String) = db.select(PaymentTable.searchSql, s"$query*")
   def byRecent = db select PaymentTable.selectRecentSql
 
   def toPaymentInfo(rc: RichCursor) = PaymentInfo(rawRd = rc string PaymentTable.rd, rawPr = rc string PaymentTable.pr,
-    preimage = rc string PaymentTable.preimage, incoming = rc int PaymentTable.incoming, finalSum = rc long PaymentTable.sum,
+    preimage = rc string PaymentTable.preimage, incoming = rc int PaymentTable.incoming, firstMsat = rc long PaymentTable.msat,
     status = rc int PaymentTable.status, stamp = rc long PaymentTable.stamp, text = rc string PaymentTable.text)
 
   // Records a number of retry attempts for a given outgoing payment hash
@@ -96,9 +77,8 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
 
   override def onError = {
     case (_, exc: CMDException) =>
-      // Is needed for retry failures
-      // Also prevents a channel shutdown
-      updateRouting(FAILURE, exc.cmd.rpi)
+      // Needed for retry failures, also prevents shutdown
+      updateStatus(FAILURE, exc.cmd.rpi.pr.paymentHash)
       uiNotify
 
     case chan \ error =>
@@ -108,30 +88,37 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
   }
 
   override def onProcess = {
-    case (_, _: NormalData, cmd: CMDAddHtlc) =>
+    case (_, _: NormalData, cmd: CMDAddHtlc) => db txWrap {
       // This may either be a new payment or an old payment retry
       // so either an insert or update will be executed successfully
 
-      updateRouting(WAITING, cmd.rpi)
-      db.change(PaymentTable.newVirtualSql, cmd.rpi.text, cmd.rpi.pr.paymentHash)
-      db.change(PaymentTable.newSql, cmd.rpi.pr.paymentHash, NOIMAGE, 0, cmd.rpi.finalSum,
+      updateRouting(cmd.rpi)
+      updateStatus(WAITING, cmd.rpi.pr.paymentHash)
+      db.change(PaymentTable.newVirtualSql, cmd.rpi.searchText, cmd.rpi.pr.paymentHash)
+      db.change(PaymentTable.newSql, cmd.rpi.pr.paymentHash, NOIMAGE, 0, cmd.rpi.firstMsat,
         WAITING, System.currentTimeMillis, cmd.rpi.text, cmd.rpi.pr.toJson, cmd.rpi.rd.toJson)
 
+      // End transaction
+      // update interface
       uiNotify
+    }
 
-    case (chan, norm: NormalData, _: CommitSig) =>
+    case (chan, norm: NormalData, _: CommitSig) => db txWrap {
       for (Htlc(true, add) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkIncoming(add)
       for (Htlc(false, _) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkOutgoing(fulfill)
+      // Only if we actually have some fulfilled HTLCs we need to tell as cloud as it may wait for payment
+      // this needs to happen after we update records in a database as clud would be checking a db too
+      if (norm.commitments.localCommit.spec.fulfilled.nonEmpty) cloud doProcess CMDStart
 
       for (htlc \ some <- norm.commitments.localCommit.spec.failed) some match {
-        // This is a special case since only our peer can fail an outgoing payment like this, just fail it
-        case _: UpdateFailMalformedHtlc => db.change(PaymentTable.updStatusSql, FAILURE, htlc.add.paymentHash)
+        // A special case since only our peer can reject payments like this, leave failed
+        case _: UpdateFailMalformedHtlc => updateStatus(FAILURE, htlc.add.paymentHash)
 
         case fail: UpdateFailHtlc => for {
-          // Cut routes, add failed nodes and channels
+        // Cut routes, add failed nodes and channels
           paymentInfo <- getPaymentInfo(htlc.add.paymentHash)
           reducedPaymentInfo = cutRoutes(fail)(paymentInfo.runtime)
-          // Try to use the rest of available local routes
+        // Try to use the rest of available local routes
         } completeRPI(reducedPaymentInfo) match {
 
           case Some(updatedPaymentInfo) =>
@@ -141,9 +128,8 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
             chan process PlainAddHtlc(updatedPaymentInfo)
 
           case None =>
-            // No more spare routes left
-            updateRouting(FAILURE, reducedPaymentInfo)
-            // Ask server for new routes if all conditions are met
+            updateRouting(reducedPaymentInfo)
+            updateStatus(WAITING, reducedPaymentInfo.pr.paymentHash)
             val canNotProceed = reducedPaymentInfo canNotProceed chan.data.announce.nodeId
             val nope = canNotProceed || serverCallAttempts(htlc.add.paymentHash) > 8
 
@@ -155,10 +141,21 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
         }
       }
 
+      // End transaction
+      // update interface
       uiNotify
+    }
+
+    case (_, close: ClosingData, _: CMDBestHeight) if close.isOutdated =>
+      // Mutual tx has enough confirmations or hard timeout has passed out
+      db.change(ChannelTable.killSql, close.commitments.channelId)
   }
 
   override def onBecome = {
+    case (_, NormalData(_, _, None, None), WAIT_FUNDING_DONE | SYNC, NORMAL) =>
+      // We may need to send an LN payment in -> NORMAL unless it is a shutdown
+      cloud doProcess CMDStart
+
     case (_, _, SYNC | NORMAL | NEGOTIATIONS, CLOSING) =>
       // WAITING will either be redeemed or refunded later
       db change PaymentTable.updFailWaitingSql
