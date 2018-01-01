@@ -186,7 +186,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
       def decryptAndImport = {
         val packed = BinaryData(encryptedMnemonic.getText.toString)
-        val hash = sha256(oldWalletPassword.getText.toString.binary.data)
+        val hash = sha256(oldWalletPassword.getText.toString.binary)
         val plain = AES.decode(hash.toArray)(packed.toArray)
         require(isMnemonicCorrect(plain), "Wrong password")
         app.TransData.value = plain

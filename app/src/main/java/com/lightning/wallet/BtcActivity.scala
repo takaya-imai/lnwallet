@@ -187,8 +187,15 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       me setDetecting true
 
       toolbar setOnClickListener onButtonTap {
-        wrap(adapter.notifyDataSetChanged)(changeDenom)
-        updTitle
+        showDenomChooser { newDenominationPosition =>
+          app.prefs.edit.putInt(AbstractKit.DENOM_TYPE,
+            newDenominationPosition).commit
+
+          // Update UI with new denomination right away
+          denom = denoms apply newDenominationPosition
+          adapter.notifyDataSetChanged
+          updTitle
+        }
       }
 
       list setAdapter adapter
@@ -281,24 +288,22 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
   // DATA READING AND BUTTON ACTIONS
 
-  def checkTransData =
-    app.TransData.value match {
-      case pr: PaymentRequest =>
-        me goTo classOf[LNActivity]
+  def checkTransData = app.TransData.value match {
+    case pr: PaymentRequest => me goTo classOf[LNActivity]
 
-      case uri: BitcoinURI =>
-        app.TransData.value = null
-        val amt: TryMSat = Try(uri.getAmount)
-        sendBtcTxPopup.set(amt, uri.getAddress)
+    case uri: BitcoinURI =>
+      app.TransData.value = null
+      val amt: TryMSat = Try(uri.getAmount)
+      sendBtcTxPopup.set(amt, uri.getAddress)
 
-      case adr: Address =>
-        app.TransData.value = null
-        sendBtcTxPopup setAddress adr
+    case adr: Address =>
+      app.TransData.value = null
+      sendBtcTxPopup setAddress adr
 
-      case unusable =>
-        app.TransData.value = null
-        Tools log s"Unusable $unusable"
-    }
+    case unusable =>
+      app.TransData.value = null
+      Tools log s"Unusable $unusable"
+  }
 
   // Get bitcoins
   private def localBitcoinsAndGlidera = {

@@ -64,8 +64,8 @@ object Utils {
   lazy val sumIn = app getString txs_sum_in
   lazy val sumOut = app getString txs_sum_out
   lazy val denoms = List(SatDenomination, FinDenomination, BtcDenomination)
-  val coloredOut = (amt: MilliSatoshi) => sumOut.format(denom withSign amt)
-  val coloredIn = (amt: MilliSatoshi) => sumIn.format(denom withSign amt)
+  val coloredOut: MilliSatoshi => String = amt => sumOut.format(denom withSign amt)
+  val coloredIn: MilliSatoshi => String = amt => sumIn.format(denom withSign amt)
 
   // Mapping from text to Android id integer
   val Seq(strDollar, strEuro, strYen, strYuan) = Seq("dollar", "euro", "yen", "yuan")
@@ -73,12 +73,6 @@ object Utils {
   val revFiatMap = Map(strDollar -> typeUSD, strEuro -> typeEUR, strYen -> typeJPY, strYuan -> typeCNY)
   val passNoSuggest = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
   def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
-
-  def changeDenom = {
-    val index1 = (denoms.indexOf(denom) + 1) % denoms.size
-    app.prefs.edit.putInt(AbstractKit.DENOM_TYPE, index1).commit
-    denom = denoms(index1)
-  }
 
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
   def humanNode(nodeId: PublicKey, separator: String = "\n") = nodeId.toString
@@ -98,9 +92,8 @@ object Utils {
 trait ToolbarActivity extends TimerActivity { me =>
   lazy val toolbar = findViewById(R.id.toolbar).asInstanceOf[Toolbar]
   lazy val flash = uiTask(getSupportActionBar setSubtitle infos.head.value)
-
-  private[this] var infos = List.empty[Informer]
   private[this] var currentAnimation = Option.empty[TimerTask]
+  private[this] var infos = List.empty[Informer]
 
   val catchListener = new BlocksListener {
     def getNextTracker(initBlocksLeft: Int) = new BlocksListener {
@@ -124,12 +117,11 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
   }
 
-  val constListener =
-    new PeerConnectedEventListener with PeerDisconnectedEventListener {
-      def onPeerConnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).flash.run
-      def onPeerDisconnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).flash.run
-      def status = if (app.kit.peerGroup.numConnectedPeers < 1) btc_notify_connecting else btc_notify_operational
-    }
+  val constListener = new PeerConnectedEventListener with PeerDisconnectedEventListener {
+    def onPeerConnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).flash.run
+    def onPeerDisconnected(peer: Peer, peerCount: Int) = update(me getString status, Informer.PEER).flash.run
+    def status = if (app.kit.peerGroup.numConnectedPeers < 1) btc_notify_connecting else btc_notify_operational
+  }
 
   val txTracker = new TxTracker {
     override def coinsSent(tx: Transaction) = notifySubTitle(me getString tx_sent, Informer.BTCEVENT)
@@ -148,6 +140,17 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   def update(text: String, tag: Int) = runAnd(me) {
     for (info <- infos if info.tag == tag) info.value = text
+  }
+
+  def showDenomChooser(change: Int => Unit) = {
+    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
+    val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
+    val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
+
+    val dialog = mkChoiceDialog(change(lst.getCheckedItemPosition), none, dialog_ok, dialog_cancel)
+    lst setAdapter new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, denoms)
+    lst.setItemChecked(app.prefs.getInt(AbstractKit.DENOM_TYPE, 0), true)
+    mkForm(dialog, null, form)
   }
 
   def animateTitle(nextText: String) = new Runnable { self =>
@@ -173,7 +176,9 @@ trait ToolbarActivity extends TimerActivity { me =>
 
   def doViewMnemonic(password: String) =
     <(app.kit decryptSeed password, _ => app toast err_general) { seed =>
-      val wordsText: String = TextUtils.join("\u0020", seed.getMnemonicCode)
+      // Show current mnemonic and offer to encrypt it using current passcode
+
+      val wordsText = TextUtils.join("\u0020", seed.getMnemonicCode)
       lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
       lazy val alert = mkForm(dialog, getString(sets_noscreen).html, wordsText)
       alert
@@ -344,7 +349,7 @@ trait ToolbarActivity extends TimerActivity { me =>
           val feesOptions = Array(feeRisky.html, feeLive.html)
 
           // Prepare popup interface with fee options
-          val opts = new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, feesOptions)
+          val adp = new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, feesOptions)
           val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
           val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
@@ -353,7 +358,7 @@ trait ToolbarActivity extends TimerActivity { me =>
             case 1 => processTx(pass, RatesSaver.rates.feeLive)
           }
 
-          lst.setAdapter(opts)
+          lst.setAdapter(adp)
           lst.setItemChecked(0, true)
           lazy val dialog: Builder = mkChoiceDialog(rm(alert)(proceed), none, dialog_pay, dialog_cancel)
           lazy val alert = mkForm(dialog, getString(step_3).format(pay cute sumOut).html, form)
@@ -388,7 +393,6 @@ trait ToolbarActivity extends TimerActivity { me =>
     }
   }
 
-  // Temporairly update subtitle info
   def notifySubTitle(subtitle: String, infoType: Int)
 }
 

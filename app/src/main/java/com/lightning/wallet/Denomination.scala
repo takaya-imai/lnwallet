@@ -7,6 +7,7 @@ import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.MilliSatoshi
 import language.implicitConversions
 import org.bitcoinj.core.Coin
+import language.postfixOps
 
 
 object Denomination {
@@ -17,13 +18,13 @@ object Denomination {
   val formatFiat = new DecimalFormat("#,###,###.##")
   formatFiat setDecimalFormatSymbols symbols
 
-  def btcBigDecimal2MSat(btc: BigDecimal) = MilliSatoshi apply (btc * btc2msatFactor).toLong
+  def btcBigDecimal2MSat(btc: BigDecimal) = MilliSatoshi(btc * btc2msatFactor toLong)
   implicit def mSat2Coin(msat: MilliSatoshi): Coin = Coin.valueOf(msat.amount / sat2msatFactor)
   implicit def coin2MSat(cn: Coin): MilliSatoshi = MilliSatoshi(cn.value * sat2msatFactor)
 }
 
 trait Denomination {
-  def rawString2MSat(raw: String) = MilliSatoshi apply (BigDecimal(raw) * factor).toLong
+  def rawString2MSat(raw: String) = MilliSatoshi(BigDecimal(raw) * factor toLong)
   def formatted(msat: MilliSatoshi) = fmt format BigDecimal(msat.amount) / factor
   def withSign(msat: MilliSatoshi): String
   val fmt: DecimalFormat
@@ -52,7 +53,7 @@ object FinDenomination extends Denomination {
 }
 
 object BtcDenomination extends Denomination {
-  val fmt = new DecimalFormat("##0.000########")
+  val fmt = new DecimalFormat("##0.000#####")
   val txt = app getString amount_hint_btc
   val factor = btc2msatFactor
 

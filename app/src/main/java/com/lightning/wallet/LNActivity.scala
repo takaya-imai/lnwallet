@@ -230,6 +230,18 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       }, onPaymentError)
     }
 
+    toolbar setOnClickListener onButtonTap {
+      showDenomChooser { newDenominationPosition =>
+        app.prefs.edit.putInt(AbstractKit.DENOM_TYPE,
+          newDenominationPosition).commit
+
+        // Update UI with new denomination right away
+        denom = denoms apply newDenominationPosition
+        adapter.notifyDataSetChanged
+        updTitle(chan)
+      }
+    }
+
     list setOnItemClickListener onTap { pos =>
       val info: PaymentInfo = adapter getItem pos
       val description = me getDescription info.pr
@@ -266,11 +278,6 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         paymentDetails setText s"$description<br><br>$humanOut".html
         mkForm(bld1, title1.html, detailsWrapper)
       }
-    }
-
-    toolbar setOnClickListener onButtonTap {
-      wrap(adapter.notifyDataSetChanged)(changeDenom)
-      me updTitle chan
     }
 
     sendPayment = pr => {

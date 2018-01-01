@@ -33,6 +33,12 @@
         <item>Not encrypted\nIt\'s just plain 12 words</item>
     </array>
 
+    <array name="denoms">
+        <item><![CDATA[Satoshi <font color=#999999><small>= 0.00000001 BTC</small></font>]]></item>
+        <item><![CDATA[Finney <font color=#999999><small>= 0.0001 BTC</small></font>]]></item>
+        <item><![CDATA[Bitcoin <font color=#999999><small>= 1 BTC</small></font>]]></item>
+    </array>
+
     <array name="info_storage_tokens">
         <item><![CDATA[No <a href=http://lightning-wallet.com/storage-tokens.html#storage-tokens>storage tokens</a> left]]></item>
         <item><![CDATA[%1$d <a href=http://lightning-wallet.com/storage-tokens.html#storage-tokens>storage token</a> left]]></item>
