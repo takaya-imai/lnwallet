@@ -2,6 +2,7 @@ package com.lightning.wallet.lnutils
 
 import spray.json._
 import com.lightning.wallet.ln._
+import com.lightning.wallet.Vibr._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
@@ -106,9 +107,14 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
     case (chan, norm: NormalData, _: CommitSig) => db txWrap {
       for (Htlc(true, add) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkIncoming(add)
       for (Htlc(false, _) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkOutgoing(fulfill)
-      // Only if we actually have some fulfilled HTLCs we need to tell as cloud as it may wait for payment
-      // this needs to happen after we update records in a database as clud would be checking a db too
-      if (norm.commitments.localCommit.spec.fulfilled.nonEmpty) cloud doProcess CMDStart
+      // Only if we actually have some fulfilled HTLCs we need to let cloud know as it may wait for payment
+
+      if (norm.commitments.localCommit.spec.fulfilled.nonEmpty) {
+        // This needs to happen after we update records in a database
+        // as cloud would be getting a payment state from database
+        cloud doProcess CMDStart
+        vibrate(processed)
+      }
 
       for (htlc \ some <- norm.commitments.localCommit.spec.failed) some match {
         // A special case since only our peer can reject payments like this, leave failed

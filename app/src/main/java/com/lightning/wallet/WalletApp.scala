@@ -212,6 +212,8 @@ class WalletApp extends Application { me =>
     }
 
     def setupAndStartDownload = {
+      wallet addCoinsSentEventListener Vibr
+      wallet addCoinsReceivedEventListener Vibr
       wallet addTransactionConfidenceEventListener ChannelManager.chainEventsListener
       wallet addCoinsSentEventListener ChannelManager.chainEventsListener
       wallet.autosaveToFile(walletFile, 400, MILLISECONDS, null)
@@ -233,4 +235,13 @@ class WalletApp extends Application { me =>
       RatesSaver.update
     }
   }
+}
+
+object Vibr extends TxTracker {
+  override def coinsSent(tx: Transaction) = vibrate(processed)
+  override def coinsReceived(tx: Transaction) = vibrate(processed)
+  def vibrate(pattern: Pattern) = if (null != vib && vib.hasVibrator) vib.vibrate(pattern, -1)
+  lazy val vib = app.getSystemService(Context.VIBRATOR_SERVICE).asInstanceOf[android.os.Vibrator]
+  val processed = Array(0L, 85, 200)
+  type Pattern = Array[Long]
 }
