@@ -105,13 +105,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
     }
 
     case (chan, norm: NormalData, _: CommitSig) => db txWrap {
-      for (Htlc(true, add) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkIncoming(add)
-      for (Htlc(false, _) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkOutgoing(fulfill)
-      // Only if we actually have some fulfilled HTLCs we need to let cloud know as it may wait for payment
-
       if (norm.commitments.localCommit.spec.fulfilled.nonEmpty) {
-        // This needs to happen after we update records in a database
-        // as cloud would be getting a payment state from database
+        // First thing to do is to update related record states in a database
+        for (Htlc(true, add) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkIncoming(add)
+        for (Htlc(false, _) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkOutgoing(fulfill)
+        // Then we need to let the cloud know as it may be waiting for a payment
         cloud doProcess CMDStart
         vibrate(processed)
       }
