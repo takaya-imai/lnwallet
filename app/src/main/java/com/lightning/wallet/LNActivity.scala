@@ -101,7 +101,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         val timestamp = new Date(info.stamp)
         val markedPaymentSum = info.incoming match {
           case 1 => sumIn.format(denom formatted info.firstSum)
-          case _ => sumOut.format(denom formatted info.firstInvertedSum)
+          case _ => sumOut.format(denom formatted -info.firstSum)
         }
 
         transactWhen setText when(System.currentTimeMillis, timestamp).html

@@ -168,7 +168,6 @@ case class PaymentInfo(rawRd: String, rawPr: String, preimage: BinaryData, incom
 
   // Keep these serialized for performance reasons
   def runtime = RuntimePaymentInfo(rd, pr, firstMsat)
-  lazy val firstInvertedSum = MilliSatoshi(-firstMsat)
   lazy val firstSum = MilliSatoshi(firstMsat)
   lazy val pr = to[PaymentRequest](rawPr)
   lazy val rd = to[RoutingData](rawRd)

@@ -14,6 +14,7 @@ case class Satoshi(amount: Long) extends BtcAmount {
     def >= (that: Satoshi): Boolean = compare(that) >= 0
     def <  (that: Satoshi): Boolean = compare(that) <  0
     def >  (that: Satoshi): Boolean = compare(that) > 0
+
     // @formatter:on
 }
 
@@ -58,6 +59,7 @@ case class MilliSatoshi(amount: Long) extends BtcAmount {
     def >= (that: MilliSatoshi): Boolean = compare(that) >= 0
     def <  (that: MilliSatoshi): Boolean = compare(that) <  0
     def >  (that: MilliSatoshi): Boolean = compare(that) > 0
+    def unary_-(): MilliSatoshi = MilliSatoshi(-amount)
     // @formatter:on
 }
 
