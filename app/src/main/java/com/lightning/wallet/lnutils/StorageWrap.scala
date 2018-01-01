@@ -115,10 +115,10 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
         case _: UpdateFailMalformedHtlc => updateStatus(FAILURE, htlc.add.paymentHash)
 
         case fail: UpdateFailHtlc => for {
-        // Cut routes, add failed nodes and channels
+          // Cut routes, add failed nodes and channels
           paymentInfo <- getPaymentInfo(htlc.add.paymentHash)
           reducedPaymentInfo = cutRoutes(fail)(paymentInfo.runtime)
-        // Try to use the rest of available local routes
+          // Try to use the rest of available local routes
         } completeRPI(reducedPaymentInfo) match {
 
           case Some(updatedPaymentInfo) =>

@@ -144,9 +144,10 @@ case class RuntimePaymentInfo(rd: RoutingData, pr: PaymentRequest, firstMsat: Lo
   lazy val searchText = text + " " + pr.paymentHash.toString
 
   def canNotProceed(peerId: PublicKey) = {
-    val routes = pr.routingInfo.flatMap(_.route).toSet
-    val criticalNodes = routes.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
-    criticalNodes.nonEmpty || rd.badNodes.isEmpty && rd.badChans.isEmpty
+    val extraHops = pr.routingInfo.flatMap(_.route).toSet
+    val extraChansExcluded = extraHops.map(_.shortChannelId) subsetOf rd.badChans
+    val criticalNodesExcluded = extraHops.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
+    criticalNodesExcluded.nonEmpty || extraChansExcluded || rd.badNodes.isEmpty && rd.badChans.isEmpty
   }
 }
 
