@@ -323,20 +323,20 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
   def goQR(top: View) = {
     val activity = classOf[ScanActivity]
-    delayUI(me goTo activity)
+    delayUI(me goTo activity, 185)
     fab close true
   }
 
   def goLN(top: View) = {
     val activity = classOf[LNActivity]
-    delayUI(me goTo activity)
+    delayUI(me goTo activity, 185)
     fab close true
   }
 
   def goReceiveBtcAddress(top: View) = {
     app.TransData.value = app.kit.currentAddress
     val activity = classOf[RequestActivity]
-    delayUI(me goTo activity)
+    delayUI(me goTo activity, 185)
     fab close true
   }
 
@@ -356,7 +356,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
           val pay = AddrData(ms, spendManager.getAddress)
           override def processTx(pass: String, feePerKb: Coin) = {
             add(me getString tx_announcing, Informer.BTCEVENT).flash.run
-            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(none)
+            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(Tools.log)
           }
 
           override def onTxFail(err: Throwable) =

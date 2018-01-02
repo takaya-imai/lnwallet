@@ -430,18 +430,18 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
   def goBitcoin(top: View) = {
     val activity = classOf[BtcActivity]
-    delayUI(me goTo activity)
+    delayUI(me goTo activity, 185)
     fab close true
   }
 
   def goQR(top: View) = {
     val activity = classOf[ScanActivity]
-    delayUI(me goTo activity)
+    delayUI(me goTo activity, 185)
     fab close true
   }
 
   def goReceive(top: View) = {
-    delayUI(makePaymentRequest.run)
+    delayUI(makePaymentRequest.run, 185)
     fab close true
   }
 

@@ -143,11 +143,11 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   def showDenomChooser(change: Int => Unit) = {
+    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
     val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
     val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
-    val balance: MilliSatoshi = app.kit.currentBalance
-    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
+    val balance = app.kit.currentBalance
     val title = me getString fiat_set_denom format humanFiat(coloredIn(balance), balance)
     val dialog = mkChoiceDialog(change(lst.getCheckedItemPosition), none, dialog_ok, dialog_cancel)
     lst setAdapter new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, denoms)
@@ -428,8 +428,8 @@ trait TimerActivity extends AppCompatActivity { me =>
     passAsk -> secretInputField
   }
 
-  def delayUI(fun: => Unit) = timer.schedule(anyToRunnable(fun), 225)
   def rm(previous: Dialog)(fun: => Unit) = wrap(previous.dismiss)(me delayUI fun)
+  def delayUI(fun: => Unit, delay: Int = 225) = timer.schedule(anyToRunnable(fun), delay)
   def mkForm(bld: Builder, title: View, content: View) = showForm(bld.setCustomTitle(title).setView(content).create)
   def onFail(error: CharSequence): Unit = me runOnUiThread mkForm(me negBld dialog_ok, null, error).show
   def onFail(error: Throwable): Unit = onFail(error.getMessage)
@@ -453,14 +453,14 @@ trait TimerActivity extends AppCompatActivity { me =>
   }
 
   // Show an emergency page in case of a fatal error
-  override def onCreate(savedInstanceState: Bundle): Unit = {
+  override def onCreate(savedInstanceState: Bundle) = {
     Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
     super.onCreate(savedInstanceState)
   }
 
   override def onDestroy = wrap(super.onDestroy) { timer.cancel }
   implicit def uiTask(process: => Runnable): TimerTask = new TimerTask { def run = me runOnUiThread process }
-  implicit def str2View(res: CharSequence): LinearLayout = str2Tuple(res) match { case (view, _) => view }
+  implicit def str2View(res: CharSequence): LinearLayout = str2Tuple(res) match { case view \ _ => view }
 
   // Run computation in Future, deal with results on UI thread
   def <[T](fun: => T, no: Throwable => Unit)(ok: T => Unit) = <<(Future(fun), no)(ok)
