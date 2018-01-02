@@ -1,5 +1,6 @@
 package com.lightning.wallet.ln.wire
 
+import android.os.Handler
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
 import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi}
 import fr.acinq.bitcoin.Crypto.{Point, PublicKey, Scalar}

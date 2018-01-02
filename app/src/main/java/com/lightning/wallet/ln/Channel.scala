@@ -497,7 +497,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
       // CMDShutdown in WAIT_FUNDING_DONE and NORMAL is handled differently above
       case (some: HasCommitments, CMDShutdown, NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
       case (_: NormalData, add: CMDAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
-      case _ => Tools log s"Channel: unhandled $state : $change"
+      case _ =>
     }
 
     // Change has been successfully processed

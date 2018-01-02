@@ -146,7 +146,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       // Just disconnect this channel from all listeners
       whenBackPressed = anyToRunnable(super.onBackPressed)
       setVis(View.VISIBLE, View.GONE)
-      app toast ln_ops_start_abort
       getSupportActionBar.show
     }
 

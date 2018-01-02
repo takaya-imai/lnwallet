@@ -19,12 +19,4 @@
         android:title="@string/action_settings"
         android:id="@+id/actionSettings"/>
 
-    <group android:id="@+id/group"
-        android:checkableBehavior="single">
-        <item android:id="@+id/menu_sort_by_name"
-            android:title="Hello"/>
-        <item android:id="@+id/menu_sort_by_last_edit"
-            android:title="There"/>
-    </group>
-
 </menu>

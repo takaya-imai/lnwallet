@@ -143,14 +143,16 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   def showDenomChooser(change: Int => Unit) = {
-    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
     val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
     val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
+    val balance: MilliSatoshi = app.kit.currentBalance
+    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
+    val title = me getString fiat_set_denom format humanFiat(coloredIn(balance), balance)
     val dialog = mkChoiceDialog(change(lst.getCheckedItemPosition), none, dialog_ok, dialog_cancel)
     lst setAdapter new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, denoms)
     lst.setItemChecked(app.prefs.getInt(AbstractKit.DENOM_TYPE, 0), true)
-    mkForm(dialog, null, form)
+    mkForm(dialog, title.html, form)
   }
 
   def animateTitle(nextText: String) = new Runnable { self =>

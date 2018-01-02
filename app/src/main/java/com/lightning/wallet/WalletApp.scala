@@ -14,6 +14,7 @@ import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
+import android.app.Application.ActivityLifecycleCallbacks
 import collection.JavaConverters.seqAsJavaListConverter
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import com.lightning.wallet.ln.Channel.CLOSING
@@ -25,8 +26,8 @@ import com.google.common.net.InetAddresses
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.google.protobuf.ByteString
 import scala.collection.mutable
-import android.app.Application
 import android.widget.Toast
+import android.os.Bundle
 import java.io.File
 
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
@@ -34,6 +35,7 @@ import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.{Protos, Wallet}
+import android.app.{Activity, Application}
 import rx.lang.scala.{Observable => Obs}
 
 
@@ -42,6 +44,7 @@ class WalletApp extends Application { me =>
   lazy val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
   lazy val chainFile = new File(getFilesDir, s"$appName.spvchain")
   lazy val walletFile = new File(getFilesDir, s"$appName.wallet")
+  var currentActivity: Option[Activity] = None
   var kit: WalletKit = _
 
   lazy val plur = getString(lang) match {
@@ -72,6 +75,16 @@ class WalletApp extends Application { me =>
     // These cannot be lazy vals because values may change
     denom = denoms apply prefs.getInt(AbstractKit.DENOM_TYPE, 0)
     fiatName = prefs.getString(AbstractKit.FIAT_TYPE, strDollar)
+
+    me registerActivityLifecycleCallbacks new ActivityLifecycleCallbacks {
+      override def onActivitySaveInstanceState(activity: Activity, state: Bundle) = none
+      override def onActivityCreated(activity: Activity, state: Bundle) = currentActivity = Some(activity)
+      override def onActivityStarted(activity: Activity) = currentActivity = Some(activity)
+      override def onActivityResumed(activity: Activity) = currentActivity = Some(activity)
+      override def onActivityPaused(activity: Activity) = currentActivity = None
+      override def onActivityDestroyed(activity: Activity) = none
+      override def onActivityStopped(activity: Activity) = none
+    }
   }
 
   def setBuffer(text: String) = {
@@ -140,7 +153,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) = {
         val needsReconnect = fromNode(notClosing, id)
-        val delayed = Obs.just(Tools log s"Retrying $id").delay(5.seconds)
+        val delayed = Obs.just(Tools log s"Reconnecting $id").delay(5.seconds)
         delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
         needsReconnect.foreach(_ process CMDOffline)
       }
@@ -162,7 +175,7 @@ class WalletApp extends Application { me =>
         kit.watchScripts(cd.commitTxs.flatMap(_.txOut).map(_.publicKeyScript) map bitcoinLibScript2bitcoinjScript)
 
         cd.tier12States.map(_.txn) match {
-          case Nil => Tools log "Channel does not currently have tier 1-2 transactions"
+          case Nil => Tools log "Closing channel does not have tier 1-2 transactions"
           case txs => cloud doProcess CloudAct(txs.toJson.toString.hex, Nil, "txs/schedule")
         }
       }

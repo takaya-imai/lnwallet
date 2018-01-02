@@ -6,6 +6,7 @@ import com.lightning.wallet.R.string._
 import com.lightning.wallet.ln.Broadcaster._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
+import com.lightning.wallet.ln.Tools.wrap
 import fr.acinq.bitcoin.Transaction
 import android.widget.Button
 import android.os.Bundle
@@ -28,7 +29,9 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   def goBitcoin(view: View) = me exitTo classOf[BtcActivity]
   def goStartChannel = me exitTo classOf[LNStartActivity]
 
-  // May change destroy action throughout an activity lifecycle
+  // We may scan a payment request while opening a channel, remove it here
+  override def onResume = wrap(super.onResume) { app.TransData.value = null }
+  // May change destroy action throughout an activity lifecycle, hence a var
   private[this] var whenDestroy = anyToRunnable(super.onDestroy)
   override def onDestroy = whenDestroy.run
 
@@ -37,9 +40,6 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_ln_ops)
-
-    // Clear TransData here
-    app.TransData.value = null
     val chanOpt = app.ChannelManager.notRefunding.headOption
     chanOpt map manageFirst getOrElse manageNoActiveChannel
   }

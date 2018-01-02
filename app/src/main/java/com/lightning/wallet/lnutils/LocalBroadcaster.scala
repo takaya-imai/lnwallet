@@ -36,6 +36,6 @@ object LocalBroadcaster extends Broadcaster {
     case (_, close: ClosingData, _: Command) =>
       val tier12Publishable = for (ts <- close.tier12States if ts.isPublishable) yield ts.txn
       val toSend = close.mutualClose ++ close.localCommit.map(_.commitTx) ++ tier12Publishable
-      for (tx <- toSend) try Tools.log(app.kit blockingSend tx) catch none
+      for (tx <- toSend) try app.kit blockingSend tx catch none
   }
 }

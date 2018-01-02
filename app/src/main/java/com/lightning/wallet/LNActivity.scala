@@ -225,7 +225,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
       app.ChannelManager.getOutPaymentObs(rpi).foreach(onNext = {
         // Must account for a special fail when no routes are found
-        case Some(updatedRpi) => chan process PlainAddHtlc(updatedRpi)
+        case Some(updatedRPI) => chan process PlainAddHtlc(updatedRPI)
         case None => onFail(me getString err_ln_no_route)
       }, onPaymentError)
     }
@@ -425,7 +425,6 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       app.TransData.value = null
 
     case otherwise =>
-      Tools log s"Unusable $otherwise"
       app.TransData.value = null
   }
 

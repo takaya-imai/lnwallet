@@ -302,7 +302,6 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
 
     case unusable =>
       app.TransData.value = null
-      Tools log s"Unusable $unusable"
   }
 
   // Get bitcoins
@@ -357,7 +356,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
           val pay = AddrData(ms, spendManager.getAddress)
           override def processTx(pass: String, feePerKb: Coin) = {
             add(me getString tx_announcing, Informer.BTCEVENT).flash.run
-            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(Tools.log)
+            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(none)
           }
 
           override def onTxFail(err: Throwable) =
