@@ -91,7 +91,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
   override def onProcess = {
     case (_, _: NormalData, cmd: CMDAddHtlc) => db txWrap {
       // This may either be a new payment or an old payment retry
-      // so either an insert or update will be executed successfully
+      // so either an insert or update should be executed successfully
 
       updateRouting(cmd.rpi)
       updateStatus(WAITING, cmd.rpi.pr.paymentHash)

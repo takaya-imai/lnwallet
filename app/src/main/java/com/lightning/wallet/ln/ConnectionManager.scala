@@ -1,9 +1,13 @@
 package com.lightning.wallet.ln
 
+import scala.concurrent.duration._
 import com.lightning.wallet.ln.wire._
 import com.lightning.wallet.ln.Features._
+
+import rx.lang.scala.{Observable => Obs}
 import java.net.{InetSocketAddress, Socket}
 import com.lightning.wallet.ln.Tools.{Bytes, none}
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.lightning.wallet.ln.LNParams.nodePrivateKey
 import com.lightning.wallet.ln.crypto.Noise.KeyPair
@@ -26,10 +30,9 @@ object ConnectionManager {
     override def onOperational(id: PublicKey, their: Init) = for (lst <- listeners) lst.onOperational(id, their)
   }
 
-  def requestConnection(announce: NodeAnnouncement) = connections get announce.nodeId match {
-    case Some(work) if !work.work.isCompleted && work.savedInit == null => Tools log "Awaiting for their Init"
-    case Some(work) if !work.work.isCompleted => events.onOperational(announce.nodeId, work.savedInit)
-    case _ => connections(announce.nodeId) = new Worker(announce.nodeId, announce.addresses.head)
+  def requestConnection(ann: NodeAnnouncement) = connections get ann.nodeId match {
+    case Some(w) if !w.work.isCompleted && w.savedInit != null => events.onOperational(ann.nodeId, w.savedInit)
+    case _ => connections(ann.nodeId) = new Worker(nodeId = ann.nodeId, location = ann.addresses.head)
   }
 
   class Worker(nodeId: PublicKey, location: InetSocketAddress) {
@@ -41,23 +44,22 @@ object ConnectionManager {
     }
 
     var savedInit: Init = _
-    val BUFFER_SIZE: Int = 1024
     val socket: Socket = new Socket
+    var lastPing = System.currentTimeMillis
 
     val work = Future {
-      val buffer = new Bytes(BUFFER_SIZE)
+      val buffer = new Bytes(1024)
       socket.connect(location, 7500)
       handler.init
 
       while (true) {
-        val length = socket.getInputStream.read(buffer, 0, BUFFER_SIZE)
+        val length = socket.getInputStream.read(buffer, 0, 1024)
         if (length < 0) throw new RuntimeException("Connection droppped")
         else handler process BinaryData(buffer take length)
       }
     }
 
     work onComplete { _ =>
-      Tools log s"Disconnected"
       events onDisconnect nodeId
     }
 
@@ -74,11 +76,18 @@ object ConnectionManager {
 
       case ping: Ping if ping.pongLength > 0 =>
         handler process Pong("00" * ping.pongLength)
+        lastPing = System.currentTimeMillis
 
       case theirMessage =>
         // Forward to all channels
         events onMessage theirMessage
     }
+  }
+
+  Obs.interval(150.seconds) foreach { _ =>
+    val outdated = System.currentTimeMillis - 1000 * 150
+    for (w <- connections.values if w.lastPing < outdated)
+      try w.socket.close catch none
   }
 }
 

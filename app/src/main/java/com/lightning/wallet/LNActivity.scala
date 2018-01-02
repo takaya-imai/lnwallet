@@ -221,14 +221,12 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   def manageActive(chan: Channel) = {
-    val pay: RuntimePaymentInfo => Unit = rpi => {
-      notifySubTitle(me getString ln_send, Informer.LNPAYMENT)
+    val pay: RuntimePaymentInfo => Unit = rpi =>
       app.ChannelManager.getOutPaymentObs(rpi).foreach(onNext = {
         // Must account for a special fail when no routes are found
         case Some(updatedRPI) => chan process PlainAddHtlc(updatedRPI)
         case None => onFail(me getString err_ln_no_route)
       }, onPaymentError)
-    }
 
     toolbar setOnClickListener onButtonTap {
       showDenomChooser { newDenominationPosition =>

@@ -242,6 +242,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
           case Success(info: PaymentInfo) if info.incoming == 1 => throw AddException(cmd, ERR_FAILED)
 
           case _ =>
+            // This may be a FAILURE payment which is fine
             val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
             doProcess(CMDProceed)

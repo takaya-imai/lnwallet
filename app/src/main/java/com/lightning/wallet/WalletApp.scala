@@ -133,17 +133,20 @@ class WalletApp extends Application { me =>
     def notClosing: ChannelVec = all.filter(_.state != Channel.CLOSING)
 
     val chainEventsListener = new TxTracker with BlocksListener {
-      override def coinsSent(tx: Transaction) = CMDSpent(tx) match { case spent =>
-        // Any incoming tx may spend HTLCs so we always attempt to extract a preimage
-        for (channel <- all) channel process spent
-        bag.extractPreimage(spent.tx)
-      }
-
       override def txConfirmed(tx: Transaction) = for (chan <- notClosing) chan process CMDConfirmed(tx)
       // No matter how many blocks are left on start we only send a CMD once the last block has been processed
       def tellHeight(left: Int) = if (left < 1) for (chan <- all) chan process CMDBestHeight(broadcaster.currentHeight)
       override def onBlocksDownloaded(peer: Peer, block: Block, fb: FilteredBlock, left: Int) = tellHeight(left)
       override def onChainDownloadStarted(peer: Peer, left: Int) = tellHeight(left)
+
+      override def coinsSent(tx: Transaction) = {
+        // We always attempt to extract a preimage
+        // assuming any tx may contain it
+
+        val spent = CMDSpent(tx)
+        for (chan <- all) chan process spent
+        bag.extractPreimage(spent.tx)
+      }
     }
 
     val socketEventsListener = new ConnectionListener {
@@ -153,7 +156,7 @@ class WalletApp extends Application { me =>
 
       override def onDisconnect(id: PublicKey) = {
         val needsReconnect = fromNode(notClosing, id)
-        val delayed = Obs.just(Tools log s"Reconnecting $id").delay(5.seconds)
+        val delayed = Obs.just(Tools log s"Reconnecting to $id").delay(5.seconds)
         delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
         needsReconnect.foreach(_ process CMDOffline)
       }
