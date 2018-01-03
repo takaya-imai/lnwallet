@@ -29,13 +29,13 @@ object ConnectionManager {
       for (lst <- listeners) lst.onOperational(ann, their)
   }
 
-  def connectTo(ann: NodeAnnouncement) = connections get ann match {
-    case Some(existingWorker) if existingWorker.socket.isConnected =>
+  def connectTo(a: NodeAnnouncement) = connections get a match {
+    case Some(existingWorker) if !existingWorker.work.isCompleted =>
       if (null == existingWorker.savedInit) existingWorker.disconnect
-      else events.onOperational(ann, existingWorker.savedInit)
+      else events.onOperational(a, existingWorker.savedInit)
 
     // Either disconnected or no worker at all
-    case _ => connections(ann) = new Worker(ann)
+    case _ => connections(a) = new Worker(a)
   }
 
   class Worker(ann: NodeAnnouncement) {
