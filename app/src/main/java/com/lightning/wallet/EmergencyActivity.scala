@@ -12,10 +12,10 @@ import android.view.View
 
 
 class EmergencyActivity extends ToolbarActivity { me =>
-  override def onCreate(savedInstanceState: Bundle) = {
-    // Set action bar, main view content, animate title
+  override def notifySubTitle(subtitleText: String, infoType: Int): Unit = none
+  def showMnemonic(view: View) = passWrap(me getString sets_mnemonic) apply checkPassNotify(doViewMnemonic)
 
-    super.onCreate(savedInstanceState)
+  def INIT(state: Bundle) = {
     <(prepareWallet, _ => app toast err_general)(none)
     wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_emergency)
     add(me getString emerge_subtitle, Informer.EMERGENCY).flash.run
@@ -33,9 +33,6 @@ class EmergencyActivity extends ToolbarActivity { me =>
       peerGroup = null
       store = null
     }
-
-  override def notifySubTitle(subtitleText: String, infoType: Int): Unit = none
-  def showMnemonic(view: View) = passWrap(me getString sets_mnemonic) apply checkPassNotify(doViewMnemonic)
 
   def showDetails(report: String) = {
     val (view, field) = str2Tuple(report)

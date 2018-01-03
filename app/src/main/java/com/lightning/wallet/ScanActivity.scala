@@ -17,11 +17,8 @@ class ScanActivity extends TimerActivity with BarcodeCallback { me =>
   type Points = java.util.List[com.google.zxing.ResultPoint]
   private[this] var lastAttempt = System.currentTimeMillis
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedInstState: Bundle) =
-  {
+  def INIT(state: Bundle) = {
     setContentView(R.layout.activity_scan)
-    super.onCreate(savedInstState)
     reader decodeContinuous me
   }
 

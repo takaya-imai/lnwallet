@@ -30,9 +30,9 @@ import android.widget.Toast
 import android.os.Bundle
 import java.io.File
 
+import com.lightning.wallet.ln.wire.{Init, LightningMessage, NodeAnnouncement}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
-import com.lightning.wallet.ln.wire.{Init, LightningMessage}
 import android.content.{ClipData, ClipboardManager, Context}
 import org.bitcoinj.wallet.{Protos, Wallet}
 import android.app.{Activity, Application}
@@ -121,14 +121,13 @@ class WalletApp extends Application { me =>
   }
 
   object ChannelManager {
-    import ConnectionManager._
     type ChannelVec = Vector[Channel]
     type RPIOpt = Option[RuntimePaymentInfo]
 
     val operationalListeners = mutable.Set(broadcaster, bag, StorageWrap, Notificator)
     // Obtain a vector of stored channels which would receive CMDSpent, CMDBestHeight and nothing else
     var all: ChannelVec = for (data <- ChannelWrap.get) yield createChannel(operationalListeners, data)
-    def fromNode(of: ChannelVec, id: PublicKey): ChannelVec = of.filter(_.data.announce.nodeId == id)
+    def fromNode(of: ChannelVec, ann: NodeAnnouncement): ChannelVec = of.filter(_.data.announce == ann)
     def notRefunding: ChannelVec = all.filter(_.state != Channel.REFUNDING)
     def notClosing: ChannelVec = all.filter(_.state != Channel.CLOSING)
 
@@ -144,31 +143,38 @@ class WalletApp extends Application { me =>
         // assuming any tx may contain it
 
         val spent = CMDSpent(tx)
+        bag extractPreimage spent.tx
         for (chan <- all) chan process spent
-        bag.extractPreimage(spent.tx)
       }
     }
 
     val socketEventsListener = new ConnectionListener {
-      override def onOperational(id: PublicKey, their: Init) = fromNode(notClosing, id).foreach(_ process CMDOnline)
-      override def onTerminalError(id: PublicKey) = fromNode(notClosing, id).foreach(_ process CMDShutdown)
-      override def onMessage(msg: LightningMessage) = notClosing.foreach(_ process msg)
+      override def onOperational(ann: NodeAnnouncement, their: Init) = fromNode(notClosing, ann).foreach(_ process CMDOnline)
+      override def onTerminalError(ann: NodeAnnouncement) = fromNode(notClosing, ann).foreach(_ process CMDShutdown)
+      override def onMessage(lightningMessage: LightningMessage) = notClosing.foreach(_ process lightningMessage)
 
-      override def onDisconnect(id: PublicKey) = {
-        val needsReconnect = fromNode(notClosing, id)
-        val delayed = Obs.just(Tools log s"Reconnecting to $id").delay(5.seconds)
-        delayed.subscribe(_ => reconnect(needsReconnect), Tools.errlog)
-        needsReconnect.foreach(_ process CMDOffline)
+      override def onDisconnect(ann: NodeAnnouncement) = fromNode(notClosing, ann) match {
+        case affected if affected.isEmpty => Tools log s"Dropping connection to ${ann.nodeId}"
+        case affected => notifyAndReconnect(affected, ann)
       }
     }
 
-    def reconnect(of: ChannelVec) = of.map(_.data.announce).distinct foreach requestConnection
+    def notifyAndReconnect(chans: ChannelVec, ann: NodeAnnouncement) = {
+      // Immediately inform affected channels and try to reconnect in 5 seconds
+      Obs.just(ann).delay(5.seconds).subscribe(ConnectionManager.connectTo, none)
+      chans.foreach(_ process CMDOffline)
+    }
+
+    def initConnect = for (chan <- notClosing) ConnectionManager connectTo chan.data.announce
     def createChannel(interested: mutable.Set[ChannelListener], bootstrap: ChannelData) = new Channel {
-      def SEND(msg: LightningMessage) = connections.get(data.announce.nodeId).foreach(_.handler process msg)
       def STORE(hasCommitments: HasCommitments) = runAnd(hasCommitments)(ChannelWrap put hasCommitments)
-      // First add listeners, then specifically call doProcess so it runs on UI thread
+      // First add listeners, then specifically call doProcess so it runs on current thread
       val listeners = interested
       doProcess(bootstrap)
+
+      def SEND(lightningMessage: LightningMessage) =
+        ConnectionManager.connections.get(data.announce)
+          .foreach(_.handler process lightningMessage)
 
       def CLOSEANDWATCH(cd: ClosingData) = {
         BECOME(data1 = STORE(cd), state1 = CLOSING)
@@ -247,17 +253,18 @@ class WalletApp extends Application { me =>
 
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       startBlocksDownload(ChannelManager.chainEventsListener)
-      ChannelManager reconnect ChannelManager.notClosing
+      ChannelManager.initConnect
       RatesSaver.update
     }
   }
 }
 
 object Vibr extends TxTracker {
-  override def coinsSent(tx: Transaction) = vibrate(processed)
-  override def coinsReceived(tx: Transaction) = vibrate(processed)
+  override def coinsSent(tx: Transaction) = vibrate(btcBroadcasted)
+  override def coinsReceived(tx: Transaction) = vibrate(btcBroadcasted)
   def vibrate(pattern: Pattern) = if (null != vib && vib.hasVibrator) vib.vibrate(pattern, -1)
   lazy val vib = app.getSystemService(Context.VIBRATOR_SERVICE).asInstanceOf[android.os.Vibrator]
-  val processed = Array(0L, 85, 200)
+  val btcBroadcasted = Array(0L, 75, 250, 75, 250)
+  val lnSettled = Array(0L, 85, 200)
   type Pattern = Array[Long]
 }

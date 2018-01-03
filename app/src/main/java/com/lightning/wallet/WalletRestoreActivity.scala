@@ -7,6 +7,7 @@ import com.lightning.wallet.R.string._
 import org.bitcoinj.wallet.KeyChain.KeyPurpose._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.hootsuite.nachos.terminator.ChipTerminatorHandler._
+
 import com.lightning.wallet.Utils.{app, isMnemonicCorrect}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import org.bitcoinj.wallet.{DeterministicSeed, Wallet}
@@ -41,12 +42,9 @@ class WalletRestoreActivity extends TimerActivity with ViewSwitch { me =>
   lazy val restoreWallet = findViewById(R.id.restoreWallet).asInstanceOf[Button]
   lazy val restoreWhen = findViewById(R.id.restoreWhen).asInstanceOf[Button]
   lazy val password = findViewById(R.id.restorePass).asInstanceOf[EditText]
-  lazy val datePicker = new WhenPicker(me, 1488326400L * 1000)
+  lazy val datePicker = new WhenPicker(me, 1501545600L * 1000)
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedState: Bundle) =
-  {
-    super.onCreate(savedState)
+  def INIT(state: Bundle) = {
     setContentView(R.layout.activity_restore)
     val allowed = MnemonicCode.INSTANCE.getWordList
     val lineStyle = android.R.layout.simple_list_item_1

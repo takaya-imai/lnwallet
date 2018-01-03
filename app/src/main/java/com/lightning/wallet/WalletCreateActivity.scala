@@ -1,16 +1,16 @@
 package com.lightning.wallet
 
 import R.string._
-import org.bitcoinj.core.{BlockChain, PeerGroup}
 import android.widget.{Button, EditText}
+import org.bitcoinj.core.{BlockChain, PeerGroup}
 
 import com.lightning.wallet.ln.Tools.wrap
 import org.bitcoinj.store.SPVBlockStore
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.wallet.Wallet
-import android.os.Bundle
 import android.view.View
+import android.os.Bundle
 
 
 class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
@@ -22,10 +22,7 @@ class WalletCreateActivity extends TimerActivity with ViewSwitch { me =>
     findViewById(R.id.createInfo) ::
     findViewById(R.id.createProgress) :: Nil
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedState: Bundle) =
-  {
-    super.onCreate(savedState)
+  def INIT(state: Bundle) = {
     setContentView(R.layout.activity_create)
     createPass addTextChangedListener new TextChangedWatcher {
       override def onTextChanged(s: CharSequence, st: Int, n: Int, af: Int) =

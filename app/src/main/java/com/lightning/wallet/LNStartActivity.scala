@@ -20,7 +20,6 @@ import scala.util.{Failure, Success}
 
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
-import fr.acinq.bitcoin.Crypto.PublicKey
 import org.bitcoinj.script.ScriptBuilder
 import scala.collection.mutable
 import org.bitcoinj.core.Coin
@@ -71,11 +70,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     def getCount = nodes.size
   }
 
-  override def onCreate(savedState: Bundle) = {
-    // Initialize this activity, method is run once
-    // Set action bar, main view content, title text
-
-    super.onCreate(savedState)
+  def INIT(state: Bundle) = {
     wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln_start)
     add(text = me getString ln_select_peer, tag = Informer.LNSTATE).flash.run
     animateTitle(me getString ln_ops_start)
@@ -100,10 +95,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
       "<br>" + humanNode(announce.nodeId, "<br>"), new String).html
 
     val socketOpenListener = new ConnectionListener {
-      override def onMessage(message: LightningMessage) = freshChan process message
-      override def onDisconnect(nodeId: PublicKey) = if (nodeId == announce.nodeId) freshChan process CMDShutdown
-      override def onTerminalError(nodeId: PublicKey) = if (nodeId == announce.nodeId) freshChan process CMDShutdown
-      override def onOperational(nodeId: PublicKey, their: Init) = if (nodeId == announce.nodeId)
+      override def onMessage(lightningMessage: LightningMessage) = freshChan process lightningMessage
+      override def onDisconnect(ann: NodeAnnouncement) = if (ann == announce) freshChan process CMDShutdown
+      override def onTerminalError(ann: NodeAnnouncement) = if (ann == announce) freshChan process CMDShutdown
+      override def onOperational(ann: NodeAnnouncement, their: Init) = if (ann == announce)
         // Peer is reachable so now we ask user to provide a funding
         me runOnUiThread askForFunding(freshChan, their)
     }
@@ -143,6 +138,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     def cancelChannel: Unit = {
       freshChan.listeners -= chanOpenListener
       ConnectionManager.listeners -= socketOpenListener
+      ConnectionManager.connections(announce).disconnect
       // Just disconnect this channel from all listeners
       whenBackPressed = anyToRunnable(super.onBackPressed)
       setVis(View.VISIBLE, View.GONE)
@@ -152,7 +148,7 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
     // We need PaymentInfoWrap here to process inner channel errors
     freshChan.listeners ++= Set(chanOpenListener, PaymentInfoWrap)
     ConnectionManager.listeners += socketOpenListener
-    ConnectionManager requestConnection announce
+    ConnectionManager connectTo announce
 
     // Update UI to display selected node details
     lnCancel setOnClickListener onButtonTap(cancelChannel)

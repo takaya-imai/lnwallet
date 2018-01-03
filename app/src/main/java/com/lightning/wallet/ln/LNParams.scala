@@ -15,10 +15,10 @@ import fr.acinq.eclair.UInt64
 
 
 object LNParams { me =>
+  val dustLimit = Satoshi(573)
   val minHtlcValue = MilliSatoshi(10000L)
   val maxHtlcValue = MilliSatoshi(4194304000L)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
-  val dustLimit = Satoshi(MIN_NONDUST_OUTPUT.value)
   val chainHash = Block.TestnetGenesisBlock.hash
   val theirReserveToFundingRatio = 0.01 // 1%
   val maxReserveToFundingRatio = 0.05 // 5%

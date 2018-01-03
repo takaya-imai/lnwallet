@@ -85,10 +85,7 @@ public abstract class NfcDetectorActivity extends AppCompatActivity {
 	/** NXP chips support Mifare Classic, others do not. */
 	protected boolean nxpMifareClassic;
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    	Log.d(TAG, "onCreate");
+    public void initNfc(Bundle savedInstanceState) {
     	
     	if(savedInstanceState != null) {
     	    intentProcessed = savedInstanceState.getBoolean(STATE_INTENT_PROCESSED);

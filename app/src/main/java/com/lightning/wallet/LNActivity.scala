@@ -160,24 +160,19 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     add(subtitle, infoType).flash.run
   }
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedState: Bundle) =
+  def INIT(state: Bundle) = if (app.isAlive) {
+    // Set action bar, main view content, wire up list events, update title later
+    wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
+    add(me getString ln_notify_connecting, Informer.LNSTATE)
+    wrap(me setDetecting true)(me initNfc state)
+    me startListUpdates adapter
 
-    if (app.isAlive) {
-      super.onCreate(savedState)
-
-      // Set action bar, main view content, wire up list events, update title later
-      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_ln)
-      add(me getString ln_notify_connecting, Informer.LNSTATE)
-      me startListUpdates adapter
-      me setDetecting true
-
-      list setAdapter adapter
-      list setFooterDividersEnabled false
-      paymentsViewProvider reload new String
-      app.kit.wallet addCoinsSentEventListener txTracker
-      app.kit.wallet addCoinsReceivedEventListener txTracker
-    } else me exitTo classOf[MainActivity]
+    list setAdapter adapter
+    list setFooterDividersEnabled false
+    paymentsViewProvider reload new String
+    app.kit.wallet addCoinsSentEventListener txTracker
+    app.kit.wallet addCoinsReceivedEventListener txTracker
+  } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeCoinsSentEventListener txTracker

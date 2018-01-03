@@ -143,11 +143,11 @@ trait ToolbarActivity extends TimerActivity { me =>
   }
 
   def showDenomChooser(change: Int => Unit) = {
-    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
     val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
     val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
-    val balance = app.kit.currentBalance
+    val balance: MilliSatoshi = app.kit.currentBalance
+    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
     val title = me getString fiat_set_denom format humanFiat(coloredIn(balance), balance)
     val dialog = mkChoiceDialog(change(lst.getCheckedItemPosition), none, dialog_ok, dialog_cancel)
     lst setAdapter new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, denoms)
@@ -219,9 +219,8 @@ trait ToolbarActivity extends TimerActivity { me =>
       }
 
       def proceed = {
-        import app.ChannelManager.{operationalListeners, all, notClosing, reconnect, createChannel}
-        val localCommits: Vector[Commitments] = app.ChannelManager.all.flatMap(_ apply identity)
-        val serverRequest = LNParams.cloud.connector.getBackup(LNParams.cloudId.toString)
+        val serverRequest = LNParams.cloud.connector getBackup LNParams.cloudId.toString
+        val localCommitments = app.ChannelManager.all.flatMap(_ apply identity)
         add(app getString ln_notify_recovering, Informer.LNPAYMENT).flash.run
         timer.schedule(delete(Informer.LNPAYMENT), 16000)
 
@@ -235,14 +234,15 @@ trait ToolbarActivity extends TimerActivity { me =>
             // This may be some garbage so omit this one if it fails
             refundingData <- Try apply to[RefundingData](jsonDecoded)
             // Now throw it away if it is already present in list of local channels
-            if !localCommits.exists(_.channelId == refundingData.commitments.channelId)
-            refundingChannel = createChannel(operationalListeners, refundingData)
+            if !localCommitments.exists(_.channelId == refundingData.commitments.channelId)
+            chan = app.ChannelManager.createChannel(app.ChannelManager.operationalListeners, refundingData)
             isAdded = app.kit watchFunding refundingData.commitments
-          } all +:= refundingChannel
+          } app.ChannelManager.all +:= chan
 
-          // Request new connections
-          reconnect(notClosing)
-        }, Tools.errlog)
+          // New channels have been added
+          // and they need to be reconnected
+          app.ChannelManager.initConnect
+        }, none)
       }
     }
 
@@ -275,7 +275,7 @@ trait ToolbarActivity extends TimerActivity { me =>
 
     changePass setOnClickListener onButtonTap {
       def openForm = passWrap(me getString sets_secret_change) apply checkPassNotify { oldPass =>
-        val (view, field) = generatePromptView(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, secret_new, null)
+        val view \ field = generatePromptView(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, secret_new, null)
         mkForm(mkChoiceDialog(checkNewPass, none, dialog_ok, dialog_cancel), me getString sets_secret_change, view)
         def checkNewPass = if (field.getText.toString.length >= 6) changePassword else app toast secret_too_short
 
@@ -452,10 +452,11 @@ trait TimerActivity extends AppCompatActivity { me =>
     new Builder(me).setPositiveButton(okResource, again).setNegativeButton(noResource, cancel)
   }
 
-  // Show an emergency page in case of a fatal error
+  def INIT(savedInstanceState: Bundle): Unit
   override def onCreate(savedInstanceState: Bundle) = {
     Thread setDefaultUncaughtExceptionHandler new UncaughtHandler(me)
     super.onCreate(savedInstanceState)
+    INIT(savedInstanceState)
   }
 
   override def onDestroy = wrap(super.onDestroy) { timer.cancel }

@@ -9,8 +9,8 @@ import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
 import com.lightning.wallet.ln.Tools.wrap
 import fr.acinq.bitcoin.Transaction
 import android.widget.Button
-import android.os.Bundle
 import android.view.View
+import android.os.Bundle
 import java.util.Date
 
 
@@ -35,10 +35,7 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
   private[this] var whenDestroy = anyToRunnable(super.onDestroy)
   override def onDestroy = whenDestroy.run
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedInstanceState: Bundle) =
-  {
-    super.onCreate(savedInstanceState)
+  def INIT(state: Bundle) = {
     setContentView(R.layout.activity_ln_ops)
     val chanOpt = app.ChannelManager.notRefunding.headOption
     chanOpt map manageFirst getOrElse manageNoActiveChannel

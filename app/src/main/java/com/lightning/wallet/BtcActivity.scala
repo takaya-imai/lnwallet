@@ -2,6 +2,7 @@ package com.lightning.wallet
 
 import android.widget._
 import org.bitcoinj.core._
+
 import collection.JavaConverters._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
@@ -10,10 +11,9 @@ import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
-import com.lightning.wallet.ln.{PaymentRequest, Tools}
 import android.view.{Menu, MenuItem, View, ViewGroup}
-import scala.util.{Failure, Success, Try}
 
+import scala.util.{Failure, Success, Try}
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import android.text.format.DateUtils.getRelativeTimeSpanString
@@ -21,14 +21,16 @@ import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import android.content.DialogInterface.BUTTON_POSITIVE
 import android.widget.AbsListView.OnScrollListener
 import com.lightning.wallet.ln.LNParams.minDepth
+import com.lightning.wallet.ln.PaymentRequest
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
-import android.graphics.Typeface
+
 import android.content.Intent
-import android.os.Bundle
 import android.net.Uri
 import java.util.Date
+
+import android.os.Bundle
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
@@ -175,89 +177,85 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     timer.schedule(delete(infoType), 8000)
   }
 
-  // Initialize this activity, method is run once
-  override def onCreate(savedInstanceState: Bundle) =
+  def INIT(state: Bundle) = if (app.isAlive) {
+    // Set action bar, main view content, animate title, wire up list events
+    wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
+    wrap(updTitle)(add(me getString constListener.status, Informer.PEER).flash.run)
+    wrap(me setDetecting true)(me initNfc state)
+    me startListUpdates adapter
 
-    if (app.isAlive) {
-      super.onCreate(savedInstanceState)
-      // Set action bar, main view content, animate title, wire up list events
-      wrap(me setSupportActionBar toolbar)(me setContentView R.layout.activity_btc)
-      wrap(updTitle)(add(me getString constListener.status, Informer.PEER).flash.run)
-      me startListUpdates adapter
-      me setDetecting true
+    toolbar setOnClickListener onButtonTap {
+      showDenomChooser { newDenominationPosition =>
+        app.prefs.edit.putInt(AbstractKit.DENOM_TYPE,
+          newDenominationPosition).commit
 
-      toolbar setOnClickListener onButtonTap {
-        showDenomChooser { newDenominationPosition =>
-          app.prefs.edit.putInt(AbstractKit.DENOM_TYPE,
-            newDenominationPosition).commit
+        // Update UI with new denomination right away
+        denom = denoms apply newDenominationPosition
+        adapter.notifyDataSetChanged
+        updTitle
+      }
+    }
 
-          // Update UI with new denomination right away
-          denom = denoms apply newDenominationPosition
-          adapter.notifyDataSetChanged
-          updTitle
-        }
+    list setAdapter adapter
+    list setFooterDividersEnabled false
+    list setOnItemClickListener onTap { pos =>
+      val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
+      val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_tx_btc_details, null)
+      val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
+
+      val wrap = adapter getItem pos
+      val marking = if (wrap.nativeValue.isPositive) sumIn else sumOut
+      val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
+      val outputs = wrap.payDatas(wrap.nativeValue.isPositive).flatMap(_.toOption)
+      val humanViews = for (payData <- outputs) yield payData.cute(marking).html
+
+      // Wire up a popup list
+      lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, humanViews.toArray)
+      lst setOnItemClickListener onTap { position => outputs(position - 1).onClick }
+      lst setHeaderDividersEnabled false
+      lst addHeaderView detailsWrapper
+
+      outside setOnClickListener onButtonTap {
+        val blocktrail = "https://www.blocktrail.com/tBTC/tx/"
+        val uri = Uri.parse(blocktrail + wrap.tx.getHashAsString)
+        me startActivity new Intent(Intent.ACTION_VIEW, uri)
       }
 
-      list setAdapter adapter
-      list setFooterDividersEnabled false
-      list setOnItemClickListener onTap { pos =>
-        val lst = getLayoutInflater.inflate(R.layout.frag_center_list, null).asInstanceOf[ListView]
-        val detailsWrapper = getLayoutInflater.inflate(R.layout.frag_tx_btc_details, null)
-        val outside = detailsWrapper.findViewById(R.id.viewTxOutside).asInstanceOf[Button]
+      wrap.fee match {
+        case _ if wrap.tx.getConfidence.getConfidenceType == DEAD =>
+          mkForm(me negBld dialog_ok, sumOut.format(txsConfs.last).html, lst)
 
-        val wrap = adapter getItem pos
-        val marking = if (wrap.nativeValue.isPositive) sumIn else sumOut
-        val confirms = app.plurOrZero(txsConfs, wrap.tx.getConfidence.getDepthInBlocks)
-        val outputs = wrap.payDatas(wrap.nativeValue.isPositive).flatMap(_.toOption)
-        val humanViews = for (payData <- outputs) yield payData.cute(marking).html
+        case _ if wrap.nativeValue.isPositive =>
+          val details = feeIncoming.format(confirms)
+          mkForm(me negBld dialog_ok, details.html, lst)
 
-        // Wire up a popup list
-        lst setAdapter new ArrayAdapter(me, R.layout.frag_top_tip, R.id.actionTip, humanViews.toArray)
-        lst setOnItemClickListener onTap { position => outputs(position - 1).onClick }
-        lst setHeaderDividersEnabled false
-        lst addHeaderView detailsWrapper
+        case Some(fee) =>
+          val details = feeDetails.format(marking.format(denom withSign fee), confirms)
+          mkForm(me negBld dialog_ok, humanFiat(details, fee).html, lst)
 
-        outside setOnClickListener onButtonTap {
-          val blocktrail = "https://www.blocktrail.com/tBTC/tx/"
-          val uri = Uri.parse(blocktrail + wrap.tx.getHashAsString)
-          me startActivity new Intent(Intent.ACTION_VIEW, uri)
-        }
-
-        wrap.fee match {
-          case _ if wrap.tx.getConfidence.getConfidenceType == DEAD =>
-            mkForm(me negBld dialog_ok, sumOut.format(txsConfs.last).html, lst)
-
-          case _ if wrap.nativeValue.isPositive =>
-            val details = feeIncoming.format(confirms)
-            mkForm(me negBld dialog_ok, details.html, lst)
-
-          case Some(fee) =>
-            val details = feeDetails.format(marking.format(denom withSign fee), confirms)
-            mkForm(me negBld dialog_ok, humanFiat(details, fee).html, lst)
-
-          case None =>
-            val details = feeAbsent.format(confirms).html
-            mkForm(me negBld dialog_ok, details, lst)
-        }
+        case None =>
+          val details = feeAbsent.format(confirms).html
+          mkForm(me negBld dialog_ok, details, lst)
       }
+    }
 
-      // Wait for transactions list
-      <(nativeTransactions, onFail) { txs =>
-        app.kit.wallet addCoinsSentEventListener lstTracker
-        app.kit.wallet addCoinsReceivedEventListener lstTracker
-        app.kit.wallet addTransactionConfidenceEventListener lstTracker
-        if (txs.isEmpty) mnemonicWarn setVisibility View.VISIBLE
-        mnemonicInfo setText getString(mnemonic_info).html
-        adapter set txs
-      }
+    // Wait for transactions list
+    <(nativeTransactions, onFail) { txs =>
+      app.kit.wallet addCoinsSentEventListener lstTracker
+      app.kit.wallet addCoinsReceivedEventListener lstTracker
+      app.kit.wallet addTransactionConfidenceEventListener lstTracker
+      if (txs.isEmpty) mnemonicWarn setVisibility View.VISIBLE
+      mnemonicInfo setText getString(mnemonic_info).html
+      adapter set txs
+    }
 
-      // Wire up general listeners
-      app.kit.wallet addCoinsSentEventListener txTracker
-      app.kit.wallet addCoinsReceivedEventListener txTracker
-      app.kit.peerGroup addBlocksDownloadedEventListener catchListener
-      app.kit.peerGroup addDisconnectedEventListener constListener
-      app.kit.peerGroup addConnectedEventListener constListener
-    } else me exitTo classOf[MainActivity]
+    // Wire up general listeners
+    app.kit.wallet addCoinsSentEventListener txTracker
+    app.kit.wallet addCoinsReceivedEventListener txTracker
+    app.kit.peerGroup addBlocksDownloadedEventListener catchListener
+    app.kit.peerGroup addDisconnectedEventListener constListener
+    app.kit.peerGroup addConnectedEventListener constListener
+  } else me exitTo classOf[MainActivity]
 
   override def onDestroy = wrap(super.onDestroy) {
     app.kit.wallet removeTransactionConfidenceEventListener lstTracker
@@ -281,7 +279,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  override def onResume: Unit = wrap(super.onResume) {
+  override def onResume = wrap(super.onResume) {
     app.prefs.edit.putBoolean(AbstractKit.LANDING_LN, false).commit
     checkTransData
   }
@@ -356,7 +354,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
           val pay = AddrData(ms, spendManager.getAddress)
           override def processTx(pass: String, feePerKb: Coin) = {
             add(me getString tx_announcing, Informer.BTCEVENT).flash.run
-            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(Tools.log)
+            <(app.kit blockingSend makeTx(pass, feePerKb), onTxFail)(none)
           }
 
           override def onTxFail(err: Throwable) =

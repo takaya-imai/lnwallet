@@ -111,7 +111,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
         for (Htlc(false, _) \ fulfill <- norm.commitments.localCommit.spec.fulfilled) updOkOutgoing(fulfill)
         // Then we need to let the cloud know as it may be waiting for a payment
         cloud doProcess CMDStart
-        vibrate(processed)
+        vibrate(lnSettled)
       }
 
       for (htlc \ some <- norm.commitments.localCommit.spec.failed) some match {
