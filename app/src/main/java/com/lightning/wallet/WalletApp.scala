@@ -6,7 +6,6 @@ import org.bitcoinj.core._
 import com.lightning.wallet.ln._
 import scala.concurrent.duration._
 import com.softwaremill.quicklens._
-import com.lightning.wallet.Utils._
 import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Tools._
 import spray.json.DefaultJsonProtocol._
@@ -34,6 +33,7 @@ import com.lightning.wallet.ln.wire.{Init, LightningMessage, NodeAnnouncement}
 import com.google.common.util.concurrent.Service.State.{RUNNING, STARTING}
 import org.bitcoinj.uri.{BitcoinURI, BitcoinURIParseException}
 import android.content.{ClipData, ClipboardManager, Context}
+import com.lightning.wallet.Utils.{app, appName}
 import org.bitcoinj.wallet.{Protos, Wallet}
 import android.app.{Activity, Application}
 import rx.lang.scala.{Observable => Obs}
@@ -62,7 +62,7 @@ class WalletApp extends Application { me =>
 
   // Various utilities
 
-  def toast(code: Int): Unit = toast(app getString code)
+  def toast(code: Int): Unit = toast(me getString code)
   def toast(msg: CharSequence): Unit = Toast.makeText(me, msg, Toast.LENGTH_LONG).show
   def isAlive = if (null == kit) false else kit.state match { case STARTING | RUNNING => true case _ => false }
   def plurOrZero(opts: Array[String], number: Long) = if (number > 0) plur(opts, number) format number else opts(0)
@@ -70,11 +70,11 @@ class WalletApp extends Application { me =>
   def getBuffer = clipboardManager.getPrimaryClip.getItemAt(0).getText.toString
   def getTo(base58: String) = Address.fromBase58(params, base58)
 
-  appReference = me
+  Utils.appReference = me
   override def onCreate = wrap(super.onCreate) {
     // These cannot be lazy vals because values may change
-    denom = denoms apply prefs.getInt(AbstractKit.DENOM_TYPE, 0)
-    fiatName = prefs.getString(AbstractKit.FIAT_TYPE, strDollar)
+    Utils.denom = Utils.denoms apply prefs.getInt(AbstractKit.DENOM_TYPE, 0)
+    Utils.fiatName = prefs.getString(AbstractKit.FIAT_TYPE, Utils.strDollar)
 
     me registerActivityLifecycleCallbacks new ActivityLifecycleCallbacks {
       override def onActivitySaveInstanceState(activity: Activity, state: Bundle) = none
@@ -143,20 +143,20 @@ class WalletApp extends Application { me =>
         // assuming any tx may contain it
 
         val spent = CMDSpent(tx)
-        bag extractPreimage spent.tx
+        bag.extractPreimage(spent.tx)
         for (chan <- all) chan process spent
       }
     }
 
     val socketEventsListener = new ConnectionListener {
-      override def onOperational(ann: NodeAnnouncement, their: Init) = fromNode(notClosing, ann).foreach(_ process CMDOnline)
-      override def onTerminalError(ann: NodeAnnouncement) = fromNode(notClosing, ann).foreach(_ process CMDShutdown)
-      override def onMessage(lightningMessage: LightningMessage) = notClosing.foreach(_ process lightningMessage)
-
       override def onDisconnect(ann: NodeAnnouncement) = fromNode(notClosing, ann) match {
         case affected if affected.isEmpty => Tools log s"Dropping connection to ${ann.nodeId}"
         case affected => notifyAndReconnect(affected, ann)
       }
+
+      override def onOperational(ann: NodeAnnouncement, their: Init) = fromNode(notClosing, ann).foreach(_ process CMDOnline)
+      override def onTerminalError(ann: NodeAnnouncement) = fromNode(notClosing, ann).foreach(_ process CMDShutdown)
+      override def onMessage(lightningMessage: LightningMessage) = notClosing.foreach(_ process lightningMessage)
     }
 
     def notifyAndReconnect(chans: ChannelVec, ann: NodeAnnouncement) = {
@@ -219,7 +219,7 @@ class WalletApp extends Application { me =>
     type ScriptSeq = Seq[org.bitcoinj.script.Script]
     def blockingSend(tx: Transaction) = peerGroup.broadcastTransaction(tx, 1).broadcast.get.toString
     def watchFunding(cs: Commitments) = watchScripts(cs.commitInput.txOut.publicKeyScript :: Nil)
-    def watchScripts(scripts: ScriptSeq) = app.kit.wallet addWatchedScripts scripts.asJava
+    def watchScripts(scripts: ScriptSeq) = wallet addWatchedScripts scripts.asJava
     def currentBalance = wallet getBalance BalanceType.ESTIMATED_SPENDABLE
     def currentAddress = wallet currentAddress KeyPurpose.RECEIVE_FUNDS
     def shutDown = none
@@ -242,7 +242,7 @@ class WalletApp extends Application { me =>
       wallet.watchMode = true
 
       val trustedNode = InetAddresses forString cloud.connector.url
-      peerGroup addAddress new PeerAddress(app.params, trustedNode, 8333)
+      peerGroup addAddress new PeerAddress(params, trustedNode, 8333)
       peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setMinRequiredProtocolVersion(70015)
       peerGroup.setUserAgent(appName, "0.01")

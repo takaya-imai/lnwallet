@@ -30,8 +30,11 @@ object ConnectionManager {
   }
 
   def connectTo(ann: NodeAnnouncement) = connections get ann match {
-    case Some(w) if w.socket.isConnected && null != w.savedInit => events.onOperational(ann, w.savedInit)
-    case Some(w) if w.socket.isConnected && null == w.savedInit => w.disconnect
+    case Some(existingWorker) if existingWorker.socket.isConnected =>
+      if (null == existingWorker.savedInit) existingWorker.disconnect
+      else events.onOperational(ann, existingWorker.savedInit)
+
+    // Either disconnected or no worker at all
     case _ => connections(ann) = new Worker(ann)
   }
 

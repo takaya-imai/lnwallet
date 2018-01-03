@@ -2,7 +2,6 @@ package com.lightning.wallet
 
 import android.widget._
 import org.bitcoinj.core._
-
 import collection.JavaConverters._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
@@ -12,8 +11,8 @@ import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, runAnd, wrap}
 import android.provider.Settings.{System => FontSystem}
 import android.view.{Menu, MenuItem, View, ViewGroup}
-
 import scala.util.{Failure, Success, Try}
+
 import android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE
 import org.bitcoinj.core.TransactionConfidence.ConfidenceType.DEAD
 import android.text.format.DateUtils.getRelativeTimeSpanString
@@ -25,12 +24,10 @@ import com.lightning.wallet.ln.PaymentRequest
 import android.text.format.DateFormat
 import org.bitcoinj.uri.BitcoinURI
 import java.text.SimpleDateFormat
-
 import android.content.Intent
+import android.os.Bundle
 import android.net.Uri
 import java.util.Date
-
-import android.os.Bundle
 
 
 trait HumanTimeDisplay { me: TimerActivity =>
