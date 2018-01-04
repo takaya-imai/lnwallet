@@ -168,8 +168,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 }
 
 class Connector(val url: String) {
-  import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-  def http(way: String) = post(s"http://$url:9001/v1/$way", true)
+  def http(way: String) = post(s"$url/v1/$way", true)
   def ask[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
@@ -181,6 +180,7 @@ class Connector(val url: String) {
   def getBackup(key: String) = ask("data/get", ecryptedData => toVec[String](ecryptedData) map HEX.decode, "key" -> key)
   def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
 
+  import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
   def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
   def findRoutes(rd: RoutingData, from: PublicKey, to: PublicKey) = ask("router/routes", toVec[PaymentRoute],
     "nodes" -> rd.badNodes.map(_.toBin).toJson.toString.hex, "channels" -> rd.badChans.toJson.toString.hex,

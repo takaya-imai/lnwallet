@@ -198,7 +198,7 @@
 
     <!-- setting a private Olympus server -->
     <string name="ln_olympus_success">Olympus server has been set successfully</string>
-    <string name="ln_olympus_ip">Olympus server address\n<small>like 127.0.0.1 or myserver.com</small></string>
+    <string name="ln_olympus_ip">Olympus server address\n<small>like http://127.0.0.1:9001</small></string>
     <string name="ln_olympus_key"><![CDATA[<small>Not sure what is this about?<br><a href=http://lightning-wallet.com/what-does-olympus-server-do.html#setting-up-your-own-server>Read more</a> on why you might want to setup your own Olympus server</small><br><br>Your Olympus Public Key]]></string>
     <string name="ln_olympus_key_error">Could not set an Olympus server because your public key is not recognized\n\nMake sure a server knows your public key and try again</string>
     <string name="ln_olympus_sig_error">Could not set an Olympus server because a signature check failed\n\nMake sure you\'ve used a correct public key and try again</string>
