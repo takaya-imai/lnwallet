@@ -13,6 +13,7 @@ import org.bitcoinj.wallet.WalletProtobufSerializer
 import com.lightning.wallet.ln.LNParams
 import com.lightning.wallet.helper.AES
 import fr.acinq.bitcoin.Crypto.sha256
+import com.lightning.wallet.ln.Tools
 import fr.acinq.bitcoin.BinaryData
 import scala.concurrent.Future
 import java.io.FileInputStream
@@ -118,7 +119,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
         mainPassCheck setOnClickListener onButtonTap {
           // Lazy Future has already been initialized above
-          // Check password after wallet initialization is complete
+          // check password after wallet initialization is complete
           <<(prepareKit map setup, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
@@ -145,7 +146,7 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
 
   private def wrongPass(err: Throwable) = {
     setVis(View.GONE, View.VISIBLE, View.GONE)
-    app toast secret_wrong
+    Tools log err.getMessage
   }
 
   private def inform(messageCode: Int): Unit = {

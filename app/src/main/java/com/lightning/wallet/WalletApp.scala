@@ -15,6 +15,7 @@ import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import android.app.Application.ActivityLifecycleCallbacks
 import collection.JavaConverters.seqAsJavaListConverter
+import com.lightning.wallet.lnutils.Connector.CMDStart
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import com.lightning.wallet.ln.Channel.CLOSING
 import org.bitcoinj.wallet.KeyChain.KeyPurpose
@@ -241,8 +242,6 @@ class WalletApp extends Application { me =>
       wallet.autosaveToFile(walletFile, 400, MILLISECONDS, null)
       wallet.watchMode = true
 
-      val trustedNode = InetAddresses forString cloud.connector.url
-      peerGroup addAddress new PeerAddress(params, trustedNode, 8333)
       peerGroup addPeerDiscovery new DnsDiscovery(params)
       peerGroup.setMinRequiredProtocolVersion(70015)
       peerGroup.setUserAgent(appName, "0.01")
@@ -255,6 +254,10 @@ class WalletApp extends Application { me =>
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager.initConnect
       RatesSaver.update
+
+      // Cloud has data as this point, check if it's empty
+      // it's needed to clear possible acts if there are any
+      if (cloud.data.acts.nonEmpty) cloud doProcess CMDStart
     }
   }
 }

@@ -9,7 +9,6 @@ import fr.acinq.bitcoin.DeterministicWallet._
 import scala.util.{Failure, Success}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
-import org.bitcoinj.core.Transaction.MIN_NONDUST_OUTPUT
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
 
@@ -53,6 +52,7 @@ object LNParams { me =>
   private val con = new Connector("213.133.99.89")
   def getCloud(tryData: TryCloudData) = tryData match {
     case Failure(_) => new PublicCloud(con, bag) { data = CloudDataSaver.empty }
+    // Empty url string means we should use a default cloud with token based verification
     case Success(saved) if saved.url.isEmpty => new PublicCloud(con, bag) { data = saved }
 
     case Success(saved) =>

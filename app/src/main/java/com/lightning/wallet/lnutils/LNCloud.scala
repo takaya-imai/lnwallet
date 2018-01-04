@@ -3,7 +3,6 @@ package com.lightning.wallet.lnutils
 import spray.json._
 import DefaultJsonProtocol._
 import com.lightning.wallet.ln._
-import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.Connector._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
@@ -28,17 +27,19 @@ import org.bitcoinj.core.ECKey
 
 abstract class Cloud extends StateMachine[CloudData] {
   // Persisted data exchange with a maintenance server
+  // Checks if user's server accepts a signature
   def checkIfWorks: Obs[Any] = Obs just true
   protected[this] var isFree = true
   val connector: Connector
 
   def BECOME(d1: CloudData) = {
+    // Save to db on every update
     CloudDataSaver saveObject d1
     become(d1, state)
   }
 }
 
-// Represents a task to be executed, can be persisted
+// Represents a remote call to be executed, can be persisted
 case class CloudAct(data: BinaryData, plus: Seq[HttpParam], path: String)
 // Stores token request parameters, clear tokens left and tasks to be executed, also url for custom server
 case class CloudData(info: Option[RequestAndMemo], tokens: Set[ClearToken], acts: Set[CloudAct], url: String)
@@ -155,9 +156,9 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
     case _ =>
   }
 
-  def signed(data: BinaryData): Seq[HttpParam] = {
-    val sig = Crypto encodeSignature Crypto.sign(Crypto sha256 data, cloudPrivateKey)
-    Seq("sig" -> sig.toString, "pubkey" -> cloudPublicKey.toString, BODY -> data.toString)
+  def signed(data: BinaryData) = {
+    val sig = Crypto encodeSignature Crypto.sign(Crypto sha256 data, LNParams.cloudPrivateKey)
+    Seq("sig" -> sig.toString, "pubkey" -> LNParams.cloudPublicKey.toString, BODY -> data.toString)
   }
 
   override def checkIfWorks = {
