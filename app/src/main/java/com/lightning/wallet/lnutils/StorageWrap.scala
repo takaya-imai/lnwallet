@@ -156,7 +156,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
   }
 
   override def onBecome = {
-    case (_, NormalData(_, _, None, None), WAIT_FUNDING_DONE | SYNC, NORMAL) =>
+    case (chan, _, WAIT_FUNDING_DONE | SYNC, NORMAL) if chan.isOperational =>
       // We may need to send an LN payment in -> NORMAL unless it is a shutdown
       cloud doProcess CMDStart
 
