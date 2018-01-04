@@ -74,11 +74,12 @@ object PaymentInfo {
     rpi.modify(_.rd.badNodes).using(_ ++ bad).modify(_.rd.routes) setTo routes1
   }
 
-  def cutRoutes(fail: UpdateFailHtlc)(rpi: RuntimePaymentInfo) =
-    Try apply parseErrorPacket(rpi.rd.onion.sharedSecrets, fail.reason) map {
-      // Try to reduce remaining routes and remember bad nodes and channels
-      // excluded nodes and channels will be needed for further calls
+  def cutRoutes(fail: UpdateFailHtlc)(rpi: RuntimePaymentInfo) = {
+    // Try to reduce remaining routes and also remember bad nodes and channels
+    val parsed = Try apply parseErrorPacket(rpi.rd.onion.sharedSecrets, fail.reason)
+    parsed.foreach(Tools log _.toString)
 
+    parsed map {
       case ErrorPacket(nodeKey, UnknownNextPeer) =>
         rpi.routeIds drop 1 zip rpi.routeIds collectFirst {
           case failedId \ previousId if previousId == nodeKey =>
@@ -97,6 +98,7 @@ object PaymentInfo {
 
       // Remove all except our peer, recipient, recipient's peer
     } getOrElse withoutNode(rpi.routeIds drop 1 dropRight 3, rpi)
+  }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
   def resolveHtlc(nodeSecret: PrivateKey, add: UpdateAddHtlc, bag: PaymentInfoBag, minExpiry: Long) = Try {
