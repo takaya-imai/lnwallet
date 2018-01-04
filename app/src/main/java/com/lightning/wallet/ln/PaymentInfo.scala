@@ -145,9 +145,9 @@ case class RuntimePaymentInfo(rd: RoutingData, pr: PaymentRequest, firstMsat: Lo
 
   def canNotProceed(peerId: PublicKey) = {
     val extraHops = pr.routingInfo.flatMap(_.route).toSet
-    val extraChansExcluded = extraHops.map(_.shortChannelId) subsetOf rd.badChans
-    val criticalNodesExcluded = extraHops.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
-    criticalNodesExcluded.nonEmpty || extraChansExcluded || rd.badNodes.isEmpty && rd.badChans.isEmpty
+    val extraChans = extraHops.map(_.shortChannelId) & rd.badChans
+    val criticalNodes = extraHops.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
+    criticalNodes.nonEmpty || extraChans.nonEmpty || rd.badNodes.isEmpty && rd.badChans.isEmpty
   }
 }
 
