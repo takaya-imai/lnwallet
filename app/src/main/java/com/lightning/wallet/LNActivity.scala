@@ -180,10 +180,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     stopDetecting
   }
 
-  override def onCreateOptionsMenu(menu: Menu) = {
+  override def onCreateOptionsMenu(menu: Menu) = runAnd(true) {
     getMenuInflater.inflate(R.menu.ln_normal_ops, menu)
     setupSearch(menu)
-    true
   }
 
   override def onResume = wrap(super.onResume) {
@@ -213,6 +212,11 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     val relativeLeft = expiry - broadcaster.currentHeight
     val leftHuman = app.plurOrZero(blocksLeft, relativeLeft)
     s"${me getString ln_expiry} $leftHuman<br>$title"
+  }
+
+  def qr(pr: PaymentRequest) = {
+    me goTo classOf[RequestActivity]
+    app.TransData.value = pr
   }
 
   def manageActive(chan: Channel) = {
@@ -257,17 +261,20 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       }
 
       if (info.incoming == 1) {
-        val humanIn = humanFiat(coloredIn(info.firstSum), info.firstSum)
         val title = getString(ln_incoming_title).format(humanStatus)
+        val humanIn = humanFiat(coloredIn(info.firstSum), info.firstSum)
+        val bld = mkChoiceDialog(none, qr(info.pr), dialog_ok, dialog_retry)
+        // Can show a QR again if this is a donation case or if it has not expired yet
+        val canRetryQR = info.pr.amount.isEmpty || info.actualStatus != SUCCESS && info.pr.isFresh
+        mkForm(bld = if (canRetryQR) bld else me negBld dialog_ok, title.html, detailsWrapper)
         paymentDetails setText s"$description<br><br>$humanIn".html
-        mkForm(me negBld dialog_ok, title.html, detailsWrapper)
       } else {
         val humanOut = humanFiat(coloredOut(info.firstSum), info.firstSum)
         val feeAmount = MilliSatoshi(info.rd.firstMsatWithFee - info.firstMsat)
         val bld = mkChoiceDialog(none, pay(info.runtime), dialog_ok, dialog_retry)
         val title = humanFiat(getString(ln_outgoing_title).format(coloredOut(feeAmount), humanStatus), feeAmount)
         val title1 = if (info.actualStatus == WAITING) expiryTitle(info.rd.firstExpiry, title) else title
-        val bld1 = if (info.actualStatus != SUCCESS) bld else negBld(dialog_ok)
+        val bld1 = if (info.actualStatus != SUCCESS) bld else me negBld dialog_ok
         paymentDetails setText s"$description<br><br>$humanOut".html
         mkForm(bld1, title1.html, detailsWrapper)
       }
@@ -340,14 +347,11 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
               val rpi = emptyRPI apply PaymentRequest(chainHash, sum, Crypto sha256 r,
                 nodePrivateKey, inputDescription.getText.toString.trim, None, extraRoute)
 
+              qr(rpi.pr)
               // Save incoming request to a database
               db.change(PaymentTable.newVirtualSql, rpi.searchText, rpi.pr.paymentHash)
               db.change(PaymentTable.newSql, rpi.pr.paymentHash, r, 1, rpi.firstMsat, HIDDEN,
                 System.currentTimeMillis, rpi.text, rpi.pr.toJson, rpi.rd.toJson)
-
-              // Display a QR code
-              app.TransData.value = rpi.pr
-              me goTo classOf[RequestActivity]
             }
 
             def recAttempt = rateManager.result match {
