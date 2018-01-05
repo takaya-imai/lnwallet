@@ -14,7 +14,7 @@ trait RoutingMessage extends LightningMessage
 trait ChannelMessage extends LightningMessage
 
 case class Error(channelId: BinaryData, data: BinaryData) extends LightningMessage {
-  Tools log s"Remote error, channelId: $channelId, " + new String(data.toArray, "UTF-8")
+  Tools log s"Error, channelId: $channelId, " + new String(data.toArray, "UTF-8")
 }
 
 case class Init(globalFeatures: BinaryData, localFeatures: BinaryData) extends LightningMessage
