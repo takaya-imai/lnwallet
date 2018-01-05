@@ -7,8 +7,10 @@ import spray.json.DefaultJsonProtocol._
 import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
+
 import rx.lang.scala.{Scheduler, Observable => Obs}
-import org.bitcoinj.core.{Coin, Transaction}
+import org.bitcoinj.core.Transaction.DEFAULT_TX_FEE
+import org.bitcoinj.core.Coin
 import spray.json.JsonFormat
 import scala.util.Try
 
