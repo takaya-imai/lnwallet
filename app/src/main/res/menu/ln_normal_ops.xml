@@ -5,7 +5,7 @@
 
     <item
         app:showAsAction="never"
-        android:title="@string/ln_close"
+        android:title="@string/ln_chan_info"
         android:id="@+id/actionCloseChannel"/>
 
     <item

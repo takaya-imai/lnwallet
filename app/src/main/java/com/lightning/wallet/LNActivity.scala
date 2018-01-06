@@ -14,7 +14,7 @@ import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 
-import fr.acinq.bitcoin.{BinaryData, MilliSatoshi, Satoshi, Crypto}
+import fr.acinq.bitcoin.{BinaryData, Crypto, MilliSatoshi, Satoshi}
 import com.lightning.wallet.ln.wire.{ChannelUpdate, CommitSig}
 import com.lightning.wallet.R.drawable.{await, conf1, dead}
 import com.lightning.wallet.ln.Tools.{none, random}
@@ -36,6 +36,7 @@ import com.lightning.wallet.Utils.app
 import org.bitcoinj.uri.BitcoinURI
 import org.bitcoinj.core.Address
 import scala.language.postfixOps
+import android.app.AlertDialog
 import org.ndeftools.Message
 import android.os.Bundle
 import java.util.Date
@@ -147,9 +148,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   private[this] var sendPayment: PaymentRequest => Unit = none
-  private[this] var closePaymentChannel = anyToRunnable(none)
   private[this] var makePaymentRequest = anyToRunnable(none)
   private[this] var whenStop = anyToRunnable(super.onStop)
+  private[this] var getChannelInfo = anyToRunnable(none)
   override def onStop = whenStop.run
 
   def evacuate = me exitTo classOf[LNOpsActivity]
@@ -194,7 +195,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   // APP MENU
 
   override def onOptionsItemSelected(menu: MenuItem) = runAnd(true) {
-    if (menu.getItemId == R.id.actionCloseChannel) closePaymentChannel.run
+    if (menu.getItemId == R.id.actionCloseChannel) getChannelInfo.run
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
@@ -313,17 +314,6 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       for (sum <- pr.amount) rateManager setSum Try(sum)
     }
 
-    closePaymentChannel = anyToRunnable {
-      val humanIp = chan.data.announce.addresses.headOption.map(_.getHostString).orNull
-      val title = getString(ln_ops_start_node_view).format(chan.data.announce.alias, humanIp,
-        "<br>" + humanNode(chan.data.announce.nodeId) + "<br><br>", me getString ln_close)
-
-      passWrap(title.html) apply checkPassNotify { pass =>
-        // Close all of the chans in case we have more than one active left
-        for (chan <- app.ChannelManager.notClosing) chan process CMDShutdown
-      }
-    }
-
     makePaymentRequest = anyToRunnable {
       // Somewhat counterintuitive: localParams.channelReserveSat is THEIR unspendable reseve
       // peer's balance can't go below their unspendable channel reserve so it should be taken into account here
@@ -382,6 +372,23 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       app.ChannelManager.getOutPaymentObs = app.ChannelManager.outPaymentObs
       chan.listeners -= chanListener
       super.onStop
+    }
+
+    getChannelInfo = anyToRunnable {
+      val (view, field) = str2Tuple(getString(ln_chan_info_details).format(chan.data.announce.alias,
+        chan.data.announce.addresses.headOption.map(_.getHostString).orNull, nodePrivateKey.publicKey.toString,
+        chan.data.announce.nodeId.toString, chan(_.channelId).get.toString).html)
+
+      // Show canncel and peer details and ofer to close a given channel
+      lazy val dlg = mkChoiceDialog(none, rm(alert)(proceed), dialog_ok, ln_chan_close)
+      lazy val alert: AlertDialog = mkForm(dlg, null, view)
+      field setTextIsSelectable true
+      alert
+
+      def proceed = passWrap(me getString ln_chan_close) apply checkPassNotify { _ =>
+        // attempt to close all of the channels in case we have more than one active left
+        for (chan <- app.ChannelManager.notClosing) chan process CMDShutdown
+      }
     }
 
     app.ChannelManager.getOutPaymentObs = rpi => {

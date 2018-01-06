@@ -10,14 +10,15 @@ import com.lightning.wallet.Denomination._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.wire.LightningMessageCodecs._
-import android.widget.{BaseAdapter, Button, ListView, TextView}
+
 import com.lightning.wallet.lnutils.{CloudAct, PaymentInfoWrap, RatesSaver}
+import android.widget.{BaseAdapter, Button, ListView, TextView}
 import com.lightning.wallet.ln.Tools.{none, random, wrap}
 import com.lightning.wallet.helper.{AES, ThrottledWork}
 import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import android.view.{Menu, View, ViewGroup}
-
 import scala.util.{Failure, Success}
+
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import org.bitcoinj.script.ScriptBuilder
@@ -58,9 +59,10 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
       val (announce, connections) = adapter getItem nodePosition
       val humanConnects = app.plurOrZero(chansNumber, connections)
-      textLine setText nodeView.format(announce.alias, humanConnects,
-        humanNode(announce.nodeId, "\u0020"), new String).html
+      val theirNode = humanNode(announce.nodeId, "\u0020")
 
+      // Display number of connections so users may pick a well connected nodes
+      textLine setText nodeView.format(announce.alias, humanConnects, theirNode).html
       view
     }
 
@@ -89,10 +91,11 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
 
   private def onPeerSelected(pos: Int) = hideKeys {
     val (announce, connections) = adapter getItem pos
-    // This channel does not receive events just yet so we need to add some custom listeners
+    val theirNode = humanNode(announce.nodeId, "\u0020")
+    val humanConnects = app.plurOrZero(chansNumber, connections)
+    // This channel does not receive events yet so we need to add some custom listeners
     val freshChan = app.ChannelManager.createChannel(mutable.Set.empty, InitData apply announce)
-    val detailsText = nodeView.format(announce.alias, app.plurOrZero(chansNumber, connections),
-      "<br>" + humanNode(announce.nodeId, "<br>"), new String).html
+    val detailsText = nodeView.format(announce.alias, humanConnects, s"<br>$theirNode").html
 
     val socketOpenListener = new ConnectionListener {
       override def onMessage(lightningMessage: LightningMessage) = freshChan process lightningMessage

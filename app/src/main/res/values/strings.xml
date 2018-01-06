@@ -77,9 +77,10 @@
     <string name="action_buy">Testnet faucet</string>
     <string name="action_scan">Scan QR code</string>
 
+    <string name="ln_chan_info">Channel info</string>
+    <string name="ln_chan_close">Close channel</string>
     <string name="ln_receive">Receive lightning</string>
     <string name="ln_search">Find payments</string>
-    <string name="ln_close">Close channel</string>
 
     <!-- dialogs -->
     <string name="spend_address_tip">Paste Bitcoin address\nfrom clipboard</string>
@@ -180,6 +181,7 @@
     <string name="ln_send_title"><![CDATA[Send lightning<br><br><small>%1$s</small>]]></string>
     <string name="ln_incoming_title"><![CDATA[<font color=#1BA2E0>Incoming payment</font><br>%1$s]]></string>
     <string name="ln_outgoing_title"><![CDATA[<font color=#E31300>Outgoing payment</font><br>%2$s<br><br>%1$s fee]]></string>
+    <string name="ln_chan_info_details"><![CDATA[%1$s<br><small>%2$s</small><br><br>Your node ID<br><font color=#999999>%3$s</font><br><br>Peer node ID<br><font color=#999999>%4$s</font><br><br>Channel ID<br><font color=#999999>%5$s</font>]]></string>
     <string name="ln_proof">Signed payment request: %1$s\n\nPayment hash: %2$s\n\nPayment preimage: %3$s</string>
     <string name="ln_htlc_notification_title">Bring your wallet online</string>
     <string name="ln_htlc_notification">to resolve pending payments</string>
@@ -231,7 +233,7 @@
 
     <!-- opening a new channel -->
     <string name="ln_ops_start_fund_title"><![CDATA[<small>Got questions or feel lost?<br><a href=http://lightning-wallet.com/using-lightning-wallet.html#using-lightning-wallet>Read about Lightning Network</a></small><br><br>Fund a Payment Channel]]></string>
-    <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>%4$s]]></string>
+    <string name="ln_ops_start_node_view"><![CDATA[%1$s<br><small>%2$s<br><font color=#999999>%3$s</font></small>]]></string>
     <string name="ln_ops_start">Open new Channel</string>
 
     <array name="ln_ops_start_node_channels">
