@@ -47,8 +47,8 @@ class LNOpsActivity extends TimerActivity with HumanTimeDisplay { me =>
       val openStatus = humanStatus(LNParams.broadcaster txStatus open.txid)
       val balance = coloredIn(c.commitInput.txOut.amount)
 
-      closeOnClick(ln_chan_info)
-      lnOpsAction setText ln_chan_info
+      closeOnClick(ln_chan_close)
+      lnOpsAction setText ln_chan_close
       lnOpsDescription setText getString(ln_ops_chan_opening).format(balance,
         app.plurOrZero(txsConfs, threshold), open.txid.toString, openStatus).html
     }

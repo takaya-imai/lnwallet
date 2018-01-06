@@ -182,12 +182,10 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     me startListUpdates adapter
 
     toolbar setOnClickListener onButtonTap {
-      showDenomChooser { newDenominationPosition =>
-        app.prefs.edit.putInt(AbstractKit.DENOM_TYPE,
-          newDenominationPosition).commit
+      showDenominationChooser(app.kit.currentBalance) { pos =>
+        app.prefs.edit.putInt(AbstractKit.DENOM_TYPE, pos).commit
 
-        // Update UI with new denomination right away
-        denom = denoms apply newDenominationPosition
+        denom = denoms apply pos
         adapter.notifyDataSetChanged
         updTitle
       }

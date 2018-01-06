@@ -199,9 +199,14 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     else if (menu.getItemId == R.id.actionSettings) mkSetsForm
   }
 
-  def updTitle(chan: Channel) = animateTitle {
+  def getBalance(chan: Channel): MilliSatoshi = {
     val canSend = chan(_.localCommit.spec.toLocalMsat)
-    denom withSign MilliSatoshi(canSend getOrElse 0L)
+    MilliSatoshi(canSend getOrElse 0L)
+  }
+
+  def updTitle(chan: Channel) = animateTitle {
+    // A channel always has some balance everytime
+    denom withSign getBalance(chan)
   }
 
   def onPaymentError(er: Throwable) = er.getMessage match {
@@ -229,12 +234,10 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       }, onPaymentError)
 
     toolbar setOnClickListener onButtonTap {
-      showDenomChooser { newDenominationPosition =>
-        app.prefs.edit.putInt(AbstractKit.DENOM_TYPE,
-          newDenominationPosition).commit
+      showDenominationChooser(me getBalance chan) { pos =>
+        app.prefs.edit.putInt(AbstractKit.DENOM_TYPE, pos).commit
 
-        // Update UI with new denomination right away
-        denom = denoms apply newDenominationPosition
+        denom = denoms apply pos
         adapter.notifyDataSetChanged
         updTitle(chan)
       }

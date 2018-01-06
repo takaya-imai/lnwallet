@@ -142,15 +142,14 @@ trait ToolbarActivity extends TimerActivity { me =>
     for (info <- infos if info.tag == tag) info.value = text
   }
 
-  def showDenomChooser(change: Int => Unit) = {
+  def showDenominationChooser(balance: MilliSatoshi)(change: Int => Unit) = {
     val form = getLayoutInflater.inflate(R.layout.frag_input_choose_fee, null)
     val lst = form.findViewById(R.id.choiceList).asInstanceOf[ListView]
 
-    val balance: MilliSatoshi = app.kit.currentBalance
-    val denoms = getResources.getStringArray(R.array.denoms).map(_.html)
+    val denominations = getResources.getStringArray(R.array.denoms).map(_.html)
     val title = me getString fiat_set_denom format humanFiat(coloredIn(balance), balance)
     val dialog = mkChoiceDialog(change(lst.getCheckedItemPosition), none, dialog_ok, dialog_cancel)
-    lst setAdapter new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, denoms)
+    lst setAdapter new ArrayAdapter(me, android.R.layout.select_dialog_singlechoice, denominations)
     lst.setItemChecked(app.prefs.getInt(AbstractKit.DENOM_TYPE, 0), true)
     mkForm(dialog, title.html, form)
   }
@@ -181,7 +180,7 @@ trait ToolbarActivity extends TimerActivity { me =>
       // Show current mnemonic and offer to encrypt it using current passcode
 
       val wordsText = TextUtils.join("\u0020", seed.getMnemonicCode)
-      lazy val dialog = mkChoiceDialog(warnUser, none, dialog_export, dialog_cancel)
+      lazy val dialog = mkChoiceDialog(none, warnUser, dialog_ok, dialog_export)
       lazy val alert = mkForm(dialog, getString(sets_noscreen).html, wordsText)
       alert
 
