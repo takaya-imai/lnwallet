@@ -452,7 +452,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   }
 
   def goReceive(top: View) = {
-    delayUI(makePaymentRequest.run, 195)
+    delayUI(makePaymentRequest.run)
     fab close true
   }
 

@@ -322,7 +322,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   }
 
   def goPay(top: View) = {
-    delayUI(sendBtcTxPopup, 195)
+    delayUI(sendBtcTxPopup)
     fab close true
   }
 
@@ -334,7 +334,6 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     adapter set adapter.availableItems
     adapter.notifyDataSetChanged
   }
-
 
   def sendBtcTxPopup: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_btc, null, false)

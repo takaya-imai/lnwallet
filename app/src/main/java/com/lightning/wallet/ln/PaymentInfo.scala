@@ -87,11 +87,14 @@ object PaymentInfo {
             withoutNode(Vector(failedId), rpi)
         } getOrElse rpi
 
-      case ErrorPacket(_, message: Update) =>
+      case ErrorPacket(nodeKey, message: Update)
+        if Announcements.checkSig(message.update, nodeKey) =>
         // There may be other operational chans so try them out
         val routes1 = without(rpi.rd.routes, _.shortChannelId == message.update.shortChannelId)
         rpi.modify(_.rd.badChans).using(_ + message.update.shortChannelId).modify(_.rd.routes) setTo routes1
 
+      // ChannelUpdate signature check has failed, this node is fishy
+      case ErrorPacket(nodeKey, _: Update) => withoutNode(Vector(nodeKey), rpi)
       case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(Vector(nodeKey), rpi)
       case ErrorPacket(nodeKey, _: Node) => withoutNode(Vector(nodeKey), rpi)
       case _ => rpi
