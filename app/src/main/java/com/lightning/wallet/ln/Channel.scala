@@ -180,9 +180,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE norm.copy(commitments = c1)
 
 
-      case (norm @ NormalData(_, commitments, None, None), cmd: CMDAddHtlc, NORMAL)
-        // GUARD: we can only accept a new HTLC when mutual shutdown is not active AND this HTLC is not already in-flight
-        if !Commitments.actualRemoteCommit(commitments).spec.htlcs.exists(_.add.paymentHash == cmd.rpi.pr.paymentHash) =>
+      // We can only accept a new HTLC when shutdown is not active
+      case (norm: NormalData, cmd: CMDAddHtlc, NORMAL) if isOperational =>
+        // AND this HTLC is not already in-flight AND it has not been fulfilled already
+        val activeHtlcs = Commitments.actualRemoteCommit(norm.commitments).spec.htlcs
+        val active = activeHtlcs.exists(_.add.paymentHash == cmd.rpi.pr.paymentHash)
+        if (active) throw AddException(cmd, ERR_TOO_MANY_HTLC)
 
         LNParams.bag getPaymentInfo cmd.rpi.pr.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
@@ -191,7 +194,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
           case _ =>
             // This may be a FAILURE payment which is fine
-            val c1 \ updateAddHtlc = Commitments.sendAdd(commitments, cmd)
+            val c1 \ updateAddHtlc = Commitments.sendAdd(norm.commitments, cmd)
             me UPDATE norm.copy(commitments = c1) SEND updateAddHtlc
             doProcess(CMDProceed)
         }

@@ -66,7 +66,6 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
   lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
   private[this] var state = SCROLL_STATE_IDLE
-  val maxLinesNum = 24
   val minLinesNum = 4
 
   def startListUpdates(adapter: BaseAdapter) =
@@ -79,9 +78,9 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
       list addFooterView allTxsButton
     }
 
-  abstract class CutAdapter[T] extends BaseAdapter {
-    // Automatically manages switching list view from short to long and back
-    def switch = cut = if (cut == minLinesNum) maxLinesNum else minLinesNum
+  abstract class CutAdapter[T](val max: Int) extends BaseAdapter {
+    // Automatically switches list view from short to long and back
+    def switch = cut = if (cut == minLinesNum) max else minLinesNum
     def getItemId(position: Int): Long = position
     def getCount: Int = visibleItems.size
 
@@ -129,7 +128,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   lazy val feeAbsent = getString(txs_fee_absent)
   lazy val walletEmpty = getString(wallet_empty)
 
-  lazy val adapter = new CutAdapter[TxWrap] {
+  lazy val adapter = new CutAdapter[TxWrap](96) {
     override val viewLine = R.layout.frag_tx_btc_line
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
@@ -303,6 +302,30 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     me startActivity new Intent(Intent.ACTION_VIEW, uri)
   }
 
+  def goQR(top: View) = {
+    val activity = classOf[ScanActivity]
+    delayUI(me goTo activity, 195)
+    fab close true
+  }
+
+  def goLN(top: View) = {
+    val activity = classOf[LNActivity]
+    delayUI(me goTo activity, 195)
+    fab close true
+  }
+
+  def goReceiveBtcAddress(top: View) = {
+    app.TransData.value = app.kit.currentAddress
+    val activity = classOf[RequestActivity]
+    delayUI(me goTo activity, 195)
+    fab close true
+  }
+
+  def goPay(top: View) = {
+    delayUI(sendBtcTxPopup, 195)
+    fab close true
+  }
+
   def toggle(v: View) = {
     // Expand or collapse all txs
     // adapter contains all history
@@ -312,26 +335,6 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     adapter.notifyDataSetChanged
   }
 
-  // Reactions to menu buttons
-
-  def goQR(top: View) = {
-    val activity = classOf[ScanActivity]
-    delayUI(me goTo activity, 185)
-    fab close true
-  }
-
-  def goLN(top: View) = {
-    val activity = classOf[LNActivity]
-    delayUI(me goTo activity, 185)
-    fab close true
-  }
-
-  def goReceiveBtcAddress(top: View) = {
-    app.TransData.value = app.kit.currentAddress
-    val activity = classOf[RequestActivity]
-    delayUI(me goTo activity, 185)
-    fab close true
-  }
 
   def sendBtcTxPopup: BtcManager = {
     val content = getLayoutInflater.inflate(R.layout.frag_input_send_btc, null, false)
@@ -366,12 +369,7 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
     spendManager
   }
 
-  def goPay(top: View) = {
-    delayUI(sendBtcTxPopup)
-    fab close true
-  }
-
   def viewMnemonic(top: View) = passWrap(me getString sets_mnemonic) apply checkPassNotify(doViewMnemonic)
-  def nativeTransactions = app.kit.wallet.getRecentTransactions(maxLinesNum, false).asScala
+  def nativeTransactions = app.kit.wallet.getRecentTransactions(adapter.max, false).asScala
     .toVector.map(bitcoinjTx2Wrap).filterNot(_.nativeValue.isZero)
 }

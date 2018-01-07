@@ -93,7 +93,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   lazy val paymentsViewProvider = new PaymentsViewProvider
   val imgMap = Array(await, await, conf1, dead)
 
-  lazy val adapter = new CutAdapter[PaymentInfo] {
+  lazy val adapter = new CutAdapter[PaymentInfo](PaymentTable.limit) {
+    // Reduce an amount of database query results to PaymentTable.limit here
+
     override val viewLine = R.layout.frag_tx_ln_line
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
@@ -439,18 +441,18 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
 
   def goBitcoin(top: View) = {
     val activity = classOf[BtcActivity]
-    delayUI(me goTo activity, 185)
+    delayUI(me goTo activity, 195)
     fab close true
   }
 
   def goQR(top: View) = {
     val activity = classOf[ScanActivity]
-    delayUI(me goTo activity, 185)
+    delayUI(me goTo activity, 195)
     fab close true
   }
 
   def goReceive(top: View) = {
-    delayUI(makePaymentRequest.run, 185)
+    delayUI(makePaymentRequest.run, 195)
     fab close true
   }
 

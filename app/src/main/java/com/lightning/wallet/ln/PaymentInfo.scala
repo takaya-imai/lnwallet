@@ -88,8 +88,8 @@ object PaymentInfo {
         } getOrElse rpi
 
       case ErrorPacket(_, message: Update) =>
-        // There may be other operational chans so try them out, also remember this chan as failed
-        val routes1: Vector[PaymentRoute] = without(rpi.rd.routes, _.shortChannelId == message.update.shortChannelId)
+        // There may be other operational chans so try them out
+        val routes1 = without(rpi.rd.routes, _.shortChannelId == message.update.shortChannelId)
         rpi.modify(_.rd.badChans).using(_ + message.update.shortChannelId).modify(_.rd.routes) setTo routes1
 
       case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(Vector(nodeKey), rpi)
