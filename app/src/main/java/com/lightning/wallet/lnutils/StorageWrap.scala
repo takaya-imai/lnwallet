@@ -15,6 +15,7 @@ import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.BinaryData
 import scala.collection.mutable
+import scala.util.Try
 
 
 object StorageWrap extends ChannelListener {
@@ -50,12 +51,12 @@ object ChannelWrap {
 
   def put(data: HasCommitments) = {
     val chanId = data.commitments.channelId
-    doPut(chanId.toString, data.toJson.toString)
+    doPut(chanId.toString, "1" + data.toJson.toString)
   }
 
   def get = {
     val rc = RichCursor(db select ChannelTable.selectAllSql)
-    rc.vec(_ string ChannelTable.data) map to[HasCommitments]
+    rc.vec(_ string ChannelTable.data substring 1) map to[HasCommitments]
   }
 }
 

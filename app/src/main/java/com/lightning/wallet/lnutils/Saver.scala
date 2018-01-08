@@ -34,35 +34,29 @@ object JsonHttpUtils {
   def pickInc(err: Throwable, next: Int) = next.seconds
 }
 
-trait Saver {
-  val KEY: String
-  def tryGet: Try[String] = StorageWrap.get(KEY)
-  def save(snap: JsValue) = StorageWrap.put(snap.toString, KEY)
-}
-
-object CloudDataSaver extends Saver {
+object CloudDataSaver {
   def empty = CloudData(None, Set.empty, Set.empty, url = "")
-  def tryGetObject: TryCloudData = tryGet map to[CloudData]
-  def saveObject(data: CloudData) = save(data.toJson)
+  def saveObject(data: CloudData) = StorageWrap.put("1" + data.toJson.toString, KEY)
+  def tryGetObject: TryCloudData = StorageWrap.get(KEY).map(_ substring 1) map to[CloudData]
   type TryCloudData = Try[CloudData]
   val KEY = "cloudData"
 }
 
-object RatesSaver extends Saver {
+object RatesSaver {
   type Fiat2Btc = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, Fiat2Btc)
   val KEY = "rates"
 
-  // Either load saved rates data or create a new one from scratch
-  var rates = tryGet map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
+  // Either load saved rates data or create a new object from scratch
+  var rates = StorageWrap.get(KEY) map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
 
-  def update = {
+  def saveObject = {
     val safe = retry(LNParams.cloud.connector.getRates map toVec[Result], pickInc, 3 to 4)
     initDelay(safe, rates.stamp, timeoutMillis = 1200000) foreach { case newFee \ newFiat +: _ =>
-      val validFees = for (positive <- newFee("5") +: rates.feeHistory if positive > 0) yield positive
+      val validFees = for (positive <- newFee("6") +: rates.feeHistory if positive > 0) yield positive
       rates = Rates(validFees take 3, newFiat, System.currentTimeMillis)
-      save(rates.toJson)
+      StorageWrap.put(rates.toJson.toString, KEY)
     }
   }
 }

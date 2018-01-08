@@ -77,7 +77,6 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
       timer.schedule(anyToRunnable(maybeUpdate), 10000, 10000)
       allTxsWrapper setVisibility View.GONE
       list addFooterView allTxsWrapper
-      fab open false
     }
 
   abstract class CutAdapter[T](val max: Int, viewLine: Int) extends BaseAdapter {
@@ -245,7 +244,6 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
         // Show user a mnemonic dialog if there is no txs
         mnemonicInfo setText getString(mnemonic_info).html
         mnemonicWarn setVisibility View.VISIBLE
-        fab close false
       }
     }
 

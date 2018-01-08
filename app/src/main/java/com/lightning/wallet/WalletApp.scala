@@ -252,7 +252,7 @@ class WalletApp extends Application { me =>
       ConnectionManager.listeners += ChannelManager.socketEventsListener
       startBlocksDownload(ChannelManager.chainEventsListener)
       ChannelManager.initConnect
-      RatesSaver.update
+      RatesSaver.saveObject
 
       // Cloud has data as this point, check if it's empty
       // it's needed to clear possible acts if there are any
