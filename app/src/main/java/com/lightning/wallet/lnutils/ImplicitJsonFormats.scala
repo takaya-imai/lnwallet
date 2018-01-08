@@ -126,8 +126,9 @@ object ImplicitJsonFormats { me =>
   implicit val secretsAndPacketFmt = jsonFormat[Vector[BytesAndKey], Packet,
     SecretsAndPacket](SecretsAndPacket.apply, "sharedSecrets", "packet")
 
-  implicit val routingDataFmt = jsonFormat[Vector[PaymentRoute], Set[PublicKey], Set[Long], SecretsAndPacket, Long, Long,
-    RoutingData](RoutingData.apply, "routes", "badNodes", "badChannels", "onion", "amountWithFee", "expiry")
+  implicit val routingDataFmt =
+    jsonFormat[Vector[PaymentRoute], PaymentRoute, Set[PublicKey], Set[Long], SecretsAndPacket, Long, Long,
+      RoutingData](RoutingData.apply, "routes", "usedRoute", "badNodes", "badChans", "onion", "lastMsat", "lastExpiry")
 
   implicit val ratesFmt = jsonFormat[Seq[Double], Fiat2Btc, Long,
     Rates](Rates.apply, "feeHistory", "exchange", "stamp")

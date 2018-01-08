@@ -241,8 +241,8 @@ object Commitments {
 
       // Let's compute the current commitment
       // *as seen by them* with this change taken into account
-      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rpi.rd.firstMsatWithFee,
-        cmd.rpi.pr.paymentHash, cmd.rpi.rd.firstExpiry, cmd.rpi.rd.onion.packet.serialize)
+      val add = UpdateAddHtlc(c.channelId, c.localNextHtlcId, cmd.rpi.rd.lastMsat,
+        cmd.rpi.pr.paymentHash, cmd.rpi.rd.lastExpiry, cmd.rpi.rd.onion.packet.serialize)
 
       val c1 = addLocalProposal(c, add).modify(_.localNextHtlcId).using(_ + 1)
       val reduced = CommitmentSpec.reduce(actualRemoteCommit(c1).spec, c1.remoteChanges.acked, c1.localChanges.proposed)

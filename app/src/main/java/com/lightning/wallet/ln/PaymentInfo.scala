@@ -29,35 +29,33 @@ object PaymentInfo {
   final val SUCCESS = 2
   final val FAILURE = 3
 
-  def build(hops: PaymentRoute, finalSum: Long, finalExpiry: Long) = {
-    val firstPayload = Vector apply PerHopPayload(0L, finalSum, finalExpiry)
-    val start = (firstPayload, Vector.empty[PublicKey], finalSum, finalExpiry)
-
-    (start /: hops.reverse) {
-      case (payloads, nodes, msat, expiry) \ hop =>
-        val fee = hop.feeBaseMsat + (hop.feeProportionalMillionths * msat) / 1000000L
-        val nextPayloads = PerHopPayload(hop.shortChannelId, msat, expiry) +: payloads
-        (nextPayloads, hop.nodeId +: nodes, msat + fee, expiry + hop.cltvExpiryDelta)
-    }
-  }
-
   def buildOnion(nodes: PublicKeyVec, payloads: Vector[PerHopPayload], assoc: BinaryData): SecretsAndPacket = {
     require(nodes.size == payloads.size, "Payload count mismatch: there should be exactly as much payloads as node pubkeys")
     makePacket(PrivateKey(random getBytes 32), nodes, payloads.map(php => serialize(perHopPayloadCodec encode php).toArray), assoc)
   }
 
-  def completeRPI(rpi: RuntimePaymentInfo) = rpi.rd.routes.headOption map { firstRoute =>
-    val lastChanExpiry = LNParams.broadcaster.currentHeight + rpi.pr.minFinalCltvExpiry.getOrElse(9L)
-    val (payloads, nodeIds, firstSumWithFee, firstExpiry) = build(firstRoute, rpi.firstMsat, lastChanExpiry)
-    val rd1 = rpi.rd.copy(onion = buildOnion(nodeIds :+ rpi.pr.nodeId, payloads, rpi.pr.paymentHash),
-      routes = rpi.rd.routes.tail, firstMsatWithFee = firstSumWithFee, firstExpiry = firstExpiry)
+  def completeRPI(rpi: RuntimePaymentInfo) = rpi.rd.routes.headOption map { route =>
+    val firstExpiry = LNParams.broadcaster.currentHeight + rpi.pr.minFinalCltvExpiry.getOrElse(9L)
+    val firstPayload = PerHopPayload(shortChannelId = 0L, amtToForward = rpi.firstMsat, firstExpiry)
+    val start = (Vector(firstPayload), Vector.empty[PublicKey], rpi.firstMsat, firstExpiry)
 
-    rpi.copy(rd = rd1)
+    val (payloads, nodeIds, lastMsat, lastExpiry) = (start /: route.reverse) {
+      case (loads, nodes, msat, expiry) \ Hop(nodeId, shortChannelId, delta, _, base, proportional) =>
+        // Walk in reverse direction from receiver to sender and accumulate cltv deltas with fees
+
+        val nextFee = msat + base + (proportional * msat) / 1000000L
+        val nextPayload = PerHopPayload(shortChannelId, msat, expiry)
+        (nextPayload +: loads, nodeId +: nodes, nextFee, expiry + delta)
+      }
+
+    val onion = buildOnion(nodeIds :+ rpi.pr.nodeId, payloads, rpi.pr.paymentHash)
+    rpi.modify(_.rd) setTo rpi.rd.copy(routes = rpi.rd.routes.tail, usedRoute = route,
+      onion = onion, lastMsat = lastMsat, lastExpiry = lastExpiry)
   }
 
   val emptyRPI: PaymentRequest => RuntimePaymentInfo = pr => {
     val packet = Packet(Array(Version), random getBytes 33, random getBytes DataLength, random getBytes MacLength)
-    val rd = RoutingData(Vector.empty, Set.empty, Set.empty, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
+    val rd = RoutingData(Vector.empty, usedRoute = null, Set.empty, Set.empty, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
     val finalSum = pr.amount match { case Some(msat) => msat.amount case None => 0L }
     RuntimePaymentInfo(rd, pr, finalSum)
   }
@@ -69,9 +67,16 @@ object PaymentInfo {
     CMDFailHtlc(add.id, reason)
   }
 
-  private def withoutNode(bad: PublicKeyVec, rpi: RuntimePaymentInfo) = {
-    val routes1: Vector[PaymentRoute] = without(rpi.rd.routes, bad contains _.nodeId)
-    rpi.modify(_.rd.badNodes).using(_ ++ bad).modify(_.rd.routes) setTo routes1
+  def withoutNodes(bad: PublicKeyVec, rpi: RuntimePaymentInfo) = {
+    val routesWithoutBadNodes = without(rpi.rd.routes, bad contains _.nodeId)
+    val rd1 = rpi.rd.copy(routes = routesWithoutBadNodes, badNodes = rpi.rd.badNodes ++ bad)
+    rpi.copy(rd = rd1)
+  }
+
+  def withoutChannel(shortChanId: Long, rpi: RuntimePaymentInfo) = {
+    val routesWithoutBadChans = without(rpi.rd.routes, _.shortChannelId == shortChanId)
+    val rd1 = rpi.rd.copy(routes = routesWithoutBadChans, badChans = rpi.rd.badChans + shortChanId)
+    rpi.copy(rd = rd1)
   }
 
   def cutRoutes(fail: UpdateFailHtlc)(rpi: RuntimePaymentInfo) = {
@@ -80,27 +85,26 @@ object PaymentInfo {
     parsed.foreach(Tools log _.toString)
 
     parsed map {
-      case ErrorPacket(nodeKey, UnknownNextPeer) =>
-        rpi.routeIds drop 1 zip rpi.routeIds collectFirst {
-          case failedId \ previousId if previousId == nodeKey =>
-            // Remove all the routes containing next failed node
-            withoutNode(Vector(failedId), rpi)
+      case ErrorPacket(nodeKey, _: Node) =>
+        withoutNodes(Vector(nodeKey), rpi)
+
+      case ErrorPacket(nodeKey, message: Update) =>
+        val isHonest = Announcements.checkSig(message.update, nodeKey)
+        if (isHonest) withoutChannel(message.update.shortChannelId, rpi)
+        else withoutNodes(Vector(nodeKey), rpi)
+
+      case ErrorPacket(nodeKey, _) =>
+        rpi.rd.usedRoute.collectFirst {
+          case hop if hop.nodeId == nodeKey =>
+            // Try without this outgoing channel
+            withoutChannel(hop.shortChannelId, rpi)
         } getOrElse rpi
 
-      case ErrorPacket(nodeKey, message: Update)
-        if Announcements.checkSig(message.update, nodeKey) =>
-        // There may be other operational chans so try them out
-        val routes1 = without(rpi.rd.routes, _.shortChannelId == message.update.shortChannelId)
-        rpi.modify(_.rd.badChans).using(_ + message.update.shortChannelId).modify(_.rd.routes) setTo routes1
-
-      // ChannelUpdate signature check has failed, this node is fishy
-      case ErrorPacket(nodeKey, _: Update) => withoutNode(Vector(nodeKey), rpi)
-      case ErrorPacket(nodeKey, InvalidRealm) => withoutNode(Vector(nodeKey), rpi)
-      case ErrorPacket(nodeKey, _: Node) => withoutNode(Vector(nodeKey), rpi)
-      case _ => rpi
-
-      // Remove all except our peer, recipient, recipient's peer
-    } getOrElse withoutNode(rpi.routeIds drop 1 dropRight 3, rpi)
+    } getOrElse {
+      // Except our peer, recipient, recipient's peers
+      val routeNodeIds = rpi.rd.usedRoute.map(_.nodeId)
+      withoutNodes(routeNodeIds drop 1 dropRight 3, rpi)
+    }
   }
 
   // After mutually signed HTLCs are present we need to parse and fail/fulfill them
@@ -140,19 +144,18 @@ object PaymentInfo {
 }
 
 case class PerHopPayload(shortChannelId: Long, amtToForward: Long, outgoingCltv: Long)
-case class RoutingData(routes: Vector[PaymentRoute], badNodes: Set[PublicKey], badChans: Set[Long],
-                       onion: SecretsAndPacket, firstMsatWithFee: Long, firstExpiry: Long)
+case class RoutingData(routes: Vector[PaymentRoute], usedRoute: PaymentRoute, badNodes: Set[PublicKey],
+                       badChans: Set[Long], onion: SecretsAndPacket, lastMsat: Long, lastExpiry: Long)
 
 case class RuntimePaymentInfo(rd: RoutingData, pr: PaymentRequest, firstMsat: Long) {
-  lazy val routeIds = rd.onion.sharedSecrets.unzip match { case _ \ nodeIds => nodeIds }
-  lazy val text = pr.description match { case Right(txt) => txt case _ => new String }
+  lazy val text = pr.description match { case Right(info) => info case _ => new String }
   lazy val searchText = text + " " + pr.paymentHash.toString
 
   def canNotProceed(peerId: PublicKey) = {
     val extraHops = pr.routingInfo.flatMap(_.route).toSet
     val extraChans = extraHops.map(_.shortChannelId) & rd.badChans
-    val criticalNodes = extraHops.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
-    criticalNodes.nonEmpty || extraChans.nonEmpty || rd.badNodes.isEmpty && rd.badChans.isEmpty
+    val extraNodes = extraHops.map(_.nodeId) + pr.nodeId + peerId & rd.badNodes
+    extraNodes.nonEmpty || extraChans.nonEmpty || rd.badNodes.isEmpty && rd.badChans.isEmpty
   }
 }
 

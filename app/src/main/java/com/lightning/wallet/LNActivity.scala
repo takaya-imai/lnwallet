@@ -273,10 +273,10 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         paymentDetails setText s"$description<br><br>$humanIn".html
       } else {
         val humanOut = humanFiat(coloredOut(info.firstSum), info.firstSum)
-        val feeAmount = MilliSatoshi(info.rd.firstMsatWithFee - info.firstMsat)
+        val feeAmount = MilliSatoshi(info.rd.lastMsat - info.firstMsat)
         val bld = mkChoiceDialog(none, pay(info.runtime), dialog_ok, dialog_retry)
         val title = humanFiat(getString(ln_outgoing_title).format(coloredOut(feeAmount), humanStatus), feeAmount)
-        val title1 = if (info.actualStatus == WAITING) expiryTitle(info.rd.firstExpiry, title) else title
+        val title1 = if (info.actualStatus == WAITING) expiryTitle(info.rd.lastExpiry, title) else title
         val bld1 = if (info.actualStatus != SUCCESS) bld else me negBld dialog_ok
         paymentDetails setText s"$description<br><br>$humanOut".html
         mkForm(bld1, title1.html, detailsWrapper)
