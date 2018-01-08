@@ -36,8 +36,8 @@ object JsonHttpUtils {
 
 object CloudDataSaver {
   def empty = CloudData(None, Set.empty, Set.empty, url = "")
-  def saveObject(data: CloudData) = StorageWrap.put("1" + data.toJson.toString, KEY)
-  def tryGetObject: TryCloudData = StorageWrap.get(KEY).map(_ substring 1) map to[CloudData]
+  def tryGetObject: TryCloudData = StorageWrap get KEY map to[CloudData]
+  def saveObject(data: CloudData) = StorageWrap.put(data.toJson.toString, KEY)
   type TryCloudData = Try[CloudData]
   val KEY = "cloudData"
 }
@@ -46,10 +46,10 @@ object RatesSaver {
   type Fiat2Btc = Map[String, Double]
   type BlockNum2Fee = Map[String, Double]
   type Result = (BlockNum2Fee, Fiat2Btc)
-  val KEY = "rates"
+  val KEY = "feerateAndFiat"
 
   // Either load saved rates data or create a new object from scratch
-  var rates = StorageWrap.get(KEY) map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
+  var rates = StorageWrap get KEY map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
 
   def saveObject = {
     val safe = retry(LNParams.cloud.connector.getRates map toVec[Result], pickInc, 3 to 4)

@@ -223,6 +223,10 @@ object Commitments {
   def addRemoteProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.remoteChanges.proposed).using(_ :+ proposal)
   def addLocalProposal(c: Commitments, proposal: LightningMessage) = c.modify(_.localChanges.proposed).using(_ :+ proposal)
 
+  def hasOutdatedOutgoing(c: Commitments, height: Long) =
+    c.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && height >= htlc.add.expiry) ||
+      c.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && height >= htlc.add.expiry)
+
   def getHtlcCrossSigned(commitments: Commitments, incomingRelativeToLocal: Boolean, htlcId: Long) = {
     val remoteSigned = CommitmentSpec.findHtlcById(commitments.localCommit.spec, htlcId, incomingRelativeToLocal)
     val localSigned = CommitmentSpec.findHtlcById(actualRemoteCommit(commitments).spec, htlcId, !incomingRelativeToLocal)

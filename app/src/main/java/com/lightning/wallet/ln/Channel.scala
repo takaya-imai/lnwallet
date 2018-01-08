@@ -259,12 +259,12 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         me UPDATE d1 doProcess CMDHTLCProcess
 
 
-      // Check if we have outdated outgoing HTLCs
       case (norm: NormalData, CMDBestHeight(height), NORMAL | SYNC)
-        if norm.commitments.localCommit.spec.htlcs.exists(htlc => !htlc.incoming && height >= htlc.add.expiry) ||
-          norm.commitments.remoteCommit.spec.htlcs.exists(htlc => htlc.incoming && height >= htlc.add.expiry) =>
+        // GUARD: close channel uncooperatively if outdated HTLC is large enough to be included in a commit tx
+        // or if outdated HTLC is small and thus filtered out of commit tx but an additional period of 288 blocks has passed
+        if norm.commitments.localCommit.htlcTxsAndSigs.isEmpty && Commitments.hasOutdatedOutgoing(norm.commitments, height - 288)
+          || norm.commitments.localCommit.htlcTxsAndSigs.nonEmpty && Commitments.hasOutdatedOutgoing(norm.commitments, height) =>
 
-        // Outdated HTLCs are present
         startLocalCurrentClose(norm)
 
 
