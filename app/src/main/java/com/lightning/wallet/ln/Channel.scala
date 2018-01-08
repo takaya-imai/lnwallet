@@ -185,8 +185,8 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         // AND this HTLC is not already in-flight AND it has not been fulfilled already
         val activeHtlcs = Commitments.actualRemoteCommit(norm.commitments).spec.htlcs
         val active = activeHtlcs.exists(_.add.paymentHash == cmd.rpi.pr.paymentHash)
-        if (active) throw AddException(cmd, ERR_TOO_MANY_HTLC)
 
+        if (active) throw AddException(cmd, ERR_TOO_MANY_HTLC)
         LNParams.bag getPaymentInfo cmd.rpi.pr.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
           case Success(info: PaymentInfo) if info.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)

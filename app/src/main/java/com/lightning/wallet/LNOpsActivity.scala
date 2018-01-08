@@ -3,9 +3,9 @@ package com.lightning.wallet
 import com.lightning.wallet.ln._
 import com.lightning.wallet.Utils._
 import com.lightning.wallet.R.string._
-import com.lightning.wallet.ln.Broadcaster._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.ln.LNParams.broadcaster.txStatus
+import com.lightning.wallet.ln.LNParams.DepthAndDead
 import com.lightning.wallet.ln.Tools.wrap
 import fr.acinq.bitcoin.Transaction
 import android.widget.Button

@@ -16,7 +16,6 @@ import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import com.lightning.wallet.ln.crypto.Sphinx.BytesAndKey
 import com.lightning.wallet.lnutils.RatesSaver.Fiat2Btc
 import com.lightning.wallet.ln.crypto.ShaChain.Index
-import com.lightning.wallet.ln.Broadcaster.TxSeq
 import com.lightning.wallet.ln.Tools.Bytes
 import fr.acinq.eclair.UInt64
 import scodec.bits.BitVector
@@ -282,7 +281,7 @@ object ImplicitJsonFormats { me =>
   implicit val refundingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, Transaction,
     RefundingData](RefundingData.apply, "announce", "commitments", "fundingTx"), tag = "RefundingData")
 
-  implicit val closingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, TxSeq,
+  implicit val closingDataFmt = taggedJsonFmt(jsonFormat[NodeAnnouncement, Commitments, Seq[Transaction],
     Seq[LocalCommitPublished], Seq[RemoteCommitPublished], Seq[RemoteCommitPublished], Seq[RevokedCommitPublished], Long,
     ClosingData](ClosingData.apply, "announce", "commitments", "mutualClose", "localCommit", "remoteCommit", "nextRemoteCommit",
     "revokedCommits", "startedAt"), tag = "ClosingData")

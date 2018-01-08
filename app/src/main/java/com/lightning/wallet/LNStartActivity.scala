@@ -19,6 +19,7 @@ import fr.acinq.bitcoin.{MilliSatoshi, Script}
 import android.view.{Menu, View, ViewGroup}
 import scala.util.{Failure, Success}
 
+import com.lightning.wallet.lnutils.Connector.AnnounceChansNumVec
 import android.content.DialogInterface.BUTTON_POSITIVE
 import com.lightning.wallet.ln.Scripts.multiSig2of2
 import org.bitcoinj.script.ScriptBuilder
@@ -41,7 +42,6 @@ class LNStartActivity extends ToolbarActivity with ViewSwitch with SearchBar { m
   private[this] var whenBackPressed = anyToRunnable(super.onBackPressed)
   override def onBackPressed: Unit = whenBackPressed.run
 
-  type AnnounceChansNumVec = Vector[AnnounceChansNum]
   private[this] val worker = new ThrottledWork[String, AnnounceChansNumVec] {
     def work(radixNodeAliasOrNodeIdQuery: String) = LNParams.cloud.connector findNodes radixNodeAliasOrNodeIdQuery
     def process(res: AnnounceChansNumVec) = wrap(me runOnUiThread adapter.notifyDataSetChanged)(adapter.nodes = res)

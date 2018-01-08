@@ -3,21 +3,23 @@ package com.lightning.wallet.ln
 import fr.acinq.bitcoin._
 import com.lightning.wallet.lnutils._
 import com.lightning.wallet.ln.Scripts._
-import com.lightning.wallet.ln.Broadcaster._
 import fr.acinq.bitcoin.DeterministicWallet._
 
 import scala.util.{Failure, Success}
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey, sha256}
 import com.lightning.wallet.lnutils.CloudDataSaver.TryCloudData
+import com.lightning.wallet.ln.LNParams.DepthAndDead
 import com.lightning.wallet.Utils.app
 import fr.acinq.eclair.UInt64
 
 
 object LNParams { me =>
-  val dustLimit = Satoshi(573L)
-  val minHtlcValue = MilliSatoshi(1000L)
-  val maxHtlcValue = MilliSatoshi(4194304000L)
+  type DepthAndDead = (Int, Boolean)
   val maxChannelCapacity = MilliSatoshi(16777216000L)
+  val maxHtlcValue = MilliSatoshi(4194304000L)
+  val minHtlcValue = MilliSatoshi(1000L)
+  val dustLimit = Satoshi(573L)
+
   val chainHash = Block.TestnetGenesisBlock.hash
   val theirReserveToFundingRatio = 0.01 // 1%
   val maxReserveToFundingRatio = 0.05 // 5%
@@ -103,11 +105,6 @@ case class HideReady(txn: Transaction) extends PublishStatus { def isPublishable
 case class HideDelayed(parent: (DepthAndDead, Long), txn: Transaction) extends DelayedPublishStatus
 case class ShowReady(txn: Transaction, fee: Satoshi, amount: Satoshi) extends PublishStatus { def isPublishable = true }
 case class ShowDelayed(parent: (DepthAndDead, Long), txn: Transaction, fee: Satoshi, amount: Satoshi) extends DelayedPublishStatus
-
-object Broadcaster {
-  type TxSeq = Seq[Transaction]
-  type DepthAndDead = (Int, Boolean)
-}
 
 trait Broadcaster extends ChannelListener { me =>
   def txStatus(txid: BinaryData): DepthAndDead

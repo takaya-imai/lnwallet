@@ -22,16 +22,14 @@ object JsonHttpUtils {
     Obs.just(null).delay(delayLeft.millis).flatMap(_ => next)
   }
 
-  def obsOn[T](provider: => T, scheduler: Scheduler): Obs[T] =
+  def obsOn[T](provider: => T, scheduler: Scheduler) =
     Obs.just(null).subscribeOn(scheduler).map(_ => provider)
 
-  def retry[T](obs: Obs[T], pick: (Throwable, Int) => Duration, times: Range): Obs[T] =
+  def retry[T](obs: Obs[T], pick: (Throwable, Int) => Duration, times: Range) =
     obs.retryWhen(_.zipWith(Obs from times)(pick) flatMap Obs.timer)
 
-  type JsValueVec = Vector[JsValue]
-  def toVec[T : JsonFormat](vec: JsValueVec) = for (js <- vec) yield js.convertTo[T]
   def to[T : JsonFormat](raw: String): T = raw.parseJson.convertTo[T]
-  def pickInc(err: Throwable, next: Int) = next.seconds
+  def pickInc(error: Throwable, next: Int) = next.seconds
 }
 
 object CloudDataSaver {
@@ -50,14 +48,11 @@ object RatesSaver {
 
   // Either load saved rates data or create a new object from scratch
   var rates = StorageWrap get KEY map to[Rates] getOrElse Rates(Nil, Map.empty, 0)
-
-  def saveObject = {
-    val safe = retry(LNParams.cloud.connector.getRates map toVec[Result], pickInc, 3 to 4)
-    initDelay(safe, rates.stamp, timeoutMillis = 1200000) foreach { case newFee \ newFiat +: _ =>
-      val validFees = for (positive <- newFee("6") +: rates.feeHistory if positive > 0) yield positive
-      rates = Rates(validFees take 3, newFiat, System.currentTimeMillis)
-      StorageWrap.put(rates.toJson.toString, KEY)
-    }
+  def safe = retry(LNParams.cloud.connector.ask[Result]("rates/get"), pickInc, 3 to 4)
+  def saveObject = initDelay(safe, rates.stamp, 1200000) foreach { case newFee \ newFiat =>
+    val fees = for (notZero <- newFee("6") +: rates.feeHistory if notZero > 0) yield notZero
+    rates = Rates(fees take 3, newFiat, System.currentTimeMillis)
+    StorageWrap.put(rates.toJson.toString, KEY)
   }
 }
 

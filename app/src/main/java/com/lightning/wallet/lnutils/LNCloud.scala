@@ -9,20 +9,21 @@ import com.lightning.wallet.lnutils.JsonHttpUtils._
 import com.lightning.wallet.lnutils.ImplicitConversions._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import fr.acinq.bitcoin.{BinaryData, Crypto, Transaction}
-import com.lightning.wallet.ln.Tools.{none, random}
 import rx.lang.scala.{Observable => Obs}
 import scala.util.{Failure, Success}
 
+import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
 import com.lightning.wallet.ln.RoutingInfoTag.PaymentRoute
 import collection.JavaConverters.mapAsJavaMapConverter
 import com.github.kevinsawicki.http.HttpRequest.post
-import com.lightning.wallet.ln.Broadcaster.TxSeq
+import com.lightning.wallet.ln.Tools.random
 import rx.lang.scala.schedulers.IOScheduler
 import fr.acinq.bitcoin.Crypto.PublicKey
 import com.lightning.wallet.Utils.app
 import org.bitcoinj.core.Utils.HEX
 import java.net.ProtocolException
 import org.bitcoinj.core.ECKey
+import java.math.BigInteger
 
 
 abstract class Cloud extends StateMachine[CloudData] {
@@ -67,7 +68,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
     // Execute if we are not busy and have available tokens and actions, don't care amout memo
     case CloudData(_, SET(token @ (point, clear, sig), _*), SET(action, _*), _) \ CMDStart if isFree =>
       val params = Seq("point" -> point, "cleartoken" -> clear, "clearsig" -> sig, BODY -> action.data.toString) ++ action.plus
-      val go = connector.ask(action.path, none, params:_*) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
+      val go = connector.ask[String](action.path, params:_*) doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go.foreach(_ => me BECOME data.copy(acts = data.acts - action, tokens = data.tokens - token), onError)
       isFree = false
 
@@ -118,21 +119,21 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
   // TALKING TO SERVER
 
   def getRequestAndMemo: Obs[RequestAndMemo] =
-    connector.ask("blindtokens/info", identity) flatMap { raw =>
-      val JsString(pubKeyQ) +: JsString(pubKeyR) +: JsNumber(qty) +: _ = raw
-      val signerSessionPubKey = ECKey.fromPublicOnly(HEX decode pubKeyR)
-      val signerMasterPubKey = ECKey.fromPublicOnly(HEX decode pubKeyQ)
+    connector.ask[TokensInfo]("blindtokens/info") flatMap {
+      case (signerMasterPubKey, signerSessionPubKey, quantity) =>
+        val pubKeyQ = ECKey.fromPublicOnly(HEX decode signerMasterPubKey)
+        val pubKeyR = ECKey.fromPublicOnly(HEX decode signerSessionPubKey)
 
-      // Prepare a list of BlindParam and a list of BigInteger clear tokens for each BlindParam
-      val blinder = new ECBlind(signerMasterPubKey.getPubKeyPoint, signerSessionPubKey.getPubKeyPoint)
-      val memo = BlindMemo(blinder params qty.toInt, blinder tokens qty.toInt, signerSessionPubKey.getPublicKeyAsHex)
-      connector.ask("blindtokens/buy", vec => PaymentRequest read json2String(vec.head), "seskey" -> memo.sesPubKeyHex,
-        "tokens" -> memo.makeBlindTokens.toJson.toString.hex).map(_ -> memo)
-    }
+        // Prepare a list of BlindParam and a list of BigInteger clear tokens
+        val blinder = new ECBlind(pubKeyQ.getPubKeyPoint, pubKeyR.getPubKeyPoint)
+        val memo = BlindMemo(blinder params quantity, blinder tokens quantity, pubKeyR.getPublicKeyAsHex)
+        connector.ask[String]("blindtokens/buy", "tokens" -> memo.makeBlindTokens.toJson.toString.hex,
+          "seskey" -> memo.sesPubKeyHex).map(PaymentRequest.read).map(pr => pr -> memo)
+      }
 
-  def getClearTokens(memo: BlindMemo) = connector.ask("blindtokens/redeem",
-    ts => for (clearToken <- ts) yield json2String(clearToken).bigInteger,
-    "seskey" -> memo.sesPubKeyHex).map(memo.makeClearSigs).map(memo.pack)
+  def getClearTokens(m: BlindMemo) =
+    connector.ask[BigIntegerVec]("blindtokens/redeem",
+      "seskey" -> m.sesPubKeyHex).map(m.makeClearSigs).map(m.pack)
 }
 
 // Users may supply their own cloud with key based authentication
@@ -143,7 +144,7 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
   def doProcess(some: Any) = (data, some) match {
     // Execute if we are not busy and have available actions
     case CloudData(_, _, SET(action, _*), _) \ CMDStart if isFree =>
-      val go = connector.ask(action.path, none, signed(action.data) ++ action.plus:_*)
+      val go = connector.ask[String](action.path, signed(action.data) ++ action.plus:_*)
       val go1 = go doOnTerminate { isFree = true } doOnCompleted { me doProcess CMDStart }
       go1.foreach(_ => me BECOME data.copy(acts = data.acts - action), Tools.errlog)
       isFree = false
@@ -163,26 +164,23 @@ class PrivateCloud(val connector: Connector) extends Cloud { me =>
 
   override def checkIfWorks = {
     val params = signed(random getBytes 32)
-    connector.ask("check", none, params:_*)
+    connector.ask[String]("check", params:_*)
   }
 }
 
 class Connector(val url: String) {
   def http(way: String) = post(s"$url/v1/$way", true)
-  def ask[T](command: String, process: Vector[JsValue] => T, params: HttpParam*) =
+  def ask[T : JsonFormat](command: String, params: HttpParam*): Obs[T] =
     obsOn(http(command).form(params.toMap.asJava).body.parseJson, IOScheduler.apply) map {
       case JsArray(JsString("error") +: JsString(why) +: _) => throw new ProtocolException(why)
-      case JsArray(JsString("ok") +: responses) => process(responses)
+      case JsArray(JsString("ok") +: response +: _) => response.convertTo[T]
       case _ => throw new ProtocolException
     }
 
-  def getRates = ask("rates/get", identity)
-  def getBackup(key: String) = ask("data/get", ecryptedData => toVec[String](ecryptedData) map HEX.decode, "key" -> key)
-  def getChildTxs(txs: TxSeq) = ask("txs/get", toVec[Transaction], "txids" -> txs.map(_.txid).toJson.toString.hex)
-
-  import com.lightning.wallet.ln.wire.LightningMessageCodecs.AnnounceChansNum
-  def findNodes(query: String) = ask("router/nodes", toVec[AnnounceChansNum], "query" -> query)
-  def findRoutes(rd: RoutingData, from: PublicKey, to: PublicKey) = ask("router/routes", toVec[PaymentRoute],
+  def findNodes(query: String) = ask[AnnounceChansNumVec]("router/nodes", "query" -> query)
+  def getBackup(key: String) = ask[StringVec]("data/get", "key" -> key).map(_ map HEX.decode)
+  def getChildTxs(txs: TxSeq) = ask[TxSeq]("txs/get", "txids" -> txs.map(_.txid).toJson.toString.hex)
+  def findRoutes(rd: RoutingData, from: PublicKey, to: PublicKey) = ask[PaymentRouteVec]("router/routes",
     "nodes" -> rd.badNodes.map(_.toBin).toJson.toString.hex, "channels" -> rd.badChans.toJson.toString.hex,
     "from" -> from.toString, "to" -> to.toString)
 }
@@ -190,13 +188,18 @@ class Connector(val url: String) {
 class FailoverConnector(failover: Connector, url: String) extends Connector(url) {
   override def getChildTxs(txs: TxSeq) = super.getChildTxs(txs).onErrorResumeNext(_ => failover getChildTxs txs)
   override def getBackup(key: String) = super.getBackup(key).onErrorResumeNext(_ => failover getBackup key)
-  override def getRates = super.getRates.onErrorResumeNext(_ => failover.getRates)
 }
 
 object Connector {
-  type HttpParam = (String, String)
-  type ClearToken = (String, String, String)
+  type TxSeq = Seq[Transaction]
+  type StringVec = Vector[String]
+  type BigIntegerVec = Vector[BigInteger]
+  type PaymentRouteVec = Vector[PaymentRoute]
+  type AnnounceChansNumVec = Vector[AnnounceChansNum]
   type RequestAndMemo = (PaymentRequest, BlindMemo)
+  type ClearToken = (String, String, String)
+  type TokensInfo = (String, String, Int)
+  type HttpParam = (String, String)
   val CMDStart = "CMDStart"
   val BODY = "body"
 }

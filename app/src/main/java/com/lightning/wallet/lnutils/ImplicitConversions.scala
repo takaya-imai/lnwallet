@@ -5,7 +5,6 @@ import language.implicitConversions
 import fr.acinq.bitcoin.BinaryData
 import org.bitcoinj.core.Utils.HEX
 import org.bitcoinj.core.TxWrap
-import java.math.BigInteger
 import android.text.Html
 
 
@@ -27,7 +26,6 @@ object ImplicitConversions {
 class StringOps(source: String) {
   def binary = BinaryData(source getBytes "UTF-8")
   def hex = HEX.encode(source getBytes "UTF-8")
-  def bigInteger = new BigInteger(source)
   def noCommas = source.replace(",", "")
   def html = Html fromHtml source
 }
