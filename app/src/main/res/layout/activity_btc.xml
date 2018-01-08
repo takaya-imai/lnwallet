@@ -3,8 +3,6 @@
     xmlns:fab="http://schemas.android.com/apk/res-auto">
 
     <LinearLayout style="@style/StandardLinearLayout">
-
-        <!-- Custom toolbar -->
         <include layout="@layout/toolbar"/>
 
         <ListView
@@ -46,7 +44,8 @@
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
             style="@style/FabButton"
-            android:onClick="goLN"/>
+            android:onClick="goLN"
+            fab:fab_size="mini"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_upward_white_18dp"
@@ -65,7 +64,6 @@
             fab:fab_colorPressed="@color/btc"
             fab:fab_colorNormal="@color/btc"
             fab:fab_colorRipple="@color/btc"
-
             style="@style/FabButton"
             fab:fab_size="mini"/>
 

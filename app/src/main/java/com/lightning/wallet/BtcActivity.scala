@@ -62,8 +62,9 @@ trait HumanTimeDisplay { me: TimerActivity =>
 }
 
 trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
-  lazy val allTxsButton = getLayoutInflater.inflate(R.layout.frag_txs_all, null)
-  lazy val toggler = allTxsButton.findViewById(R.id.toggler).asInstanceOf[ImageButton]
+  lazy val allTxsWrapper = getLayoutInflater.inflate(R.layout.frag_txs_all, null)
+  lazy val toggler = allTxsWrapper.findViewById(R.id.toggler).asInstanceOf[ImageButton]
+  lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
   lazy val list = findViewById(R.id.itemsList).asInstanceOf[ListView]
   private[this] var state = SCROLL_STATE_IDLE
   val minLinesNum = 4
@@ -74,27 +75,27 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
       def onScrollStateChanged(v: AbsListView, newState: Int) = state = newState
       def maybeUpdate = if (SCROLL_STATE_IDLE == state) adapter.notifyDataSetChanged
       timer.schedule(anyToRunnable(maybeUpdate), 10000, 10000)
-      allTxsButton setVisibility View.GONE
-      list addFooterView allTxsButton
+      allTxsWrapper setVisibility View.GONE
+      list addFooterView allTxsWrapper
+      fab open false
     }
 
-  abstract class CutAdapter[T](val max: Int) extends BaseAdapter {
-    // Automatically switches list view from short to long and back
+  abstract class CutAdapter[T](val max: Int, viewLine: Int) extends BaseAdapter {
+    // Automatically switches list view from short to long version and back again
     def switch = cut = if (cut == minLinesNum) max else minLinesNum
-    def getItemId(position: Int): Long = position
-    def getCount: Int = visibleItems.size
+    def getItemId(position: Int) = position
+    def getCount = visibleItems.size
 
-    var cut: Int = minLinesNum
+    var cut = minLinesNum
     var visibleItems = Vector.empty[T]
     var availableItems = Vector.empty[T]
-    val viewLine: Int
 
     val set: Vector[T] => Unit = items1 => {
       val visibility = if (items1.size > minLinesNum) View.VISIBLE else View.GONE
       val resource = if (cut == minLinesNum) R.drawable.ic_expand_more_black_24dp
         else R.drawable.ic_expand_less_black_24dp
 
-      allTxsButton setVisibility visibility
+      allTxsWrapper setVisibility visibility
       toggler setImageResource resource
       visibleItems = items1 take cut
       availableItems = items1
@@ -119,7 +120,6 @@ trait ListUpdater extends HumanTimeDisplay { me: TimerActivity =>
 }
 
 class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me =>
-  lazy val fab = findViewById(R.id.fab).asInstanceOf[com.github.clans.fab.FloatingActionMenu]
   lazy val mnemonicWarn = findViewById(R.id.mnemonicWarn).asInstanceOf[LinearLayout]
   lazy val mnemonicInfo = me clickableTextField findViewById(R.id.mnemonicInfo)
   lazy val txsConfs = getResources getStringArray R.array.txs_confs
@@ -128,8 +128,9 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
   lazy val feeAbsent = getString(txs_fee_absent)
   lazy val walletEmpty = getString(wallet_empty)
 
-  lazy val adapter = new CutAdapter[TxWrap](96) {
-    override val viewLine = R.layout.frag_tx_btc_line
+  lazy val adapter = new CutAdapter[TxWrap](96, R.layout.frag_tx_btc_line) {
+    // BTC line has a wider timestamp section because there is no payment info
+
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
 
@@ -238,9 +239,14 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       app.kit.wallet addCoinsSentEventListener lstTracker
       app.kit.wallet addCoinsReceivedEventListener lstTracker
       app.kit.wallet addTransactionConfidenceEventListener lstTracker
-      if (txs.isEmpty) mnemonicWarn setVisibility View.VISIBLE
-      mnemonicInfo setText getString(mnemonic_info).html
       adapter set txs
+
+      if (txs.isEmpty) {
+        // Show user a mnemonic dialog if there is no txs
+        mnemonicInfo setText getString(mnemonic_info).html
+        mnemonicWarn setVisibility View.VISIBLE
+        fab close false
+      }
     }
 
     // Wire up general listeners
@@ -296,35 +302,19 @@ class BtcActivity extends DataReader with ToolbarActivity with ListUpdater { me 
       app.TransData.value = null
   }
 
-  // Get bitcoins
   private def localBitcoinsAndGlidera = {
     val uri = Uri parse "https://testnet.manu.backend.hamburg/faucet"
     me startActivity new Intent(Intent.ACTION_VIEW, uri)
   }
 
-  def goQR(top: View) = {
-    val activity = classOf[ScanActivity]
-    delayUI(me goTo activity, 195)
-    fab close true
-  }
-
-  def goLN(top: View) = {
-    val activity = classOf[LNActivity]
-    delayUI(me goTo activity, 195)
-    fab close true
-  }
-
-  def goReceiveBtcAddress(top: View) = {
+  def goReceiveBtcAddress(section: View) = {
     app.TransData.value = app.kit.currentAddress
-    val activity = classOf[RequestActivity]
-    delayUI(me goTo activity, 195)
-    fab close true
+    me goTo classOf[RequestActivity]
   }
 
-  def goPay(top: View) = {
-    delayUI(sendBtcTxPopup)
-    fab close true
-  }
+  def goQR(top: View) = me goTo classOf[ScanActivity]
+  def goLN(top: View) = me goTo classOf[LNActivity]
+  def goPay(top: View) = sendBtcTxPopup
 
   def toggle(v: View) = {
     // Expand or collapse all txs

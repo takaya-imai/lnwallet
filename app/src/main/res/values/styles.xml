@@ -96,6 +96,8 @@
     <!-- floating buttons style -->
 
     <style name="FloatingMenu">
+        <item name="menu_shadowRadius">2dp</item>
+        <item name="menu_shadowYOffset">2dp</item>
         <item name="menu_shadowColor">#33000000</item>
         <item name="android:layout_margin">@dimen/app_padding</item>
         <item name="android:layout_alignParentBottom">true</item>
@@ -107,6 +109,8 @@
     </style>
 
     <style name="FabButton">
+        <item name="fab_shadowRadius">2dp</item>
+        <item name="fab_shadowYOffset">2dp</item>
         <item name="fab_shadowColor">#33000000</item>
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>

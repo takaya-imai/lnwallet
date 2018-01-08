@@ -29,7 +29,6 @@ import android.content.Context.LAYOUT_INFLATER_SERVICE
 import android.content.DialogInterface.BUTTON_POSITIVE
 import org.ndeftools.util.activity.NfcReaderActivity
 import com.lightning.wallet.lnutils.JsonHttpUtils.to
-import com.github.clans.fab.FloatingActionMenu
 import android.support.v4.view.MenuItemCompat
 import android.view.ViewGroup.LayoutParams
 import com.lightning.wallet.Utils.app
@@ -87,16 +86,14 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
   lazy val viewParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
   lazy val container = findViewById(R.id.container).asInstanceOf[RelativeLayout]
 
-  lazy val blocksLeft = getResources getStringArray R.array.ln_status_left_blocks
   lazy val paymentStatesMap = getResources getStringArray R.array.ln_payment_states
-  lazy val fab = findViewById(R.id.fab).asInstanceOf[FloatingActionMenu]
+  lazy val blocksLeft = getResources getStringArray R.array.ln_status_left_blocks
   lazy val paymentsViewProvider = new PaymentsViewProvider
   val imgMap = Array(await, await, conf1, dead)
 
-  lazy val adapter = new CutAdapter[PaymentInfo](PaymentTable.limit) {
-    // Reduce an amount of database query results to PaymentTable.limit here
+  lazy val adapter = new CutAdapter[PaymentInfo](PaymentTable.limit, R.layout.frag_tx_ln_line) {
+    // LN line has a narrower timestamp section because payment info, also limit of rows is reduced
 
-    override val viewLine = R.layout.frag_tx_ln_line
     def getItem(position: Int) = visibleItems(position)
     def getHolder(view: View) = new TxViewHolder(view) {
 
@@ -437,24 +434,9 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
       app.TransData.value = null
   }
 
-  // Reactions to menu
-
-  def goBitcoin(top: View) = {
-    val activity = classOf[BtcActivity]
-    delayUI(me goTo activity, 195)
-    fab close true
-  }
-
-  def goQR(top: View) = {
-    val activity = classOf[ScanActivity]
-    delayUI(me goTo activity, 195)
-    fab close true
-  }
-
-  def goReceive(top: View) = {
-    delayUI(makePaymentRequest.run)
-    fab close true
-  }
+  def goBitcoin(top: View) = me goTo classOf[BtcActivity]
+  def goQR(top: View) = me goTo classOf[ScanActivity]
+  def goReceive(top: View) = makePaymentRequest.run
 
   def toggle(v: View) = {
     // Expand or collapse all txs
