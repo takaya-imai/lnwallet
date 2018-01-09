@@ -82,7 +82,7 @@ object PaymentInfo {
   def cutRoutes(fail: UpdateFailHtlc)(rpi: RuntimePaymentInfo) = {
     // Try to reduce remaining routes and also remember bad nodes and channels
     val parsed = Try apply parseErrorPacket(rpi.rd.onion.sharedSecrets, fail.reason)
-    parsed.foreach(Tools log _.toString)
+    Tools log parsed.toString
 
     parsed map {
       case ErrorPacket(nodeKey, _: Node) =>
@@ -96,9 +96,9 @@ object PaymentInfo {
       case ErrorPacket(nodeKey, _) =>
         rpi.rd.usedRoute.collectFirst {
           case hop if hop.nodeId == nodeKey =>
-            // Try without this node's outgoing channel
+            // Try without this outgoing channel
             withoutChannels(Vector(hop.shortChannelId), rpi)
-        } getOrElse rpi
+        } getOrElse withoutNodes(Vector(nodeKey), rpi)
 
     } getOrElse {
       // Except for our channel and peer's channel
