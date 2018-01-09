@@ -62,7 +62,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
       } if (data.info.isEmpty && pr.amount.forall(_.amount < 20000000L) && memo.clears.size > 20) {
         // Proceed if data is still empty, the price is low enough and number of sigs is high enough
         me BECOME data.copy(info = Some apply paymentRequestAndMemo)
-        operationalChannel process SilentAddHtlc(rpi)
+        operationalChannel process CMDSilentAddHtlc(rpi)
       }
 
     // Execute if we are not busy and have available tokens and actions, don't care amout memo
@@ -91,7 +91,7 @@ class PublicCloud(val connector: Connector, bag: PaymentInfoBag) extends Cloud {
             operationalChannel <- app.ChannelManager.all.find(_.isOperational)
             // Repeatedly retry an old request instead of getting a new one until it expires
             Some(pay) <- retry(app.ChannelManager outPaymentObs emptyRPI(pr), pickInc, 3 to 4)
-          } operationalChannel process SilentAddHtlc(pay)
+          } operationalChannel process CMDSilentAddHtlc(pay)
 
         // First attempt has been rejected
         case Failure(_) => eraseRequestData

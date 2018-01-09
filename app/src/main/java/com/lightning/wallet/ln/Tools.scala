@@ -64,8 +64,8 @@ object Features {
 
 class LightningException extends RuntimeException
 trait CMDException extends LightningException { val cmd: CMDAddHtlc }
-case class AddException(cmd: CMDAddHtlc, code: Int) extends CMDException
-case class ReserveException(cmd: CMDAddHtlc, missingSat: Long, reserveSat: Long)
+case class CMDAddExcept(cmd: CMDAddHtlc, code: Int) extends CMDException
+case class CMDReserveExcept(cmd: CMDAddHtlc, missingSat: Long, reserveSat: Long)
   extends CMDException
 
 // STATE MACHINE

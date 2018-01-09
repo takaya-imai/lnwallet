@@ -44,8 +44,7 @@
             fab:fab_colorNormal="@color/ln"
             fab:fab_colorRipple="@color/ln"
             style="@style/FabButton"
-            android:onClick="goLN"
-            fab:fab_size="mini"/>
+            android:onClick="goLN"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_upward_white_18dp"

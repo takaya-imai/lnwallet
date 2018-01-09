@@ -8,6 +8,7 @@ import com.lightning.wallet.ln.Channel._
 import com.lightning.wallet.ln.LNParams._
 import com.lightning.wallet.ln.PaymentInfo._
 import com.lightning.wallet.ln.Announcements._
+import com.lightning.wallet.ln.AddErrorCodes._
 import com.lightning.wallet.lnutils.ImplicitJsonFormats._
 import com.lightning.wallet.lnutils.Connector.CMDStart
 import com.lightning.wallet.lnutils.JsonHttpUtils.to
@@ -15,7 +16,6 @@ import com.lightning.wallet.helper.RichCursor
 import com.lightning.wallet.Utils.app
 import fr.acinq.bitcoin.BinaryData
 import scala.collection.mutable
-import scala.util.Try
 
 
 object StorageWrap extends ChannelListener {
@@ -55,6 +55,7 @@ object ChannelWrap {
   }
 
   def get = {
+    // Supports simple versioning (1 is prepended)
     val rc = RichCursor(db select ChannelTable.selectAllSql)
     rc.vec(_ string ChannelTable.data substring 1) map to[HasCommitments]
   }
@@ -78,6 +79,11 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
   val serverCallAttempts = mutable.Map.empty[BinaryData, Int] withDefaultValue 0
 
   override def onError = {
+    case _ \ CMDAddExcept(_, ERR_TOO_MANY_HTLC) =>
+      // Payment is either absent or in progress
+      // so don't mark it as failed here
+      uiNotify
+
     case (_, exc: CMDException) =>
       // Needed for retry failures, also prevents shutdown
       updateStatus(FAILURE, exc.cmd.rpi.pr.paymentHash)
@@ -130,7 +136,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
             // There are still routes left and we have just used one
             // if accepted: routing info will be upserted in onProcess
             // if not accepted: status will change to FAILURE in onError
-            chan process PlainAddHtlc(updatedPaymentInfo)
+            chan process CMDPlainAddHtlc(updatedPaymentInfo)
 
           case None =>
             updateRouting(reducedPaymentInfo)
@@ -142,7 +148,7 @@ object PaymentInfoWrap extends PaymentInfoBag with ChannelListener {
             if (nope) serverCallAttempts(htlc.add.paymentHash) = 0
             else app.ChannelManager.getOutPaymentObs(reducedPaymentInfo)
               .doOnSubscribe(serverCallAttempts(htlc.add.paymentHash) += 1)
-              .foreach(_ map PlainAddHtlc foreach chan.process, Tools.errlog)
+              .foreach(_ map CMDPlainAddHtlc foreach chan.process, Tools.errlog)
         }
       }
 

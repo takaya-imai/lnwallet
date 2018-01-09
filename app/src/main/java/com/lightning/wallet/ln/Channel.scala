@@ -186,11 +186,11 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
         val activeHtlcs = Commitments.actualRemoteCommit(norm.commitments).spec.htlcs
         val active = activeHtlcs.exists(_.add.paymentHash == cmd.rpi.pr.paymentHash)
 
-        if (active) throw AddException(cmd, ERR_TOO_MANY_HTLC)
+        if (active) throw CMDAddExcept(cmd, ERR_TOO_MANY_HTLC)
         LNParams.bag getPaymentInfo cmd.rpi.pr.paymentHash match {
           // When re-sending an already fulfilled HTLC a peer may provide us with a preimage without routing a payment
-          case Success(info: PaymentInfo) if info.actualStatus == SUCCESS => throw AddException(cmd, ERR_FULFILLED)
-          case Success(info: PaymentInfo) if info.incoming == 1 => throw AddException(cmd, ERR_FAILED)
+          case Success(info: PaymentInfo) if info.actualStatus == SUCCESS => throw CMDAddExcept(cmd, ERR_FULFILLED)
+          case Success(info: PaymentInfo) if info.incoming == 1 => throw CMDAddExcept(cmd, ERR_FAILED)
 
           case _ =>
             // This may be a FAILURE payment which is fine
@@ -501,7 +501,7 @@ abstract class Channel extends StateMachine[ChannelData] { me =>
 
       // CMDShutdown in WAIT_FUNDING_DONE and NORMAL is handled differently above
       case (some: HasCommitments, CMDShutdown, NEGOTIATIONS | SYNC) => startLocalCurrentClose(some)
-      case (_: NormalData, add: CMDAddHtlc, SYNC) => throw AddException(add, ERR_OFFLINE)
+      case (_: NormalData, add: CMDAddHtlc, SYNC) => throw CMDAddExcept(add, ERR_OFFLINE)
       case _ =>
     }
 

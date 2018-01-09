@@ -34,8 +34,8 @@ case class CMDFulfillHtlc(id: Long, preimage: BinaryData) extends Command
 case class CMDFailHtlc(id: Long, reason: BinaryData) extends Command
 
 sealed trait CMDAddHtlc extends Command { val rpi: RuntimePaymentInfo }
-case class SilentAddHtlc(rpi: RuntimePaymentInfo) extends CMDAddHtlc
-case class PlainAddHtlc(rpi: RuntimePaymentInfo) extends CMDAddHtlc
+case class CMDSilentAddHtlc(rpi: RuntimePaymentInfo) extends CMDAddHtlc
+case class CMDPlainAddHtlc(rpi: RuntimePaymentInfo) extends CMDAddHtlc
 
 // CHANNEL DATA
 
@@ -238,9 +238,9 @@ object Commitments {
   }
 
   def sendAdd(c: Commitments, cmd: CMDAddHtlc) =
-    if (cmd.rpi.firstMsat < c.remoteParams.htlcMinimumMsat) throw AddException(cmd, ERR_REMOTE_AMOUNT_LOW)
-    else if (cmd.rpi.firstMsat > maxHtlcValue.amount) throw AddException(cmd, ERR_AMOUNT_OVERFLOW)
-    else if (cmd.rpi.pr.paymentHash.size != 32) throw AddException(cmd, ERR_FAILED)
+    if (cmd.rpi.firstMsat < c.remoteParams.htlcMinimumMsat) throw CMDAddExcept(cmd, ERR_REMOTE_AMOUNT_LOW)
+    else if (cmd.rpi.firstMsat > maxHtlcValue.amount) throw CMDAddExcept(cmd, ERR_AMOUNT_OVERFLOW)
+    else if (cmd.rpi.pr.paymentHash.size != 32) throw CMDAddExcept(cmd, ERR_FAILED)
     else {
 
       // Let's compute the current commitment
@@ -260,9 +260,9 @@ object Commitments {
       val missingSat = reduced.toRemoteMsat / 1000L - reserveWithTxFeeSat
 
       // We should both check if WE can send another HTLC and if PEER can accept another HTLC
-      if (totalInFlightMsat > c.remoteParams.maxHtlcValueInFlightMsat) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (outgoing.size > maxAllowedHtlcs | incoming.size > maxAllowedHtlcs) throw AddException(cmd, ERR_TOO_MANY_HTLC)
-      if (missingSat < 0L) throw ReserveException(cmd, missingSat, reserveWithTxFeeSat)
+      if (totalInFlightMsat > c.remoteParams.maxHtlcValueInFlightMsat) throw CMDAddExcept(cmd, ERR_TOO_MANY_HTLC)
+      if (outgoing.size > maxAllowedHtlcs | incoming.size > maxAllowedHtlcs) throw CMDAddExcept(cmd, ERR_TOO_MANY_HTLC)
+      if (missingSat < 0L) throw CMDReserveExcept(cmd, missingSat, reserveWithTxFeeSat)
       c1 -> add
     }
 

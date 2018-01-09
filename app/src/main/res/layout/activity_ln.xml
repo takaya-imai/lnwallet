@@ -28,8 +28,7 @@
             fab:fab_colorNormal="@color/btc"
             fab:fab_colorRipple="@color/btc"
             android:onClick="goBitcoin"
-            style="@style/FabButton"
-            fab:fab_size="mini"/>
+            style="@style/FabButton"/>
 
         <com.github.clans.fab.FloatingActionButton
             android:src="@drawable/ic_arrow_downward_white_18dp"

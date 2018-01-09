@@ -116,7 +116,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     // Should be removed when activity is stopped
 
     override def onError = {
-      case _ \ ReserveException(PlainAddHtlc(rpi), missingSat, reserveSat) =>
+      case _ \ CMDReserveExcept(CMDPlainAddHtlc(rpi), missingSat, reserveSat) =>
         // Current commit tx fee and channel reserve forbid sending of this payment
         // Inform user with all the details laid out as cleanly as possible
 
@@ -126,7 +126,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
         val sending = coloredOut apply MilliSatoshi(rpi.firstMsat)
         onFail(error = message.format(reserve, sending, missing).html)
 
-      case _ \ AddException(_: PlainAddHtlc, code) =>
+      case _ \ CMDAddExcept(_: CMDPlainAddHtlc, code) =>
         // Let user know why payment could not be added
         onFail(me getString code)
     }
@@ -228,7 +228,7 @@ class LNActivity extends DataReader with ToolbarActivity with ListUpdater with S
     val pay: RuntimePaymentInfo => Unit = rpi =>
       app.ChannelManager.getOutPaymentObs(rpi).foreach(onNext = {
         // Must account for a special fail when no routes are found
-        case Some(updatedRPI) => chan process PlainAddHtlc(updatedRPI)
+        case Some(updatedRPI) => chan process CMDPlainAddHtlc(updatedRPI)
         case None => onFail(me getString err_ln_no_route)
       }, onPaymentError)
 

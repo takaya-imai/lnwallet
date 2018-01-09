@@ -75,7 +75,7 @@ object Utils {
   def isMnemonicCorrect(mnemonic: String) = mnemonic.split("\\s+").length > 11
 
   def humanAddr(adr: Address) = s"$adr" grouped 4 mkString "\u0020"
-  def humanNode(nodeId: PublicKey, separator: String = "\n") = nodeId.toString
+  def humanNode(nodeId: PublicKey, separator: String) = nodeId.toString
     .grouped(24).map(_ grouped 3 mkString "\u0020").mkString(separator)
 
   def currentRate: Try[Double] = Try(RatesSaver.rates exchange fiatName)
@@ -431,7 +431,10 @@ trait TimerActivity extends AppCompatActivity { me =>
   def delayUI(fun: => Unit, delay: Int = 225) = timer.schedule(anyToRunnable(fun), delay)
   def mkForm(bld: Builder, title: View, content: View) = showForm(bld.setCustomTitle(title).setView(content).create)
   def onFail(error: CharSequence): Unit = me runOnUiThread mkForm(me negBld dialog_ok, null, error).show
-  def onFail(error: Throwable): Unit = onFail(error.getMessage)
+  def onFail(error: Throwable): Unit = {
+    error.printStackTrace()
+    onFail(error.getMessage)
+  }
 
   def showForm(alertDialog: AlertDialog) = {
     alertDialog setCanceledOnTouchOutside false

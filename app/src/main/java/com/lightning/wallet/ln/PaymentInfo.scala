@@ -55,7 +55,7 @@ object PaymentInfo {
 
   val emptyRPI: PaymentRequest => RuntimePaymentInfo = pr => {
     val packet = Packet(Array(Version), random getBytes 33, random getBytes DataLength, random getBytes MacLength)
-    val rd = RoutingData(Vector.empty, usedRoute = null, Set.empty, Set.empty, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
+    val rd = RoutingData(Vector.empty, Vector.empty, Set.empty, Set.empty, SecretsAndPacket(Vector.empty, packet), 0L, 0L)
     val finalSum = pr.amount match { case Some(msat) => msat.amount case None => 0L }
     RuntimePaymentInfo(rd, pr, finalSum)
   }
@@ -73,9 +73,9 @@ object PaymentInfo {
     rpi.copy(rd = rd1)
   }
 
-  def withoutChannel(shortChanId: Long, rpi: RuntimePaymentInfo) = {
-    val routesWithoutBadChans = without(rpi.rd.routes, _.shortChannelId == shortChanId)
-    val rd1 = rpi.rd.copy(routes = routesWithoutBadChans, badChans = rpi.rd.badChans + shortChanId)
+  def withoutChannels(shortChanIds: Vector[Long], rpi: RuntimePaymentInfo) = {
+    val routesWithoutBadChans = without(rpi.rd.routes, shortChanIds contains _.shortChannelId)
+    val rd1 = rpi.rd.copy(routes = routesWithoutBadChans, badChans = rpi.rd.badChans ++ shortChanIds)
     rpi.copy(rd = rd1)
   }
 
@@ -90,20 +90,20 @@ object PaymentInfo {
 
       case ErrorPacket(nodeKey, message: Update) =>
         val isHonest = Announcements.checkSig(message.update, nodeKey)
-        if (isHonest) withoutChannel(message.update.shortChannelId, rpi)
+        if (isHonest) withoutChannels(Vector(message.update.shortChannelId), rpi)
         else withoutNodes(Vector(nodeKey), rpi)
 
       case ErrorPacket(nodeKey, _) =>
         rpi.rd.usedRoute.collectFirst {
           case hop if hop.nodeId == nodeKey =>
-            // Try without this outgoing channel
-            withoutChannel(hop.shortChannelId, rpi)
+            // Try without this node's outgoing channel
+            withoutChannels(Vector(hop.shortChannelId), rpi)
         } getOrElse rpi
 
     } getOrElse {
-      // Except our peer, recipient, recipient's peers
-      val routeNodeIds = rpi.rd.usedRoute.map(_.nodeId)
-      withoutNodes(routeNodeIds drop 1 dropRight 3, rpi)
+      // Except for our channel and peer's channel
+      val shortChanIds = rpi.rd.usedRoute.map(_.shortChannelId)
+      withoutChannels(shortChanIds drop 1 dropRight 1, rpi)
     }
   }
 
