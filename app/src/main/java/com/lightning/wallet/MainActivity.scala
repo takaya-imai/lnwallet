@@ -36,6 +36,26 @@ trait ViewSwitch {
   }
 }
 
+object MainActivity {
+  var proceed: Runnable = _
+  lazy val prepareKit = Future {
+    val stream = new FileInputStream(app.walletFile)
+    val proto = WalletProtobufSerializer parseToProto stream
+
+    app.kit = new app.WalletKit {
+      wallet = (new WalletProtobufSerializer).readWallet(app.params, null, proto)
+      store = new org.bitcoinj.store.SPVBlockStore(app.params, app.chainFile)
+      blockChain = new BlockChain(app.params, wallet, store)
+      peerGroup = new PeerGroup(app.params, blockChain)
+
+      def startUp: Unit = {
+        setupAndStartDownload
+        proceed.run
+      }
+    }
+  }
+}
+
 class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch { me =>
   lazy val mnemonicOptions = getResources getStringArray R.array.restore_mnemonic_options
   lazy val mainPassKeysType = findViewById(R.id.mainPassKeysType).asInstanceOf[SegmentedGroup]
@@ -48,23 +68,6 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       findViewById(R.id.mainPassForm) ::
       findViewById(R.id.mainProgress) :: Nil
 
-  lazy val prepareKit = Future {
-    val stream = new FileInputStream(app.walletFile)
-    val proto = WalletProtobufSerializer parseToProto stream
-
-    app.kit = new app.WalletKit {
-      wallet = (new WalletProtobufSerializer).readWallet(app.params, null, proto)
-      store = new org.bitcoinj.store.SPVBlockStore(app.params, app.chainFile)
-      blockChain = new BlockChain(app.params, wallet, store)
-      peerGroup = new PeerGroup(app.params, blockChain)
-
-      def startUp = {
-        setupAndStartDownload
-        exitToLastClosedActivity
-      }
-    }
-  }
-
   def INIT(state: Bundle) = {
     wrap(me initNfc state)(me setContentView R.layout.activity_main)
     mainPassKeysType setOnCheckedChangeListener new OnCheckedChangeListener {
@@ -73,6 +76,16 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
         updateInputType
       }
     }
+
+    MainActivity.proceed = anyToRunnable {
+      val landingIsLN = app.prefs.getBoolean(AbstractKit.LANDING_LN, true)
+      val landing = if (landingIsLN) classOf[LNActivity] else classOf[BtcActivity]
+      me exitTo landing
+    }
+
+    // When activity is re-accessed after initial
+    // NFC check we need to call next manually
+    if (intentProcessed) onNoNfcIntentFound
   }
 
   // NFC AND SHARE
@@ -108,19 +121,17 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
       // Find out what exactly should be done once user opens an app
       // depends on both wallet app file existence and runtime objects
       case (false, _, _) => setVis(View.VISIBLE, View.GONE, View.GONE)
-      case (true, true, true) => exitToLastClosedActivity
+      case (true, true, true) => MainActivity.proceed.run
 
       case (true, false, _) =>
         // Launch of a previously closed app
-        // Also happens if app has became inactive
         setVis(View.GONE, View.VISIBLE, View.GONE)
-        <<(prepareKit, throw _)(none)
+        <<(MainActivity.prepareKit, throw _)(none)
         updateInputType
 
         mainPassCheck setOnClickListener onButtonTap {
-          // Lazy Future has already been initialized above
-          // check password after wallet initialization is complete
-          <<(prepareKit map setup, wrongPass)(_ => app.kit.startAsync)
+          // Lazy Future has already been initialized so check a pass after it's done
+          <<(MainActivity.prepareKit map setup, wrongPass)(_ => app.kit.startAsync)
           setVis(View.GONE, View.GONE, View.VISIBLE)
         }
 
@@ -152,11 +163,6 @@ class MainActivity extends NfcReaderActivity with TimerActivity with ViewSwitch 
   private def inform(messageCode: Int): Unit = {
     val dlg = mkChoiceDialog(next, finish, dialog_ok, dialog_cancel)
     showForm(alertDialog = dlg.setMessage(messageCode).create)
-  }
-
-  private def exitToLastClosedActivity = exitTo {
-    val landingIsLN = app.prefs.getBoolean(AbstractKit.LANDING_LN, true)
-    if (landingIsLN) classOf[LNActivity] else classOf[BtcActivity]
   }
 
   def goRestoreWallet(view: View) = {

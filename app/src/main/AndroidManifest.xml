@@ -20,6 +20,7 @@
         android:name="WalletApp"
         android:allowBackup="false"
         android:fullBackupContent="false"
+        android:resizeableActivity="true"
         android:icon="@drawable/ic_launcher_testnet"
         android:label="@string/app_name">
 
