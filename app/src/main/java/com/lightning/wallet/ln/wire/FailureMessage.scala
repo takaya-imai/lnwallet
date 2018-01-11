@@ -3,7 +3,6 @@ package com.lightning.wallet.ln.wire
 import scodec.codecs._
 import LightningMessageCodecs._
 import fr.acinq.bitcoin.BinaryData
-import scodec.Codec
 
 
 sealed trait FailureMessage

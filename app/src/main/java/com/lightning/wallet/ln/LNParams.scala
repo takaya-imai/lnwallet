@@ -52,7 +52,7 @@ object LNParams { me =>
   // CLOUD
 
   // Developer Olympus server with token based verification
-  private val con = new Connector("http://10.0.2.2:9001")
+  private val con = new Connector("http://213.133.99.89:9001")
 
   def getCloud(tryData: TryCloudData) = tryData match {
     case Failure(_) => new PublicCloud(con, bag) { data = CloudDataSaver.empty }
