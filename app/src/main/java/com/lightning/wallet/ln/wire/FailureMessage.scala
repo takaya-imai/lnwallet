@@ -7,6 +7,7 @@ import scodec.Codec
 
 
 sealed trait FailureMessage
+case object ExpiryTooFar extends FailureMessage
 case object FinalExpiryTooSoon extends FailureMessage
 case class FinalIncorrectCltvExpiry(expiry: Long) extends FailureMessage
 case class FinalIncorrectHtlcAmount(amountMsat: Long) extends FailureMessage
@@ -39,8 +40,7 @@ case class ExpiryTooSoon(update: ChannelUpdate) extends Update
 
 object FailureMessageCodecs {
   private val sha256Codec = binarydata(32) withContext "sha256Codec"
-  //private val channelUpdateWithLengthCodec = variableSizeBytes(uint16, channelUpdateCodec) withContext "channelUpdate"
-  private val channelUpdateWithLengthCodec = channelUpdateCodec withContext "channelUpdate"
+  private val channelUpdateWithLengthCodec = variableSizeBytes(uint16, channelUpdateCodec) withContext "channelUpdate"
   private val disabled = (binarydata(2) withContext "flags") :: channelUpdateWithLengthCodec
   private val amount = (uint64 withContext "amountMsat") :: channelUpdateWithLengthCodec
   private val expiry = (uint32 withContext "expiry") :: channelUpdateWithLengthCodec
@@ -72,5 +72,6 @@ object FailureMessageCodecs {
     .typecase(cr = (uint32 withContext "expiry").as[FinalIncorrectCltvExpiry], tag = 18)
     .typecase(cr = (uint32 withContext "amountMsat").as[FinalIncorrectHtlcAmount], tag = 19)
     .typecase(cr = disabled.as[ChannelDisabled], tag = UPDATE | 20)
+    .typecase(cr = provide(ExpiryTooFar), tag = 21)
 }
 
