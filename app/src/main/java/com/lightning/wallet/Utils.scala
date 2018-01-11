@@ -427,14 +427,11 @@ trait TimerActivity extends AppCompatActivity { me =>
     passAsk -> secretInputField
   }
 
+  def delayUI(fun: => Unit) = timer.schedule(anyToRunnable(fun), 225)
   def rm(previous: Dialog)(fun: => Unit) = wrap(previous.dismiss)(me delayUI fun)
-  def delayUI(fun: => Unit, delay: Int = 225) = timer.schedule(anyToRunnable(fun), delay)
   def mkForm(bld: Builder, title: View, content: View) = showForm(bld.setCustomTitle(title).setView(content).create)
   def onFail(error: CharSequence): Unit = me runOnUiThread mkForm(me negBld dialog_ok, null, error).show
-  def onFail(error: Throwable): Unit = {
-    error.printStackTrace()
-    onFail(error.getMessage)
-  }
+  def onFail(error: Throwable): Unit = onFail(error.getMessage)
 
   def showForm(alertDialog: AlertDialog) = {
     alertDialog setCanceledOnTouchOutside false

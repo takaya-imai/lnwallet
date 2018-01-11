@@ -39,6 +39,10 @@ object PaymentInfo {
     val firstPayload = PerHopPayload(shortChannelId = 0L, amtToForward = rpi.firstMsat, firstExpiry)
     val start = (Vector(firstPayload), Vector.empty[PublicKey], rpi.firstMsat, firstExpiry)
 
+    println("--------------")
+    println("--------------")
+    for (r <- rpi.rd.routes) println(r)
+
     val (payloads, nodeIds, lastMsat, lastExpiry) = (start /: route.reverse) {
       case (loads, nodes, msat, expiry) \ Hop(nodeId, shortChannelId, delta, _, base, proportional) =>
         // Walk in reverse direction from receiver to sender and accumulate cltv deltas with fees
@@ -86,12 +90,19 @@ object PaymentInfo {
 
     parsed map {
       case ErrorPacket(nodeKey, _: Node) =>
+        println(s"-- Node")
         withoutNodes(Vector(nodeKey), rpi)
 
       case ErrorPacket(nodeKey, message: Update) =>
         val isHonest = Announcements.checkSig(message.update, nodeKey)
-        if (isHonest) withoutChannels(Vector(message.update.shortChannelId), rpi)
-        else withoutNodes(Vector(nodeKey), rpi)
+        if (isHonest) {
+          println(s"-- $message")
+          withoutChannels(Vector(message.update.shortChannelId), rpi)
+        }
+        else {
+          println(s"-- $nodeKey")
+          withoutNodes(Vector(nodeKey), rpi)
+        }
 
       case ErrorPacket(nodeKey, _) =>
         rpi.rd.usedRoute.collectFirst {
@@ -103,6 +114,8 @@ object PaymentInfo {
     } getOrElse {
       // Except for our channel and peer's channel
       val shortChanIds = rpi.rd.usedRoute.map(_.shortChannelId)
+
+      println(s"-- ${shortChanIds drop 1 dropRight 1}")
       withoutChannels(shortChanIds drop 1 dropRight 1, rpi)
     }
   }
