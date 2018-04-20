@@ -336,6 +336,8 @@ class WalletActivity extends NfcReaderActivity with TimerActivity { me =>
     me goTo classOf[RequestActivity]
   }
 
+  def goReceiveLN(top: View) = for (ln <- lnOpt) ln.makePaymentRequest
+
   def goChanDetails(top: View) = {
     val nothingToShow = app.ChannelManager.all.isEmpty
     if (nothingToShow) app toast ln_status_none
